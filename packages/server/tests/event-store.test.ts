@@ -90,6 +90,53 @@ describe("event store", () => {
     second.close();
   });
 
+  it("aggregates listSessions() with first/last seen + count + last event", async () => {
+    const store = createEventStore(":memory:");
+
+    store.append({ ...baseEnvelope, session_id: sessionA, hook_event_name: "UserPromptSubmit", prompt: "go" });
+    await Bun.sleep(2);
+    store.append({
+      ...baseEnvelope,
+      session_id: sessionA,
+      hook_event_name: "PreToolUse",
+      tool_name: "Bash",
+      tool_input: { command: "ls" },
+      tool_use_id: "toolu_a",
+    });
+    await Bun.sleep(2);
+    store.append({ ...baseEnvelope, session_id: sessionB, hook_event_name: "Stop" });
+    await Bun.sleep(2);
+    store.append({ ...baseEnvelope, session_id: sessionA, hook_event_name: "Stop" });
+
+    const sessions = store.listSessions();
+    expect(sessions).toHaveLength(2);
+
+    const a = sessions.find((s) => s.session_id === sessionA)!;
+    const b = sessions.find((s) => s.session_id === sessionB)!;
+
+    expect(a.event_count).toBe(3);
+    expect(a.last_event_name).toBe("Stop");
+    expect(a.first_seen_at).toBeLessThanOrEqual(a.last_seen_at);
+
+    expect(b.event_count).toBe(1);
+    expect(b.last_event_name).toBe("Stop");
+
+    expect(a.last_seen_at).toBeGreaterThan(b.last_seen_at);
+
+    store.close();
+  });
+
+  it("orders listSessions() by most-recent activity first", () => {
+    const store = createEventStore(":memory:");
+    store.append({ ...baseEnvelope, session_id: sessionA, hook_event_name: "Stop" });
+    store.append({ ...baseEnvelope, session_id: sessionB, hook_event_name: "Stop" });
+
+    const sessions = store.listSessions();
+    expect(sessions.map((s) => s.session_id)).toEqual([sessionB, sessionA]);
+
+    store.close();
+  });
+
   it("isolates events between distinct in-memory stores", () => {
     const a = createEventStore(":memory:");
     const b = createEventStore(":memory:");

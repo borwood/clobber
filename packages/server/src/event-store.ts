@@ -11,9 +11,18 @@ export interface ListFilter {
   readonly session_id?: string;
 }
 
+export interface SessionSummary {
+  readonly session_id: string;
+  readonly first_seen_at: number;
+  readonly last_seen_at: number;
+  readonly event_count: number;
+  readonly last_event_name: string;
+}
+
 export interface EventStore {
   append(payload: HookPayload): StoredEvent;
   list(filter?: ListFilter): StoredEvent[];
+  listSessions(): SessionSummary[];
   close(): void;
 }
 
@@ -46,6 +55,23 @@ export function createEventStore(path: string): EventStore {
   const listBySessionStmt = db.prepare(
     "SELECT * FROM events WHERE session_id = ? ORDER BY id ASC",
   );
+  const listSessionsStmt = db.prepare(`
+    SELECT
+      session_id,
+      MIN(received_at) AS first_seen_at,
+      MAX(received_at) AS last_seen_at,
+      COUNT(*)         AS event_count,
+      (
+        SELECT hook_event_name
+          FROM events e2
+         WHERE e2.session_id = events.session_id
+         ORDER BY e2.id DESC
+         LIMIT 1
+      ) AS last_event_name
+    FROM events
+    GROUP BY session_id
+    ORDER BY last_seen_at DESC, MAX(id) DESC
+  `);
 
   function rowToEvent(row: Row): StoredEvent {
     const parsed = HookPayloadSchema.parse(JSON.parse(row.payload_json));
@@ -69,6 +95,10 @@ export function createEventStore(path: string): EventStore {
         ? (listBySessionStmt.all(filter.session_id) as Row[])
         : (listAllStmt.all() as Row[]);
       return rows.map(rowToEvent);
+    },
+
+    listSessions() {
+      return listSessionsStmt.all() as SessionSummary[];
     },
 
     close() {

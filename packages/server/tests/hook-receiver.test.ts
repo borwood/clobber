@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { createServer } from "../src/server.ts";
-import { createEventStore, type StoredEvent } from "../src/event-store.ts";
+import { createEventStore, type StoredEvent, type SessionSummary } from "../src/event-store.ts";
 import type { HookPayload } from "@clobber/shared";
 
 const baseEnvelope = {
@@ -142,6 +142,40 @@ describe("hook receiver", () => {
 
     expect(a.map((e) => e.payload.hook_event_name)).toEqual(["Stop", "SessionEnd"]);
     expect(b.map((e) => e.payload.hook_event_name)).toEqual(["Stop"]);
+
+    await server.close();
+    store.close();
+  });
+
+  it("exposes session summaries via /sessions", async () => {
+    const { server, store } = buildServer();
+
+    await server.inject({
+      method: "POST",
+      url: "/hook",
+      payload: { ...baseEnvelope, session_id: sessionA, hook_event_name: "UserPromptSubmit", prompt: "go" },
+    });
+    await server.inject({
+      method: "POST",
+      url: "/hook",
+      payload: { ...baseEnvelope, session_id: sessionA, hook_event_name: "Stop" },
+    });
+    await server.inject({
+      method: "POST",
+      url: "/hook",
+      payload: { ...baseEnvelope, session_id: sessionB, hook_event_name: "Stop" },
+    });
+
+    const res = await server.inject({ method: "GET", url: "/sessions" });
+    expect(res.statusCode).toBe(200);
+    const sessions = res.json() as SessionSummary[];
+
+    expect(sessions).toHaveLength(2);
+    const a = sessions.find((s) => s.session_id === sessionA)!;
+    const b = sessions.find((s) => s.session_id === sessionB)!;
+    expect(a.event_count).toBe(2);
+    expect(a.last_event_name).toBe("Stop");
+    expect(b.event_count).toBe(1);
 
     await server.close();
     store.close();

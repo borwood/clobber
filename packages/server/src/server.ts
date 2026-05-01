@@ -29,5 +29,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     return store.list(session_id ? { session_id } : undefined);
   });
 
+  app.get("/sessions", async () => store.listSessions());
+
   return app;
 }
