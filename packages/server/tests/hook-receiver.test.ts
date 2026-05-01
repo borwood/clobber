@@ -15,7 +15,11 @@ const sessionB = "22222222-2222-4222-8222-222222222222";
 
 function buildServer() {
   const store = createEventStore(":memory:");
-  const server = createServer({ store });
+  const server = createServer({
+    store,
+    spawner: () => ({ sessionId: "stub", pid: 0 }),
+    hookUrl: "http://test.invalid/hook",
+  });
   return { server, store };
 }
 

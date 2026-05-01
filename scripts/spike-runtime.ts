@@ -24,7 +24,11 @@ const HOOK_URL = `http://127.0.0.1:${PORT}/hook`;
 const DB_PATH = join(tmpdir(), `clobber-spike-runtime-${Date.now()}.db`);
 
 const store = createEventStore(DB_PATH);
-const server = createServer({ store });
+const server = createServer({
+  store,
+  spawner: () => ({ sessionId: "unused", pid: 0 }),
+  hookUrl: HOOK_URL,
+});
 await server.listen({ port: PORT, host: "127.0.0.1" });
 console.log(`[spike3] server up at http://127.0.0.1:${PORT}, db=${DB_PATH}`);
 

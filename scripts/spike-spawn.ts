@@ -32,7 +32,11 @@ const settings = {
 };
 
 const store = createEventStore(":memory:");
-const server = createServer({ store });
+const server = createServer({
+  store,
+  spawner: () => ({ sessionId: "unused", pid: 0 }),
+  hookUrl: HOOK_URL,
+});
 await server.listen({ port: PORT, host: "127.0.0.1" });
 console.log(`[spike] receiver listening on ${HOOK_URL}`);
 

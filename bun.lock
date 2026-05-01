@@ -30,6 +30,7 @@
       "name": "@clobber/server",
       "version": "0.0.0",
       "dependencies": {
+        "@clobber/runtime": "workspace:*",
         "@clobber/shared": "workspace:*",
         "fastify": "^5.8.5",
         "zod": "^4.4.1",
