@@ -12,6 +12,7 @@ import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
 import { randomUUID, createHash } from "node:crypto";
 import { createServer } from "../packages/server/src/server.ts";
+import { createEventStore } from "../packages/server/src/event-store.ts";
 
 const PORT = 3300;
 const HOOK_URL = `http://127.0.0.1:${PORT}/hook`;
@@ -30,7 +31,8 @@ const settings = {
   },
 };
 
-const server = createServer();
+const store = createEventStore(":memory:");
+const server = createServer({ store });
 await server.listen({ port: PORT, host: "127.0.0.1" });
 console.log(`[spike] receiver listening on ${HOOK_URL}`);
 
@@ -180,5 +182,6 @@ if (stderrStr.trim().length > 0) {
 }
 
 await server.close();
+store.close();
 console.log("\n[spike] done.");
 process.exit(0);
