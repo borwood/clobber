@@ -8,6 +8,8 @@
     "dev": "bun run --hot ./src/index.ts"
   },
   "dependencies": {
-    "@clobber/shared": "workspace:*"
+    "@clobber/shared": "workspace:*",
+    "fastify": "^5.8.5",
+    "zod": "^4.4.1"
   }
 }
