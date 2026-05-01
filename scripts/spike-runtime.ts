@@ -16,16 +16,21 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnAgent } from "../packages/runtime/src/spawn-agent.ts";
 import { createServer } from "../packages/server/src/server.ts";
+import { createDatabase } from "../packages/server/src/db.ts";
 import { createEventStore } from "../packages/server/src/event-store.ts";
+import { createWorkspaceStore } from "../packages/server/src/workspace-store.ts";
 import type { StoredEvent, SessionSummary } from "../packages/server/src/event-store.ts";
 
 const PORT = 3302;
 const HOOK_URL = `http://127.0.0.1:${PORT}/hook`;
 const DB_PATH = join(tmpdir(), `clobber-spike-runtime-${Date.now()}.db`);
 
-const store = createEventStore(DB_PATH);
+const db = createDatabase(DB_PATH);
+const store = createEventStore(db);
+const workspaces = createWorkspaceStore(db);
 const server = createServer({
   store,
+  workspaces,
   spawner: () => ({ sessionId: "unused", pid: 0 }),
   hookUrl: HOOK_URL,
 });
@@ -69,12 +74,13 @@ console.log(`[spike3] session match: ${ourSession !== undefined}`);
 console.log(`[spike3] event count > 0: ${events.length > 0}`);
 
 await server.close();
-store.close();
+db.close();
 
-const reopened = createEventStore(DB_PATH);
+const reopenedDb = createDatabase(DB_PATH);
+const reopened = createEventStore(reopenedDb);
 const persisted = reopened.list({ session_id: agent.sessionId });
 console.log(`[spike3] events after reopen: ${persisted.length} (should match above)`);
-reopened.close();
+reopenedDb.close();
 
 console.log("[spike3] done.");
 process.exit(0);

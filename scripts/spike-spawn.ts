@@ -12,7 +12,9 @@ import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
 import { randomUUID, createHash } from "node:crypto";
 import { createServer } from "../packages/server/src/server.ts";
+import { createDatabase } from "../packages/server/src/db.ts";
 import { createEventStore } from "../packages/server/src/event-store.ts";
+import { createWorkspaceStore } from "../packages/server/src/workspace-store.ts";
 
 const PORT = 3300;
 const HOOK_URL = `http://127.0.0.1:${PORT}/hook`;
@@ -31,9 +33,12 @@ const settings = {
   },
 };
 
-const store = createEventStore(":memory:");
+const db = createDatabase(":memory:");
+const store = createEventStore(db);
+const workspaces = createWorkspaceStore(db);
 const server = createServer({
   store,
+  workspaces,
   spawner: () => ({ sessionId: "unused", pid: 0 }),
   hookUrl: HOOK_URL,
 });
@@ -186,6 +191,6 @@ if (stderrStr.trim().length > 0) {
 }
 
 await server.close();
-store.close();
+db.close();
 console.log("\n[spike] done.");
 process.exit(0);

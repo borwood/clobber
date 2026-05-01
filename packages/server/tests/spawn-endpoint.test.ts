@@ -1,22 +1,27 @@
 import { describe, it, expect } from "bun:test";
 import { createServer } from "../src/server.ts";
+import { createDatabase } from "../src/db.ts";
 import { createEventStore } from "../src/event-store.ts";
+import { createWorkspaceStore } from "../src/workspace-store.ts";
 import type { AgentSpawner, AgentSpawnRequest } from "../src/server.ts";
 
 function buildHarness(spawner: AgentSpawner) {
-  const store = createEventStore(":memory:");
+  const db = createDatabase(":memory:");
+  const store = createEventStore(db);
+  const workspaces = createWorkspaceStore(db);
   const server = createServer({
     store,
+    workspaces,
     spawner,
     hookUrl: "http://127.0.0.1:3300/hook",
   });
-  return { server, store };
+  return { server, db };
 }
 
 describe("POST /spawn", () => {
   it("calls the injected spawner with prompt, cwd, and the server's hookUrl", async () => {
     const calls: AgentSpawnRequest[] = [];
-    const { server, store } = buildHarness((req) => {
+    const { server, db } = buildHarness((req) => {
       calls.push(req);
       return { sessionId: "fixed-session-id", pid: 4242 };
     });
@@ -45,12 +50,12 @@ describe("POST /spawn", () => {
     });
 
     await server.close();
-    store.close();
+    db.close();
   });
 
   it("forwards an explicit sessionId to the spawner", async () => {
     const calls: AgentSpawnRequest[] = [];
-    const { server, store } = buildHarness((req) => {
+    const { server, db } = buildHarness((req) => {
       calls.push(req);
       return { sessionId: req.sessionId!, pid: 1 };
     });
@@ -68,12 +73,12 @@ describe("POST /spawn", () => {
     expect(calls[0]!.sessionId).toBe("00000000-0000-4000-8000-000000000abc");
 
     await server.close();
-    store.close();
+    db.close();
   });
 
   it("rejects a request missing prompt with 400 and does not spawn", async () => {
     let invocations = 0;
-    const { server, store } = buildHarness(() => {
+    const { server, db } = buildHarness(() => {
       invocations += 1;
       return { sessionId: "x", pid: 0 };
     });
@@ -88,12 +93,12 @@ describe("POST /spawn", () => {
     expect(invocations).toBe(0);
 
     await server.close();
-    store.close();
+    db.close();
   });
 
   it("rejects a request missing cwd with 400 and does not spawn", async () => {
     let invocations = 0;
-    const { server, store } = buildHarness(() => {
+    const { server, db } = buildHarness(() => {
       invocations += 1;
       return { sessionId: "x", pid: 0 };
     });
@@ -108,11 +113,11 @@ describe("POST /spawn", () => {
     expect(invocations).toBe(0);
 
     await server.close();
-    store.close();
+    db.close();
   });
 
   it("rejects an unknown permissionMode with 400", async () => {
-    const { server, store } = buildHarness(() => ({ sessionId: "x", pid: 0 }));
+    const { server, db } = buildHarness(() => ({ sessionId: "x", pid: 0 }));
 
     const res = await server.inject({
       method: "POST",
@@ -123,6 +128,6 @@ describe("POST /spawn", () => {
     expect(res.statusCode).toBe(400);
 
     await server.close();
-    store.close();
+    db.close();
   });
 });

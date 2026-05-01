@@ -10,14 +10,18 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnAgent } from "../packages/runtime/src/spawn-agent.ts";
 import { createServer, type AgentSpawner } from "../packages/server/src/server.ts";
+import { createDatabase } from "../packages/server/src/db.ts";
 import { createEventStore } from "../packages/server/src/event-store.ts";
+import { createWorkspaceStore } from "../packages/server/src/workspace-store.ts";
 import type { StoredEvent } from "../packages/server/src/event-store.ts";
 
 const PORT = 3303;
 const HOOK_URL = `http://127.0.0.1:${PORT}/hook`;
 const BASE = `http://127.0.0.1:${PORT}`;
 
-const store = createEventStore(":memory:");
+const db = createDatabase(":memory:");
+const store = createEventStore(db);
+const workspaces = createWorkspaceStore(db);
 
 const spawner: AgentSpawner = (req) => {
   const agent = spawnAgent({
@@ -31,7 +35,7 @@ const spawner: AgentSpawner = (req) => {
   return { sessionId: agent.sessionId, pid: agent.pid };
 };
 
-const server = createServer({ store, spawner, hookUrl: HOOK_URL });
+const server = createServer({ store, workspaces, spawner, hookUrl: HOOK_URL });
 await server.listen({ port: PORT, host: "127.0.0.1" });
 console.log(`[spike4] server up at ${BASE}`);
 
@@ -78,6 +82,6 @@ console.log(`[spike4] saw Stop event: ${stopFound}`);
 console.log(`[spike4] all events tagged with our sessionId: ${events.every((e) => e.payload.session_id === sessionId)}`);
 
 await server.close();
-store.close();
+db.close();
 console.log("[spike4] done.");
 process.exit(stopFound ? 0 : 1);

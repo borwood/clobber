@@ -1,4 +1,5 @@
 import { describe, it, expect } from "bun:test";
+import { createDatabase } from "../src/db.ts";
 import { createEventStore } from "../src/event-store.ts";
 import type { HookPayload } from "@clobber/shared";
 
@@ -12,9 +13,15 @@ const baseEnvelope = {
 const sessionA = "11111111-1111-4111-8111-111111111111";
 const sessionB = "22222222-2222-4222-8222-222222222222";
 
+function open(path: string = ":memory:") {
+  const db = createDatabase(path);
+  const store = createEventStore(db);
+  return { db, store };
+}
+
 describe("event store", () => {
   it("appends a payload and returns it via list()", () => {
-    const store = createEventStore(":memory:");
+    const { db, store } = open();
     const payload: HookPayload = {
       ...baseEnvelope,
       hook_event_name: "PreToolUse",
@@ -32,11 +39,11 @@ describe("event store", () => {
     expect(all).toHaveLength(1);
     expect(all[0]!.payload).toEqual(payload);
 
-    store.close();
+    db.close();
   });
 
   it("preserves insertion order across appends", () => {
-    const store = createEventStore(":memory:");
+    const { db, store } = open();
     const events: HookPayload[] = [
       { ...baseEnvelope, hook_event_name: "UserPromptSubmit", prompt: "hi" },
       {
@@ -58,11 +65,11 @@ describe("event store", () => {
       "Stop",
     ]);
 
-    store.close();
+    db.close();
   });
 
   it("filters events by session_id", () => {
-    const store = createEventStore(":memory:");
+    const { db, store } = open();
     store.append({ ...baseEnvelope, session_id: sessionA, hook_event_name: "Stop" });
     store.append({ ...baseEnvelope, session_id: sessionB, hook_event_name: "Stop" });
     store.append({ ...baseEnvelope, session_id: sessionA, hook_event_name: "SessionEnd" });
@@ -73,25 +80,25 @@ describe("event store", () => {
     expect(a.map((r) => r.payload.hook_event_name)).toEqual(["Stop", "SessionEnd"]);
     expect(b.map((r) => r.payload.hook_event_name)).toEqual(["Stop"]);
 
-    store.close();
+    db.close();
   });
 
   it("persists across reopens of the same file", () => {
     const path = `/tmp/clobber-store-${Date.now()}-${Math.random().toString(36).slice(2)}.db`;
 
-    const first = createEventStore(path);
-    first.append({ ...baseEnvelope, hook_event_name: "Stop" });
-    first.close();
+    const first = open(path);
+    first.store.append({ ...baseEnvelope, hook_event_name: "Stop" });
+    first.db.close();
 
-    const second = createEventStore(path);
-    const events = second.list();
+    const second = open(path);
+    const events = second.store.list();
     expect(events).toHaveLength(1);
     expect(events[0]!.payload.hook_event_name).toBe("Stop");
-    second.close();
+    second.db.close();
   });
 
   it("aggregates listSessions() with first/last seen + count + last event", async () => {
-    const store = createEventStore(":memory:");
+    const { db, store } = open();
 
     store.append({ ...baseEnvelope, session_id: sessionA, hook_event_name: "UserPromptSubmit", prompt: "go" });
     await Bun.sleep(2);
@@ -123,30 +130,30 @@ describe("event store", () => {
 
     expect(a.last_seen_at).toBeGreaterThan(b.last_seen_at);
 
-    store.close();
+    db.close();
   });
 
   it("orders listSessions() by most-recent activity first", () => {
-    const store = createEventStore(":memory:");
+    const { db, store } = open();
     store.append({ ...baseEnvelope, session_id: sessionA, hook_event_name: "Stop" });
     store.append({ ...baseEnvelope, session_id: sessionB, hook_event_name: "Stop" });
 
     const sessions = store.listSessions();
     expect(sessions.map((s) => s.session_id)).toEqual([sessionB, sessionA]);
 
-    store.close();
+    db.close();
   });
 
-  it("isolates events between distinct in-memory stores", () => {
-    const a = createEventStore(":memory:");
-    const b = createEventStore(":memory:");
+  it("isolates events between distinct in-memory databases", () => {
+    const a = open();
+    const b = open();
 
-    a.append({ ...baseEnvelope, hook_event_name: "Stop" });
+    a.store.append({ ...baseEnvelope, hook_event_name: "Stop" });
 
-    expect(a.list()).toHaveLength(1);
-    expect(b.list()).toHaveLength(0);
+    expect(a.store.list()).toHaveLength(1);
+    expect(b.store.list()).toHaveLength(0);
 
-    a.close();
-    b.close();
+    a.db.close();
+    b.db.close();
   });
 });

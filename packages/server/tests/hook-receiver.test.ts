@@ -1,6 +1,8 @@
 import { describe, it, expect } from "bun:test";
 import { createServer } from "../src/server.ts";
+import { createDatabase } from "../src/db.ts";
 import { createEventStore, type StoredEvent, type SessionSummary } from "../src/event-store.ts";
+import { createWorkspaceStore } from "../src/workspace-store.ts";
 import type { HookPayload } from "@clobber/shared";
 
 const baseEnvelope = {
@@ -14,18 +16,21 @@ const sessionA = "11111111-1111-4111-8111-111111111111";
 const sessionB = "22222222-2222-4222-8222-222222222222";
 
 function buildServer() {
-  const store = createEventStore(":memory:");
+  const db = createDatabase(":memory:");
+  const store = createEventStore(db);
+  const workspaces = createWorkspaceStore(db);
   const server = createServer({
     store,
+    workspaces,
     spawner: () => ({ sessionId: "stub", pid: 0 }),
     hookUrl: "http://test.invalid/hook",
   });
-  return { server, store };
+  return { server, db };
 }
 
 describe("hook receiver", () => {
   it("captures a valid PreToolUse and exposes it via /events", async () => {
-    const { server, store } = buildServer();
+    const { server, db } = buildServer();
     const sample: HookPayload = {
       ...baseEnvelope,
       hook_event_name: "PreToolUse",
@@ -47,11 +52,11 @@ describe("hook receiver", () => {
     expect(typeof events[0]!.received_at).toBe("number");
 
     await server.close();
-    store.close();
+    db.close();
   });
 
   it("preserves event order across multiple posts", async () => {
-    const { server, store } = buildServer();
+    const { server, db } = buildServer();
     const events: HookPayload[] = [
       { ...baseEnvelope, hook_event_name: "UserPromptSubmit", prompt: "hi" },
       {
@@ -92,11 +97,11 @@ describe("hook receiver", () => {
     ]);
 
     await server.close();
-    store.close();
+    db.close();
   });
 
   it("rejects an invalid hook payload with 400 and does not store it", async () => {
-    const { server, store } = buildServer();
+    const { server, db } = buildServer();
 
     const post = await server.inject({
       method: "POST",
@@ -113,11 +118,11 @@ describe("hook receiver", () => {
     expect(events).toHaveLength(0);
 
     await server.close();
-    store.close();
+    db.close();
   });
 
   it("filters /events by session_id query param", async () => {
-    const { server, store } = buildServer();
+    const { server, db } = buildServer();
 
     await server.inject({
       method: "POST",
@@ -148,11 +153,11 @@ describe("hook receiver", () => {
     expect(b.map((e) => e.payload.hook_event_name)).toEqual(["Stop"]);
 
     await server.close();
-    store.close();
+    db.close();
   });
 
   it("exposes session summaries via /sessions", async () => {
-    const { server, store } = buildServer();
+    const { server, db } = buildServer();
 
     await server.inject({
       method: "POST",
@@ -182,7 +187,7 @@ describe("hook receiver", () => {
     expect(b.event_count).toBe(1);
 
     await server.close();
-    store.close();
+    db.close();
   });
 
   it("isolates events between server instances backed by separate stores", async () => {
@@ -203,7 +208,7 @@ describe("hook receiver", () => {
 
     await a.server.close();
     await b.server.close();
-    a.store.close();
-    b.store.close();
+    a.db.close();
+    b.db.close();
   });
 });
