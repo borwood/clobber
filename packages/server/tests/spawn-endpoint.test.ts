@@ -3,15 +3,21 @@ import { createServer } from "../src/server.ts";
 import { createDatabase } from "../src/db.ts";
 import { createEventStore } from "../src/event-store.ts";
 import { createWorkspaceStore } from "../src/workspace-store.ts";
+import { createRoleStore } from "../src/role-store.ts";
+import { createWorkspaceRoleStore } from "../src/workspace-role-store.ts";
 import type { AgentSpawner, AgentSpawnRequest } from "../src/server.ts";
 
 function buildHarness(spawner: AgentSpawner) {
   const db = createDatabase(":memory:");
   const store = createEventStore(db);
   const workspaces = createWorkspaceStore(db);
+  const roles = createRoleStore(db);
+  const workspaceRoles = createWorkspaceRoleStore(db);
   const server = createServer({
     store,
     workspaces,
+    roles,
+    workspaceRoles,
     spawner,
     hookUrl: "http://127.0.0.1:3300/hook",
   });

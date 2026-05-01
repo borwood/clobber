@@ -13,6 +13,8 @@ import { createServer, type AgentSpawner } from "../packages/server/src/server.t
 import { createDatabase } from "../packages/server/src/db.ts";
 import { createEventStore } from "../packages/server/src/event-store.ts";
 import { createWorkspaceStore } from "../packages/server/src/workspace-store.ts";
+import { createRoleStore } from "../packages/server/src/role-store.ts";
+import { createWorkspaceRoleStore } from "../packages/server/src/workspace-role-store.ts";
 import type { StoredEvent } from "../packages/server/src/event-store.ts";
 
 const PORT = 3303;
@@ -22,6 +24,8 @@ const BASE = `http://127.0.0.1:${PORT}`;
 const db = createDatabase(":memory:");
 const store = createEventStore(db);
 const workspaces = createWorkspaceStore(db);
+const roles = createRoleStore(db);
+const workspaceRoles = createWorkspaceRoleStore(db);
 
 const spawner: AgentSpawner = (req) => {
   const agent = spawnAgent({
@@ -35,7 +39,7 @@ const spawner: AgentSpawner = (req) => {
   return { sessionId: agent.sessionId, pid: agent.pid };
 };
 
-const server = createServer({ store, workspaces, spawner, hookUrl: HOOK_URL });
+const server = createServer({ store, workspaces, roles, workspaceRoles, spawner, hookUrl: HOOK_URL });
 await server.listen({ port: PORT, host: "127.0.0.1" });
 console.log(`[spike4] server up at ${BASE}`);
 

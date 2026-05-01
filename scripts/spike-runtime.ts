@@ -19,6 +19,8 @@ import { createServer } from "../packages/server/src/server.ts";
 import { createDatabase } from "../packages/server/src/db.ts";
 import { createEventStore } from "../packages/server/src/event-store.ts";
 import { createWorkspaceStore } from "../packages/server/src/workspace-store.ts";
+import { createRoleStore } from "../packages/server/src/role-store.ts";
+import { createWorkspaceRoleStore } from "../packages/server/src/workspace-role-store.ts";
 import type { StoredEvent, SessionSummary } from "../packages/server/src/event-store.ts";
 
 const PORT = 3302;
@@ -28,9 +30,13 @@ const DB_PATH = join(tmpdir(), `clobber-spike-runtime-${Date.now()}.db`);
 const db = createDatabase(DB_PATH);
 const store = createEventStore(db);
 const workspaces = createWorkspaceStore(db);
+const roles = createRoleStore(db);
+const workspaceRoles = createWorkspaceRoleStore(db);
 const server = createServer({
   store,
   workspaces,
+  roles,
+  workspaceRoles,
   spawner: () => ({ sessionId: "unused", pid: 0 }),
   hookUrl: HOOK_URL,
 });

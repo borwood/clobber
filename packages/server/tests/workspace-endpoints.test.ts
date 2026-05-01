@@ -3,15 +3,21 @@ import { createServer } from "../src/server.ts";
 import { createDatabase } from "../src/db.ts";
 import { createEventStore } from "../src/event-store.ts";
 import { createWorkspaceStore } from "../src/workspace-store.ts";
+import { createRoleStore } from "../src/role-store.ts";
+import { createWorkspaceRoleStore } from "../src/workspace-role-store.ts";
 import type { Workspace } from "@clobber/shared";
 
 function buildServer() {
   const db = createDatabase(":memory:");
   const events = createEventStore(db);
   const workspaces = createWorkspaceStore(db);
+  const roles = createRoleStore(db);
+  const workspaceRoles = createWorkspaceRoleStore(db);
   const server = createServer({
     store: events,
     workspaces,
+    roles,
+    workspaceRoles,
     spawner: () => ({ sessionId: "stub", pid: 0 }),
     hookUrl: "http://test.invalid/hook",
   });

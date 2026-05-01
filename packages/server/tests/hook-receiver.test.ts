@@ -3,6 +3,8 @@ import { createServer } from "../src/server.ts";
 import { createDatabase } from "../src/db.ts";
 import { createEventStore, type StoredEvent, type SessionSummary } from "../src/event-store.ts";
 import { createWorkspaceStore } from "../src/workspace-store.ts";
+import { createRoleStore } from "../src/role-store.ts";
+import { createWorkspaceRoleStore } from "../src/workspace-role-store.ts";
 import type { HookPayload } from "@clobber/shared";
 
 const baseEnvelope = {
@@ -19,9 +21,13 @@ function buildServer() {
   const db = createDatabase(":memory:");
   const store = createEventStore(db);
   const workspaces = createWorkspaceStore(db);
+  const roles = createRoleStore(db);
+  const workspaceRoles = createWorkspaceRoleStore(db);
   const server = createServer({
     store,
     workspaces,
+    roles,
+    workspaceRoles,
     spawner: () => ({ sessionId: "stub", pid: 0 }),
     hookUrl: "http://test.invalid/hook",
   });

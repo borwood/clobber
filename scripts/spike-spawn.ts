@@ -15,6 +15,8 @@ import { createServer } from "../packages/server/src/server.ts";
 import { createDatabase } from "../packages/server/src/db.ts";
 import { createEventStore } from "../packages/server/src/event-store.ts";
 import { createWorkspaceStore } from "../packages/server/src/workspace-store.ts";
+import { createRoleStore } from "../packages/server/src/role-store.ts";
+import { createWorkspaceRoleStore } from "../packages/server/src/workspace-role-store.ts";
 
 const PORT = 3300;
 const HOOK_URL = `http://127.0.0.1:${PORT}/hook`;
@@ -36,9 +38,13 @@ const settings = {
 const db = createDatabase(":memory:");
 const store = createEventStore(db);
 const workspaces = createWorkspaceStore(db);
+const roles = createRoleStore(db);
+const workspaceRoles = createWorkspaceRoleStore(db);
 const server = createServer({
   store,
   workspaces,
+  roles,
+  workspaceRoles,
   spawner: () => ({ sessionId: "unused", pid: 0 }),
   hookUrl: HOOK_URL,
 });

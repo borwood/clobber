@@ -3,6 +3,8 @@ import { createServer, type AgentSpawner } from "./server.ts";
 import { createDatabase } from "./db.ts";
 import { createEventStore } from "./event-store.ts";
 import { createWorkspaceStore } from "./workspace-store.ts";
+import { createRoleStore } from "./role-store.ts";
+import { createWorkspaceRoleStore } from "./workspace-role-store.ts";
 
 const PORT = 3300;
 const HOOK_URL = `http://127.0.0.1:${PORT}/hook`;
@@ -24,6 +26,8 @@ const spawner: AgentSpawner = (req) => {
 const db = createDatabase(DB_PATH);
 const store = createEventStore(db);
 const workspaces = createWorkspaceStore(db);
-const app = createServer({ store, workspaces, spawner, hookUrl: HOOK_URL });
+const roles = createRoleStore(db);
+const workspaceRoles = createWorkspaceRoleStore(db);
+const app = createServer({ store, workspaces, roles, workspaceRoles, spawner, hookUrl: HOOK_URL });
 await app.listen({ port: PORT, host: "127.0.0.1" });
 console.log(`clobber-server listening on http://127.0.0.1:${PORT} (db: ${DB_PATH})`);
