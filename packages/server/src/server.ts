@@ -1,9 +1,18 @@
 import Fastify, { type FastifyInstance } from "fastify";
-import { HookPayloadSchema, type HookPayload } from "@clobber/shared";
+import { HookPayloadSchema } from "@clobber/shared";
+import type { EventStore } from "./event-store.ts";
 
-export function createServer(): FastifyInstance {
+export interface ServerOptions {
+  readonly store: EventStore;
+}
+
+interface EventsQuery {
+  session_id?: string;
+}
+
+export function createServer(opts: ServerOptions): FastifyInstance {
   const app = Fastify({ logger: false });
-  const events: HookPayload[] = [];
+  const { store } = opts;
 
   app.post("/hook", async (request, reply) => {
     const parsed = HookPayloadSchema.safeParse(request.body);
@@ -11,11 +20,14 @@ export function createServer(): FastifyInstance {
       reply.code(400);
       return { error: "invalid hook payload", issues: parsed.error.issues };
     }
-    events.push(parsed.data);
+    store.append(parsed.data);
     return { continue: true };
   });
 
-  app.get("/events", async () => events);
+  app.get<{ Querystring: EventsQuery }>("/events", async (request) => {
+    const { session_id } = request.query;
+    return store.list(session_id ? { session_id } : undefined);
+  });
 
   return app;
 }

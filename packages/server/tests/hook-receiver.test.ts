@@ -1,5 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { createServer } from "../src/server.ts";
+import { createEventStore, type StoredEvent } from "../src/event-store.ts";
 import type { HookPayload } from "@clobber/shared";
 
 const baseEnvelope = {
@@ -9,9 +10,18 @@ const baseEnvelope = {
   permission_mode: "default",
 } as const;
 
+const sessionA = "11111111-1111-4111-8111-111111111111";
+const sessionB = "22222222-2222-4222-8222-222222222222";
+
+function buildServer() {
+  const store = createEventStore(":memory:");
+  const server = createServer({ store });
+  return { server, store };
+}
+
 describe("hook receiver", () => {
   it("captures a valid PreToolUse and exposes it via /events", async () => {
-    const server = createServer();
+    const { server, store } = buildServer();
     const sample: HookPayload = {
       ...baseEnvelope,
       hook_event_name: "PreToolUse",
@@ -26,15 +36,18 @@ describe("hook receiver", () => {
 
     const get = await server.inject({ method: "GET", url: "/events" });
     expect(get.statusCode).toBe(200);
-    const events = get.json() as HookPayload[];
+    const events = get.json() as StoredEvent[];
     expect(events).toHaveLength(1);
-    expect(events[0]).toEqual(sample);
+    expect(events[0]!.payload).toEqual(sample);
+    expect(events[0]!.id).toBeGreaterThan(0);
+    expect(typeof events[0]!.received_at).toBe("number");
 
     await server.close();
+    store.close();
   });
 
   it("preserves event order across multiple posts", async () => {
-    const server = createServer();
+    const { server, store } = buildServer();
     const events: HookPayload[] = [
       { ...baseEnvelope, hook_event_name: "UserPromptSubmit", prompt: "hi" },
       {
@@ -66,8 +79,8 @@ describe("hook receiver", () => {
     }
 
     const res = await server.inject({ method: "GET", url: "/events" });
-    const captured = res.json() as HookPayload[];
-    expect(captured.map((e) => e.hook_event_name)).toEqual([
+    const captured = res.json() as StoredEvent[];
+    expect(captured.map((e) => e.payload.hook_event_name)).toEqual([
       "UserPromptSubmit",
       "PreToolUse",
       "PostToolUse",
@@ -75,10 +88,11 @@ describe("hook receiver", () => {
     ]);
 
     await server.close();
+    store.close();
   });
 
   it("rejects an invalid hook payload with 400 and does not store it", async () => {
-    const server = createServer();
+    const { server, store } = buildServer();
 
     const post = await server.inject({
       method: "POST",
@@ -95,25 +109,63 @@ describe("hook receiver", () => {
     expect(events).toHaveLength(0);
 
     await server.close();
+    store.close();
   });
 
-  it("isolates events between server instances", async () => {
-    const a = createServer();
-    const b = createServer();
+  it("filters /events by session_id query param", async () => {
+    const { server, store } = buildServer();
 
-    await a.inject({
+    await server.inject({
+      method: "POST",
+      url: "/hook",
+      payload: { ...baseEnvelope, session_id: sessionA, hook_event_name: "Stop" },
+    });
+    await server.inject({
+      method: "POST",
+      url: "/hook",
+      payload: { ...baseEnvelope, session_id: sessionB, hook_event_name: "Stop" },
+    });
+    await server.inject({
+      method: "POST",
+      url: "/hook",
+      payload: { ...baseEnvelope, session_id: sessionA, hook_event_name: "SessionEnd" },
+    });
+
+    const a = (await server.inject({
+      method: "GET",
+      url: `/events?session_id=${sessionA}`,
+    })).json() as StoredEvent[];
+    const b = (await server.inject({
+      method: "GET",
+      url: `/events?session_id=${sessionB}`,
+    })).json() as StoredEvent[];
+
+    expect(a.map((e) => e.payload.hook_event_name)).toEqual(["Stop", "SessionEnd"]);
+    expect(b.map((e) => e.payload.hook_event_name)).toEqual(["Stop"]);
+
+    await server.close();
+    store.close();
+  });
+
+  it("isolates events between server instances backed by separate stores", async () => {
+    const a = buildServer();
+    const b = buildServer();
+
+    await a.server.inject({
       method: "POST",
       url: "/hook",
       payload: { ...baseEnvelope, hook_event_name: "Stop" },
     });
 
-    const aEvents = (await a.inject({ method: "GET", url: "/events" })).json() as unknown[];
-    const bEvents = (await b.inject({ method: "GET", url: "/events" })).json() as unknown[];
+    const aEvents = (await a.server.inject({ method: "GET", url: "/events" })).json() as unknown[];
+    const bEvents = (await b.server.inject({ method: "GET", url: "/events" })).json() as unknown[];
 
     expect(aEvents).toHaveLength(1);
     expect(bEvents).toHaveLength(0);
 
-    await a.close();
-    await b.close();
+    await a.server.close();
+    await b.server.close();
+    a.store.close();
+    b.store.close();
   });
 });
