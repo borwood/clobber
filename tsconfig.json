@@ -16,7 +16,9 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": true,
     "noEmit": true,
+    "types": ["bun"],
     "paths": {
       "@clobber/shared": ["./packages/shared/src/index.ts"],
       "@clobber/shared/*": ["./packages/shared/src/*"],
@@ -30,5 +32,5 @@
       "@clobber/cli/*": ["./packages/cli/src/*"]
     }
   },
-  "include": ["packages/*/src/**/*"]
+  "include": ["packages/*/src/**/*", "packages/*/tests/**/*"]
 }
