@@ -1,0 +1,19 @@
+node_modules/
+dist/
+build/
+.DS_Store
+*.log
+
+.env
+.env.local
+.env.*.local
+
+.vscode/
+.idea/
+
+# clobber runtime data
+.clobber/
+data/
+*.sqlite
+*.sqlite-journal
+*.db

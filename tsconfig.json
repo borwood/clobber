@@ -1,0 +1,34 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": true,
+    "noFallthroughCasesInSwitch": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+    "paths": {
+      "@clobber/shared": ["./packages/shared/src/index.ts"],
+      "@clobber/shared/*": ["./packages/shared/src/*"],
+      "@clobber/server": ["./packages/server/src/index.ts"],
+      "@clobber/server/*": ["./packages/server/src/*"],
+      "@clobber/web": ["./packages/web/src/index.ts"],
+      "@clobber/web/*": ["./packages/web/src/*"],
+      "@clobber/runtime": ["./packages/runtime/src/index.ts"],
+      "@clobber/runtime/*": ["./packages/runtime/src/*"],
+      "@clobber/cli": ["./packages/cli/src/index.ts"],
+      "@clobber/cli/*": ["./packages/cli/src/*"]
+    }
+  },
+  "include": ["packages/*/src/**/*"]
+}
