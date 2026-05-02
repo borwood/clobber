@@ -1,0 +1,72 @@
+import { randomUUID } from "node:crypto";
+import type { Database } from "bun:sqlite";
+import { AgentSchema, type Agent, type CreateAgentRequest } from "@clobber/shared";
+
+export interface AgentStore {
+  create(req: CreateAgentRequest): Agent;
+  get(id: string): Agent | null;
+  delete(id: string): boolean;
+  listForWorkspace(workspaceId: string): Agent[];
+}
+
+interface Row {
+  id: string;
+  workspace_id: string;
+  role_id: string;
+  label: string | null;
+  created_at: number;
+}
+
+function rowToAgent(row: Row): Agent {
+  const input: Record<string, unknown> = {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    role_id: row.role_id,
+    created_at: row.created_at,
+  };
+  if (row.label !== null) input["label"] = row.label;
+  return AgentSchema.parse(input);
+}
+
+export function createAgentStore(db: Database): AgentStore {
+  const insertStmt = db.prepare(
+    "INSERT INTO agents (id, workspace_id, role_id, label, created_at) VALUES (?, ?, ?, ?, ?)",
+  );
+  const getStmt = db.prepare("SELECT * FROM agents WHERE id = ?");
+  const listStmt = db.prepare(
+    "SELECT * FROM agents WHERE workspace_id = ? ORDER BY created_at DESC, id DESC",
+  );
+  const deleteStmt = db.prepare("DELETE FROM agents WHERE id = ?");
+
+  return {
+    create(req) {
+      const id = randomUUID();
+      const created_at = Date.now();
+      const label = req.label === undefined ? null : req.label;
+      insertStmt.run(id, req.workspace_id, req.role_id, label, created_at);
+      const out: Record<string, unknown> = {
+        id,
+        workspace_id: req.workspace_id,
+        role_id: req.role_id,
+        created_at,
+      };
+      if (req.label !== undefined) out["label"] = req.label;
+      return AgentSchema.parse(out);
+    },
+
+    get(id) {
+      const row = getStmt.get(id) as Row | null;
+      return row === null ? null : rowToAgent(row);
+    },
+
+    listForWorkspace(workspaceId) {
+      const rows = listStmt.all(workspaceId) as Row[];
+      return rows.map(rowToAgent);
+    },
+
+    delete(id) {
+      const result = deleteStmt.run(id);
+      return result.changes > 0;
+    },
+  };
+}
