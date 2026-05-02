@@ -5,6 +5,8 @@ import { createEventStore } from "../src/event-store.ts";
 import { createWorkspaceStore } from "../src/workspace-store.ts";
 import { createRoleStore } from "../src/role-store.ts";
 import { createWorkspaceRoleStore } from "../src/workspace-role-store.ts";
+import { createAgentStore } from "../src/agent-store.ts";
+import { createSessionStore } from "../src/session-store.ts";
 import type { Role } from "@clobber/shared";
 
 function buildServer() {
@@ -14,6 +16,8 @@ function buildServer() {
     workspaces: createWorkspaceStore(db),
     roles: createRoleStore(db),
     workspaceRoles: createWorkspaceRoleStore(db),
+    agents: createAgentStore(db),
+    sessions: createSessionStore(db),
     spawner: () => ({ sessionId: "stub", pid: 0 }),
     hookUrl: "http://test.invalid/hook",
   });

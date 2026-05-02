@@ -34,7 +34,7 @@ export function createAgentStore(db: Database): AgentStore {
   );
   const getStmt = db.prepare("SELECT * FROM agents WHERE id = ?");
   const listStmt = db.prepare(
-    "SELECT * FROM agents WHERE workspace_id = ? ORDER BY created_at DESC, id DESC",
+    "SELECT * FROM agents WHERE workspace_id = ? ORDER BY created_at DESC, rowid DESC",
   );
   const deleteStmt = db.prepare("DELETE FROM agents WHERE id = ?");
 

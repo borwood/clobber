@@ -22,7 +22,15 @@ export function createServer(opts: ServerOptions): FastifyInstance {
   registerHookRoutes(app, { store: opts.store });
   registerEventRoutes(app, { store: opts.store });
   registerSessionRoutes(app, { store: opts.store });
-  registerSpawnRoutes(app, { spawner: opts.spawner, hookUrl: opts.hookUrl });
+  registerSpawnRoutes(app, {
+    workspaces: opts.workspaces,
+    roles: opts.roles,
+    workspaceRoles: opts.workspaceRoles,
+    agents: opts.agents,
+    sessions: opts.sessions,
+    spawner: opts.spawner,
+    hookUrl: opts.hookUrl,
+  });
   registerWorkspaceRoutes(app, { workspaces: opts.workspaces });
   registerRoleRoutes(app, { roles: opts.roles });
   registerWorkspaceRoleRoutes(app, {

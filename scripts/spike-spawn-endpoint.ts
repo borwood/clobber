@@ -15,6 +15,8 @@ import { createEventStore } from "../packages/server/src/event-store.ts";
 import { createWorkspaceStore } from "../packages/server/src/workspace-store.ts";
 import { createRoleStore } from "../packages/server/src/role-store.ts";
 import { createWorkspaceRoleStore } from "../packages/server/src/workspace-role-store.ts";
+import { createAgentStore } from "../packages/server/src/agent-store.ts";
+import { createSessionStore } from "../packages/server/src/session-store.ts";
 import type { StoredEvent } from "../packages/server/src/event-store.ts";
 
 const PORT = 3303;
@@ -26,6 +28,8 @@ const store = createEventStore(db);
 const workspaces = createWorkspaceStore(db);
 const roles = createRoleStore(db);
 const workspaceRoles = createWorkspaceRoleStore(db);
+const agents = createAgentStore(db);
+const sessions = createSessionStore(db);
 
 const spawner: AgentSpawner = (req) => {
   const agent = spawnAgent({
@@ -39,21 +43,38 @@ const spawner: AgentSpawner = (req) => {
   return { sessionId: agent.sessionId, pid: agent.pid };
 };
 
-const server = createServer({ store, workspaces, roles, workspaceRoles, spawner, hookUrl: HOOK_URL });
+const server = createServer({
+  store,
+  workspaces,
+  roles,
+  workspaceRoles,
+  agents,
+  sessions,
+  spawner,
+  hookUrl: HOOK_URL,
+});
 await server.listen({ port: PORT, host: "127.0.0.1" });
 console.log(`[spike4] server up at ${BASE}`);
 
 const cwd = await mkdtemp(join(tmpdir(), "clobber-spike4-"));
+
+const ws = workspaces.create({ name: "spike4", repo_path: cwd });
+const role = roles.create({
+  name: "spike-runner",
+  persistent: false,
+  permission_mode: "bypassPermissions",
+  allowed_tools: ["Bash"],
+});
+workspaceRoles.setCeiling(ws.id, role.id, 1);
 
 const t0 = Date.now();
 const spawnRes = await fetch(`${BASE}/spawn`, {
   method: "POST",
   headers: { "content-type": "application/json" },
   body: JSON.stringify({
+    workspace_id: ws.id,
+    role_id: role.id,
     prompt: "Run the bash command `echo from-spike4` and then say done.",
-    cwd,
-    permissionMode: "bypassPermissions",
-    allowedTools: ["Bash"],
   }),
 });
 
@@ -62,8 +83,13 @@ if (!spawnRes.ok) {
   process.exit(1);
 }
 
-const { sessionId, pid } = (await spawnRes.json()) as { sessionId: string; pid: number };
-console.log(`[spike4] /spawn returned session=${sessionId} pid=${pid}`);
+const { agent_id, session_id, pid } = (await spawnRes.json()) as {
+  agent_id: string;
+  session_id: string;
+  pid: number;
+};
+const sessionId = session_id;
+console.log(`[spike4] /spawn returned agent=${agent_id} session=${sessionId} pid=${pid}`);
 
 let events: StoredEvent[] = [];
 const deadline = Date.now() + 30_000;

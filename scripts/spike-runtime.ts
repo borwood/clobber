@@ -21,6 +21,8 @@ import { createEventStore } from "../packages/server/src/event-store.ts";
 import { createWorkspaceStore } from "../packages/server/src/workspace-store.ts";
 import { createRoleStore } from "../packages/server/src/role-store.ts";
 import { createWorkspaceRoleStore } from "../packages/server/src/workspace-role-store.ts";
+import { createAgentStore } from "../packages/server/src/agent-store.ts";
+import { createSessionStore } from "../packages/server/src/session-store.ts";
 import type { StoredEvent, SessionSummary } from "../packages/server/src/event-store.ts";
 
 const PORT = 3302;
@@ -32,11 +34,15 @@ const store = createEventStore(db);
 const workspaces = createWorkspaceStore(db);
 const roles = createRoleStore(db);
 const workspaceRoles = createWorkspaceRoleStore(db);
+const agents = createAgentStore(db);
+const sessions = createSessionStore(db);
 const server = createServer({
   store,
   workspaces,
   roles,
   workspaceRoles,
+  agents,
+  sessions,
   spawner: () => ({ sessionId: "unused", pid: 0 }),
   hookUrl: HOOK_URL,
 });
