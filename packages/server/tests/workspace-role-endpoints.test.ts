@@ -32,6 +32,8 @@ function buildServer(): Harness {
     sessionTokens: createSessionTokenStore(db),
     spawner: () => stubSpawnedAgent(),
     hookUrl: "http://test.invalid/hook",
+    apiBase: "http://test.invalid",
+    cliEntry: "/dummy/cli.ts",
   });
   return { server, db, repos: [] };
 }

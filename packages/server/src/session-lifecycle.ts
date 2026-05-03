@@ -1,11 +1,13 @@
 import type { AgentStore } from "./agent-store.ts";
 import type { SessionStore } from "./session-store.ts";
 import type { RoleStore } from "./role-store.ts";
+import type { SessionTokenStore } from "./session-token-store.ts";
 
 export interface SessionLifecycleDeps {
   readonly sessions: SessionStore;
   readonly agents: AgentStore;
   readonly roles: RoleStore;
+  readonly sessionTokens: SessionTokenStore;
 }
 
 /**
@@ -20,6 +22,7 @@ export function endSession(sessionId: string, deps: SessionLifecycleDeps): void 
   if (session.ended_at !== undefined) return;
 
   deps.sessions.markEnded(sessionId);
+  deps.sessionTokens.revoke(sessionId);
   if (session.agent_id === undefined) return;
   const role = deps.roles.get(session.role_id);
   if (role === null) return;

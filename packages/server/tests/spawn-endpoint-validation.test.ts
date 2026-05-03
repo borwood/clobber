@@ -28,6 +28,8 @@ function buildHarness() {
       return stubSpawnedAgent({ sessionId: "x" });
     },
     hookUrl: "http://test.invalid/hook",
+    apiBase: "http://test.invalid",
+    cliEntry: "/dummy/cli.ts",
   });
   return {
     server,

@@ -71,6 +71,8 @@ beforeAll(async () => {
     sessionTokens: tokens,
     spawner: () => ({ ...stub, sessionId: randomUUID() }),
     hookUrl: "http://test.invalid/hook",
+    apiBase: "http://test.invalid",
+    cliEntry: "/dummy/cli.ts",
   });
   await app.listen({ port: 0, host: "127.0.0.1" });
   const addr = app.server.address();

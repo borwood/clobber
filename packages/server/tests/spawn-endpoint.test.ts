@@ -47,6 +47,8 @@ function buildHarness(spawner: AgentSpawner): Harness {
     sessionTokens: createSessionTokenStore(db),
     spawner,
     hookUrl: "http://127.0.0.1:3300/hook",
+    apiBase: "http://127.0.0.1:3300",
+    cliEntry: "/dummy/cli.ts",
   });
   return { server, db, workspaces, roles, workspaceRoles, agents, sessions };
 }
@@ -87,7 +89,7 @@ describe("POST /spawn", () => {
 
     const ws = h.workspaces.create({ name: "ws", repo_path: "/repo/path" });
     const role = h.roles.create({
-      name: "manager",
+      name: "custom-role",
       persistent: true,
       permission_mode: "bypassPermissions",
       allowed_tools: ["Bash", "Read"],
@@ -110,7 +112,9 @@ describe("POST /spawn", () => {
       session_id: string;
       pid: number;
     };
-    expect(body.session_id).toBe("claude-session-1");
+    expect(body.session_id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
     expect(body.pid).toBe(9001);
     expect(typeof body.agent_id).toBe("string");
 
@@ -119,6 +123,7 @@ describe("POST /spawn", () => {
       hookUrl: "http://127.0.0.1:3300/hook",
       prompt: "do the thing",
       cwd: "/repo/path",
+      sessionId: body.session_id,
       permissionMode: "bypassPermissions",
       allowedTools: ["Bash", "Read"],
     });
@@ -146,16 +151,18 @@ describe("POST /spawn", () => {
     });
     const { ws, role } = seed(h, { ceiling: 1 });
 
-    await h.server.inject({
+    const res = await h.server.inject({
       method: "POST",
       url: "/spawn",
       payload: { workspace_id: ws.id, role_id: role.id, prompt: "hi" },
     });
+    const body = res.json() as { session_id: string };
 
     expect(calls[0]).toEqual({
       hookUrl: "http://127.0.0.1:3300/hook",
       prompt: "hi",
       cwd: "/r",
+      sessionId: body.session_id,
     });
 
     await teardown(h);

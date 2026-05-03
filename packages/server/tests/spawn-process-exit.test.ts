@@ -22,9 +22,10 @@ function deferredExitSpawner(): DeferredSpawner {
   const resolvers = new Map<string, (code: number | null) => void>();
   const sessions: string[] = [];
   let counter = 0;
-  const spawner: AgentSpawner = () => {
+  const spawner: AgentSpawner = (req) => {
     counter += 1;
-    const sessionId = `00000000-0000-4000-8000-${counter.toString().padStart(12, "0")}`;
+    if (req.sessionId === undefined) throw new Error("test stub expects sessionId from spawn route");
+    const sessionId = req.sessionId;
     sessions.push(sessionId);
     const exited = new Promise<number | null>((resolve) => {
       resolvers.set(sessionId, resolve);
@@ -76,6 +77,8 @@ function buildHarness(): Harness {
     sessionTokens: createSessionTokenStore(db),
     spawner: spawnControl.spawner,
     hookUrl: "http://test.invalid/hook",
+    apiBase: "http://test.invalid",
+    cliEntry: "/dummy/cli.ts",
   });
   return { server, db, workspaces, roles, workspaceRoles, agents, sessions, spawnControl };
 }

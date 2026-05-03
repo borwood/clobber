@@ -31,7 +31,7 @@ function buildHarness(): Harness {
   const sessions = createSessionStore(db);
   const tokens = createSessionTokenStore(db);
   const ws = workspaces.create({ name: "ws", repo_path: "/r" });
-  const role = roles.create({ name: "manager", persistent: false });
+  const role = roles.create({ name: "custom-role", persistent: false });
   workspaceRoles.setCeiling(ws.id, role.id, 1);
   const stub: SpawnedAgentInfo = {
     sessionId: "stub",
@@ -50,6 +50,8 @@ function buildHarness(): Harness {
     sessionTokens: tokens,
     spawner: () => ({ ...stub, sessionId: randomUUID() }),
     hookUrl: "http://test.invalid/hook",
+    apiBase: "http://test.invalid",
+    cliEntry: "/dummy/cli.ts",
   });
   return { server, db, workspaceId: ws.id, roleId: role.id, roleName: role.name, tokens };
 }

@@ -4,6 +4,7 @@ import { serializeUserMessage } from "@clobber/runtime";
 import type { SessionStore } from "../session-store.ts";
 import type { AgentStore } from "../agent-store.ts";
 import type { RoleStore } from "../role-store.ts";
+import type { SessionTokenStore } from "../session-token-store.ts";
 import type { WorkspaceSessionSummaries } from "../workspace-session-summaries.ts";
 import type { AgentRegistry } from "../agent-registry.ts";
 import { readTranscript } from "../transcript-reader.ts";
@@ -27,6 +28,7 @@ export function registerSessionRoutes(
     sessions: SessionStore;
     agents: AgentStore;
     roles: RoleStore;
+    sessionTokens: SessionTokenStore;
     summaries: WorkspaceSessionSummaries;
     registry: AgentRegistry;
   },

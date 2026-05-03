@@ -4,6 +4,7 @@ import type { EventStore } from "../event-store.ts";
 import type { AgentStore } from "../agent-store.ts";
 import type { SessionStore } from "../session-store.ts";
 import type { RoleStore } from "../role-store.ts";
+import type { SessionTokenStore } from "../session-token-store.ts";
 import type { AgentRegistry } from "../agent-registry.ts";
 import { endSession } from "../session-lifecycle.ts";
 
@@ -14,6 +15,7 @@ export function registerHookRoutes(
     sessions: SessionStore;
     agents: AgentStore;
     roles: RoleStore;
+    sessionTokens: SessionTokenStore;
     registry: AgentRegistry;
   },
 ): void {
@@ -36,6 +38,7 @@ function applySessionLifecycle(
     sessions: SessionStore;
     agents: AgentStore;
     roles: RoleStore;
+    sessionTokens: SessionTokenStore;
     registry: AgentRegistry;
   },
 ): void {

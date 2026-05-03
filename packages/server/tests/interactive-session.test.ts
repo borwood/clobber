@@ -30,9 +30,10 @@ function controlledSpawner(): SpawnControl {
   const resolvers = new Map<string, (code: number | null) => void>();
   let counter = 0;
 
-  const spawner: AgentSpawner = () => {
+  const spawner: AgentSpawner = (req) => {
     counter += 1;
-    const sessionId = `00000000-0000-4000-8000-${counter.toString().padStart(12, "0")}`;
+    if (req.sessionId === undefined) throw new Error("test stub expects sessionId from spawn route");
+    const sessionId = req.sessionId;
     const stdin = new PassThrough();
     const writes: string[] = [];
     stdin.on("data", (chunk: Buffer) => {
@@ -91,6 +92,8 @@ function buildHarness(): Harness {
     sessionTokens: createSessionTokenStore(db),
     spawner: control.spawner,
     hookUrl: "http://test.invalid/hook",
+    apiBase: "http://test.invalid",
+    cliEntry: "/dummy/cli.ts",
   });
   return { server, db, workspaces, roles, workspaceRoles, agents: agentsStore, sessions, control };
 }

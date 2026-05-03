@@ -1,4 +1,6 @@
-import { spawnAgent } from "@clobber/runtime";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { spawnAgent, buildHookSettings } from "@clobber/runtime";
 import { createServer, type AgentSpawner } from "./server.ts";
 import { createDatabase } from "./db.ts";
 import { createEventStore } from "./event-store.ts";
@@ -12,18 +14,28 @@ import { createSessionTokenStore } from "./session-token-store.ts";
 import { reapOrphanedSessions } from "./boot-reap.ts";
 
 const PORT = 3300;
-const HOOK_URL = `http://127.0.0.1:${PORT}/hook`;
+const API_BASE = `http://127.0.0.1:${PORT}`;
+const HOOK_URL = `${API_BASE}/hook`;
 const envDb = process.env["CLOBBER_DB"];
 const DB_PATH = envDb && envDb.length > 0 ? envDb : "./clobber.db";
 
+const HERE = dirname(fileURLToPath(import.meta.url));
+const CLI_ENTRY = resolve(HERE, "../../cli/src/index.ts");
+
 const spawner: AgentSpawner = (req) => {
+  const settings =
+    req.settings === undefined
+      ? buildHookSettings({ url: req.hookUrl })
+      : (req.settings as ReturnType<typeof buildHookSettings>);
   const agent = spawnAgent({
     hookUrl: req.hookUrl,
     prompt: req.prompt,
     cwd: req.cwd,
+    settings,
     ...(req.sessionId === undefined ? {} : { sessionId: req.sessionId }),
     ...(req.permissionMode === undefined ? {} : { permissionMode: req.permissionMode }),
     ...(req.allowedTools === undefined ? {} : { allowedTools: req.allowedTools }),
+    ...(req.env === undefined ? {} : { env: req.env }),
   });
   return {
     sessionId: agent.sessionId,
@@ -42,7 +54,7 @@ const agents = createAgentStore(db);
 const sessions = createSessionStore(db);
 const sessionSummaries = createWorkspaceSessionSummaries(db);
 const sessionTokens = createSessionTokenStore(db);
-reapOrphanedSessions({ sessions, agents, roles });
+reapOrphanedSessions({ sessions, agents, roles, sessionTokens });
 const app = createServer({
   store,
   workspaces,
@@ -54,6 +66,8 @@ const app = createServer({
   sessionTokens,
   spawner,
   hookUrl: HOOK_URL,
+  apiBase: API_BASE,
+  cliEntry: CLI_ENTRY,
 });
 await app.listen({ port: PORT, host: "127.0.0.1" });
-console.log(`clobber-server listening on http://127.0.0.1:${PORT} (db: ${DB_PATH})`);
+console.log(`clobber-server listening on ${API_BASE} (db: ${DB_PATH})`);

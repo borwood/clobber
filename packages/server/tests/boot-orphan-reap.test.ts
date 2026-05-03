@@ -5,6 +5,7 @@ import { createWorkspaceStore } from "../src/workspace-store.ts";
 import { createRoleStore } from "../src/role-store.ts";
 import { createAgentStore } from "../src/agent-store.ts";
 import { createSessionStore } from "../src/session-store.ts";
+import { createSessionTokenStore } from "../src/session-token-store.ts";
 import { reapOrphanedSessions } from "../src/boot-reap.ts";
 
 interface Harness {
@@ -13,6 +14,7 @@ interface Harness {
   roles: ReturnType<typeof createRoleStore>;
   agents: ReturnType<typeof createAgentStore>;
   sessions: ReturnType<typeof createSessionStore>;
+  sessionTokens: ReturnType<typeof createSessionTokenStore>;
 }
 
 function buildHarness(): Harness {
@@ -23,6 +25,7 @@ function buildHarness(): Harness {
     roles: createRoleStore(db),
     agents: createAgentStore(db),
     sessions: createSessionStore(db),
+    sessionTokens: createSessionTokenStore(db),
   };
 }
 
@@ -63,6 +66,7 @@ describe("reapOrphanedSessions (boot-time)", () => {
       sessions: h.sessions,
       agents: h.agents,
       roles: h.roles,
+      sessionTokens: h.sessionTokens,
     });
 
     expect(typeof h.sessions.get(a.sessionId)!.ended_at).toBe("number");
@@ -79,6 +83,7 @@ describe("reapOrphanedSessions (boot-time)", () => {
       sessions: h.sessions,
       agents: h.agents,
       roles: h.roles,
+      sessionTokens: h.sessionTokens,
     });
 
     expect(h.agents.get(ephemeral.agentId)).toBeNull();
@@ -96,6 +101,7 @@ describe("reapOrphanedSessions (boot-time)", () => {
       sessions: h.sessions,
       agents: h.agents,
       roles: h.roles,
+      sessionTokens: h.sessionTokens,
     });
 
     expect(h.sessions.get(done.sessionId)!.ended_at).toBe(endedAt!);
@@ -111,6 +117,7 @@ describe("reapOrphanedSessions (boot-time)", () => {
       sessions: h.sessions,
       agents: h.agents,
       roles: h.roles,
+      sessionTokens: h.sessionTokens,
     });
 
     expect(h.sessions.countActive(a.workspaceId, a.roleId)).toBe(0);
@@ -124,6 +131,7 @@ describe("reapOrphanedSessions (boot-time)", () => {
       sessions: h.sessions,
       agents: h.agents,
       roles: h.roles,
+      sessionTokens: h.sessionTokens,
     });
 
     h.db.close();

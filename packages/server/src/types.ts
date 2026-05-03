@@ -15,6 +15,8 @@ export interface AgentSpawnRequest {
   readonly sessionId?: string;
   readonly permissionMode?: PermissionMode;
   readonly allowedTools?: readonly string[];
+  readonly env?: NodeJS.ProcessEnv;
+  readonly settings?: Record<string, unknown>;
 }
 
 export interface SpawnedAgentInfo {
@@ -37,4 +39,6 @@ export interface ServerOptions {
   readonly sessionTokens: SessionTokenStore;
   readonly spawner: AgentSpawner;
   readonly hookUrl: string;
+  readonly apiBase: string;
+  readonly cliEntry: string;
 }

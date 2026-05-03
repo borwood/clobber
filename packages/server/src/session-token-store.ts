@@ -8,8 +8,13 @@ export interface SessionTokenLookup {
 
 export interface SessionTokenStore {
   mint(sessionId: string): string;
+  register(sessionId: string, token: string): void;
   lookup(token: string): SessionTokenLookup | null;
   revoke(sessionId: string): void;
+}
+
+export function generateTokenValue(): string {
+  return randomBytes(32).toString("base64url");
 }
 
 interface Row {
@@ -29,12 +34,19 @@ export function createSessionTokenStore(db: Database): SessionTokenStore {
     "SELECT token, session_id, created_at FROM session_tokens WHERE token = ?",
   );
 
+  function registerImpl(sessionId: string, token: string): void {
+    deleteBySessionStmt.run(sessionId);
+    insertStmt.run(token, sessionId, Date.now());
+  }
+
   return {
     mint(sessionId) {
-      const token = randomBytes(32).toString("base64url");
-      deleteBySessionStmt.run(sessionId);
-      insertStmt.run(token, sessionId, Date.now());
+      const token = generateTokenValue();
+      registerImpl(sessionId, token);
       return token;
+    },
+    register(sessionId, token) {
+      registerImpl(sessionId, token);
     },
     lookup(token) {
       const row = lookupStmt.get(token) as Row | null;

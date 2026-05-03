@@ -27,6 +27,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     sessions: opts.sessions,
     agents: opts.agents,
     roles: opts.roles,
+    sessionTokens: opts.sessionTokens,
     registry,
   });
   registerEventRoutes(app, { store: opts.store });
@@ -34,6 +35,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     sessions: opts.sessions,
     agents: opts.agents,
     roles: opts.roles,
+    sessionTokens: opts.sessionTokens,
     summaries: opts.sessionSummaries,
     registry,
   });
@@ -43,8 +45,11 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     workspaceRoles: opts.workspaceRoles,
     agents: opts.agents,
     sessions: opts.sessions,
+    sessionTokens: opts.sessionTokens,
     spawner: opts.spawner,
     hookUrl: opts.hookUrl,
+    apiBase: opts.apiBase,
+    cliEntry: opts.cliEntry,
     registry,
   });
   registerWorkspaceRoutes(app, {
