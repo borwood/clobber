@@ -17,3 +17,6 @@ data/
 *.sqlite
 *.sqlite-journal
 *.db
+*.db-shm
+*.db-wal
+*.db-journal
