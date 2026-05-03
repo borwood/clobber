@@ -32,5 +32,9 @@
       "@clobber/cli/*": ["./packages/cli/src/*"]
     }
   },
-  "include": ["packages/*/src/**/*", "packages/*/tests/**/*"]
+  "include": [
+    "packages/*/src/**/*",
+    "packages/*/tests/**/*",
+    "packages/*/roles/**/*.ts"
+  ]
 }
