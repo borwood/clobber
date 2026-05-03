@@ -92,4 +92,32 @@ describe("buildClaudeArgs", () => {
     expect(args).not.toContain("--permission-mode");
     expect(args).not.toContain("--allowedTools");
   });
+
+  it("omits --settings when settings is not supplied", () => {
+    const args = buildClaudeArgs({ sessionId: "abc" });
+    expect(args).not.toContain("--settings");
+  });
+
+  it("emits one --plugin-dir per entry in pluginDirs (in order)", () => {
+    const args = buildClaudeArgs({
+      sessionId: "abc",
+      pluginDirs: ["/tmp/.clobber/roles/manager", "/tmp/.clobber/roles/worker"],
+    });
+    const flags = args
+      .map((a, i) => (a === "--plugin-dir" ? args[i + 1] : null))
+      .filter((v): v is string => v !== null);
+    expect(flags).toEqual([
+      "/tmp/.clobber/roles/manager",
+      "/tmp/.clobber/roles/worker",
+    ]);
+  });
+
+  it("does not require --settings when --plugin-dir provides hooks", () => {
+    const args = buildClaudeArgs({
+      sessionId: "abc",
+      pluginDirs: ["/tmp/.clobber/roles/manager"],
+    });
+    expect(args).not.toContain("--settings");
+    expect(args).toContain("--plugin-dir");
+  });
 });

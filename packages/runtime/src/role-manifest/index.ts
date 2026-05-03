@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
-import { join, isAbsolute } from "node:path";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { isAbsolute, join } from "node:path";
 import { RoleManifestSchema, type RoleManifest } from "@clobber/shared";
 
 export class RoleManifestError extends Error {
@@ -16,6 +16,9 @@ export interface DefineRoleOptions {
   readonly manifest: unknown;
 }
 
+export const PLUGIN_MANIFEST_REL = ".claude-plugin/plugin.json";
+export const PLUGIN_HOOKS_REL = "hooks/hooks.json";
+
 export function defineRole(opts: DefineRoleOptions): LoadedRole {
   if (!isAbsolute(opts.root)) {
     throw new RoleManifestError(`role root must be absolute, got: ${opts.root}`);
@@ -31,31 +34,51 @@ export function defineRole(opts: DefineRoleOptions): LoadedRole {
   }
   const manifest = parsed.data;
 
-  const refs: readonly string[] = [
-    manifest.systemPromptPath,
-    manifest.settingsOverlayPath,
-    ...manifest.skills.map((s) => s.path),
-    ...manifest.hookScripts.map((h) => h.path),
-  ];
-  for (const rel of refs) {
-    const abs = join(opts.root, rel);
-    if (!existsSync(abs)) {
-      throw new RoleManifestError(
-        `referenced file missing in role bundle "${manifest.name}": ${rel}`,
-      );
-    }
+  const systemPromptAbs = join(opts.root, manifest.systemPromptPath);
+  if (!existsSync(systemPromptAbs)) {
+    throw new RoleManifestError(
+      `system prompt missing in role bundle "${manifest.name}": ${manifest.systemPromptPath}`,
+    );
   }
 
-  const overlayRaw = readFileSync(
-    join(opts.root, manifest.settingsOverlayPath),
-    "utf8",
-  );
+  const pluginRootAbs = join(opts.root, manifest.pluginTemplatePath);
+  if (!existsSync(pluginRootAbs) || !statSync(pluginRootAbs).isDirectory()) {
+    throw new RoleManifestError(
+      `plugin template missing or not a directory for role "${manifest.name}": ${manifest.pluginTemplatePath}`,
+    );
+  }
+
+  const pluginJsonAbs = join(pluginRootAbs, PLUGIN_MANIFEST_REL);
+  if (!existsSync(pluginJsonAbs)) {
+    throw new RoleManifestError(
+      `plugin manifest missing for role "${manifest.name}": ${manifest.pluginTemplatePath}/${PLUGIN_MANIFEST_REL}`,
+    );
+  }
+  const pluginJsonRaw = readFileSync(pluginJsonAbs, "utf8");
+  let pluginJson: { name?: unknown };
   try {
-    JSON.parse(overlayRaw);
+    pluginJson = JSON.parse(pluginJsonRaw) as { name?: unknown };
   } catch (err) {
     throw new RoleManifestError(
-      `settings overlay is not valid JSON (${manifest.settingsOverlayPath}): ${(err as Error).message}`,
+      `plugin manifest is not valid JSON for role "${manifest.name}": ${(err as Error).message}`,
     );
+  }
+  if (pluginJson.name !== manifest.name) {
+    throw new RoleManifestError(
+      `plugin manifest name (${JSON.stringify(pluginJson.name)}) does not match role name (${JSON.stringify(manifest.name)})`,
+    );
+  }
+
+  const hooksAbs = join(pluginRootAbs, PLUGIN_HOOKS_REL);
+  if (existsSync(hooksAbs)) {
+    const hooksRaw = readFileSync(hooksAbs, "utf8");
+    try {
+      JSON.parse(hooksRaw);
+    } catch (err) {
+      throw new RoleManifestError(
+        `plugin hooks file is not valid JSON for role "${manifest.name}": ${(err as Error).message}`,
+      );
+    }
   }
 
   return Object.freeze({ bundleRoot: opts.root, manifest });

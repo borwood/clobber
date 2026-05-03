@@ -56,17 +56,26 @@ export function buildHookSettings(opts: BuildHookSettingsOptions): HookSettings 
 
 export interface BuildClaudeArgsOptions {
   readonly sessionId: string;
-  readonly settings: HookSettings;
+  readonly settings?: HookSettings;
+  readonly pluginDirs?: readonly string[];
   readonly permissionMode?: PermissionMode;
   readonly allowedTools?: readonly string[];
 }
 
 export function buildClaudeArgs(opts: BuildClaudeArgsOptions): string[] {
-  const args: string[] = [
-    "--session-id", opts.sessionId,
-    "--settings", JSON.stringify(opts.settings),
-    "--setting-sources", "user",
-  ];
+  const args: string[] = ["--session-id", opts.sessionId];
+
+  if (opts.settings !== undefined) {
+    args.push("--settings", JSON.stringify(opts.settings));
+  }
+
+  if (opts.pluginDirs !== undefined) {
+    for (const dir of opts.pluginDirs) {
+      args.push("--plugin-dir", dir);
+    }
+  }
+
+  args.push("--setting-sources", "user");
 
   if (opts.allowedTools && opts.allowedTools.length > 0) {
     args.push("--allowedTools", opts.allowedTools.join(","));

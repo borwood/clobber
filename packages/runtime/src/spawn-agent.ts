@@ -14,6 +14,7 @@ export interface SpawnAgentOptions {
   readonly cwd: string;
   readonly sessionId?: string;
   readonly settings?: HookSettings;
+  readonly pluginDirs?: readonly string[];
   readonly hookAsync?: boolean;
   readonly permissionMode?: PermissionMode;
   readonly allowedTools?: readonly string[];
@@ -31,14 +32,13 @@ export interface SpawnedAgent {
 
 export function spawnAgent(opts: SpawnAgentOptions): SpawnedAgent {
   const sessionId = opts.sessionId === undefined ? randomUUID() : opts.sessionId;
-  const settings =
-    opts.settings === undefined
-      ? buildHookSettings({ url: opts.hookUrl, async: opts.hookAsync === true })
-      : opts.settings;
+
+  const settings = resolveSettings(opts);
 
   const args = buildClaudeArgs({
     sessionId,
-    settings,
+    ...(settings === undefined ? {} : { settings }),
+    ...(opts.pluginDirs === undefined ? {} : { pluginDirs: opts.pluginDirs }),
     ...(opts.permissionMode === undefined ? {} : { permissionMode: opts.permissionMode }),
     ...(opts.allowedTools === undefined ? {} : { allowedTools: opts.allowedTools }),
   });
@@ -66,4 +66,10 @@ export function spawnAgent(opts: SpawnAgentOptions): SpawnedAgent {
   });
 
   return { sessionId, pid: child.pid, child, stdin, exited };
+}
+
+function resolveSettings(opts: SpawnAgentOptions): HookSettings | undefined {
+  if (opts.settings !== undefined) return opts.settings;
+  if (opts.pluginDirs !== undefined) return undefined;
+  return buildHookSettings({ url: opts.hookUrl, async: opts.hookAsync === true });
 }

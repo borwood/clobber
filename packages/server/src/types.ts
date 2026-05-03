@@ -16,7 +16,7 @@ export interface AgentSpawnRequest {
   readonly permissionMode?: PermissionMode;
   readonly allowedTools?: readonly string[];
   readonly env?: NodeJS.ProcessEnv;
-  readonly settings?: Record<string, unknown>;
+  readonly pluginDirs?: readonly string[];
 }
 
 export interface SpawnedAgentInfo {

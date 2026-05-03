@@ -1,6 +1,6 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnAgent, buildHookSettings } from "@clobber/runtime";
+import { spawnAgent } from "@clobber/runtime";
 import { createServer, type AgentSpawner } from "./server.ts";
 import { createDatabase } from "./db.ts";
 import { createEventStore } from "./event-store.ts";
@@ -23,16 +23,12 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI_ENTRY = resolve(HERE, "../../cli/src/index.ts");
 
 const spawner: AgentSpawner = (req) => {
-  const settings =
-    req.settings === undefined
-      ? buildHookSettings({ url: req.hookUrl })
-      : (req.settings as ReturnType<typeof buildHookSettings>);
   const agent = spawnAgent({
     hookUrl: req.hookUrl,
     prompt: req.prompt,
     cwd: req.cwd,
-    settings,
     ...(req.sessionId === undefined ? {} : { sessionId: req.sessionId }),
+    ...(req.pluginDirs === undefined ? {} : { pluginDirs: req.pluginDirs }),
     ...(req.permissionMode === undefined ? {} : { permissionMode: req.permissionMode }),
     ...(req.allowedTools === undefined ? {} : { allowedTools: req.allowedTools }),
     ...(req.env === undefined ? {} : { env: req.env }),

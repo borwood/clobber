@@ -18,21 +18,28 @@ describe("managerRole", () => {
     expect(text.trim().length).toBeGreaterThan(20);
   });
 
-  it("ships one skill markdown per CLI command", () => {
-    const skillNames = managerRole.manifest.skills.map((s) => s.name).sort();
-    expect(skillNames).toEqual(["ask", "spawn", "status", "whoami"]);
-    for (const skill of managerRole.manifest.skills) {
-      expect(existsSync(join(managerRole.bundleRoot, skill.path))).toBe(true);
+  it("ships a plugin template directory with .claude-plugin/plugin.json named after the role", () => {
+    const pluginRoot = join(managerRole.bundleRoot, managerRole.manifest.pluginTemplatePath);
+    const pluginJsonPath = join(pluginRoot, ".claude-plugin", "plugin.json");
+    expect(existsSync(pluginJsonPath)).toBe(true);
+    const json = JSON.parse(readFileSync(pluginJsonPath, "utf8")) as { name: string };
+    expect(json.name).toBe("manager");
+  });
+
+  it("ships a SKILL.md per CLI command under skills/<name>/", () => {
+    const pluginRoot = join(managerRole.bundleRoot, managerRole.manifest.pluginTemplatePath);
+    for (const cmd of managerRole.manifest.allowedCliCommands) {
+      expect(existsSync(join(pluginRoot, "skills", cmd, "SKILL.md"))).toBe(true);
     }
   });
 
-  it("ships a settings overlay that registers HTTP hooks via __CLOBBER_HOOK_URL__ placeholder", () => {
-    const raw = readFileSync(
-      join(managerRole.bundleRoot, managerRole.manifest.settingsOverlayPath),
-      "utf8",
-    );
+  it("ships hooks/hooks.json with the __CLOBBER_HOOK_URL__ placeholder", () => {
+    const pluginRoot = join(managerRole.bundleRoot, managerRole.manifest.pluginTemplatePath);
+    const hooksPath = join(pluginRoot, "hooks", "hooks.json");
+    expect(existsSync(hooksPath)).toBe(true);
+    const raw = readFileSync(hooksPath, "utf8");
     expect(raw).toContain("__CLOBBER_HOOK_URL__");
-    const parsed = JSON.parse(raw) as { hooks?: Record<string, unknown> };
-    expect(parsed.hooks).toBeDefined();
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    expect(parsed["SessionStart"]).toBeDefined();
   });
 });

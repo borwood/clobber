@@ -9,9 +9,21 @@ let bundleRoot: string;
 beforeEach(() => {
   bundleRoot = mkdtempSync(join(tmpdir(), "clobber-role-"));
   writeFileSync(join(bundleRoot, "system-prompt.md"), "you are a test role\n");
-  writeFileSync(join(bundleRoot, "settings.overlay.json"), "{}\n");
-  mkdirSync(join(bundleRoot, "skills"), { recursive: true });
-  writeFileSync(join(bundleRoot, "skills", "whoami.md"), "# whoami\n");
+  mkdirSync(join(bundleRoot, "plugin-template", ".claude-plugin"), { recursive: true });
+  writeFileSync(
+    join(bundleRoot, "plugin-template", ".claude-plugin", "plugin.json"),
+    JSON.stringify({ name: "test-role", description: "for tests", version: "0.0.1" }),
+  );
+  mkdirSync(join(bundleRoot, "plugin-template", "skills", "whoami"), { recursive: true });
+  writeFileSync(
+    join(bundleRoot, "plugin-template", "skills", "whoami", "SKILL.md"),
+    "---\nname: whoami\ndescription: who\n---\n# whoami\n",
+  );
+  mkdirSync(join(bundleRoot, "plugin-template", "hooks"), { recursive: true });
+  writeFileSync(
+    join(bundleRoot, "plugin-template", "hooks", "hooks.json"),
+    JSON.stringify({ SessionStart: [] }),
+  );
 });
 
 afterEach(() => {
@@ -22,10 +34,8 @@ const validManifest = {
   name: "test-role",
   description: "for tests",
   systemPromptPath: "system-prompt.md",
+  pluginTemplatePath: "plugin-template",
   allowedCliCommands: ["whoami"],
-  settingsOverlayPath: "settings.overlay.json",
-  skills: [{ name: "whoami", path: "skills/whoami.md" }],
-  hookScripts: [],
 } as const;
 
 describe("defineRole", () => {
@@ -52,24 +62,53 @@ describe("defineRole", () => {
     ).toThrow(/system-prompt\.md/);
   });
 
-  it("throws RoleManifestError if the settings overlay file is missing", () => {
-    rmSync(join(bundleRoot, "settings.overlay.json"));
+  it("throws RoleManifestError if the plugin template directory is missing", () => {
+    rmSync(join(bundleRoot, "plugin-template"), { recursive: true });
     expect(() =>
       defineRole({ root: bundleRoot, manifest: validManifest }),
-    ).toThrow(/settings\.overlay\.json/);
+    ).toThrow(/plugin template/);
   });
 
-  it("throws RoleManifestError if a skill file is missing", () => {
-    rmSync(join(bundleRoot, "skills", "whoami.md"));
+  it("throws RoleManifestError if .claude-plugin/plugin.json is missing", () => {
+    rmSync(join(bundleRoot, "plugin-template", ".claude-plugin", "plugin.json"));
     expect(() =>
       defineRole({ root: bundleRoot, manifest: validManifest }),
-    ).toThrow(/whoami\.md/);
+    ).toThrow(/plugin manifest/);
   });
 
-  it("throws RoleManifestError if the settings overlay is not valid JSON", () => {
-    writeFileSync(join(bundleRoot, "settings.overlay.json"), "not json{{{");
+  it("throws RoleManifestError if plugin.json is not valid JSON", () => {
+    writeFileSync(
+      join(bundleRoot, "plugin-template", ".claude-plugin", "plugin.json"),
+      "not json{{{",
+    );
     expect(() =>
       defineRole({ root: bundleRoot, manifest: validManifest }),
     ).toThrow(RoleManifestError);
+  });
+
+  it("throws RoleManifestError if plugin.json name does not match manifest name", () => {
+    writeFileSync(
+      join(bundleRoot, "plugin-template", ".claude-plugin", "plugin.json"),
+      JSON.stringify({ name: "wrong-name", description: "x", version: "0.0.1" }),
+    );
+    expect(() =>
+      defineRole({ root: bundleRoot, manifest: validManifest }),
+    ).toThrow(/does not match role name/);
+  });
+
+  it("throws RoleManifestError if hooks/hooks.json exists but is not valid JSON", () => {
+    writeFileSync(
+      join(bundleRoot, "plugin-template", "hooks", "hooks.json"),
+      "not json",
+    );
+    expect(() =>
+      defineRole({ root: bundleRoot, manifest: validManifest }),
+    ).toThrow(/hooks file is not valid JSON/);
+  });
+
+  it("accepts a role with no hooks/hooks.json", () => {
+    rmSync(join(bundleRoot, "plugin-template", "hooks"), { recursive: true });
+    const role = defineRole({ root: bundleRoot, manifest: validManifest });
+    expect(role.manifest.name).toBe("test-role");
   });
 });

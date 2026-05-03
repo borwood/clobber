@@ -67,7 +67,7 @@ export function registerSpawnRoutes(app: FastifyInstance, deps: SpawnRouteDeps):
     const token = generateTokenValue();
 
     const bundle = loadRoleBundle(role.name);
-    const bundleExtras: Pick<AgentSpawnRequest, "env" | "settings"> =
+    const bundleExtras: Pick<AgentSpawnRequest, "env" | "pluginDirs"> =
       bundle === null
         ? {}
         : (() => {
@@ -88,7 +88,7 @@ export function registerSpawnRoutes(app: FastifyInstance, deps: SpawnRouteDeps):
               CLOBBER_WORKSPACE_ID: workspace.id,
               CLOBBER_ROLE: role.name,
             };
-            return { env, settings: materialized.settings };
+            return { env, pluginDirs: [materialized.pluginDir] };
           })();
 
     const agent = deps.agents.create({

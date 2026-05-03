@@ -80,7 +80,7 @@ async function teardown(h: Harness): Promise<void> {
 }
 
 describe("POST /spawn — manager bundle materialization", () => {
-  it("materializes the manager bundle into the workspace cwd and threads token+env", async () => {
+  it("materializes the manager plugin under .clobber/roles/manager and threads token+env+pluginDir", async () => {
     const h = buildHarness();
     const ws = h.workspaces.create({ name: "ws", repo_path: repoPath });
     const role = h.roles.create({ name: "manager", persistent: true });
@@ -94,9 +94,17 @@ describe("POST /spawn — manager bundle materialization", () => {
     expect(res.statusCode).toBe(200);
     const body = res.json() as { session_id: string; pid: number };
 
-    expect(existsSync(join(repoPath, ".claude", "skills", "manager", "whoami.md"))).toBe(true);
-    expect(existsSync(join(repoPath, ".claude", "skills", "manager", "spawn.md"))).toBe(true);
+    const pluginDir = join(repoPath, ".clobber", "roles", "manager");
+    expect(existsSync(join(pluginDir, ".claude-plugin", "plugin.json"))).toBe(true);
+    expect(existsSync(join(pluginDir, "skills", "whoami", "SKILL.md"))).toBe(true);
+    expect(existsSync(join(pluginDir, "skills", "spawn", "SKILL.md"))).toBe(true);
+    expect(existsSync(join(pluginDir, "hooks", "hooks.json"))).toBe(true);
     expect(existsSync(join(repoPath, ".clobber", "bin", "clobber"))).toBe(true);
+    expect(existsSync(join(repoPath, ".claude"))).toBe(false);
+
+    const hooksRaw = readFileSync(join(pluginDir, "hooks", "hooks.json"), "utf8");
+    expect(hooksRaw).toContain("http://127.0.0.1:3300/hook");
+    expect(hooksRaw).not.toContain("__CLOBBER_HOOK_URL__");
 
     const session = h.sessions.get(body.session_id);
     expect(session).not.toBeNull();
@@ -115,8 +123,7 @@ describe("POST /spawn — manager bundle materialization", () => {
     expect(typeof passedToken).toBe("string");
     expect(h.sessionTokens.lookup(passedToken!)?.session_id).toBe(body.session_id);
 
-    expect(call.settings).toBeDefined();
-    expect(JSON.stringify(call.settings)).toContain("http://127.0.0.1:3300/hook");
+    expect(call.pluginDirs).toEqual([pluginDir]);
 
     const path = call.env!["PATH"]!;
     expect(path.startsWith(join(repoPath, ".clobber", "bin"))).toBe(true);
@@ -146,7 +153,7 @@ describe("POST /spawn — manager bundle materialization", () => {
     expect(h.calls).toHaveLength(1);
     const call = h.calls[0]!;
     expect(call.env).toBeUndefined();
-    expect(call.settings).toBeUndefined();
+    expect(call.pluginDirs).toBeUndefined();
 
     await teardown(h);
   });

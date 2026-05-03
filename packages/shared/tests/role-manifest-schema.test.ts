@@ -5,10 +5,8 @@ const baseManifest = {
   name: "manager",
   description: "Owns workspace state and spawns workers.",
   systemPromptPath: "system-prompt.md",
+  pluginTemplatePath: "plugin-template",
   allowedCliCommands: ["whoami"],
-  settingsOverlayPath: "settings.overlay.json",
-  skills: [{ name: "whoami", path: "skills/whoami.md" }],
-  hookScripts: [],
 };
 
 describe("RoleManifestSchema", () => {
@@ -43,28 +41,20 @@ describe("RoleManifestSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects an absolute skill path", () => {
+  it("rejects an absolute pluginTemplatePath", () => {
     const result = RoleManifestSchema.safeParse({
       ...baseManifest,
-      skills: [{ name: "x", path: "/abs/x.md" }],
+      pluginTemplatePath: "/abs/plugin",
     });
     expect(result.success).toBe(false);
   });
 
-  it("rejects a hookScript with an invalid event name", () => {
+  it("rejects a pluginTemplatePath that escapes the bundle", () => {
     const result = RoleManifestSchema.safeParse({
       ...baseManifest,
-      hookScripts: [{ event: "NotARealEvent", path: "hooks/x.sh" }],
+      pluginTemplatePath: "../escapee",
     });
     expect(result.success).toBe(false);
-  });
-
-  it("accepts a hookScript with a real event name", () => {
-    const result = RoleManifestSchema.safeParse({
-      ...baseManifest,
-      hookScripts: [{ event: "SessionStart", path: "hooks/start.sh" }],
-    });
-    expect(result.success).toBe(true);
   });
 
   it("rejects an empty allowed CLI command", () => {
@@ -75,13 +65,10 @@ describe("RoleManifestSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects duplicate skill names", () => {
+  it("rejects duplicate allowed CLI commands", () => {
     const result = RoleManifestSchema.safeParse({
       ...baseManifest,
-      skills: [
-        { name: "whoami", path: "skills/whoami.md" },
-        { name: "whoami", path: "skills/dup.md" },
-      ],
+      allowedCliCommands: ["whoami", "whoami"],
     });
     expect(result.success).toBe(false);
   });

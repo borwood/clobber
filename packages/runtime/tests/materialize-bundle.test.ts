@@ -15,25 +15,7 @@ afterEach(() => {
 });
 
 describe("materializeBundle", () => {
-  it("writes role skills into <repo>/.claude/skills/<role>/", () => {
-    materializeBundle({
-      bundle: managerRole,
-      repoPath,
-      hookUrl: "http://127.0.0.1:3300/hook",
-      cliEntry: "/abs/cli/index.ts",
-    });
-
-    const skillsDir = join(repoPath, ".claude", "skills", "manager");
-    expect(existsSync(join(skillsDir, "whoami.md"))).toBe(true);
-    expect(existsSync(join(skillsDir, "spawn.md"))).toBe(true);
-    expect(existsSync(join(skillsDir, "ask.md"))).toBe(true);
-    expect(existsSync(join(skillsDir, "status.md"))).toBe(true);
-
-    const whoami = readFileSync(join(skillsDir, "whoami.md"), "utf8");
-    expect(whoami).toContain("clobber whoami");
-  });
-
-  it("returns settings JSON with __CLOBBER_HOOK_URL__ substituted by the real hook url", () => {
+  it("writes the role plugin tree under <repo>/.clobber/roles/<role>/", () => {
     const result = materializeBundle({
       bundle: managerRole,
       repoPath,
@@ -41,11 +23,41 @@ describe("materializeBundle", () => {
       cliEntry: "/abs/cli/index.ts",
     });
 
-    const settings = result.settings as { hooks: Record<string, unknown> };
-    const serialized = JSON.stringify(settings);
-    expect(serialized).not.toContain("__CLOBBER_HOOK_URL__");
-    expect(serialized).toContain("http://127.0.0.1:3300/hook");
-    expect(settings.hooks).toBeDefined();
+    expect(result.pluginDir).toBe(join(repoPath, ".clobber", "roles", "manager"));
+    expect(existsSync(join(result.pluginDir, ".claude-plugin", "plugin.json"))).toBe(true);
+    expect(existsSync(join(result.pluginDir, "skills", "whoami", "SKILL.md"))).toBe(true);
+    expect(existsSync(join(result.pluginDir, "skills", "spawn", "SKILL.md"))).toBe(true);
+    expect(existsSync(join(result.pluginDir, "skills", "ask", "SKILL.md"))).toBe(true);
+    expect(existsSync(join(result.pluginDir, "skills", "status", "SKILL.md"))).toBe(true);
+
+    const whoami = readFileSync(join(result.pluginDir, "skills", "whoami", "SKILL.md"), "utf8");
+    expect(whoami).toContain("clobber whoami");
+  });
+
+  it("never writes anything under <repo>/.claude/", () => {
+    materializeBundle({
+      bundle: managerRole,
+      repoPath,
+      hookUrl: "http://127.0.0.1:3300/hook",
+      cliEntry: "/abs/cli/index.ts",
+    });
+    expect(existsSync(join(repoPath, ".claude"))).toBe(false);
+  });
+
+  it("substitutes __CLOBBER_HOOK_URL__ in the materialized hooks/hooks.json", () => {
+    const result = materializeBundle({
+      bundle: managerRole,
+      repoPath,
+      hookUrl: "http://127.0.0.1:3300/hook",
+      cliEntry: "/abs/cli/index.ts",
+    });
+
+    const hooksPath = join(result.pluginDir, "hooks", "hooks.json");
+    const raw = readFileSync(hooksPath, "utf8");
+    expect(raw).not.toContain("__CLOBBER_HOOK_URL__");
+    expect(raw).toContain("http://127.0.0.1:3300/hook");
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    expect(parsed["SessionStart"]).toBeDefined();
   });
 
   it("creates a per-bundle bin dir with an executable `clobber` shim that points at the cli entry", () => {
@@ -78,7 +90,7 @@ describe("materializeBundle", () => {
       cliEntry: "/abs/cli/index.ts",
     });
     expect(
-      existsSync(join(repoPath, ".claude", "skills", "manager", "whoami.md")),
+      existsSync(join(repoPath, ".clobber", "roles", "manager", "skills", "whoami", "SKILL.md")),
     ).toBe(true);
   });
 });

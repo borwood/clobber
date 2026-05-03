@@ -11,14 +11,7 @@ export const managerRole = defineRole({
     description:
       "Permanent inhabitant of a workspace. Decomposes work, spawns workers, asks the user when blocked.",
     systemPromptPath: "system-prompt.md",
-    settingsOverlayPath: "settings.overlay.json",
+    pluginTemplatePath: "plugin-template",
     allowedCliCommands: ["whoami", "spawn", "ask", "status"],
-    skills: [
-      { name: "whoami", path: "skills/whoami.md" },
-      { name: "spawn", path: "skills/spawn.md" },
-      { name: "ask", path: "skills/ask.md" },
-      { name: "status", path: "skills/status.md" },
-    ],
-    hookScripts: [],
   },
 });
