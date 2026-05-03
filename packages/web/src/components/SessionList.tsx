@@ -41,9 +41,15 @@ export function SessionList({ sessions, selectedId, onSelect }: Props) {
                 {s.session_id}
               </div>
               <div className="mt-1 flex items-center gap-2 text-xs text-zinc-500">
-                <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">
-                  {s.last_event_name}
-                </span>
+                {s.last_event_name === undefined ? (
+                  <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500 italic">
+                    no events yet
+                  </span>
+                ) : (
+                  <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">
+                    {s.last_event_name}
+                  </span>
+                )}
                 <span>{s.event_count} events</span>
                 <span className="ml-auto">{relativeTime(s.last_seen_at)}</span>
               </div>

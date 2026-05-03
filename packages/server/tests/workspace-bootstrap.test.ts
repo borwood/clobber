@@ -7,6 +7,7 @@ import { createRoleStore } from "../src/role-store.ts";
 import { createWorkspaceRoleStore } from "../src/workspace-role-store.ts";
 import { createAgentStore } from "../src/agent-store.ts";
 import { createSessionStore } from "../src/session-store.ts";
+import { createWorkspaceSessionSummaries } from "../src/workspace-session-summaries.ts";
 import { makeRepoFixture, type RepoFixture } from "./repo-fixture.ts";
 import type { Role, Workspace, WorkspaceRoleAssignment } from "@clobber/shared";
 
@@ -32,6 +33,7 @@ function buildHarness(): Harness {
     workspaceRoles,
     agents,
     sessions,
+    sessionSummaries: createWorkspaceSessionSummaries(db),
     spawner: () => ({ sessionId: "stub", pid: 0 }),
     hookUrl: "http://test.invalid/hook",
   });

@@ -1,17 +1,28 @@
 import type { FastifyInstance } from "fastify";
-import type { EventStore } from "../event-store.ts";
 import type { SessionStore } from "../session-store.ts";
+import type { WorkspaceSessionSummaries } from "../workspace-session-summaries.ts";
 import { readTranscript } from "../transcript-reader.ts";
 
 interface IdParam {
   id: string;
 }
 
+interface SessionsQuery {
+  workspace_id?: string;
+}
+
 export function registerSessionRoutes(
   app: FastifyInstance,
-  deps: { store: EventStore; sessions: SessionStore },
+  deps: { sessions: SessionStore; summaries: WorkspaceSessionSummaries },
 ): void {
-  app.get("/sessions", async () => deps.store.listSessions());
+  app.get<{ Querystring: SessionsQuery }>("/sessions", async (request, reply) => {
+    const workspaceId = request.query.workspace_id;
+    if (workspaceId === undefined || workspaceId.length === 0) {
+      reply.code(400);
+      return { error: "workspace_id query param is required" };
+    }
+    return deps.summaries.list(workspaceId);
+  });
 
   app.get<{ Params: IdParam }>(
     "/sessions/:id/transcript",

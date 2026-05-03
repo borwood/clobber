@@ -7,6 +7,7 @@ import { createRoleStore } from "../src/role-store.ts";
 import { createWorkspaceRoleStore } from "../src/workspace-role-store.ts";
 import { createAgentStore } from "../src/agent-store.ts";
 import { createSessionStore } from "../src/session-store.ts";
+import { createWorkspaceSessionSummaries } from "../src/workspace-session-summaries.ts";
 import type { AgentSpawner, AgentSpawnRequest } from "../src/server.ts";
 
 interface Harness {
@@ -34,6 +35,7 @@ function buildHarness(spawner: AgentSpawner): Harness {
     workspaceRoles,
     agents,
     sessions,
+    sessionSummaries: createWorkspaceSessionSummaries(db),
     spawner,
     hookUrl: "http://127.0.0.1:3300/hook",
   });

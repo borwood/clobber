@@ -5,6 +5,7 @@ import type { RoleStore } from "./role-store.ts";
 import type { WorkspaceRoleStore } from "./workspace-role-store.ts";
 import type { AgentStore } from "./agent-store.ts";
 import type { SessionStore } from "./session-store.ts";
+import type { WorkspaceSessionSummaries } from "./workspace-session-summaries.ts";
 
 export interface AgentSpawnRequest {
   readonly hookUrl: string;
@@ -29,6 +30,7 @@ export interface ServerOptions {
   readonly workspaceRoles: WorkspaceRoleStore;
   readonly agents: AgentStore;
   readonly sessions: SessionStore;
+  readonly sessionSummaries: WorkspaceSessionSummaries;
   readonly spawner: AgentSpawner;
   readonly hookUrl: string;
 }

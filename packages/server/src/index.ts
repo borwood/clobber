@@ -7,6 +7,7 @@ import { createRoleStore } from "./role-store.ts";
 import { createWorkspaceRoleStore } from "./workspace-role-store.ts";
 import { createAgentStore } from "./agent-store.ts";
 import { createSessionStore } from "./session-store.ts";
+import { createWorkspaceSessionSummaries } from "./workspace-session-summaries.ts";
 
 const PORT = 3300;
 const HOOK_URL = `http://127.0.0.1:${PORT}/hook`;
@@ -32,6 +33,7 @@ const roles = createRoleStore(db);
 const workspaceRoles = createWorkspaceRoleStore(db);
 const agents = createAgentStore(db);
 const sessions = createSessionStore(db);
+const sessionSummaries = createWorkspaceSessionSummaries(db);
 const app = createServer({
   store,
   workspaces,
@@ -39,6 +41,7 @@ const app = createServer({
   workspaceRoles,
   agents,
   sessions,
+  sessionSummaries,
   spawner,
   hookUrl: HOOK_URL,
 });

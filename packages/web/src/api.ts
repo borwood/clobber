@@ -12,7 +12,7 @@ export interface SessionSummary {
   readonly first_seen_at: number;
   readonly last_seen_at: number;
   readonly event_count: number;
-  readonly last_event_name: string;
+  readonly last_event_name?: string;
 }
 
 export interface SpawnRequest {
@@ -57,7 +57,10 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
 }
 
 export const api = {
-  listSessions: () => getJson<SessionSummary[]>("/sessions"),
+  listSessions: (workspaceId: string) =>
+    getJson<SessionSummary[]>(
+      `/sessions?workspace_id=${encodeURIComponent(workspaceId)}`,
+    ),
   listWorkspaces: () => getJson<Workspace[]>("/workspaces"),
   createWorkspace: (req: CreateWorkspaceRequest) => postJson<Workspace>("/workspaces", req),
   listWorkspaceRoles: (workspaceId: string) =>

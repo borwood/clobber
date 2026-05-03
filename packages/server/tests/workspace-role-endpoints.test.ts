@@ -7,6 +7,7 @@ import { createRoleStore } from "../src/role-store.ts";
 import { createWorkspaceRoleStore } from "../src/workspace-role-store.ts";
 import { createAgentStore } from "../src/agent-store.ts";
 import { createSessionStore } from "../src/session-store.ts";
+import { createWorkspaceSessionSummaries } from "../src/workspace-session-summaries.ts";
 import { makeRepoFixture, type RepoFixture } from "./repo-fixture.ts";
 import type { Role, Workspace, WorkspaceRoleAssignment, WorkspaceRoleCeiling } from "@clobber/shared";
 
@@ -25,6 +26,7 @@ function buildServer(): Harness {
     workspaceRoles: createWorkspaceRoleStore(db),
     agents: createAgentStore(db),
     sessions: createSessionStore(db),
+    sessionSummaries: createWorkspaceSessionSummaries(db),
     spawner: () => ({ sessionId: "stub", pid: 0 }),
     hookUrl: "http://test.invalid/hook",
   });

@@ -78,10 +78,13 @@ export function App() {
   }, [workspaceId]);
 
   useEffect(() => {
+    setSessions([]);
+    setSelectedSession(null);
+    if (workspaceId === null) return;
     let cancelled = false;
     async function tick() {
       try {
-        const next = await api.listSessions();
+        const next = await api.listSessions(workspaceId!);
         if (!cancelled) setSessions(next);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
@@ -93,7 +96,7 @@ export function App() {
       cancelled = true;
       clearInterval(id);
     };
-  }, []);
+  }, [workspaceId]);
 
   useEffect(() => {
     if (selectedSession === null) {
