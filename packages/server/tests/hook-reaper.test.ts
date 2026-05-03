@@ -228,6 +228,86 @@ describe("hook reaper + transcript pickup", () => {
     await teardown(h);
   });
 
+  it("UserPromptSubmit picks up transcript_path on a session that has none", async () => {
+    const h = buildHarness();
+    const seed = seedSession(h, { persistent: false });
+
+    expect(h.sessions.get(seed.sessionId)!.transcript_path).toBeUndefined();
+
+    const transcriptPath = `/home/u/.claude/projects/abc/${seed.sessionId}.jsonl`;
+    const res = await h.server.inject({
+      method: "POST",
+      url: "/hook",
+      payload: {
+        ...envelope(seed.sessionId, transcriptPath),
+        hook_event_name: "UserPromptSubmit",
+        prompt: "hello there",
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(h.sessions.get(seed.sessionId)!.transcript_path).toBe(transcriptPath);
+
+    await teardown(h);
+  });
+
+  it("Stop also picks up transcript_path (claude -p never fires SessionStart)", async () => {
+    const h = buildHarness();
+    const seed = seedSession(h, { persistent: false });
+
+    const transcriptPath = `/home/u/.claude/projects/abc/${seed.sessionId}.jsonl`;
+    await h.server.inject({
+      method: "POST",
+      url: "/hook",
+      payload: {
+        ...envelope(seed.sessionId, transcriptPath),
+        hook_event_name: "Stop",
+      },
+    });
+    expect(h.sessions.get(seed.sessionId)!.transcript_path).toBe(transcriptPath);
+
+    await teardown(h);
+  });
+
+  it("repeated payloads with the same transcript_path are idempotent", async () => {
+    const h = buildHarness();
+    const seed = seedSession(h, { persistent: false });
+
+    const transcriptPath = `/home/u/.claude/projects/abc/${seed.sessionId}.jsonl`;
+    for (let i = 0; i < 3; i++) {
+      await h.server.inject({
+        method: "POST",
+        url: "/hook",
+        payload: {
+          ...envelope(seed.sessionId, transcriptPath),
+          hook_event_name: "UserPromptSubmit",
+          prompt: `n${i}`,
+        },
+      });
+    }
+    expect(h.sessions.get(seed.sessionId)!.transcript_path).toBe(transcriptPath);
+
+    await teardown(h);
+  });
+
+  it("transcript_path pickup for an unknown session_id is a no-op", async () => {
+    const h = buildHarness();
+    const unknown = randomUUID();
+
+    const res = await h.server.inject({
+      method: "POST",
+      url: "/hook",
+      payload: {
+        ...envelope(unknown, "/tmp/t.jsonl"),
+        hook_event_name: "UserPromptSubmit",
+        prompt: "hi",
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(h.sessions.get(unknown)).toBeNull();
+
+    await teardown(h);
+  });
+
   it("SessionStart for an unknown session_id is also a no-op", async () => {
     const h = buildHarness();
     const unknown = randomUUID();

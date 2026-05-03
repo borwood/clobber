@@ -31,16 +31,14 @@ function applySessionLifecycle(
   payload: HookPayload,
   deps: { sessions: SessionStore; agents: AgentStore; roles: RoleStore },
 ): void {
-  if (payload.hook_event_name === "SessionStart") {
-    const session = deps.sessions.get(payload.session_id);
-    if (session === null) return;
+  const session = deps.sessions.get(payload.session_id);
+  if (session === null) return;
+
+  if (session.transcript_path !== payload.transcript_path) {
     deps.sessions.updateTranscriptPath(payload.session_id, payload.transcript_path);
-    return;
   }
 
   if (payload.hook_event_name === "SessionEnd") {
-    const session = deps.sessions.get(payload.session_id);
-    if (session === null) return;
     deps.sessions.markEnded(payload.session_id);
     if (session.agent_id === undefined) return;
     const role = deps.roles.get(session.role_id);
