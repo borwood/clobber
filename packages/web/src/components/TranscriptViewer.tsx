@@ -138,6 +138,7 @@ function AssistantContentBlock({ block }: { block: ContentBlock }) {
     return <pre className="whitespace-pre-wrap text-sm text-zinc-100">{block.text}</pre>;
   }
   if (block.type === "thinking") {
+    if (block.thinking.trim().length === 0) return null;
     return (
       <details className="text-xs text-zinc-500">
         <summary className="cursor-pointer hover:text-zinc-300">thinking</summary>
