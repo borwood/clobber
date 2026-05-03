@@ -4,6 +4,7 @@ import type { EventStore } from "../event-store.ts";
 import type { AgentStore } from "../agent-store.ts";
 import type { SessionStore } from "../session-store.ts";
 import type { RoleStore } from "../role-store.ts";
+import { endSession } from "../session-lifecycle.ts";
 
 export function registerHookRoutes(
   app: FastifyInstance,
@@ -39,10 +40,6 @@ function applySessionLifecycle(
   }
 
   if (payload.hook_event_name === "SessionEnd") {
-    deps.sessions.markEnded(payload.session_id);
-    if (session.agent_id === undefined) return;
-    const role = deps.roles.get(session.role_id);
-    if (role === null) return;
-    if (!role.persistent) deps.agents.delete(session.agent_id);
+    endSession(payload.session_id, deps);
   }
 }

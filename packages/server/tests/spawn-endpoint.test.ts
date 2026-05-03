@@ -73,7 +73,7 @@ describe("POST /spawn", () => {
     const h = buildHarness((req) => {
       calls.push(req);
       counter += 1;
-      return { sessionId: `claude-session-${counter}`, pid: 9000 + counter };
+      return { sessionId: `claude-session-${counter}`, pid: 9000 + counter, exited: new Promise<number | null>(() => {}) };
     });
 
     const ws = h.workspaces.create({ name: "ws", repo_path: "/repo/path" });
@@ -133,7 +133,7 @@ describe("POST /spawn", () => {
     const calls: AgentSpawnRequest[] = [];
     const h = buildHarness((req) => {
       calls.push(req);
-      return { sessionId: "s1", pid: 1 };
+      return { sessionId: "s1", pid: 1, exited: new Promise<number | null>(() => {}) };
     });
     const { ws, role } = seed(h, { ceiling: 1 });
 
@@ -156,7 +156,7 @@ describe("POST /spawn", () => {
     let invocations = 0;
     const h = buildHarness(() => {
       invocations += 1;
-      return { sessionId: "x", pid: 0 };
+      return { sessionId: "x", pid: 0, exited: new Promise<number | null>(() => {}) };
     });
     const role = h.roles.create({ name: "r", persistent: false });
 
@@ -181,7 +181,7 @@ describe("POST /spawn", () => {
     let invocations = 0;
     const h = buildHarness(() => {
       invocations += 1;
-      return { sessionId: "x", pid: 0 };
+      return { sessionId: "x", pid: 0, exited: new Promise<number | null>(() => {}) };
     });
     const ws = h.workspaces.create({ name: "ws", repo_path: "/r" });
     const res = await h.server.inject({
@@ -205,7 +205,7 @@ describe("POST /spawn", () => {
     let invocations = 0;
     const h = buildHarness(() => {
       invocations += 1;
-      return { sessionId: "x", pid: 0 };
+      return { sessionId: "x", pid: 0, exited: new Promise<number | null>(() => {}) };
     });
     const { ws, role } = seed(h);
     const res = await h.server.inject({
@@ -228,7 +228,7 @@ describe("POST /spawn", () => {
     let counter = 0;
     const h = buildHarness(() => {
       counter += 1;
-      return { sessionId: `s${counter}`, pid: counter };
+      return { sessionId: `s${counter}`, pid: counter, exited: new Promise<number | null>(() => {}) };
     });
     const { ws, role } = seed(h, { ceiling: 1 });
     const first = await h.server.inject({
@@ -256,7 +256,7 @@ describe("POST /spawn", () => {
     let counter = 0;
     const h = buildHarness(() => {
       counter += 1;
-      return { sessionId: `s${counter}`, pid: counter };
+      return { sessionId: `s${counter}`, pid: counter, exited: new Promise<number | null>(() => {}) };
     });
     const { ws, role } = seed(h, { ceiling: 1 });
     const first = await h.server.inject({

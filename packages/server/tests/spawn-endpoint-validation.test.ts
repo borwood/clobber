@@ -22,7 +22,7 @@ function buildHarness() {
     sessionSummaries: createWorkspaceSessionSummaries(db),
     spawner: () => {
       invocations += 1;
-      return { sessionId: "x", pid: 0 };
+      return { sessionId: "x", pid: 0, exited: new Promise<number | null>(() => {}) };
     },
     hookUrl: "http://test.invalid/hook",
   });

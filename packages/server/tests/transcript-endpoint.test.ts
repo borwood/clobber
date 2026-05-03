@@ -38,7 +38,7 @@ function buildHarness(): Harness {
     agents,
     sessions,
     sessionSummaries: createWorkspaceSessionSummaries(db),
-    spawner: () => ({ sessionId: "stub", pid: 0 }),
+    spawner: () => ({ sessionId: "stub", pid: 0, exited: new Promise<number | null>(() => {}) }),
     hookUrl: "http://test.invalid/hook",
   });
   return { server, db, workspaces, roles, agents, sessions, tmp };

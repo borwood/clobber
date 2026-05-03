@@ -23,7 +23,7 @@ const spawner: AgentSpawner = (req) => {
     ...(req.permissionMode === undefined ? {} : { permissionMode: req.permissionMode }),
     ...(req.allowedTools === undefined ? {} : { allowedTools: req.allowedTools }),
   });
-  return { sessionId: agent.sessionId, pid: agent.pid };
+  return { sessionId: agent.sessionId, pid: agent.pid, exited: agent.exited };
 };
 
 const db = createDatabase(DB_PATH);
