@@ -26,7 +26,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     roles: opts.roles,
   });
   registerEventRoutes(app, { store: opts.store });
-  registerSessionRoutes(app, { store: opts.store });
+  registerSessionRoutes(app, { store: opts.store, sessions: opts.sessions });
   registerSpawnRoutes(app, {
     workspaces: opts.workspaces,
     roles: opts.roles,

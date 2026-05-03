@@ -2,13 +2,13 @@ import { useEffect, useState } from "react";
 import {
   api,
   type SessionSummary,
-  type StoredEvent,
+  type TranscriptLine,
   type Workspace,
   type WorkspaceRoleAssignment,
 } from "./api.ts";
 import { SpawnPanel } from "./components/SpawnPanel.tsx";
 import { SessionList } from "./components/SessionList.tsx";
-import { EventLog } from "./components/EventLog.tsx";
+import { TranscriptViewer } from "./components/TranscriptViewer.tsx";
 import { WorkspaceSwitcher } from "./components/WorkspaceSwitcher.tsx";
 import { RolePicker } from "./components/RolePicker.tsx";
 
@@ -22,7 +22,7 @@ export function App() {
 
   const [sessions, setSessions] = useState<readonly SessionSummary[]>([]);
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
-  const [events, setEvents] = useState<readonly StoredEvent[]>([]);
+  const [transcript, setTranscript] = useState<readonly TranscriptLine[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -97,14 +97,14 @@ export function App() {
 
   useEffect(() => {
     if (selectedSession === null) {
-      setEvents([]);
+      setTranscript([]);
       return;
     }
     let cancelled = false;
     async function tick() {
       try {
-        const next = await api.listEvents(selectedSession!);
-        if (!cancelled) setEvents(next);
+        const next = await api.getTranscript(selectedSession!);
+        if (!cancelled) setTranscript(next);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       }
@@ -151,9 +151,9 @@ export function App() {
           <h2 className="text-sm uppercase tracking-wider text-zinc-500 mb-3">
             {selectedSession === null
               ? "select a session"
-              : `events · ${selectedSession.slice(0, 8)}`}
+              : `transcript · ${selectedSession.slice(0, 8)}`}
           </h2>
-          <EventLog events={events} />
+          <TranscriptViewer lines={transcript} />
         </section>
 
         <aside className="border-l border-zinc-800 overflow-y-auto p-4 space-y-5">

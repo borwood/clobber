@@ -1,5 +1,4 @@
 import type {
-  HookPayload,
   Workspace,
   CreateWorkspaceRequest,
   Role,
@@ -7,12 +6,6 @@ import type {
 } from "@clobber/shared";
 
 export type { Workspace, Role, WorkspaceRoleAssignment } from "@clobber/shared";
-
-export interface StoredEvent {
-  readonly id: number;
-  readonly received_at: number;
-  readonly payload: HookPayload;
-}
 
 export interface SessionSummary {
   readonly session_id: string;
@@ -35,6 +28,8 @@ export interface SpawnResponse {
   readonly pid: number;
 }
 
+export type TranscriptLine = Record<string, unknown>;
+
 async function getJson<T>(path: string): Promise<T> {
   const res = await fetch(path);
   if (!res.ok) throw new Error(`GET ${path} failed: ${res.status} ${await res.text()}`);
@@ -53,10 +48,6 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
 
 export const api = {
   listSessions: () => getJson<SessionSummary[]>("/sessions"),
-  listEvents: (sessionId?: string) =>
-    getJson<StoredEvent[]>(
-      sessionId ? `/events?session_id=${encodeURIComponent(sessionId)}` : "/events",
-    ),
   listWorkspaces: () => getJson<Workspace[]>("/workspaces"),
   createWorkspace: (req: CreateWorkspaceRequest) => postJson<Workspace>("/workspaces", req),
   listWorkspaceRoles: (workspaceId: string) =>
@@ -64,4 +55,6 @@ export const api = {
       `/workspaces/${encodeURIComponent(workspaceId)}/roles`,
     ),
   spawn: (req: SpawnRequest) => postJson<SpawnResponse>("/spawn", req),
+  getTranscript: (sessionId: string) =>
+    getJson<TranscriptLine[]>(`/sessions/${encodeURIComponent(sessionId)}/transcript`),
 };
