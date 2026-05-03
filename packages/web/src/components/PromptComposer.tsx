@@ -1,0 +1,72 @@
+import { useState, type KeyboardEvent } from "react";
+
+interface Props {
+  readonly sessionId: string;
+  readonly disabled: boolean;
+  readonly onSend: (prompt: string) => Promise<void>;
+}
+
+export function PromptComposer({ sessionId, disabled, onSend }: Props) {
+  const [prompt, setPrompt] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const canSend = !disabled && !sending && prompt.trim().length > 0;
+
+  async function send() {
+    if (!canSend) return;
+    setSending(true);
+    setError(null);
+    try {
+      await onSend(prompt);
+      setPrompt("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  function onKey(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      void send();
+    }
+  }
+
+  return (
+    <div className="border-t border-zinc-800 bg-zinc-950 p-3 space-y-2">
+      <textarea
+        value={prompt}
+        onChange={(e) => setPrompt(e.target.value)}
+        onKeyDown={onKey}
+        disabled={disabled || sending}
+        placeholder={
+          disabled
+            ? "Session ended."
+            : "Follow-up prompt… (⌘/Ctrl+Enter to send)"
+        }
+        rows={3}
+        className="w-full resize-none rounded border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600 disabled:opacity-50"
+      />
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-zinc-600 font-mono truncate">
+          {sessionId.slice(0, 8)}
+        </span>
+        {error !== null && (
+          <span className="text-xs text-red-400 truncate" title={error}>
+            {error}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={() => void send()}
+          disabled={!canSend}
+          className="ml-auto px-3 py-1.5 text-xs rounded bg-emerald-700 text-white hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {sending ? "Sending…" : "Send"}
+        </button>
+      </div>
+    </div>
+  );
+}

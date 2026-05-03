@@ -11,6 +11,7 @@ import { SessionList } from "./components/SessionList.tsx";
 import { TranscriptViewer } from "./components/TranscriptViewer.tsx";
 import { WorkspaceSwitcher } from "./components/WorkspaceSwitcher.tsx";
 import { RolePicker } from "./components/RolePicker.tsx";
+import { PromptComposer } from "./components/PromptComposer.tsx";
 
 const POLL_MS = 1000;
 
@@ -121,7 +122,7 @@ export function App() {
   }, [selectedSession]);
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="h-screen flex flex-col overflow-hidden">
       <header className="border-b border-zinc-800 px-6 py-3 flex items-center gap-4">
         <h1 className="text-xl font-bold tracking-tight">clobber</h1>
         <WorkspaceSwitcher
@@ -160,13 +161,28 @@ export function App() {
           />
         </aside>
 
-        <section className="overflow-y-auto p-6">
-          <h2 className="text-sm uppercase tracking-wider text-zinc-500 mb-3">
-            {selectedSession === null
-              ? "select a session"
-              : `transcript · ${selectedSession.slice(0, 8)}`}
-          </h2>
-          <TranscriptViewer lines={transcript} />
+        <section className="flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto p-6">
+            <h2 className="text-sm uppercase tracking-wider text-zinc-500 mb-3">
+              {selectedSession === null
+                ? "select a session"
+                : `transcript · ${selectedSession.slice(0, 8)}`}
+            </h2>
+            <TranscriptViewer lines={transcript} />
+          </div>
+          {selectedSession !== null && (
+            <PromptComposer
+              sessionId={selectedSession}
+              disabled={
+                sessions.find((s) => s.session_id === selectedSession)?.ended_at !==
+                undefined
+              }
+              onSend={async (prompt) => {
+                await api.sendPrompt(selectedSession, prompt);
+                setTranscript(await api.getTranscript(selectedSession));
+              }}
+            />
+          )}
         </section>
 
         <aside className="border-l border-zinc-800 overflow-y-auto p-4 space-y-5">

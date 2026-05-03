@@ -76,4 +76,9 @@ export const api = {
       `/sessions/${encodeURIComponent(sessionId)}/end`,
       {},
     ),
+  sendPrompt: (sessionId: string, prompt: string) =>
+    postJson<{ ok: true }>(
+      `/sessions/${encodeURIComponent(sessionId)}/prompt`,
+      { prompt },
+    ),
 };
