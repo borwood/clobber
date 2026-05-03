@@ -19,7 +19,12 @@ import type { ServerOptions } from "./types.ts";
 export function createServer(opts: ServerOptions): FastifyInstance {
   const app = Fastify({ logger: false });
 
-  registerHookRoutes(app, { store: opts.store });
+  registerHookRoutes(app, {
+    store: opts.store,
+    sessions: opts.sessions,
+    agents: opts.agents,
+    roles: opts.roles,
+  });
   registerEventRoutes(app, { store: opts.store });
   registerSessionRoutes(app, { store: opts.store });
   registerSpawnRoutes(app, {
