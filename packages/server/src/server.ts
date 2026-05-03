@@ -36,7 +36,11 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     spawner: opts.spawner,
     hookUrl: opts.hookUrl,
   });
-  registerWorkspaceRoutes(app, { workspaces: opts.workspaces });
+  registerWorkspaceRoutes(app, {
+    workspaces: opts.workspaces,
+    roles: opts.roles,
+    workspaceRoles: opts.workspaceRoles,
+  });
   registerRoleRoutes(app, { roles: opts.roles });
   registerWorkspaceRoleRoutes(app, {
     workspaces: opts.workspaces,

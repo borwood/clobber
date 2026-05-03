@@ -85,8 +85,9 @@ describe("workspace-role endpoints", () => {
       method: "GET",
       url: `/workspaces/${ws.id}/roles`,
     })).json() as WorkspaceRoleAssignment[];
-    expect(list).toHaveLength(1);
-    expect(list[0]!.max_concurrent).toBe(7);
+    const workerEntry = list.find((a) => a.role.id === role.id);
+    expect(workerEntry).toBeDefined();
+    expect(workerEntry!.max_concurrent).toBe(7);
 
     await server.close();
     db.close();
@@ -100,10 +101,10 @@ describe("workspace-role endpoints", () => {
       payload: { name: "ws", repo_path: "/r" },
     })).json() as Workspace;
 
-    const manager = (await server.inject({
+    const lead = (await server.inject({
       method: "POST",
       url: "/roles",
-      payload: { name: "manager", persistent: true },
+      payload: { name: "lead", persistent: true },
     })).json() as Role;
     const worker = (await server.inject({
       method: "POST",
@@ -113,7 +114,7 @@ describe("workspace-role endpoints", () => {
 
     await server.inject({
       method: "PUT",
-      url: `/workspaces/${ws.id}/roles/${manager.id}`,
+      url: `/workspaces/${ws.id}/roles/${lead.id}`,
       payload: { max_concurrent: 1 },
     });
     await server.inject({
@@ -127,10 +128,10 @@ describe("workspace-role endpoints", () => {
       url: `/workspaces/${ws.id}/roles`,
     })).json() as WorkspaceRoleAssignment[];
 
-    expect(list).toHaveLength(2);
     const byName = new Map(list.map((entry) => [entry.role.name, entry]));
-    expect(byName.get("manager")).toEqual({ role: manager, max_concurrent: 1 });
+    expect(byName.get("lead")).toEqual({ role: lead, max_concurrent: 1 });
     expect(byName.get("worker")).toEqual({ role: worker, max_concurrent: 5 });
+    expect(byName.get("manager")?.max_concurrent).toBe(1);
 
     await server.close();
     db.close();
@@ -156,7 +157,7 @@ describe("workspace-role endpoints", () => {
       method: "GET",
       url: `/workspaces/${ws.id}/roles`,
     })).json() as WorkspaceRoleAssignment[];
-    expect(list).toHaveLength(0);
+    expect(list.find((a) => a.role.id === role.id)).toBeUndefined();
 
     const second = await server.inject({
       method: "DELETE",
@@ -190,7 +191,7 @@ describe("workspace-role endpoints", () => {
       method: "GET",
       url: `/workspaces/${ws.id}/roles`,
     })).json() as WorkspaceRoleAssignment[];
-    expect(list).toHaveLength(0);
+    expect(list.find((a) => a.role.id === role.id)).toBeUndefined();
 
     await server.close();
     db.close();
@@ -258,7 +259,7 @@ describe("workspace-role endpoints", () => {
       method: "GET",
       url: `/workspaces/${ws.id}/roles`,
     })).json() as WorkspaceRoleAssignment[];
-    expect(list).toHaveLength(0);
+    expect(list.find((a) => a.role.id === role.id)).toBeUndefined();
 
     await server.close();
     db.close();

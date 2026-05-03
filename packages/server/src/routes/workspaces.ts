@@ -1,6 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { CreateWorkspaceRequestSchema } from "@clobber/shared";
 import type { WorkspaceStore } from "../workspace-store.ts";
+import type { RoleStore } from "../role-store.ts";
+import type { WorkspaceRoleStore } from "../workspace-role-store.ts";
+import { ensureManagerRole } from "../manager-role.ts";
 
 interface IdParam {
   id: string;
@@ -8,9 +11,13 @@ interface IdParam {
 
 export function registerWorkspaceRoutes(
   app: FastifyInstance,
-  deps: { workspaces: WorkspaceStore },
+  deps: {
+    workspaces: WorkspaceStore;
+    roles: RoleStore;
+    workspaceRoles: WorkspaceRoleStore;
+  },
 ): void {
-  const { workspaces } = deps;
+  const { workspaces, roles, workspaceRoles } = deps;
 
   app.post("/workspaces", async (request, reply) => {
     const parsed = CreateWorkspaceRequestSchema.safeParse(request.body);
@@ -23,6 +30,8 @@ export function registerWorkspaceRoutes(
       return { error: "workspace name already exists" };
     }
     const created = workspaces.create(parsed.data);
+    const manager = ensureManagerRole(roles);
+    workspaceRoles.setCeiling(created.id, manager.id, 1);
     reply.code(201);
     return created;
   });
