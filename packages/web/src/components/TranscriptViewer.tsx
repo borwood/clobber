@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState, type UIEvent } from "react";
 import type { TranscriptLine } from "../api.ts";
 import {
   classifyLine,
@@ -11,35 +12,76 @@ interface Props {
   readonly showSystem: boolean;
 }
 
+const PIN_THRESHOLD_PX = 100;
+
 export function TranscriptViewer({ lines, showSystem }: Props) {
-  if (lines.length === 0) {
-    return (
-      <p className="text-sm text-zinc-500">
-        No transcript yet. Wait for the agent to start.
-      </p>
-    );
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [pinned, setPinned] = useState(true);
+
+  useLayoutEffect(() => {
+    if (!pinned) return;
+    const el = scrollRef.current;
+    if (el === null) return;
+    el.scrollTop = el.scrollHeight;
+  }, [lines, pinned, showSystem]);
+
+  function onScroll(_e: UIEvent<HTMLDivElement>) {
+    const el = scrollRef.current;
+    if (el === null) return;
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setPinned(distFromBottom < PIN_THRESHOLD_PX);
+  }
+
+  function jumpToLatest() {
+    const el = scrollRef.current;
+    if (el === null) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    setPinned(true);
   }
 
   return (
-    <div className="space-y-3">
-      {lines.map((line, idx) => {
-        const classified = classifyLine(line);
-        if (classified.kind === "user") {
-          return <UserBubble key={idx} line={classified.line} />;
-        }
-        if (classified.kind === "assistant") {
-          return <AssistantBubble key={idx} line={classified.line} />;
-        }
-        if (!showSystem) return null;
-        return (
-          <SystemLine
-            key={idx}
-            type={classified.type}
-            {...(classified.summary === undefined ? {} : { summary: classified.summary })}
-            raw={classified.raw}
-          />
-        );
-      })}
+    <div className="flex-1 relative overflow-hidden">
+      <div
+        ref={scrollRef}
+        onScroll={onScroll}
+        className="absolute inset-0 overflow-y-auto px-6 pb-6"
+      >
+        {lines.length === 0 ? (
+          <p className="text-sm text-zinc-500">
+            No transcript yet. Wait for the agent to start.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {lines.map((line, idx) => {
+              const classified = classifyLine(line);
+              if (classified.kind === "user") {
+                return <UserBubble key={idx} line={classified.line} />;
+              }
+              if (classified.kind === "assistant") {
+                return <AssistantBubble key={idx} line={classified.line} />;
+              }
+              if (!showSystem) return null;
+              return (
+                <SystemLine
+                  key={idx}
+                  type={classified.type}
+                  {...(classified.summary === undefined ? {} : { summary: classified.summary })}
+                  raw={classified.raw}
+                />
+              );
+            })}
+          </div>
+        )}
+      </div>
+      {!pinned && (
+        <button
+          type="button"
+          onClick={jumpToLatest}
+          className="absolute bottom-3 right-4 px-3 py-1.5 text-xs rounded-full bg-zinc-800 text-zinc-100 border border-zinc-700 shadow-lg hover:bg-zinc-700"
+        >
+          ↓ jump to latest
+        </button>
+      )}
     </div>
   );
 }
