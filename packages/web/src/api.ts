@@ -1,4 +1,12 @@
-import type { HookPayload, PermissionMode } from "@clobber/shared";
+import type {
+  HookPayload,
+  Workspace,
+  CreateWorkspaceRequest,
+  Role,
+  WorkspaceRoleAssignment,
+} from "@clobber/shared";
+
+export type { Workspace, Role, WorkspaceRoleAssignment } from "@clobber/shared";
 
 export interface StoredEvent {
   readonly id: number;
@@ -15,15 +23,15 @@ export interface SessionSummary {
 }
 
 export interface SpawnRequest {
+  readonly workspace_id: string;
+  readonly role_id: string;
   readonly prompt: string;
-  readonly cwd: string;
-  readonly sessionId?: string;
-  readonly permissionMode?: PermissionMode;
-  readonly allowedTools?: readonly string[];
+  readonly label?: string;
 }
 
 export interface SpawnResponse {
-  readonly sessionId: string;
+  readonly agent_id: string;
+  readonly session_id: string;
   readonly pid: number;
 }
 
@@ -46,6 +54,14 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
 export const api = {
   listSessions: () => getJson<SessionSummary[]>("/sessions"),
   listEvents: (sessionId?: string) =>
-    getJson<StoredEvent[]>(sessionId ? `/events?session_id=${encodeURIComponent(sessionId)}` : "/events"),
+    getJson<StoredEvent[]>(
+      sessionId ? `/events?session_id=${encodeURIComponent(sessionId)}` : "/events",
+    ),
+  listWorkspaces: () => getJson<Workspace[]>("/workspaces"),
+  createWorkspace: (req: CreateWorkspaceRequest) => postJson<Workspace>("/workspaces", req),
+  listWorkspaceRoles: (workspaceId: string) =>
+    getJson<WorkspaceRoleAssignment[]>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/roles`,
+    ),
   spawn: (req: SpawnRequest) => postJson<SpawnResponse>("/spawn", req),
 };
