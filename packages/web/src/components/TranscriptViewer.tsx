@@ -8,9 +8,10 @@ import {
 
 interface Props {
   readonly lines: readonly TranscriptLine[];
+  readonly showSystem: boolean;
 }
 
-export function TranscriptViewer({ lines }: Props) {
+export function TranscriptViewer({ lines, showSystem }: Props) {
   if (lines.length === 0) {
     return (
       <p className="text-sm text-zinc-500">
@@ -23,14 +24,21 @@ export function TranscriptViewer({ lines }: Props) {
     <div className="space-y-3">
       {lines.map((line, idx) => {
         const classified = classifyLine(line);
-        if (classified.kind === "skip") return null;
         if (classified.kind === "user") {
           return <UserBubble key={idx} line={classified.line} />;
         }
         if (classified.kind === "assistant") {
           return <AssistantBubble key={idx} line={classified.line} />;
         }
-        return <UnknownLine key={idx} line={line} />;
+        if (!showSystem) return null;
+        return (
+          <SystemLine
+            key={idx}
+            type={classified.type}
+            {...(classified.summary === undefined ? {} : { summary: classified.summary })}
+            raw={classified.raw}
+          />
+        );
       })}
     </div>
   );
@@ -118,13 +126,27 @@ function RawBlock({ block }: { block: ContentBlock }) {
   );
 }
 
-function UnknownLine({ line }: { line: TranscriptLine }) {
+function SystemLine({
+  type,
+  summary,
+  raw,
+}: {
+  type: string;
+  summary?: string;
+  raw: TranscriptLine;
+}) {
   return (
-    <Bubble label={String(line["type"] ?? "?")} tone="zinc">
-      <pre className="whitespace-pre-wrap text-xs text-zinc-500 overflow-x-auto">
-        {JSON.stringify(line, null, 2)}
+    <details className="text-xs text-zinc-500 leading-snug">
+      <summary className="cursor-pointer hover:text-zinc-300 select-none">
+        <span className="font-mono text-zinc-400">{type}</span>
+        {summary !== undefined && (
+          <span className="text-zinc-500"> · {summary}</span>
+        )}
+      </summary>
+      <pre className="whitespace-pre-wrap mt-1 text-zinc-500 bg-zinc-950 p-2 rounded border border-zinc-800 overflow-x-auto">
+        {JSON.stringify(raw, null, 2)}
       </pre>
-    </Bubble>
+    </details>
   );
 }
 

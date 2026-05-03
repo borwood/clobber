@@ -24,6 +24,7 @@ export function App() {
   const [sessions, setSessions] = useState<readonly SessionSummary[]>([]);
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<readonly TranscriptLine[]>([]);
+  const [showSystem, setShowSystem] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -163,12 +164,23 @@ export function App() {
 
         <section className="flex flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto p-6">
-            <h2 className="text-sm uppercase tracking-wider text-zinc-500 mb-3">
-              {selectedSession === null
-                ? "select a session"
-                : `transcript · ${selectedSession.slice(0, 8)}`}
-            </h2>
-            <TranscriptViewer lines={transcript} />
+            <div className="flex items-center mb-3">
+              <h2 className="text-sm uppercase tracking-wider text-zinc-500">
+                {selectedSession === null
+                  ? "select a session"
+                  : `transcript · ${selectedSession.slice(0, 8)}`}
+              </h2>
+              <label className="ml-auto flex items-center gap-2 text-xs text-zinc-500 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={showSystem}
+                  onChange={(e) => setShowSystem(e.target.checked)}
+                  className="accent-emerald-600"
+                />
+                show details
+              </label>
+            </div>
+            <TranscriptViewer lines={transcript} showSystem={showSystem} />
           </div>
           {selectedSession !== null && (
             <PromptComposer
