@@ -13,6 +13,7 @@ export interface SessionSummary {
   readonly last_seen_at: number;
   readonly event_count: number;
   readonly last_event_name?: string;
+  readonly ended_at?: number;
 }
 
 export interface SpawnRequest {
@@ -70,4 +71,9 @@ export const api = {
   spawn: (req: SpawnRequest) => postJson<SpawnResponse>("/spawn", req),
   getTranscript: (sessionId: string) =>
     getJson<TranscriptLine[]>(`/sessions/${encodeURIComponent(sessionId)}/transcript`),
+  endSession: (sessionId: string) =>
+    postJson<{ ok: true }>(
+      `/sessions/${encodeURIComponent(sessionId)}/end`,
+      {},
+    ),
 };

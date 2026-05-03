@@ -147,6 +147,16 @@ export function App() {
             sessions={sessions}
             selectedId={selectedSession}
             onSelect={setSelectedSession}
+            onEnd={async (id) => {
+              try {
+                await api.endSession(id);
+                if (workspaceId !== null) {
+                  setSessions(await api.listSessions(workspaceId));
+                }
+              } catch (e) {
+                setError(e instanceof Error ? e.message : String(e));
+              }
+            }}
           />
         </aside>
 

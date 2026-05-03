@@ -6,6 +6,7 @@ export interface SessionSummary {
   readonly last_seen_at: number;
   readonly event_count: number;
   readonly last_event_name?: string;
+  readonly ended_at?: number;
 }
 
 export interface WorkspaceSessionSummaries {
@@ -18,6 +19,7 @@ interface Row {
   last_seen_at: number;
   event_count: number;
   last_event_name: string | null;
+  ended_at: number | null;
 }
 
 export function createWorkspaceSessionSummaries(db: Database): WorkspaceSessionSummaries {
@@ -27,6 +29,7 @@ export function createWorkspaceSessionSummaries(db: Database): WorkspaceSessionS
       COALESCE(MIN(e.received_at), s.started_at) AS first_seen_at,
       COALESCE(MAX(e.received_at), s.started_at) AS last_seen_at,
       COUNT(e.id) AS event_count,
+      s.ended_at AS ended_at,
       (
         SELECT hook_event_name
           FROM events e2
@@ -50,6 +53,7 @@ export function createWorkspaceSessionSummaries(db: Database): WorkspaceSessionS
         last_seen_at: row.last_seen_at,
         event_count: row.event_count,
         ...(row.last_event_name === null ? {} : { last_event_name: row.last_event_name }),
+        ...(row.ended_at === null ? {} : { ended_at: row.ended_at }),
       }));
     },
   };
