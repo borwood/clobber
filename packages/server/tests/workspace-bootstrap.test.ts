@@ -7,12 +7,14 @@ import { createRoleStore } from "../src/role-store.ts";
 import { createWorkspaceRoleStore } from "../src/workspace-role-store.ts";
 import { createAgentStore } from "../src/agent-store.ts";
 import { createSessionStore } from "../src/session-store.ts";
+import { makeRepoFixture, type RepoFixture } from "./repo-fixture.ts";
 import type { Role, Workspace, WorkspaceRoleAssignment } from "@clobber/shared";
 
 interface Harness {
   server: ReturnType<typeof createServer>;
   db: ReturnType<typeof createDatabase>;
   roles: ReturnType<typeof createRoleStore>;
+  repos: RepoFixture[];
 }
 
 function buildHarness(): Harness {
@@ -33,19 +35,22 @@ function buildHarness(): Harness {
     spawner: () => ({ sessionId: "stub", pid: 0 }),
     hookUrl: "http://test.invalid/hook",
   });
-  return { server, db, roles };
+  return { server, db, roles, repos: [] };
 }
 
 async function teardown(h: Harness) {
   await h.server.close();
   h.db.close();
+  for (const repo of h.repos) repo.cleanup();
 }
 
-async function createWorkspace(h: Harness, name: string, repo: string): Promise<Workspace> {
+async function createWorkspace(h: Harness, name: string): Promise<Workspace> {
+  const repo = makeRepoFixture("clobber-bootstrap-");
+  h.repos.push(repo);
   const res = await h.server.inject({
     method: "POST",
     url: "/workspaces",
-    payload: { name, repo_path: repo },
+    payload: { name, repo_path: repo.path },
   });
   expect(res.statusCode).toBe(201);
   return res.json() as Workspace;
@@ -68,7 +73,7 @@ describe("workspace bootstrap — manager auto-seed", () => {
     const h = buildHarness();
     expect(h.roles.findByName("manager")).toBeNull();
 
-    await createWorkspace(h, "alpha", "/r/a");
+    await createWorkspace(h, "alpha");
 
     const manager = h.roles.findByName("manager");
     expect(manager).not.toBeNull();
@@ -84,7 +89,7 @@ describe("workspace bootstrap — manager auto-seed", () => {
   it("sets ceiling=1 for (workspace, manager) on creation", async () => {
     const h = buildHarness();
 
-    const ws = await createWorkspace(h, "alpha", "/r/a");
+    const ws = await createWorkspace(h, "alpha");
     const assignments = await listAssignments(h, ws.id);
 
     expect(assignments).toHaveLength(1);
@@ -98,8 +103,8 @@ describe("workspace bootstrap — manager auto-seed", () => {
   it("reuses the same manager role across multiple workspaces", async () => {
     const h = buildHarness();
 
-    const a = await createWorkspace(h, "alpha", "/r/a");
-    const b = await createWorkspace(h, "beta", "/r/b");
+    const a = await createWorkspace(h, "alpha");
+    const b = await createWorkspace(h, "beta");
 
     const aAssignments = await listAssignments(h, a.id);
     const bAssignments = await listAssignments(h, b.id);

@@ -7,9 +7,16 @@ import { createRoleStore } from "../src/role-store.ts";
 import { createWorkspaceRoleStore } from "../src/workspace-role-store.ts";
 import { createAgentStore } from "../src/agent-store.ts";
 import { createSessionStore } from "../src/session-store.ts";
+import { makeRepoFixture, type RepoFixture } from "./repo-fixture.ts";
 import type { Role, Workspace, WorkspaceRoleAssignment, WorkspaceRoleCeiling } from "@clobber/shared";
 
-function buildServer() {
+interface Harness {
+  server: ReturnType<typeof createServer>;
+  db: ReturnType<typeof createDatabase>;
+  repos: RepoFixture[];
+}
+
+function buildServer(): Harness {
   const db = createDatabase(":memory:");
   const server = createServer({
     store: createEventStore(db),
@@ -21,20 +28,32 @@ function buildServer() {
     spawner: () => ({ sessionId: "stub", pid: 0 }),
     hookUrl: "http://test.invalid/hook",
   });
-  return { server, db };
+  return { server, db, repos: [] };
+}
+
+async function teardown(h: Harness): Promise<void> {
+  await h.server.close();
+  h.db.close();
+  for (const repo of h.repos) repo.cleanup();
+}
+
+async function createWorkspaceViaApi(h: Harness, name: string): Promise<Workspace> {
+  const repo = makeRepoFixture("clobber-wsrole-");
+  h.repos.push(repo);
+  return (await h.server.inject({
+    method: "POST",
+    url: "/workspaces",
+    payload: { name, repo_path: repo.path },
+  })).json() as Workspace;
 }
 
 async function seedWorkspaceAndRole(
-  server: ReturnType<typeof buildServer>["server"],
+  h: Harness,
   workspaceName: string,
   roleName: string,
 ): Promise<{ ws: Workspace; role: Role }> {
-  const ws = (await server.inject({
-    method: "POST",
-    url: "/workspaces",
-    payload: { name: workspaceName, repo_path: `/r/${workspaceName}` },
-  })).json() as Workspace;
-  const role = (await server.inject({
+  const ws = await createWorkspaceViaApi(h, workspaceName);
+  const role = (await h.server.inject({
     method: "POST",
     url: "/roles",
     payload: { name: roleName, persistent: false },
@@ -44,8 +63,9 @@ async function seedWorkspaceAndRole(
 
 describe("workspace-role endpoints", () => {
   it("PUT /workspaces/:wid/roles/:rid creates a ceiling and returns it", async () => {
-    const { server, db } = buildServer();
-    const { ws, role } = await seedWorkspaceAndRole(server, "rh", "worker");
+    const h = buildServer();
+    const { server } = h;
+    const { ws, role } = await seedWorkspaceAndRole(h, "rh", "worker");
 
     const put = await server.inject({
       method: "PUT",
@@ -60,13 +80,13 @@ describe("workspace-role endpoints", () => {
       max_concurrent: 5,
     } satisfies WorkspaceRoleCeiling);
 
-    await server.close();
-    db.close();
+    await teardown(h);
   });
 
   it("PUT updates an existing ceiling (upsert)", async () => {
-    const { server, db } = buildServer();
-    const { ws, role } = await seedWorkspaceAndRole(server, "rh", "worker");
+    const h = buildServer();
+    const { server } = h;
+    const { ws, role } = await seedWorkspaceAndRole(h, "rh", "worker");
 
     await server.inject({
       method: "PUT",
@@ -89,17 +109,13 @@ describe("workspace-role endpoints", () => {
     expect(workerEntry).toBeDefined();
     expect(workerEntry!.max_concurrent).toBe(7);
 
-    await server.close();
-    db.close();
+    await teardown(h);
   });
 
   it("GET /workspaces/:wid/roles returns joined assignments embedding the role", async () => {
-    const { server, db } = buildServer();
-    const ws = (await server.inject({
-      method: "POST",
-      url: "/workspaces",
-      payload: { name: "ws", repo_path: "/r" },
-    })).json() as Workspace;
+    const h = buildServer();
+    const { server } = h;
+    const ws = await createWorkspaceViaApi(h, "ws");
 
     const lead = (await server.inject({
       method: "POST",
@@ -133,13 +149,13 @@ describe("workspace-role endpoints", () => {
     expect(byName.get("worker")).toEqual({ role: worker, max_concurrent: 5 });
     expect(byName.get("manager")?.max_concurrent).toBe(1);
 
-    await server.close();
-    db.close();
+    await teardown(h);
   });
 
   it("DELETE /workspaces/:wid/roles/:rid removes the ceiling", async () => {
-    const { server, db } = buildServer();
-    const { ws, role } = await seedWorkspaceAndRole(server, "rh", "worker");
+    const h = buildServer();
+    const { server } = h;
+    const { ws, role } = await seedWorkspaceAndRole(h, "rh", "worker");
 
     await server.inject({
       method: "PUT",
@@ -165,13 +181,13 @@ describe("workspace-role endpoints", () => {
     });
     expect(second.statusCode).toBe(404);
 
-    await server.close();
-    db.close();
+    await teardown(h);
   });
 
   it("PUT rejects an invalid body with 400", async () => {
-    const { server, db } = buildServer();
-    const { ws, role } = await seedWorkspaceAndRole(server, "rh", "worker");
+    const h = buildServer();
+    const { server } = h;
+    const { ws, role } = await seedWorkspaceAndRole(h, "rh", "worker");
 
     const negative = await server.inject({
       method: "PUT",
@@ -193,13 +209,13 @@ describe("workspace-role endpoints", () => {
     })).json() as WorkspaceRoleAssignment[];
     expect(list.find((a) => a.role.id === role.id)).toBeUndefined();
 
-    await server.close();
-    db.close();
+    await teardown(h);
   });
 
   it("PUT returns 404 for unknown workspace or role", async () => {
-    const { server, db } = buildServer();
-    const { ws, role } = await seedWorkspaceAndRole(server, "rh", "worker");
+    const h = buildServer();
+    const { server } = h;
+    const { ws, role } = await seedWorkspaceAndRole(h, "rh", "worker");
 
     const badWs = await server.inject({
       method: "PUT",
@@ -215,13 +231,13 @@ describe("workspace-role endpoints", () => {
     });
     expect(badRole.statusCode).toBe(404);
 
-    await server.close();
-    db.close();
+    await teardown(h);
   });
 
   it("deleting a workspace cascades its ceilings", async () => {
-    const { server, db } = buildServer();
-    const { ws, role } = await seedWorkspaceAndRole(server, "rh", "worker");
+    const h = buildServer();
+    const { server } = h;
+    const { ws, role } = await seedWorkspaceAndRole(h, "rh", "worker");
 
     await server.inject({
       method: "PUT",
@@ -238,13 +254,13 @@ describe("workspace-role endpoints", () => {
     });
     expect(list.statusCode).toBe(404);
 
-    await server.close();
-    db.close();
+    await teardown(h);
   });
 
   it("deleting a role cascades its ceilings across workspaces", async () => {
-    const { server, db } = buildServer();
-    const { ws, role } = await seedWorkspaceAndRole(server, "rh", "worker");
+    const h = buildServer();
+    const { server } = h;
+    const { ws, role } = await seedWorkspaceAndRole(h, "rh", "worker");
 
     await server.inject({
       method: "PUT",
@@ -261,7 +277,6 @@ describe("workspace-role endpoints", () => {
     })).json() as WorkspaceRoleAssignment[];
     expect(list.find((a) => a.role.id === role.id)).toBeUndefined();
 
-    await server.close();
-    db.close();
+    await teardown(h);
   });
 });

@@ -4,6 +4,7 @@ import type { WorkspaceStore } from "../workspace-store.ts";
 import type { RoleStore } from "../role-store.ts";
 import type { WorkspaceRoleStore } from "../workspace-role-store.ts";
 import { ensureManagerRole } from "../manager-role.ts";
+import { validateWorkspacePath } from "../validate-workspace-path.ts";
 
 interface IdParam {
   id: string;
@@ -24,6 +25,11 @@ export function registerWorkspaceRoutes(
     if (!parsed.success) {
       reply.code(400);
       return { error: "invalid workspace request", issues: parsed.error.issues };
+    }
+    const validation = validateWorkspacePath(parsed.data.repo_path);
+    if (!validation.ok) {
+      reply.code(400);
+      return { error: validation.error };
     }
     if (workspaces.findByName(parsed.data.name) !== null) {
       reply.code(409);

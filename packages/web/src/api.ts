@@ -30,9 +30,19 @@ export interface SpawnResponse {
 
 export type TranscriptLine = Record<string, unknown>;
 
+async function failureMessage(res: Response): Promise<string> {
+  const text = await res.text();
+  const isJson = res.headers.get("content-type")?.includes("application/json") === true;
+  if (isJson) {
+    const parsed = JSON.parse(text) as { error?: unknown };
+    if (typeof parsed.error === "string") return parsed.error;
+  }
+  return `${res.status} ${text}`;
+}
+
 async function getJson<T>(path: string): Promise<T> {
   const res = await fetch(path);
-  if (!res.ok) throw new Error(`GET ${path} failed: ${res.status} ${await res.text()}`);
+  if (!res.ok) throw new Error(`GET ${path} failed: ${await failureMessage(res)}`);
   return (await res.json()) as T;
 }
 
@@ -42,7 +52,7 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`POST ${path} failed: ${res.status} ${await res.text()}`);
+  if (!res.ok) throw new Error(await failureMessage(res));
   return (await res.json()) as T;
 }
 
