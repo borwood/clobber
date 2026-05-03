@@ -70,6 +70,13 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_sessions_active
     ON sessions(workspace_id, role_id)
     WHERE ended_at IS NULL;
+
+  CREATE TABLE IF NOT EXISTS session_tokens (
+    token       TEXT    PRIMARY KEY,
+    session_id  TEXT    NOT NULL UNIQUE,
+    created_at  INTEGER NOT NULL,
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+  );
 `;
 
 export function createDatabase(path: string): Database {

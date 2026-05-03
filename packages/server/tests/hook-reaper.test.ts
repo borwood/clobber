@@ -9,6 +9,7 @@ import { createWorkspaceRoleStore } from "../src/workspace-role-store.ts";
 import { createAgentStore } from "../src/agent-store.ts";
 import { createSessionStore } from "../src/session-store.ts";
 import { createWorkspaceSessionSummaries } from "../src/workspace-session-summaries.ts";
+import { createSessionTokenStore } from "../src/session-token-store.ts";
 import { stubSpawnedAgent } from "./_spawner-stub.ts";
 
 interface Harness {
@@ -37,6 +38,7 @@ function buildHarness(): Harness {
     agents,
     sessions,
     sessionSummaries: createWorkspaceSessionSummaries(db),
+    sessionTokens: createSessionTokenStore(db),
     spawner: () => stubSpawnedAgent(),
     hookUrl: "http://test.invalid/hook",
   });

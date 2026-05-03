@@ -8,6 +8,7 @@ import { createWorkspaceRoleStore } from "./workspace-role-store.ts";
 import { createAgentStore } from "./agent-store.ts";
 import { createSessionStore } from "./session-store.ts";
 import { createWorkspaceSessionSummaries } from "./workspace-session-summaries.ts";
+import { createSessionTokenStore } from "./session-token-store.ts";
 import { reapOrphanedSessions } from "./boot-reap.ts";
 
 const PORT = 3300;
@@ -40,6 +41,7 @@ const workspaceRoles = createWorkspaceRoleStore(db);
 const agents = createAgentStore(db);
 const sessions = createSessionStore(db);
 const sessionSummaries = createWorkspaceSessionSummaries(db);
+const sessionTokens = createSessionTokenStore(db);
 reapOrphanedSessions({ sessions, agents, roles });
 const app = createServer({
   store,
@@ -49,6 +51,7 @@ const app = createServer({
   agents,
   sessions,
   sessionSummaries,
+  sessionTokens,
   spawner,
   hookUrl: HOOK_URL,
 });
