@@ -2,11 +2,36 @@
 
 > Guidelines for Claude Code working on Clobber
 
-## What Clobber Is
+## Vision
 
-A control room for multi-Claude orchestration. The user operates one or more **workspaces** (each tied to a work-source repo, e.g. a GitHub repo). Inside a workspace they see a **room** — a whiteboard where **agents** appear as circles. Clicking an agent opens its terminal panel. Agents ask questions via interactive widgets that appear above their head and in a sidebar. Persistent agents have **offices** (boxes on the whiteboard); ephemeral worker-bees come and go as issues arrive.
+Clobber is a structured environment that sits above ephemeral Claude Code sessions, organized around the human-intelligible metaphor of an office workspace and the workers inside it.
 
-Clobber spawns `claude` sessions with generated `settings.json` whose hooks call back into Clobber, giving us live status, audit log, and decision-request UX. Agents also shell out to a `clobber` CLI for status updates, questions, and notes.
+You open Clobber on a workspace tied to a repo. A **manager** agent has a permanent office in the corner. You drop them issues, decisions, and open questions; they spawn ephemeral **worker** agents to do the implementation work. Workers spin up at empty desks, follow the repo's runbooks through the SDLC, and most of the time finish autonomously through PR creation and CI monitoring (bypassPermissions mode).
+
+When a worker hits a decision it can't make alone, it taps you on the shoulder: a small interactive widget pops above its desk (buttons for options, free text for overrides) and is **mirrored in a sidebar** so you can't miss it even when you're not looking at the floor. The sidebar is the safety net for when many agents are working at once and you can't track them all.
+
+Workers emit status updates at every SDLC phase transition ("writing test", "opening PR", "watching CI") so the floor is always honest about what's happening. When a worker finishes, it submits a final report with what went well and what could have been better.
+
+The **manager wakes on intervals and at session boundaries**. It scans open issues for readiness, raises questions when issues conflict with each other or with prior decisions, and groups related work under a parent issue using GitHub's **sub-issue relationship** — never closing the related issues, only linking them as children of the parent. The manager documents its reasoning as comments on the relevant issues and then spawns workers via skill invocations like `/assignment <issue numbers> <any additional notes>`. After a worker session ends, the manager wakes again to decide whether there is enough work to spawn another agent for the next job.
+
+The workspace is **self-auditing**. Workers' "could have been better" reports auto-file internal tickets; novel problems encountered mid-session do the same via hooks — an internal ticketing system. The manager triages this queue and decides whether the runbooks or the skills issued to workers need to be revised. Over time the workspace learns and the runbooks tighten.
+
+Two foundational systems make this possible:
+
+1. **Role designation.** Every agent has a role. Roles are templates (persistent vs. ephemeral, permission mode, allowed tools, eventually runbook + skills). Workspaces have ceilings per role (e.g. one manager, three workers). The same role can be reused across workspaces.
+2. **Skills + hooks.** Claude's hook system is wired into the Clobber server: hooks let agents update status, pop widgets for user decisions, signal phase changes, and emit final reports. Skills like `/assignment` are how the manager gives a worker its initial context. Agents also shell out to a `clobber` CLI for fire-and-forget status updates, blocking question-asking, and notes.
+
+### UI views
+
+The workspace can be viewed three ways. Start with the simplest, design for the others:
+
+- **Grid** (build first) — one panel per agent: role, status, assignment, transcript link, popped widget. Easiest to reason about and the natural progression from the current UI.
+- **Kanban** — same panels, arranged in columns by SDLC status.
+- **Office** — agents as circles on a floor; persistent agents sit in their fixed offices, ephemeral agents occupy desks that move by status. The most evocative view, the one the metaphor is named for.
+
+A widget popped above an agent **always** also appears in the sidebar.
+
+Clobber spawns `claude` sessions with generated `settings.json` whose hooks call back into Clobber, giving us live status, audit log, and decision-request UX.
 
 ## Vocabulary (use these consistently in code and prose)
 
