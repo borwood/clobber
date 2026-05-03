@@ -10,6 +10,7 @@ import { createAgentStore } from "../src/agent-store.ts";
 import { createSessionStore } from "../src/session-store.ts";
 import { createWorkspaceSessionSummaries } from "../src/workspace-session-summaries.ts";
 import type { SessionSummary } from "../src/workspace-session-summaries.ts";
+import { stubSpawnedAgent } from "./_spawner-stub.ts";
 
 interface Harness {
   server: ReturnType<typeof createServer>;
@@ -34,7 +35,7 @@ function buildHarness(): Harness {
     agents,
     sessions,
     sessionSummaries: createWorkspaceSessionSummaries(db),
-    spawner: () => ({ sessionId: "stub", pid: 0, exited: new Promise<number | null>(() => {}) }),
+    spawner: () => stubSpawnedAgent(),
     hookUrl: "http://test.invalid/hook",
   });
   return { server, db, workspaces, roles, agents, sessions };

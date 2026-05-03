@@ -1,4 +1,5 @@
 import { describe, it, expect } from "bun:test";
+import { PassThrough } from "node:stream";
 import { createServer } from "../src/server.ts";
 import { createDatabase } from "../src/db.ts";
 import { createEventStore } from "../src/event-store.ts";
@@ -9,6 +10,12 @@ import { createAgentStore } from "../src/agent-store.ts";
 import { createSessionStore } from "../src/session-store.ts";
 import { createWorkspaceSessionSummaries } from "../src/workspace-session-summaries.ts";
 import type { AgentSpawner, AgentSpawnRequest } from "../src/server.ts";
+
+function liveStdin(): NodeJS.WritableStream {
+  const s = new PassThrough();
+  s.resume();
+  return s;
+}
 
 interface Harness {
   server: ReturnType<typeof createServer>;
@@ -73,7 +80,7 @@ describe("POST /spawn", () => {
     const h = buildHarness((req) => {
       calls.push(req);
       counter += 1;
-      return { sessionId: `claude-session-${counter}`, pid: 9000 + counter, exited: new Promise<number | null>(() => {}) };
+      return { sessionId: `claude-session-${counter}`, pid: 9000 + counter, exited: new Promise<number | null>(() => {}), stdin: liveStdin() };
     });
 
     const ws = h.workspaces.create({ name: "ws", repo_path: "/repo/path" });
@@ -133,7 +140,7 @@ describe("POST /spawn", () => {
     const calls: AgentSpawnRequest[] = [];
     const h = buildHarness((req) => {
       calls.push(req);
-      return { sessionId: "s1", pid: 1, exited: new Promise<number | null>(() => {}) };
+      return { sessionId: "s1", pid: 1, exited: new Promise<number | null>(() => {}), stdin: liveStdin() };
     });
     const { ws, role } = seed(h, { ceiling: 1 });
 
@@ -156,7 +163,7 @@ describe("POST /spawn", () => {
     let invocations = 0;
     const h = buildHarness(() => {
       invocations += 1;
-      return { sessionId: "x", pid: 0, exited: new Promise<number | null>(() => {}) };
+      return { sessionId: "x", pid: 0, exited: new Promise<number | null>(() => {}), stdin: liveStdin() };
     });
     const role = h.roles.create({ name: "r", persistent: false });
 
@@ -181,7 +188,7 @@ describe("POST /spawn", () => {
     let invocations = 0;
     const h = buildHarness(() => {
       invocations += 1;
-      return { sessionId: "x", pid: 0, exited: new Promise<number | null>(() => {}) };
+      return { sessionId: "x", pid: 0, exited: new Promise<number | null>(() => {}), stdin: liveStdin() };
     });
     const ws = h.workspaces.create({ name: "ws", repo_path: "/r" });
     const res = await h.server.inject({
@@ -205,7 +212,7 @@ describe("POST /spawn", () => {
     let invocations = 0;
     const h = buildHarness(() => {
       invocations += 1;
-      return { sessionId: "x", pid: 0, exited: new Promise<number | null>(() => {}) };
+      return { sessionId: "x", pid: 0, exited: new Promise<number | null>(() => {}), stdin: liveStdin() };
     });
     const { ws, role } = seed(h);
     const res = await h.server.inject({
@@ -228,7 +235,7 @@ describe("POST /spawn", () => {
     let counter = 0;
     const h = buildHarness(() => {
       counter += 1;
-      return { sessionId: `s${counter}`, pid: counter, exited: new Promise<number | null>(() => {}) };
+      return { sessionId: `s${counter}`, pid: counter, exited: new Promise<number | null>(() => {}), stdin: liveStdin() };
     });
     const { ws, role } = seed(h, { ceiling: 1 });
     const first = await h.server.inject({
@@ -256,7 +263,7 @@ describe("POST /spawn", () => {
     let counter = 0;
     const h = buildHarness(() => {
       counter += 1;
-      return { sessionId: `s${counter}`, pid: counter, exited: new Promise<number | null>(() => {}) };
+      return { sessionId: `s${counter}`, pid: counter, exited: new Promise<number | null>(() => {}), stdin: liveStdin() };
     });
     const { ws, role } = seed(h, { ceiling: 1 });
     const first = await h.server.inject({

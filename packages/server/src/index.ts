@@ -8,6 +8,7 @@ import { createWorkspaceRoleStore } from "./workspace-role-store.ts";
 import { createAgentStore } from "./agent-store.ts";
 import { createSessionStore } from "./session-store.ts";
 import { createWorkspaceSessionSummaries } from "./workspace-session-summaries.ts";
+import { reapOrphanedSessions } from "./boot-reap.ts";
 
 const PORT = 3300;
 const HOOK_URL = `http://127.0.0.1:${PORT}/hook`;
@@ -23,7 +24,12 @@ const spawner: AgentSpawner = (req) => {
     ...(req.permissionMode === undefined ? {} : { permissionMode: req.permissionMode }),
     ...(req.allowedTools === undefined ? {} : { allowedTools: req.allowedTools }),
   });
-  return { sessionId: agent.sessionId, pid: agent.pid, exited: agent.exited };
+  return {
+    sessionId: agent.sessionId,
+    pid: agent.pid,
+    exited: agent.exited,
+    stdin: agent.stdin,
+  };
 };
 
 const db = createDatabase(DB_PATH);
@@ -34,6 +40,7 @@ const workspaceRoles = createWorkspaceRoleStore(db);
 const agents = createAgentStore(db);
 const sessions = createSessionStore(db);
 const sessionSummaries = createWorkspaceSessionSummaries(db);
+reapOrphanedSessions({ sessions, agents, roles });
 const app = createServer({
   store,
   workspaces,

@@ -8,6 +8,7 @@ import { createWorkspaceRoleStore } from "../src/workspace-role-store.ts";
 import { createAgentStore } from "../src/agent-store.ts";
 import { createSessionStore } from "../src/session-store.ts";
 import { createWorkspaceSessionSummaries } from "../src/workspace-session-summaries.ts";
+import { stubSpawnedAgent } from "./_spawner-stub.ts";
 
 function buildHarness() {
   const db = createDatabase(":memory:");
@@ -22,7 +23,7 @@ function buildHarness() {
     sessionSummaries: createWorkspaceSessionSummaries(db),
     spawner: () => {
       invocations += 1;
-      return { sessionId: "x", pid: 0, exited: new Promise<number | null>(() => {}) };
+      return stubSpawnedAgent({ sessionId: "x" });
     },
     hookUrl: "http://test.invalid/hook",
   });

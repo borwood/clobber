@@ -8,6 +8,7 @@ import { createWorkspaceRoleStore } from "../src/workspace-role-store.ts";
 import { createAgentStore } from "../src/agent-store.ts";
 import { createSessionStore } from "../src/session-store.ts";
 import { createWorkspaceSessionSummaries } from "../src/workspace-session-summaries.ts";
+import { stubSpawnedAgent } from "./_spawner-stub.ts";
 import type { Role } from "@clobber/shared";
 
 function buildServer() {
@@ -20,7 +21,7 @@ function buildServer() {
     agents: createAgentStore(db),
     sessions: createSessionStore(db),
     sessionSummaries: createWorkspaceSessionSummaries(db),
-    spawner: () => ({ sessionId: "stub", pid: 0, exited: new Promise<number | null>(() => {}) }),
+    spawner: () => stubSpawnedAgent(),
     hookUrl: "http://test.invalid/hook",
   });
   return { server, db };

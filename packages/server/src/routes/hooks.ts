@@ -4,6 +4,7 @@ import type { EventStore } from "../event-store.ts";
 import type { AgentStore } from "../agent-store.ts";
 import type { SessionStore } from "../session-store.ts";
 import type { RoleStore } from "../role-store.ts";
+import type { AgentRegistry } from "../agent-registry.ts";
 import { endSession } from "../session-lifecycle.ts";
 
 export function registerHookRoutes(
@@ -13,6 +14,7 @@ export function registerHookRoutes(
     sessions: SessionStore;
     agents: AgentStore;
     roles: RoleStore;
+    registry: AgentRegistry;
   },
 ): void {
   app.post("/hook", async (request, reply) => {
@@ -30,13 +32,22 @@ export function registerHookRoutes(
 
 function applySessionLifecycle(
   payload: HookPayload,
-  deps: { sessions: SessionStore; agents: AgentStore; roles: RoleStore },
+  deps: {
+    sessions: SessionStore;
+    agents: AgentStore;
+    roles: RoleStore;
+    registry: AgentRegistry;
+  },
 ): void {
   const session = deps.sessions.get(payload.session_id);
   if (session === null) return;
 
   if (session.transcript_path !== payload.transcript_path) {
     deps.sessions.updateTranscriptPath(payload.session_id, payload.transcript_path);
+  }
+
+  if (payload.hook_event_name === "Stop") {
+    deps.registry.setBusy(payload.session_id, false);
   }
 
   if (payload.hook_event_name === "SessionEnd") {

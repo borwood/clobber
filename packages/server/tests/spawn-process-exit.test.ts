@@ -1,4 +1,5 @@
 import { describe, it, expect } from "bun:test";
+import { PassThrough } from "node:stream";
 import { createServer } from "../src/server.ts";
 import { createDatabase } from "../src/db.ts";
 import { createEventStore } from "../src/event-store.ts";
@@ -27,7 +28,9 @@ function deferredExitSpawner(): DeferredSpawner {
     const exited = new Promise<number | null>((resolve) => {
       resolvers.set(sessionId, resolve);
     });
-    return { sessionId, pid: 1000 + counter, exited };
+    const stdin = new PassThrough();
+    stdin.resume();
+    return { sessionId, pid: 1000 + counter, exited, stdin };
   };
   async function exit(sessionId: string, code: number | null): Promise<void> {
     const resolve = resolvers.get(sessionId);

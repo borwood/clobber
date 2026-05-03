@@ -9,6 +9,7 @@ import { createAgentStore } from "../src/agent-store.ts";
 import { createSessionStore } from "../src/session-store.ts";
 import { createWorkspaceSessionSummaries } from "../src/workspace-session-summaries.ts";
 import { makeRepoFixture, type RepoFixture } from "./repo-fixture.ts";
+import { stubSpawnedAgent } from "./_spawner-stub.ts";
 import type { Role, Workspace, WorkspaceRoleAssignment, WorkspaceRoleCeiling } from "@clobber/shared";
 
 interface Harness {
@@ -27,7 +28,7 @@ function buildServer(): Harness {
     agents: createAgentStore(db),
     sessions: createSessionStore(db),
     sessionSummaries: createWorkspaceSessionSummaries(db),
-    spawner: () => ({ sessionId: "stub", pid: 0, exited: new Promise<number | null>(() => {}) }),
+    spawner: () => stubSpawnedAgent(),
     hookUrl: "http://test.invalid/hook",
   });
   return { server, db, repos: [] };

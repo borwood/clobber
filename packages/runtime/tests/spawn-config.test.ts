@@ -38,11 +38,10 @@ describe("buildHookSettings", () => {
 describe("buildClaudeArgs", () => {
   const baseSettings = buildHookSettings({ url: "http://x/hook" });
 
-  it("includes session id, settings JSON, prompt, and stream-json output", () => {
+  it("emits long-running stream-json mode (no prompt arg — initial prompt streams via stdin)", () => {
     const args = buildClaudeArgs({
       sessionId: "abc-123",
       settings: baseSettings,
-      prompt: "hello world",
     });
 
     expect(args).toContain("--session-id");
@@ -53,18 +52,18 @@ describe("buildClaudeArgs", () => {
     expect(JSON.parse(settingsArg)).toEqual(baseSettings);
 
     expect(args).toContain("-p");
+    expect(args).toContain("--input-format");
+    expect(args[args.indexOf("--input-format") + 1]).toBe("stream-json");
     expect(args).toContain("--output-format");
     expect(args[args.indexOf("--output-format") + 1]).toBe("stream-json");
     expect(args).toContain("--include-hook-events");
-
-    expect(args[args.length - 1]).toBe("hello world");
+    expect(args).toContain("--verbose");
   });
 
   it("isolates from user-level claude config via --setting-sources user", () => {
     const args = buildClaudeArgs({
       sessionId: "abc",
       settings: baseSettings,
-      prompt: "p",
     });
     expect(args).toContain("--setting-sources");
     expect(args[args.indexOf("--setting-sources") + 1]).toBe("user");
@@ -74,7 +73,6 @@ describe("buildClaudeArgs", () => {
     const args = buildClaudeArgs({
       sessionId: "abc",
       settings: baseSettings,
-      prompt: "p",
       permissionMode: "bypassPermissions",
       allowedTools: ["Bash", "Read"],
     });
@@ -90,7 +88,6 @@ describe("buildClaudeArgs", () => {
     const args = buildClaudeArgs({
       sessionId: "abc",
       settings: baseSettings,
-      prompt: "p",
     });
     expect(args).not.toContain("--permission-mode");
     expect(args).not.toContain("--allowedTools");

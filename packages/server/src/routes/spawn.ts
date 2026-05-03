@@ -6,6 +6,7 @@ import type { WorkspaceRoleStore } from "../workspace-role-store.ts";
 import type { AgentStore } from "../agent-store.ts";
 import type { SessionStore } from "../session-store.ts";
 import type { AgentSpawner, AgentSpawnRequest } from "../types.ts";
+import type { AgentRegistry } from "../agent-registry.ts";
 import { endSession } from "../session-lifecycle.ts";
 
 const SpawnBodySchema = z.object({
@@ -25,6 +26,7 @@ export function registerSpawnRoutes(
     sessions: SessionStore;
     spawner: AgentSpawner;
     hookUrl: string;
+    registry: AgentRegistry;
   },
 ): void {
   app.post("/spawn", async (request, reply) => {
@@ -81,7 +83,10 @@ export function registerSpawnRoutes(
       pid: spawned.pid,
     });
 
+    deps.registry.register(spawned.sessionId, spawned.stdin);
+
     spawned.exited.then(() => {
+      deps.registry.unregister(spawned.sessionId);
       endSession(spawned.sessionId, deps);
     });
 

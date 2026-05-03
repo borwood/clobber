@@ -57,7 +57,6 @@ export function buildHookSettings(opts: BuildHookSettingsOptions): HookSettings 
 export interface BuildClaudeArgsOptions {
   readonly sessionId: string;
   readonly settings: HookSettings;
-  readonly prompt: string;
   readonly permissionMode?: PermissionMode;
   readonly allowedTools?: readonly string[];
 }
@@ -78,10 +77,10 @@ export function buildClaudeArgs(opts: BuildClaudeArgsOptions): string[] {
 
   args.push(
     "-p",
+    "--input-format", "stream-json",
     "--output-format", "stream-json",
     "--include-hook-events",
     "--verbose",
-    opts.prompt,
   );
 
   return args;

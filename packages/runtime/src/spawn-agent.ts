@@ -5,6 +5,7 @@ import {
   buildClaudeArgs,
   type HookSettings,
 } from "./spawn-config.ts";
+import { serializeUserMessage } from "./stream-json.ts";
 import type { PermissionMode } from "@clobber/shared";
 
 export interface SpawnAgentOptions {
@@ -24,6 +25,7 @@ export interface SpawnedAgent {
   readonly sessionId: string;
   readonly pid: number;
   readonly child: ChildProcess;
+  readonly stdin: NodeJS.WritableStream;
   readonly exited: Promise<number | null>;
 }
 
@@ -37,7 +39,6 @@ export function spawnAgent(opts: SpawnAgentOptions): SpawnedAgent {
   const args = buildClaudeArgs({
     sessionId,
     settings,
-    prompt: opts.prompt,
     ...(opts.permissionMode === undefined ? {} : { permissionMode: opts.permissionMode }),
     ...(opts.allowedTools === undefined ? {} : { allowedTools: opts.allowedTools }),
   });
@@ -46,17 +47,23 @@ export function spawnAgent(opts: SpawnAgentOptions): SpawnedAgent {
   const env = opts.env === undefined ? process.env : opts.env;
   const child = spawn(bin, args, {
     cwd: opts.cwd,
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: ["pipe", "pipe", "pipe"],
     env,
   });
 
   if (child.pid === undefined) {
     throw new Error(`failed to spawn ${bin}: no pid`);
   }
+  if (child.stdin === null) {
+    throw new Error(`failed to spawn ${bin}: stdin is null`);
+  }
+
+  const stdin = child.stdin;
+  stdin.write(serializeUserMessage(opts.prompt));
 
   const exited = new Promise<number | null>((resolve) => {
     child.on("exit", (code) => resolve(code));
   });
 
-  return { sessionId, pid: child.pid, child, exited };
+  return { sessionId, pid: child.pid, child, stdin, exited };
 }

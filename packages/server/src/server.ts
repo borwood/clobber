@@ -6,6 +6,7 @@ import { registerSpawnRoutes } from "./routes/spawn.ts";
 import { registerWorkspaceRoutes } from "./routes/workspaces.ts";
 import { registerRoleRoutes } from "./routes/roles.ts";
 import { registerWorkspaceRoleRoutes } from "./routes/workspace-roles.ts";
+import { createAgentRegistry } from "./agent-registry.ts";
 
 export type {
   AgentSpawnRequest,
@@ -18,17 +19,20 @@ import type { ServerOptions } from "./types.ts";
 
 export function createServer(opts: ServerOptions): FastifyInstance {
   const app = Fastify({ logger: false });
+  const registry = createAgentRegistry();
 
   registerHookRoutes(app, {
     store: opts.store,
     sessions: opts.sessions,
     agents: opts.agents,
     roles: opts.roles,
+    registry,
   });
   registerEventRoutes(app, { store: opts.store });
   registerSessionRoutes(app, {
     sessions: opts.sessions,
     summaries: opts.sessionSummaries,
+    registry,
   });
   registerSpawnRoutes(app, {
     workspaces: opts.workspaces,
@@ -38,6 +42,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     sessions: opts.sessions,
     spawner: opts.spawner,
     hookUrl: opts.hookUrl,
+    registry,
   });
   registerWorkspaceRoutes(app, {
     workspaces: opts.workspaces,

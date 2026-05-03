@@ -12,6 +12,7 @@ import { createAgentStore } from "../src/agent-store.ts";
 import { createSessionStore } from "../src/session-store.ts";
 import { createWorkspaceSessionSummaries } from "../src/workspace-session-summaries.ts";
 import { makeRepoFixture } from "./repo-fixture.ts";
+import { stubSpawnedAgent } from "./_spawner-stub.ts";
 import type { Workspace } from "@clobber/shared";
 
 function buildServer() {
@@ -30,7 +31,7 @@ function buildServer() {
     agents,
     sessions,
     sessionSummaries: createWorkspaceSessionSummaries(db),
-    spawner: () => ({ sessionId: "stub", pid: 0, exited: new Promise<number | null>(() => {}) }),
+    spawner: () => stubSpawnedAgent(),
     hookUrl: "http://test.invalid/hook",
   });
   return { server, db };
