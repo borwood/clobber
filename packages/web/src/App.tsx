@@ -13,6 +13,7 @@ import { TranscriptViewer } from "./components/TranscriptViewer.tsx";
 import { WorkspaceSwitcher } from "./components/WorkspaceSwitcher.tsx";
 import { RolePicker } from "./components/RolePicker.tsx";
 import { PromptComposer } from "./components/PromptComposer.tsx";
+import { AskWidget } from "./components/AskWidget.tsx";
 
 const POLL_MS = 1000;
 
@@ -209,19 +210,33 @@ export function App() {
             lines={transcript}
             showSystem={showSystem}
           />
-          {selectedSession !== null && (
-            <PromptComposer
-              sessionId={selectedSession}
-              disabled={
-                sessions.find((s) => s.session_id === selectedSession)?.ended_at !==
-                undefined
-              }
-              onSend={async (prompt) => {
-                await api.sendPrompt(selectedSession, prompt);
-                setTranscript(await api.getTranscript(selectedSession));
-              }}
-            />
-          )}
+          {selectedSession !== null && (() => {
+            const sel = sessions.find((s) => s.session_id === selectedSession);
+            const open = sel?.open_question;
+            return (
+              <>
+                {open !== undefined && (
+                  <AskWidget
+                    question={open}
+                    onAnswer={async (answer) => {
+                      await api.answerQuestion(selectedSession, open.id, answer);
+                      if (workspaceId !== null) {
+                        setSessions(await api.listSessions(workspaceId));
+                      }
+                    }}
+                  />
+                )}
+                <PromptComposer
+                  sessionId={selectedSession}
+                  disabled={sel?.ended_at !== undefined}
+                  onSend={async (prompt) => {
+                    await api.sendPrompt(selectedSession, prompt);
+                    setTranscript(await api.getTranscript(selectedSession));
+                  }}
+                />
+              </>
+            );
+          })()}
         </section>
 
         <aside className="border-l border-zinc-800 overflow-y-auto p-4 space-y-5">

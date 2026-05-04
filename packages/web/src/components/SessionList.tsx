@@ -51,6 +51,14 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd }: Props) {
               }
             >
               <div className="flex items-center gap-2">
+                {s.open_question !== undefined && !isEnded && (
+                  <span
+                    className="inline-block px-1 rounded bg-amber-700 text-amber-50 text-[10px] font-bold shrink-0 animate-pulse"
+                    title="Waiting for an answer"
+                  >
+                    ?
+                  </span>
+                )}
                 {s.latest_status !== undefined && !isEnded && (
                   <span
                     className={
@@ -67,6 +75,11 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd }: Props) {
                   {primary}
                 </div>
               </div>
+              {s.open_question !== undefined && !isEnded && (
+                <div className="mt-1 text-xs text-amber-200 truncate italic">
+                  {s.open_question.question}
+                </div>
+              )}
               {s.latest_status !== undefined && !isEnded && (
                 <div className="mt-1 text-xs text-zinc-300 truncate">
                   {s.latest_status.summary}

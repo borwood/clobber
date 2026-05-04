@@ -14,6 +14,13 @@ export type {
   AgentState,
 } from "@clobber/shared";
 
+export interface OpenQuestion {
+  readonly id: string;
+  readonly question: string;
+  readonly options?: readonly string[];
+  readonly asked_at: number;
+}
+
 export interface SessionSummary {
   readonly session_id: string;
   readonly role_name: string;
@@ -24,6 +31,7 @@ export interface SessionSummary {
   readonly last_event_name?: string;
   readonly ended_at?: number;
   readonly latest_status?: LatestAgentStatus;
+  readonly open_question?: OpenQuestion;
 }
 
 export interface SpawnRequest {
@@ -90,5 +98,10 @@ export const api = {
     postJson<{ ok: true }>(
       `/sessions/${encodeURIComponent(sessionId)}/prompt`,
       { prompt },
+    ),
+  answerQuestion: (sessionId: string, questionId: string, answer: string) =>
+    postJson<{ ok: true }>(
+      `/sessions/${encodeURIComponent(sessionId)}/answer`,
+      { question_id: questionId, answer },
     ),
 };
