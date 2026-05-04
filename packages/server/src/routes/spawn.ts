@@ -58,8 +58,9 @@ export function registerSpawnRoutes(app: FastifyInstance, deps: SpawnRouteDeps):
       ...(label === undefined ? {} : { label }),
     });
     if (!result.ok) {
-      reply.code(result.status);
-      return { error: result.error, ceiling: result.ceiling, active: result.active };
+      const { ok: _ok, status, ...rest } = result;
+      reply.code(status);
+      return rest;
     }
     return {
       agent_id: result.agent_id,

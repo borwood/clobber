@@ -1,5 +1,8 @@
 import { describe, it, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { createServer } from "../src/server.ts";
 import { createDatabase } from "../src/db.ts";
@@ -47,6 +50,7 @@ interface Harness {
   agents: ReturnType<typeof createAgentStore>;
   sessions: ReturnType<typeof createSessionStore>;
   stub: RecordingStub;
+  repoPath: string;
 }
 
 function buildHarness(opts: { persistent: boolean }): Harness {
@@ -58,8 +62,9 @@ function buildHarness(opts: { persistent: boolean }): Harness {
   const workspaceRoles = createWorkspaceRoleStore(db);
   const agents = createAgentStore(db);
   const sessions = createSessionStore(db);
-  const ws = workspaces.create({ name: "ws", repo_path: "/r" });
-  const role = roles.create({ name: "r", persistent: opts.persistent });
+  const repoPath = mkdtempSync(join(tmpdir(), "clobber-end-session-"));
+  const ws = workspaces.create({ name: "ws", repo_path: repoPath });
+  const role = roles.create({ name: "manager", persistent: opts.persistent });
   workspaceRoles.setCeiling(ws.id, role.id, 1);
   const server = createServer({
     store: createEventStore(db),
@@ -75,12 +80,13 @@ function buildHarness(opts: { persistent: boolean }): Harness {
     apiBase: "http://test.invalid",
     cliEntry: "/dummy/cli.ts",
   });
-  return { server, db, workspaces, roles, workspaceRoles, agents, sessions, stub };
+  return { server, db, workspaces, roles, workspaceRoles, agents, sessions, stub, repoPath };
 }
 
 async function teardown(h: Harness) {
   await h.server.close();
   h.db.close();
+  rmSync(h.repoPath, { recursive: true, force: true });
 }
 
 async function spawn(h: Harness): Promise<{ session_id: string; agent_id: string }> {

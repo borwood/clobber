@@ -81,7 +81,8 @@ interface BootedManager {
   workspaceId: string;
   managerSessionId: string;
   managerToken: string;
-  workerRoleId: string;
+  managerRoleId: string;
+  ghostRoleId: string;
 }
 
 let repoPath: string;
@@ -94,12 +95,12 @@ afterEach(() => {
   rmSync(repoPath, { recursive: true, force: true });
 });
 
-async function bootManagerWithWorkerRole(h: Harness): Promise<BootedManager> {
+async function bootManager(h: Harness): Promise<BootedManager> {
   const ws = h.workspaces.create({ name: "ws", repo_path: repoPath });
   const managerRole = h.roles.create({ name: "manager", persistent: true });
-  const workerRole = h.roles.create({ name: "worker", persistent: false });
-  h.workspaceRoles.setCeiling(ws.id, managerRole.id, 1);
-  h.workspaceRoles.setCeiling(ws.id, workerRole.id, 2);
+  const ghostRole = h.roles.create({ name: "ghost-role", persistent: false });
+  h.workspaceRoles.setCeiling(ws.id, managerRole.id, 2);
+  h.workspaceRoles.setCeiling(ws.id, ghostRole.id, 5);
 
   const res = await h.server.inject({
     method: "POST",
@@ -113,7 +114,8 @@ async function bootManagerWithWorkerRole(h: Harness): Promise<BootedManager> {
     workspaceId: ws.id,
     managerSessionId: body.session_id,
     managerToken: token,
-    workerRoleId: workerRole.id,
+    managerRoleId: managerRole.id,
+    ghostRoleId: ghostRole.id,
   };
 }
 
@@ -143,12 +145,12 @@ describe("POST /agent/spawn", () => {
 
   it("returns 400 when body is malformed", async () => {
     const h = buildHarness();
-    const boot = await bootManagerWithWorkerRole(h);
+    const boot = await bootManager(h);
     const res = await h.server.inject({
       method: "POST",
       url: "/agent/spawn",
       headers: { authorization: `Bearer ${boot.managerToken}` },
-      payload: { role: "worker" },
+      payload: { role: "manager" },
     });
     expect(res.statusCode).toBe(400);
     await teardown(h);
@@ -156,7 +158,7 @@ describe("POST /agent/spawn", () => {
 
   it("returns 404 when role name is unknown", async () => {
     const h = buildHarness();
-    const boot = await bootManagerWithWorkerRole(h);
+    const boot = await bootManager(h);
     const res = await h.server.inject({
       method: "POST",
       url: "/agent/spawn",
@@ -170,13 +172,13 @@ describe("POST /agent/spawn", () => {
 
   it("spawns into the caller's workspace and returns session info", async () => {
     const h = buildHarness();
-    const boot = await bootManagerWithWorkerRole(h);
+    const boot = await bootManager(h);
     const callsBefore = h.calls.length;
     const res = await h.server.inject({
       method: "POST",
       url: "/agent/spawn",
       headers: { authorization: `Bearer ${boot.managerToken}` },
-      payload: { role: "worker", prompt: "audit auth.ts", label: "auditor" },
+      payload: { role: "manager", prompt: "audit auth.ts", label: "auditor" },
     });
     expect(res.statusCode).toBe(200);
     const body = res.json() as {
@@ -196,37 +198,57 @@ describe("POST /agent/spawn", () => {
     const session = h.sessions.get(body.session_id);
     expect(session).not.toBeNull();
     expect(session!.workspace_id).toBe(boot.workspaceId);
-    expect(session!.role_id).toBe(boot.workerRoleId);
+    expect(session!.role_id).toBe(boot.managerRoleId);
 
     await teardown(h);
   });
 
   it("returns 403 when the role is at its workspace ceiling", async () => {
     const h = buildHarness();
-    const boot = await bootManagerWithWorkerRole(h);
-    h.workspaceRoles.setCeiling(boot.workspaceId, boot.workerRoleId, 0);
+    const boot = await bootManager(h);
+    h.workspaceRoles.setCeiling(boot.workspaceId, boot.managerRoleId, 0);
 
     const res = await h.server.inject({
       method: "POST",
       url: "/agent/spawn",
       headers: { authorization: `Bearer ${boot.managerToken}` },
-      payload: { role: "worker", prompt: "x" },
+      payload: { role: "manager", prompt: "x" },
     });
     expect(res.statusCode).toBe(403);
     expect((res.json() as { error: string }).error).toMatch(/capacity/i);
     await teardown(h);
   });
 
+  it("returns 422 when the role exists but has no bundle on disk (#21)", async () => {
+    const h = buildHarness();
+    const boot = await bootManager(h);
+    const callsBefore = h.calls.length;
+    const res = await h.server.inject({
+      method: "POST",
+      url: "/agent/spawn",
+      headers: { authorization: `Bearer ${boot.managerToken}` },
+      payload: { role: "ghost-role", prompt: "x" },
+    });
+    expect(res.statusCode).toBe(422);
+    const body = res.json() as { error: string; role: string };
+    expect(body.error).toMatch(/bundle/i);
+    expect(body.role).toBe("ghost-role");
+    expect(h.calls.length).toBe(callsBefore);
+    expect(h.sessions.countActive(boot.workspaceId, boot.ghostRoleId)).toBe(0);
+
+    await teardown(h);
+  });
+
   it("returns 401 after the caller's session has ended", async () => {
     const h = buildHarness();
-    const boot = await bootManagerWithWorkerRole(h);
+    const boot = await bootManager(h);
     h.tokens.revoke(boot.managerSessionId);
 
     const res = await h.server.inject({
       method: "POST",
       url: "/agent/spawn",
       headers: { authorization: `Bearer ${boot.managerToken}` },
-      payload: { role: "worker", prompt: "x" },
+      payload: { role: "manager", prompt: "x" },
     });
     expect(res.statusCode).toBe(401);
     await teardown(h);

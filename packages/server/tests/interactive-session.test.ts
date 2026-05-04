@@ -1,4 +1,7 @@
 import { describe, it, expect } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { serializeUserMessage } from "@clobber/runtime";
 import { createServer } from "../src/server.ts";
@@ -70,6 +73,7 @@ interface Harness {
   agents: ReturnType<typeof createAgentStore>;
   sessions: ReturnType<typeof createSessionStore>;
   control: SpawnControl;
+  repoPaths: string[];
 }
 
 function buildHarness(): Harness {
@@ -95,12 +99,23 @@ function buildHarness(): Harness {
     apiBase: "http://test.invalid",
     cliEntry: "/dummy/cli.ts",
   });
-  return { server, db, workspaces, roles, workspaceRoles, agents: agentsStore, sessions, control };
+  return {
+    server,
+    db,
+    workspaces,
+    roles,
+    workspaceRoles,
+    agents: agentsStore,
+    sessions,
+    control,
+    repoPaths: [],
+  };
 }
 
 async function teardown(h: Harness): Promise<void> {
   await h.server.close();
   h.db.close();
+  for (const p of h.repoPaths) rmSync(p, { recursive: true, force: true });
 }
 
 interface Spawned {
@@ -110,8 +125,10 @@ interface Spawned {
 }
 
 async function seedAndSpawn(h: Harness, persistent = true): Promise<Spawned> {
-  const ws = h.workspaces.create({ name: `ws-${Math.random()}`, repo_path: "/r" });
-  const role = h.roles.create({ name: `r-${Math.random()}`, persistent });
+  const repoPath = mkdtempSync(join(tmpdir(), "clobber-interactive-"));
+  h.repoPaths.push(repoPath);
+  const ws = h.workspaces.create({ name: `ws-${Math.random()}`, repo_path: repoPath });
+  const role = h.roles.create({ name: "manager", persistent });
   h.workspaceRoles.setCeiling(ws.id, role.id, 1);
   const res = await h.server.inject({
     method: "POST",

@@ -26,7 +26,6 @@ interface Harness {
   baseUrl: string;
   managerToken: string;
   workspaceId: string;
-  workerRoleId: string;
   spawnerCalls: AgentSpawnRequest[];
   repoPath: string;
 }
@@ -51,9 +50,7 @@ beforeAll(async () => {
 
   const ws = workspaces.create({ name: "ws", repo_path: repoPath });
   const managerRole = roles.create({ name: "manager", persistent: true });
-  const workerRole = roles.create({ name: "worker", persistent: false });
-  workspaceRoles.setCeiling(ws.id, managerRole.id, 1);
-  workspaceRoles.setCeiling(ws.id, workerRole.id, 2);
+  workspaceRoles.setCeiling(ws.id, managerRole.id, 5);
 
   const spawnerCalls: AgentSpawnRequest[] = [];
   const spawner: AgentSpawner = (req): SpawnedAgentInfo => {
@@ -103,7 +100,6 @@ beforeAll(async () => {
     baseUrl,
     managerToken,
     workspaceId: ws.id,
-    workerRoleId: workerRole.id,
     spawnerCalls,
     repoPath,
   };
@@ -135,7 +131,7 @@ describe("clobber CLI — spawn", () => {
     const s = captureStreams();
     const before = harness.spawnerCalls.length;
     const code = await run({
-      argv: ["spawn", "worker", "--prompt", "audit auth.ts"],
+      argv: ["spawn", "manager", "--prompt", "audit auth.ts"],
       env: {
         CLOBBER_API_BASE: harness.baseUrl,
         CLOBBER_SESSION_TOKEN: harness.managerToken,
@@ -164,7 +160,7 @@ describe("clobber CLI — spawn", () => {
     const code = await run({
       argv: [
         "spawn",
-        "worker",
+        "manager",
         "--prompt",
         "double-check the math",
         "--label",
@@ -200,7 +196,7 @@ describe("clobber CLI — spawn", () => {
   it("exits 2 with a usage hint when --prompt is missing", async () => {
     const s = captureStreams();
     const code = await run({
-      argv: ["spawn", "worker"],
+      argv: ["spawn", "manager"],
       env: {
         CLOBBER_API_BASE: harness.baseUrl,
         CLOBBER_SESSION_TOKEN: harness.managerToken,
@@ -215,7 +211,7 @@ describe("clobber CLI — spawn", () => {
   it("exits 2 when --prompt is given without a value", async () => {
     const s = captureStreams();
     const code = await run({
-      argv: ["spawn", "worker", "--prompt"],
+      argv: ["spawn", "manager", "--prompt"],
       env: {
         CLOBBER_API_BASE: harness.baseUrl,
         CLOBBER_SESSION_TOKEN: harness.managerToken,

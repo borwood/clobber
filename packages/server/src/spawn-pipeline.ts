@@ -47,7 +47,17 @@ export interface SpawnPipelineCapacityError {
   readonly active: number;
 }
 
-export type SpawnPipelineResult = SpawnPipelineSuccess | SpawnPipelineCapacityError;
+export interface SpawnPipelineNoBundleError {
+  readonly ok: false;
+  readonly status: 422;
+  readonly error: "role has no bundle on disk";
+  readonly role: string;
+}
+
+export type SpawnPipelineResult =
+  | SpawnPipelineSuccess
+  | SpawnPipelineCapacityError
+  | SpawnPipelineNoBundleError;
 
 export function executeSpawn(
   deps: SpawnPipelineDeps,
@@ -62,40 +72,44 @@ export function executeSpawn(
     return { ok: false, status: 403, error: "role at capacity", ceiling, active };
   }
 
+  const bundle = loadRoleBundle(role.name);
+  if (bundle === null) {
+    return {
+      ok: false,
+      status: 422,
+      error: "role has no bundle on disk",
+      role: role.name,
+    };
+  }
+
   const sessionId = randomUUID();
   const token = generateTokenValue();
 
-  const bundle = loadRoleBundle(role.name);
+  const materialized = materializeBundle({
+    bundle,
+    repoPath: workspace.repo_path,
+    hookUrl: deps.hookUrl,
+    cliEntry: deps.cliEntry,
+  });
+  const baseEnv = process.env;
+  const existingPath = baseEnv["PATH"] ?? "";
+  const env: NodeJS.ProcessEnv = {
+    ...baseEnv,
+    PATH: `${materialized.binDir}${delimiter}${existingPath}`,
+    CLOBBER_API_BASE: deps.apiBase,
+    CLOBBER_SESSION_TOKEN: token,
+    CLOBBER_SESSION_ID: sessionId,
+    CLOBBER_WORKSPACE_ID: workspace.id,
+    CLOBBER_ROLE: role.name,
+  };
   const bundleExtras: Pick<
     AgentSpawnRequest,
     "env" | "pluginDirs" | "appendSystemPrompt"
-  > =
-    bundle === null
-      ? {}
-      : (() => {
-          const materialized = materializeBundle({
-            bundle,
-            repoPath: workspace.repo_path,
-            hookUrl: deps.hookUrl,
-            cliEntry: deps.cliEntry,
-          });
-          const baseEnv = process.env;
-          const existingPath = baseEnv["PATH"] ?? "";
-          const env: NodeJS.ProcessEnv = {
-            ...baseEnv,
-            PATH: `${materialized.binDir}${delimiter}${existingPath}`,
-            CLOBBER_API_BASE: deps.apiBase,
-            CLOBBER_SESSION_TOKEN: token,
-            CLOBBER_SESSION_ID: sessionId,
-            CLOBBER_WORKSPACE_ID: workspace.id,
-            CLOBBER_ROLE: role.name,
-          };
-          return {
-            env,
-            pluginDirs: [materialized.pluginDir],
-            appendSystemPrompt: bundle.systemPrompt,
-          };
-        })();
+  > = {
+    env,
+    pluginDirs: [materialized.pluginDir],
+    appendSystemPrompt: bundle.systemPrompt,
+  };
 
   const agent = deps.agents.create({
     workspace_id: workspace.id,

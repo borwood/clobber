@@ -1,4 +1,7 @@
 import { describe, it, expect } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { createServer } from "../src/server.ts";
 import { createDatabase } from "../src/db.ts";
@@ -26,6 +29,7 @@ interface Harness {
   workspaceRoles: ReturnType<typeof createWorkspaceRoleStore>;
   agents: ReturnType<typeof createAgentStore>;
   sessions: ReturnType<typeof createSessionStore>;
+  repoPaths: string[];
 }
 
 function buildHarness(spawner: AgentSpawner): Harness {
@@ -50,12 +54,19 @@ function buildHarness(spawner: AgentSpawner): Harness {
     apiBase: "http://127.0.0.1:3300",
     cliEntry: "/dummy/cli.ts",
   });
-  return { server, db, workspaces, roles, workspaceRoles, agents, sessions };
+  return { server, db, workspaces, roles, workspaceRoles, agents, sessions, repoPaths: [] };
 }
 
 async function teardown(h: Harness) {
   await h.server.close();
   h.db.close();
+  for (const p of h.repoPaths) rmSync(p, { recursive: true, force: true });
+}
+
+function freshRepoPath(h: Harness): string {
+  const p = mkdtempSync(join(tmpdir(), "clobber-spawn-endpoint-"));
+  h.repoPaths.push(p);
+  return p;
 }
 
 interface SeedOptions {
@@ -66,9 +77,9 @@ interface SeedOptions {
 }
 
 function seed(h: Harness, opts: SeedOptions = {}) {
-  const ws = h.workspaces.create({ name: "ws", repo_path: "/r" });
+  const ws = h.workspaces.create({ name: "ws", repo_path: freshRepoPath(h) });
   const role = h.roles.create({
-    name: "r",
+    name: "manager",
     persistent: opts.persistent ?? false,
     ...(opts.permission_mode === undefined ? {} : { permission_mode: opts.permission_mode }),
     ...(opts.allowed_tools === undefined ? {} : { allowed_tools: [...opts.allowed_tools] }),
@@ -87,9 +98,10 @@ describe("POST /spawn", () => {
       return { sessionId: `claude-session-${counter}`, pid: 9000 + counter, exited: new Promise<number | null>(() => {}), stdin: liveStdin() };
     });
 
-    const ws = h.workspaces.create({ name: "ws", repo_path: "/repo/path" });
+    const repoPath = freshRepoPath(h);
+    const ws = h.workspaces.create({ name: "ws", repo_path: repoPath });
     const role = h.roles.create({
-      name: "custom-role",
+      name: "manager",
       persistent: true,
       permission_mode: "bypassPermissions",
       allowed_tools: ["Bash", "Read"],
@@ -119,10 +131,10 @@ describe("POST /spawn", () => {
     expect(typeof body.agent_id).toBe("string");
 
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toEqual({
+    expect(calls[0]).toMatchObject({
       hookUrl: "http://127.0.0.1:3300/hook",
       prompt: "do the thing",
-      cwd: "/repo/path",
+      cwd: repoPath,
       sessionId: body.session_id,
       permissionMode: "bypassPermissions",
       allowedTools: ["Bash", "Read"],
@@ -158,12 +170,14 @@ describe("POST /spawn", () => {
     });
     const body = res.json() as { session_id: string };
 
-    expect(calls[0]).toEqual({
+    expect(calls[0]).toMatchObject({
       hookUrl: "http://127.0.0.1:3300/hook",
       prompt: "hi",
-      cwd: "/r",
+      cwd: ws.repo_path,
       sessionId: body.session_id,
     });
+    expect(calls[0]).not.toHaveProperty("permissionMode");
+    expect(calls[0]).not.toHaveProperty("allowedTools");
 
     await teardown(h);
   });

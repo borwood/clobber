@@ -1,5 +1,8 @@
 import { describe, it, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { createServer } from "../src/server.ts";
 import { createDatabase } from "../src/db.ts";
@@ -20,6 +23,7 @@ interface Harness {
   roleId: string;
   roleName: string;
   tokens: ReturnType<typeof createSessionTokenStore>;
+  repoPath: string;
 }
 
 function buildHarness(): Harness {
@@ -30,8 +34,9 @@ function buildHarness(): Harness {
   const agents = createAgentStore(db);
   const sessions = createSessionStore(db);
   const tokens = createSessionTokenStore(db);
-  const ws = workspaces.create({ name: "ws", repo_path: "/r" });
-  const role = roles.create({ name: "custom-role", persistent: false });
+  const repoPath = mkdtempSync(join(tmpdir(), "clobber-agent-me-"));
+  const ws = workspaces.create({ name: "ws", repo_path: repoPath });
+  const role = roles.create({ name: "manager", persistent: false });
   workspaceRoles.setCeiling(ws.id, role.id, 1);
   const stub: SpawnedAgentInfo = {
     sessionId: "stub",
@@ -53,7 +58,15 @@ function buildHarness(): Harness {
     apiBase: "http://test.invalid",
     cliEntry: "/dummy/cli.ts",
   });
-  return { server, db, workspaceId: ws.id, roleId: role.id, roleName: role.name, tokens };
+  return {
+    server,
+    db,
+    workspaceId: ws.id,
+    roleId: role.id,
+    roleName: role.name,
+    tokens,
+    repoPath,
+  };
 }
 
 function makeStdin(): NodeJS.WritableStream {
@@ -65,6 +78,7 @@ function makeStdin(): NodeJS.WritableStream {
 async function teardown(h: Harness) {
   await h.server.close();
   h.db.close();
+  rmSync(h.repoPath, { recursive: true, force: true });
 }
 
 async function spawnAndMint(h: Harness): Promise<{ sessionId: string; token: string }> {

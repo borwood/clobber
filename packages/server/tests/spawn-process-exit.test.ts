@@ -1,4 +1,7 @@
 import { describe, it, expect } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { createServer } from "../src/server.ts";
 import { createDatabase } from "../src/db.ts";
@@ -55,6 +58,7 @@ interface Harness {
   agents: ReturnType<typeof createAgentStore>;
   sessions: ReturnType<typeof createSessionStore>;
   spawnControl: DeferredSpawner;
+  repoPaths: string[];
 }
 
 function buildHarness(): Harness {
@@ -80,12 +84,23 @@ function buildHarness(): Harness {
     apiBase: "http://test.invalid",
     cliEntry: "/dummy/cli.ts",
   });
-  return { server, db, workspaces, roles, workspaceRoles, agents, sessions, spawnControl };
+  return {
+    server,
+    db,
+    workspaces,
+    roles,
+    workspaceRoles,
+    agents,
+    sessions,
+    spawnControl,
+    repoPaths: [],
+  };
 }
 
 async function teardown(h: Harness): Promise<void> {
   await h.server.close();
   h.db.close();
+  for (const p of h.repoPaths) rmSync(p, { recursive: true, force: true });
 }
 
 interface SeedOpts {
@@ -94,8 +109,10 @@ interface SeedOpts {
 }
 
 function seedWorkspaceRole(h: Harness, opts: SeedOpts) {
-  const ws = h.workspaces.create({ name: `ws-${Math.random()}`, repo_path: "/r" });
-  const role = h.roles.create({ name: `r-${Math.random()}`, persistent: opts.persistent });
+  const repoPath = mkdtempSync(join(tmpdir(), "clobber-process-exit-"));
+  h.repoPaths.push(repoPath);
+  const ws = h.workspaces.create({ name: `ws-${Math.random()}`, repo_path: repoPath });
+  const role = h.roles.create({ name: "manager", persistent: opts.persistent });
   h.workspaceRoles.setCeiling(ws.id, role.id, opts.ceiling === undefined ? 1 : opts.ceiling);
   return { ws, role };
 }

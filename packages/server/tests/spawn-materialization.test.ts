@@ -137,7 +137,7 @@ describe("POST /spawn — manager bundle materialization", () => {
     await teardown(h);
   });
 
-  it("does not materialize for unknown role names", async () => {
+  it("returns 422 and does not spawn when the role has no bundle on disk (#21)", async () => {
     const h = buildHarness();
     const ws = h.workspaces.create({ name: "ws", repo_path: repoPath });
     const role = h.roles.create({ name: "no-bundle-here", persistent: false });
@@ -148,16 +148,14 @@ describe("POST /spawn — manager bundle materialization", () => {
       url: "/spawn",
       payload: { workspace_id: ws.id, role_id: role.id, prompt: "go" },
     });
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(422);
+    const body = res.json() as { error: string; role: string };
+    expect(body.error).toMatch(/bundle/i);
+    expect(body.role).toBe("no-bundle-here");
 
     expect(existsSync(join(repoPath, ".claude"))).toBe(false);
     expect(existsSync(join(repoPath, ".clobber"))).toBe(false);
-
-    expect(h.calls).toHaveLength(1);
-    const call = h.calls[0]!;
-    expect(call.env).toBeUndefined();
-    expect(call.pluginDirs).toBeUndefined();
-    expect(call.appendSystemPrompt).toBeUndefined();
+    expect(h.calls).toHaveLength(0);
 
     await teardown(h);
   });
