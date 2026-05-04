@@ -18,6 +18,11 @@ describe("managerRole", () => {
     expect(text.trim().length).toBeGreaterThan(20);
   });
 
+  it("eagerly loads the system prompt content into LoadedRole", () => {
+    expect(managerRole.systemPrompt.trim().length).toBeGreaterThan(20);
+    expect(managerRole.systemPrompt).toMatch(/Manager/);
+  });
+
   it("ships a plugin template directory with .claude-plugin/plugin.json named after the role", () => {
     const pluginRoot = join(managerRole.bundleRoot, managerRole.manifest.pluginTemplatePath);
     const pluginJsonPath = join(pluginRoot, ".claude-plugin", "plugin.json");

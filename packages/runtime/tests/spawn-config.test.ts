@@ -120,4 +120,20 @@ describe("buildClaudeArgs", () => {
     expect(args).not.toContain("--settings");
     expect(args).toContain("--plugin-dir");
   });
+
+  it("emits --append-system-prompt with the supplied text", () => {
+    const args = buildClaudeArgs({
+      sessionId: "abc",
+      appendSystemPrompt: "You are the Manager.",
+    });
+    expect(args).toContain("--append-system-prompt");
+    expect(args[args.indexOf("--append-system-prompt") + 1]).toBe(
+      "You are the Manager.",
+    );
+  });
+
+  it("omits --append-system-prompt when not supplied", () => {
+    const args = buildClaudeArgs({ sessionId: "abc" });
+    expect(args).not.toContain("--append-system-prompt");
+  });
 });

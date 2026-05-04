@@ -9,6 +9,7 @@ export class RoleManifestError extends Error {
 export interface LoadedRole {
   readonly bundleRoot: string;
   readonly manifest: RoleManifest;
+  readonly systemPrompt: string;
 }
 
 export interface DefineRoleOptions {
@@ -38,6 +39,12 @@ export function defineRole(opts: DefineRoleOptions): LoadedRole {
   if (!existsSync(systemPromptAbs)) {
     throw new RoleManifestError(
       `system prompt missing in role bundle "${manifest.name}": ${manifest.systemPromptPath}`,
+    );
+  }
+  const systemPrompt = readFileSync(systemPromptAbs, "utf8");
+  if (systemPrompt.trim().length === 0) {
+    throw new RoleManifestError(
+      `system prompt is empty for role "${manifest.name}": ${manifest.systemPromptPath}`,
     );
   }
 
@@ -81,5 +88,5 @@ export function defineRole(opts: DefineRoleOptions): LoadedRole {
     }
   }
 
-  return Object.freeze({ bundleRoot: opts.root, manifest });
+  return Object.freeze({ bundleRoot: opts.root, manifest, systemPrompt });
 }

@@ -17,6 +17,7 @@ export interface AgentSpawnRequest {
   readonly allowedTools?: readonly string[];
   readonly env?: NodeJS.ProcessEnv;
   readonly pluginDirs?: readonly string[];
+  readonly appendSystemPrompt?: string;
 }
 
 export interface SpawnedAgentInfo {

@@ -60,6 +60,7 @@ export interface BuildClaudeArgsOptions {
   readonly pluginDirs?: readonly string[];
   readonly permissionMode?: PermissionMode;
   readonly allowedTools?: readonly string[];
+  readonly appendSystemPrompt?: string;
 }
 
 export function buildClaudeArgs(opts: BuildClaudeArgsOptions): string[] {
@@ -82,6 +83,9 @@ export function buildClaudeArgs(opts: BuildClaudeArgsOptions): string[] {
   }
   if (opts.permissionMode) {
     args.push("--permission-mode", opts.permissionMode);
+  }
+  if (opts.appendSystemPrompt !== undefined) {
+    args.push("--append-system-prompt", opts.appendSystemPrompt);
   }
 
   args.push(

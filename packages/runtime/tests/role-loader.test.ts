@@ -46,6 +46,15 @@ describe("defineRole", () => {
     expect(Object.isFrozen(role)).toBe(true);
   });
 
+  it("eagerly reads the system prompt content into systemPrompt", () => {
+    writeFileSync(
+      join(bundleRoot, "system-prompt.md"),
+      "# Test Role\n\nDo the test things.\n",
+    );
+    const role = defineRole({ root: bundleRoot, manifest: validManifest });
+    expect(role.systemPrompt).toBe("# Test Role\n\nDo the test things.\n");
+  });
+
   it("throws RoleManifestError if the manifest fails schema validation", () => {
     expect(() =>
       defineRole({

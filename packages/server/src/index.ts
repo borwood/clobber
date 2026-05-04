@@ -31,6 +31,9 @@ const spawner: AgentSpawner = (req) => {
     ...(req.pluginDirs === undefined ? {} : { pluginDirs: req.pluginDirs }),
     ...(req.permissionMode === undefined ? {} : { permissionMode: req.permissionMode }),
     ...(req.allowedTools === undefined ? {} : { allowedTools: req.allowedTools }),
+    ...(req.appendSystemPrompt === undefined
+      ? {}
+      : { appendSystemPrompt: req.appendSystemPrompt }),
     ...(req.env === undefined ? {} : { env: req.env }),
   });
   return {

@@ -131,6 +131,9 @@ describe("POST /spawn — manager bundle materialization", () => {
     const shim = readFileSync(join(repoPath, ".clobber", "bin", "clobber"), "utf8");
     expect(shim).toContain("/abs/cli/index.ts");
 
+    expect(typeof call.appendSystemPrompt).toBe("string");
+    expect(call.appendSystemPrompt!).toMatch(/Manager/);
+
     await teardown(h);
   });
 
@@ -154,6 +157,7 @@ describe("POST /spawn — manager bundle materialization", () => {
     const call = h.calls[0]!;
     expect(call.env).toBeUndefined();
     expect(call.pluginDirs).toBeUndefined();
+    expect(call.appendSystemPrompt).toBeUndefined();
 
     await teardown(h);
   });
