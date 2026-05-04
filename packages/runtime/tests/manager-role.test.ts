@@ -4,9 +4,9 @@ import { join } from "node:path";
 import { managerRole } from "../src/index.ts";
 
 describe("managerRole", () => {
-  it("declares the four CLI commands the manager needs", () => {
+  it("declares the CLI commands the manager needs (including observability triple)", () => {
     expect([...managerRole.manifest.allowedCliCommands].sort()).toEqual(
-      ["ask", "spawn", "status", "whoami"].sort(),
+      ["agents", "ask", "kill", "spawn", "status", "transcript", "whoami"].sort(),
     );
   });
 
