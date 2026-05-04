@@ -1,4 +1,4 @@
-import { CommandRegistry } from "./commands.ts";
+import { CommandRegistry, type Command } from "./commands.ts";
 import { whoamiCommand } from "./commands/whoami.ts";
 import { spawnCommand } from "./commands/spawn.ts";
 import { agentsCommand } from "./commands/agents.ts";
@@ -36,6 +36,18 @@ function printUsage(registry: CommandRegistry, stdout: NodeJS.WritableStream): v
   }
 }
 
+function printCommandHelp(command: Command, stdout: NodeJS.WritableStream): void {
+  if (command.usage !== undefined) {
+    stdout.write(`${command.usage}\n`);
+    return;
+  }
+  stdout.write(`usage: clobber ${command.name}\n\n${command.summary}\n`);
+}
+
+function isHelpFlag(arg: string | undefined): boolean {
+  return arg === "--help" || arg === "-h";
+}
+
 export async function run(opts: RunOptions): Promise<number> {
   const registry = buildRegistry();
   const [name, ...rest] = opts.argv;
@@ -50,6 +62,11 @@ export async function run(opts: RunOptions): Promise<number> {
     opts.stderr.write(`unknown command: ${name}\n\n`);
     printUsage(registry, opts.stderr);
     return 2;
+  }
+
+  if (rest.some(isHelpFlag)) {
+    printCommandHelp(command, opts.stdout);
+    return 0;
   }
 
   const env = readEnv(opts.env);

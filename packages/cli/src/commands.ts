@@ -10,6 +10,7 @@ export interface CommandContext {
 export interface Command {
   readonly name: string;
   readonly summary: string;
+  readonly usage?: string;
   run(ctx: CommandContext): Promise<number>;
 }
 

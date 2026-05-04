@@ -34,9 +34,23 @@ function parseArgs(args: readonly string[]): ParsedArgs {
   return { question, options };
 }
 
+const ASK_USAGE = `usage: clobber ask <question> [--option <value>]...
+
+Ask the human a question and block until they answer. Prints the answer
+to stdout on success (exit 0). Exits 1 with a stderr hint on timeout or
+session cancellation.
+
+Repeat --option to offer the human predefined choices, which the web ask
+widget renders as buttons. The human can still type a custom answer.
+
+examples:
+  ANSWER=$(clobber ask "ship the migration?")
+  clobber ask "merge or rebase?" --option merge --option rebase`;
+
 export const askCommand: Command = {
   name: "ask",
   summary: "Ask the human a question and block until they answer.",
+  usage: ASK_USAGE,
   async run(ctx) {
     const parsed = parseArgs(ctx.args);
     const body: Record<string, unknown> = { question: parsed.question };

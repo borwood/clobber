@@ -220,6 +220,35 @@ describe("clobber CLI — ask", () => {
     expect(s.err()).toMatch(/question/i);
   });
 
+  it("`ask --help` prints usage to stdout and exits 0 (does NOT post a question)", async () => {
+    const s = captureStreams();
+    const code = await run({
+      argv: ["ask", "--help"],
+      env: env(),
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(0);
+    expect(s.out().toLowerCase()).toMatch(/usage|ask/);
+    expect(s.err()).toBe("");
+
+    // Critically: no question row was created.
+    expect(harness.questions.getOpenForSession(harness.managerSessionId)).toBeNull();
+  });
+
+  it("`ask -h` behaves the same as --help", async () => {
+    const s = captureStreams();
+    const code = await run({
+      argv: ["ask", "-h"],
+      env: env(),
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(0);
+    expect(s.out().toLowerCase()).toMatch(/usage|ask/);
+    expect(harness.questions.getOpenForSession(harness.managerSessionId)).toBeNull();
+  });
+
   it("exits 2 when --option is given without a value", async () => {
     const s = captureStreams();
     const code = await run({
