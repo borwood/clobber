@@ -25,6 +25,7 @@ export interface SpawnedAgentInfo {
   readonly pid: number;
   readonly exited: Promise<number | null>;
   readonly stdin: NodeJS.WritableStream;
+  readonly kill: (signal: NodeJS.Signals) => void;
 }
 
 export type AgentSpawner = (req: AgentSpawnRequest) => SpawnedAgentInfo;

@@ -43,6 +43,7 @@ function buildHarness(): Harness {
     pid: 9000,
     exited: new Promise<number | null>(() => {}),
     stdin: makeStdin(),
+    kill: () => {},
   };
   const server = createServer({
     store: createEventStore(db),

@@ -61,6 +61,7 @@ beforeAll(async () => {
       pid: 7777,
       exited: new Promise<number | null>(() => {}),
       stdin: makeStdin(),
+      kill: () => {},
     };
   };
 

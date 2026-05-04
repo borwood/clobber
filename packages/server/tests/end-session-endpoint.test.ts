@@ -31,6 +31,7 @@ function recordingStub(sessionId: string): RecordingStub {
       pid: 9000,
       exited: new Promise<number | null>(() => {}),
       stdin,
+      kill: () => {},
     },
     stdin,
     endedByStdinClose: false,

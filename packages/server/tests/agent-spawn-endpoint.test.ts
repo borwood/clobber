@@ -53,6 +53,7 @@ function buildHarness(): Harness {
       pid: 4321,
       exited: new Promise<number | null>(() => {}),
       stdin: makeStdin(),
+      kill: () => {},
     };
   };
   const server = createServer({

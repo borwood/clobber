@@ -10,11 +10,16 @@
 export interface LiveAgent {
   readonly sessionId: string;
   readonly stdin: NodeJS.WritableStream;
+  readonly kill: (signal: NodeJS.Signals) => void;
   busy: boolean;
 }
 
 export interface AgentRegistry {
-  register(sessionId: string, stdin: NodeJS.WritableStream): void;
+  register(
+    sessionId: string,
+    stdin: NodeJS.WritableStream,
+    kill: (signal: NodeJS.Signals) => void,
+  ): void;
   get(sessionId: string): LiveAgent | null;
   unregister(sessionId: string): void;
   setBusy(sessionId: string, busy: boolean): void;
@@ -23,8 +28,8 @@ export interface AgentRegistry {
 export function createAgentRegistry(): AgentRegistry {
   const live = new Map<string, LiveAgent>();
   return {
-    register(sessionId, stdin) {
-      live.set(sessionId, { sessionId, stdin, busy: true });
+    register(sessionId, stdin, kill) {
+      live.set(sessionId, { sessionId, stdin, kill, busy: true });
     },
     get(sessionId) {
       const agent = live.get(sessionId);

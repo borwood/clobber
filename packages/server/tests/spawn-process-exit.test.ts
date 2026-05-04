@@ -35,7 +35,7 @@ function deferredExitSpawner(): DeferredSpawner {
     });
     const stdin = new PassThrough();
     stdin.resume();
-    return { sessionId, pid: 1000 + counter, exited, stdin };
+    return { sessionId, pid: 1000 + counter, exited, stdin, kill: () => {} };
   };
   async function exit(sessionId: string, code: number | null): Promise<void> {
     const resolve = resolvers.get(sessionId);

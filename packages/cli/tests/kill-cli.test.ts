@@ -16,13 +16,19 @@ import { createSessionTokenStore } from "@clobber/server/session-token-store.ts"
 import type { AgentSpawner, SpawnedAgentInfo } from "@clobber/server/types.ts";
 import { run } from "../src/main.ts";
 
+interface KillRecord {
+  readonly sessionId: string;
+  readonly signal: NodeJS.Signals;
+}
+
 interface Harness {
   app: ReturnType<typeof createServer>;
   db: ReturnType<typeof createDatabase>;
   baseUrl: string;
   managerToken: string;
   managerSessionId: string;
-  workspaceId: string;
+  childSessionId: string;
+  killCalls: KillRecord[];
   repoPath: string;
 }
 
@@ -35,7 +41,7 @@ function makeStdin(): NodeJS.WritableStream {
 }
 
 beforeAll(async () => {
-  const repoPath = mkdtempSync(join(tmpdir(), "clobber-agents-cli-"));
+  const repoPath = mkdtempSync(join(tmpdir(), "clobber-kill-cli-"));
   const db = createDatabase(":memory:");
   const workspaces = createWorkspaceStore(db);
   const roles = createRoleStore(db);
@@ -48,16 +54,20 @@ beforeAll(async () => {
   const managerRole = roles.create({ name: "manager", persistent: true });
   workspaceRoles.setCeiling(ws.id, managerRole.id, 5);
 
-  let pidCounter = 6000;
+  const killCalls: KillRecord[] = [];
+  let pidCounter = 7000;
   const spawner: AgentSpawner = (req): SpawnedAgentInfo => {
     pidCounter += 1;
     if (req.sessionId === undefined) throw new Error("expected sessionId");
+    const sessionId = req.sessionId;
     return {
-      sessionId: req.sessionId,
+      sessionId,
       pid: pidCounter,
       exited: new Promise<number | null>(() => {}),
       stdin: makeStdin(),
-      kill: () => {},
+      kill: (signal) => {
+        killCalls.push({ sessionId, signal });
+      },
     };
   };
 
@@ -91,13 +101,25 @@ beforeAll(async () => {
   const bootBody = bootRes.json() as { session_id: string };
   const managerToken = tokens.mint(bootBody.session_id);
 
+  const childRes = await app.inject({
+    method: "POST",
+    url: "/agent/spawn",
+    headers: { authorization: `Bearer ${managerToken}` },
+    payload: { role: "manager", prompt: "child work" },
+  });
+  if (childRes.statusCode !== 200) {
+    throw new Error(`child spawn failed: ${childRes.statusCode} ${childRes.body}`);
+  }
+  const childBody = childRes.json() as { session_id: string };
+
   harness = {
     app,
     db,
     baseUrl,
     managerToken,
     managerSessionId: bootBody.session_id,
-    workspaceId: ws.id,
+    childSessionId: childBody.session_id,
+    killCalls,
     repoPath,
   };
 });
@@ -123,11 +145,11 @@ function captureStreams() {
   };
 }
 
-describe("clobber CLI — agents", () => {
-  it("`agents list` prints active agents JSON", async () => {
+describe("clobber CLI — kill", () => {
+  it("`kill <session-id>` terminates the live agent and prints ok", async () => {
     const s = captureStreams();
     const code = await run({
-      argv: ["agents", "list"],
+      argv: ["kill", harness.childSessionId],
       env: {
         CLOBBER_API_BASE: harness.baseUrl,
         CLOBBER_SESSION_TOKEN: harness.managerToken,
@@ -136,19 +158,16 @@ describe("clobber CLI — agents", () => {
       stderr: s.stderr,
     });
     expect(code).toBe(0);
-    const parsed = JSON.parse(s.out()) as {
-      agents: Array<{ session_id: string; is_caller: boolean }>;
-    };
-    expect(Array.isArray(parsed.agents)).toBe(true);
-    const caller = parsed.agents.find((a) => a.session_id === harness.managerSessionId);
-    expect(caller).toBeDefined();
-    expect(caller!.is_caller).toBe(true);
+    expect(s.out()).toMatch(/ok/);
+    expect(harness.killCalls).toEqual([
+      { sessionId: harness.childSessionId, signal: "SIGTERM" },
+    ]);
   });
 
-  it("exits 2 with usage when no subcommand is given", async () => {
+  it("exits 2 with usage when no session id is given", async () => {
     const s = captureStreams();
     const code = await run({
-      argv: ["agents"],
+      argv: ["kill"],
       env: {
         CLOBBER_API_BASE: harness.baseUrl,
         CLOBBER_SESSION_TOKEN: harness.managerToken,
@@ -157,21 +176,6 @@ describe("clobber CLI — agents", () => {
       stderr: s.stderr,
     });
     expect(code).toBe(2);
-    expect(s.err()).toMatch(/subcommand/i);
-  });
-
-  it("exits 2 for an unknown subcommand", async () => {
-    const s = captureStreams();
-    const code = await run({
-      argv: ["agents", "nope"],
-      env: {
-        CLOBBER_API_BASE: harness.baseUrl,
-        CLOBBER_SESSION_TOKEN: harness.managerToken,
-      },
-      stdout: s.stdout,
-      stderr: s.stderr,
-    });
-    expect(code).toBe(2);
-    expect(s.err()).toMatch(/nope/);
+    expect(s.err()).toMatch(/session/i);
   });
 });

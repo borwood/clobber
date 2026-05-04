@@ -9,6 +9,7 @@ import type { AgentStore } from "../agent-store.ts";
 import type { AgentRegistry } from "../agent-registry.ts";
 import type { AgentSpawner } from "../types.ts";
 import { executeSpawn } from "../spawn-pipeline.ts";
+import { endSession } from "../session-lifecycle.ts";
 import { resolveCallerSession } from "./_agent-auth.ts";
 
 export interface AgentRouteDeps {
@@ -125,4 +126,30 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
       pid: result.pid,
     };
   });
+
+  app.post<{ Params: { id: string } }>(
+    "/agent/sessions/:id/kill",
+    async (request, reply) => {
+      const auth = resolveCallerSession(request, deps);
+      if (!auth.ok) {
+        reply.code(auth.status);
+        return { error: auth.error };
+      }
+      const target = deps.sessions.get(request.params.id);
+      if (target === null || target.workspace_id !== auth.session.workspace_id) {
+        reply.code(404);
+        return { error: "session not found" };
+      }
+      if (target.ended_at !== undefined) {
+        return { ok: true };
+      }
+      const live = deps.registry.get(target.id);
+      if (live !== null) {
+        live.kill("SIGTERM");
+        deps.registry.unregister(target.id);
+      }
+      endSession(target.id, deps);
+      return { ok: true };
+    },
+  );
 }

@@ -140,7 +140,7 @@ export function executeSpawn(
     pid: spawned.pid,
   });
   deps.sessionTokens.register(sessionId, token);
-  deps.registry.register(sessionId, spawned.stdin);
+  deps.registry.register(sessionId, spawned.stdin, spawned.kill);
 
   spawned.exited.then(() => {
     deps.registry.unregister(sessionId);

@@ -59,6 +59,7 @@ beforeAll(async () => {
     pid: 9000,
     exited: new Promise<number | null>(() => {}),
     stdin: makeStdin(),
+    kill: () => {},
   };
   const app = createServer({
     store: createEventStore(db),

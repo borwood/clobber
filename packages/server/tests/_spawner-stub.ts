@@ -15,5 +15,6 @@ export function stubSpawnedAgent(
     pid: opts.pid === undefined ? 0 : opts.pid,
     exited: new Promise<number | null>(() => {}),
     stdin,
+    kill: () => {},
   };
 }

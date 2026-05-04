@@ -58,7 +58,7 @@ function controlledSpawner(): SpawnControl {
       },
     };
     agents.push(stub);
-    return { sessionId, pid: stub.pid, exited, stdin };
+    return { sessionId, pid: stub.pid, exited, stdin, kill: () => {} };
   };
 
   return { spawner, agents };

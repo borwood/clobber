@@ -41,6 +41,9 @@ const spawner: AgentSpawner = (req) => {
     pid: agent.pid,
     exited: agent.exited,
     stdin: agent.stdin,
+    kill: (signal) => {
+      agent.child.kill(signal);
+    },
   };
 };
 

@@ -13,11 +13,12 @@ import { createAgentStore } from "../src/agent-store.ts";
 import { createSessionStore } from "../src/session-store.ts";
 import { createWorkspaceSessionSummaries } from "../src/workspace-session-summaries.ts";
 import { createSessionTokenStore } from "../src/session-token-store.ts";
-import type {
-  AgentSpawner,
-  AgentSpawnRequest,
-  SpawnedAgentInfo,
-} from "../src/types.ts";
+import type { AgentSpawner, SpawnedAgentInfo } from "../src/types.ts";
+
+interface KillRecord {
+  readonly sessionId: string;
+  readonly signal: NodeJS.Signals;
+}
 
 interface Harness {
   server: ReturnType<typeof createServer>;
@@ -27,7 +28,7 @@ interface Harness {
   workspaceRoles: ReturnType<typeof createWorkspaceRoleStore>;
   sessions: ReturnType<typeof createSessionStore>;
   tokens: ReturnType<typeof createSessionTokenStore>;
-  calls: AgentSpawnRequest[];
+  killCalls: KillRecord[];
 }
 
 function makeStdin(): NodeJS.WritableStream {
@@ -44,18 +45,20 @@ function buildHarness(): Harness {
   const agents = createAgentStore(db);
   const sessions = createSessionStore(db);
   const tokens = createSessionTokenStore(db);
-  const calls: AgentSpawnRequest[] = [];
+  const killCalls: KillRecord[] = [];
   let pidCounter = 5000;
   const spawner: AgentSpawner = (req): SpawnedAgentInfo => {
-    calls.push(req);
     pidCounter += 1;
     if (req.sessionId === undefined) throw new Error("expected sessionId");
+    const sessionId = req.sessionId;
     return {
-      sessionId: req.sessionId,
+      sessionId,
       pid: pidCounter,
       exited: new Promise<number | null>(() => {}),
       stdin: makeStdin(),
-      kill: () => {},
+      kill: (signal) => {
+        killCalls.push({ sessionId, signal });
+      },
     };
   };
   const server = createServer({
@@ -72,7 +75,7 @@ function buildHarness(): Harness {
     apiBase: "http://test.invalid",
     cliEntry: "/dummy/cli.ts",
   });
-  return { server, db, workspaces, roles, workspaceRoles, sessions, tokens, calls };
+  return { server, db, workspaces, roles, workspaceRoles, sessions, tokens, killCalls };
 }
 
 async function teardown(h: Harness): Promise<void> {
@@ -84,8 +87,8 @@ let repoPath: string;
 let otherRepoPath: string;
 
 beforeEach(() => {
-  repoPath = mkdtempSync(join(tmpdir(), "clobber-agents-list-"));
-  otherRepoPath = mkdtempSync(join(tmpdir(), "clobber-agents-list-other-"));
+  repoPath = mkdtempSync(join(tmpdir(), "clobber-agent-kill-"));
+  otherRepoPath = mkdtempSync(join(tmpdir(), "clobber-agent-kill-other-"));
 });
 
 afterEach(() => {
@@ -121,10 +124,28 @@ async function bootManager(h: Harness, repo: string): Promise<Booted> {
   };
 }
 
-describe("GET /agent/agents", () => {
+async function spawnChild(h: Harness, callerToken: string): Promise<{
+  sessionId: string;
+  agentId: string;
+}> {
+  const res = await h.server.inject({
+    method: "POST",
+    url: "/agent/spawn",
+    headers: { authorization: `Bearer ${callerToken}` },
+    payload: { role: "manager", prompt: "do work" },
+  });
+  if (res.statusCode !== 200) throw new Error(`spawn failed: ${res.body}`);
+  const body = res.json() as { session_id: string; agent_id: string };
+  return { sessionId: body.session_id, agentId: body.agent_id };
+}
+
+describe("POST /agent/sessions/:id/kill", () => {
   it("returns 401 without an Authorization header", async () => {
     const h = buildHarness();
-    const res = await h.server.inject({ method: "GET", url: "/agent/agents" });
+    const res = await h.server.inject({
+      method: "POST",
+      url: "/agent/sessions/abc/kill",
+    });
     expect(res.statusCode).toBe(401);
     await teardown(h);
   });
@@ -134,136 +155,87 @@ describe("GET /agent/agents", () => {
     const boot = await bootManager(h, repoPath);
     h.tokens.revoke(boot.managerSessionId);
     const res = await h.server.inject({
-      method: "GET",
-      url: "/agent/agents",
+      method: "POST",
+      url: `/agent/sessions/${boot.managerSessionId}/kill`,
       headers: { authorization: `Bearer ${boot.managerToken}` },
     });
     expect(res.statusCode).toBe(401);
     await teardown(h);
   });
 
-  it("lists active sessions in the caller's workspace and marks the caller", async () => {
+  it("returns 404 for a missing session id", async () => {
     const h = buildHarness();
     const boot = await bootManager(h, repoPath);
-
-    const spawn1 = await h.server.inject({
-      method: "POST",
-      url: "/agent/spawn",
-      headers: { authorization: `Bearer ${boot.managerToken}` },
-      payload: { role: "manager", prompt: "audit auth.ts", label: "auditor" },
-    });
-    expect(spawn1.statusCode).toBe(200);
-    const spawned = spawn1.json() as { session_id: string; agent_id: string; pid: number };
-
     const res = await h.server.inject({
-      method: "GET",
-      url: "/agent/agents",
+      method: "POST",
+      url: "/agent/sessions/does-not-exist/kill",
       headers: { authorization: `Bearer ${boot.managerToken}` },
     });
-    expect(res.statusCode).toBe(200);
-    const body = res.json() as {
-      agents: Array<{
-        session_id: string;
-        agent_id: string;
-        role: { id: string; name: string };
-        label?: string;
-        pid: number;
-        state: "busy" | "idle";
-        started_at: number;
-        is_caller: boolean;
-      }>;
-    };
-    expect(body.agents).toHaveLength(2);
-
-    const callerEntry = body.agents.find((a) => a.session_id === boot.managerSessionId);
-    expect(callerEntry).toBeDefined();
-    expect(callerEntry!.is_caller).toBe(true);
-    expect(callerEntry!.role.name).toBe("manager");
-    expect(callerEntry!.state).toBe("busy");
-
-    const childEntry = body.agents.find((a) => a.session_id === spawned.session_id);
-    expect(childEntry).toBeDefined();
-    expect(childEntry!.is_caller).toBe(false);
-    expect(childEntry!.agent_id).toBe(spawned.agent_id);
-    expect(childEntry!.label).toBe("auditor");
-    expect(childEntry!.pid).toBe(spawned.pid);
-    expect(childEntry!.role.name).toBe("manager");
-    expect(typeof childEntry!.started_at).toBe("number");
-
+    expect(res.statusCode).toBe(404);
     await teardown(h);
   });
 
-  it("excludes ended sessions", async () => {
-    const h = buildHarness();
-    const boot = await bootManager(h, repoPath);
-
-    const spawn1 = await h.server.inject({
-      method: "POST",
-      url: "/agent/spawn",
-      headers: { authorization: `Bearer ${boot.managerToken}` },
-      payload: { role: "manager", prompt: "do x" },
-    });
-    const child = spawn1.json() as { session_id: string };
-    await h.server.inject({
-      method: "POST",
-      url: `/sessions/${child.session_id}/end`,
-    });
-
-    const res = await h.server.inject({
-      method: "GET",
-      url: "/agent/agents",
-      headers: { authorization: `Bearer ${boot.managerToken}` },
-    });
-    const body = res.json() as { agents: Array<{ session_id: string }> };
-    expect(body.agents.map((a) => a.session_id)).toEqual([boot.managerSessionId]);
-
-    await teardown(h);
-  });
-
-  it("does not include sessions from other workspaces", async () => {
+  it("returns 404 when target session belongs to a different workspace", async () => {
     const h = buildHarness();
     const bootA = await bootManager(h, repoPath);
     const bootB = await bootManager(h, otherRepoPath);
-
     const res = await h.server.inject({
-      method: "GET",
-      url: "/agent/agents",
+      method: "POST",
+      url: `/agent/sessions/${bootB.managerSessionId}/kill`,
       headers: { authorization: `Bearer ${bootA.managerToken}` },
     });
-    const body = res.json() as { agents: Array<{ session_id: string }> };
-    const ids = body.agents.map((a) => a.session_id);
-    expect(ids).toContain(bootA.managerSessionId);
-    expect(ids).not.toContain(bootB.managerSessionId);
-
+    expect(res.statusCode).toBe(404);
+    expect(h.killCalls).toEqual([]);
     await teardown(h);
   });
 
-  it("reports state=idle once the Stop hook clears busy", async () => {
+  it("terminates a live child session and ends it", async () => {
     const h = buildHarness();
     const boot = await bootManager(h, repoPath);
-
-    const stop = await h.server.inject({
-      method: "POST",
-      url: "/hook",
-      payload: {
-        session_id: boot.managerSessionId,
-        transcript_path: "/tmp/t.jsonl",
-        cwd: repoPath,
-        permission_mode: "default",
-        hook_event_name: "Stop",
-      },
-    });
-    expect(stop.statusCode).toBe(200);
+    const child = await spawnChild(h, boot.managerToken);
 
     const res = await h.server.inject({
+      method: "POST",
+      url: `/agent/sessions/${child.sessionId}/kill`,
+      headers: { authorization: `Bearer ${boot.managerToken}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json() as { ok: boolean }).toEqual({ ok: true });
+
+    expect(h.killCalls).toEqual([{ sessionId: child.sessionId, signal: "SIGTERM" }]);
+
+    const session = h.sessions.get(child.sessionId);
+    expect(session).not.toBeNull();
+    expect(session!.ended_at).toBeDefined();
+
+    const list = await h.server.inject({
       method: "GET",
       url: "/agent/agents",
       headers: { authorization: `Bearer ${boot.managerToken}` },
     });
-    const body = res.json() as { agents: Array<{ session_id: string; state: string }> };
-    const callerEntry = body.agents.find((a) => a.session_id === boot.managerSessionId);
-    expect(callerEntry!.state).toBe("idle");
+    const body = list.json() as { agents: Array<{ session_id: string }> };
+    expect(body.agents.map((a) => a.session_id)).not.toContain(child.sessionId);
 
+    await teardown(h);
+  });
+
+  it("is idempotent when the session has already ended", async () => {
+    const h = buildHarness();
+    const boot = await bootManager(h, repoPath);
+    const child = await spawnChild(h, boot.managerToken);
+
+    await h.server.inject({
+      method: "POST",
+      url: `/sessions/${child.sessionId}/end`,
+    });
+
+    const res = await h.server.inject({
+      method: "POST",
+      url: `/agent/sessions/${child.sessionId}/kill`,
+      headers: { authorization: `Bearer ${boot.managerToken}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(h.killCalls).toEqual([]);
     await teardown(h);
   });
 });
