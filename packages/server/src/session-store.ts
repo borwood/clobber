@@ -8,6 +8,7 @@ export interface SessionStore {
   markEnded(id: string): boolean;
   updateTranscriptPath(id: string, path: string): boolean;
   listForWorkspace(workspaceId: string): Session[];
+  listActiveForWorkspace(workspaceId: string): Session[];
   listActive(): Session[];
 }
 
@@ -54,6 +55,9 @@ export function createSessionStore(db: Database): SessionStore {
   );
   const listStmt = db.prepare(
     "SELECT * FROM sessions WHERE workspace_id = ? ORDER BY started_at DESC, id DESC",
+  );
+  const listActiveForWorkspaceStmt = db.prepare(
+    "SELECT * FROM sessions WHERE workspace_id = ? AND ended_at IS NULL ORDER BY started_at ASC, id ASC",
   );
   const listActiveStmt = db.prepare(
     "SELECT * FROM sessions WHERE ended_at IS NULL ORDER BY started_at ASC, id ASC",
@@ -107,6 +111,11 @@ export function createSessionStore(db: Database): SessionStore {
 
     listForWorkspace(workspaceId) {
       const rows = listStmt.all(workspaceId) as Row[];
+      return rows.map(rowToSession);
+    },
+
+    listActiveForWorkspace(workspaceId) {
+      const rows = listActiveForWorkspaceStmt.all(workspaceId) as Row[];
       return rows.map(rowToSession);
     },
 

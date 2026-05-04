@@ -51,6 +51,38 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
     };
   });
 
+  app.get("/agent/agents", async (request, reply) => {
+    const auth = resolveCallerSession(request, deps);
+    if (!auth.ok) {
+      reply.code(auth.status);
+      return { error: auth.error };
+    }
+    const sessions = deps.sessions.listActiveForWorkspace(auth.session.workspace_id);
+    const agents = sessions.map((session) => {
+      const role = deps.roles.get(session.role_id);
+      if (role === null) throw new Error(`role missing for session ${session.id}`);
+      const agentRow = session.agent_id === undefined
+        ? null
+        : deps.agents.get(session.agent_id);
+      const live = deps.registry.get(session.id);
+      const state: "busy" | "idle" = live === null || live.busy ? "busy" : "idle";
+      const entry: Record<string, unknown> = {
+        session_id: session.id,
+        agent_id: session.agent_id,
+        role: { id: role.id, name: role.name },
+        pid: session.pid,
+        state,
+        started_at: session.started_at,
+        is_caller: session.id === auth.session.id,
+      };
+      if (agentRow !== null && agentRow.label !== undefined) {
+        entry["label"] = agentRow.label;
+      }
+      return entry;
+    });
+    return { agents };
+  });
+
   app.post("/agent/spawn", async (request, reply) => {
     const auth = resolveCallerSession(request, deps);
     if (!auth.ok) {

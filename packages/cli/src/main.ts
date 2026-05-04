@@ -1,6 +1,7 @@
 import { CommandRegistry } from "./commands.ts";
 import { whoamiCommand } from "./commands/whoami.ts";
 import { spawnCommand } from "./commands/spawn.ts";
+import { agentsCommand } from "./commands/agents.ts";
 import { readEnv, CliEnvError } from "./env.ts";
 import { CliHttpError } from "./http.ts";
 import { CliUsageError } from "./usage-error.ts";
@@ -16,6 +17,7 @@ function buildRegistry(): CommandRegistry {
   const registry = new CommandRegistry();
   registry.register(whoamiCommand);
   registry.register(spawnCommand);
+  registry.register(agentsCommand);
   return registry;
 }
 
