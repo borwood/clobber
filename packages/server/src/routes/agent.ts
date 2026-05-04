@@ -10,6 +10,13 @@ import type { AgentRegistry } from "../agent-registry.ts";
 import type { AgentSpawner } from "../types.ts";
 import { executeSpawn } from "../spawn-pipeline.ts";
 import { endSession } from "../session-lifecycle.ts";
+import { readTranscript } from "../transcript-reader.ts";
+import {
+  formatTranscript,
+  isValidEntryId,
+  parseTranscriptQuery,
+  type TranscriptQuery,
+} from "../transcript-formatter.ts";
 import { resolveCallerSession } from "./_agent-auth.ts";
 
 export interface AgentRouteDeps {
@@ -126,6 +133,39 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
       pid: result.pid,
     };
   });
+
+  app.get<{ Params: { id: string }; Querystring: TranscriptQuery }>(
+    "/agent/sessions/:id/transcript",
+    async (request, reply) => {
+      const auth = resolveCallerSession(request, deps);
+      if (!auth.ok) {
+        reply.code(auth.status);
+        return { error: auth.error };
+      }
+      const target = deps.sessions.get(request.params.id);
+      if (target === null || target.workspace_id !== auth.session.workspace_id) {
+        reply.code(404);
+        return { error: "session not found" };
+      }
+      const parsed = parseTranscriptQuery(request.query);
+      if (!parsed.ok) {
+        reply.code(400);
+        return { error: parsed.error };
+      }
+      const lines = target.transcript_path === undefined
+        ? []
+        : await readTranscript(target.transcript_path);
+      const sel = parsed.selection;
+      if (
+        (sel.kind === "entry" || sel.kind === "from" || sel.kind === "to") &&
+        !isValidEntryId(sel.id, lines.length)
+      ) {
+        reply.code(404);
+        return { error: `entry id out of range: ${sel.id}` };
+      }
+      return formatTranscript(lines, sel, parsed.detail);
+    },
+  );
 
   app.post<{ Params: { id: string } }>(
     "/agent/sessions/:id/kill",
