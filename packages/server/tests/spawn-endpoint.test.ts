@@ -126,7 +126,9 @@ describe("POST /spawn", () => {
       session_id: string;
       pid: number;
     };
-    expect(body.session_id).toMatch(/^primary-[a-z0-9]{4}$/);
+    expect(body.session_id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
     expect(body.pid).toBe(9001);
     expect(typeof body.agent_id).toBe("string");
 
@@ -278,120 +280,6 @@ describe("POST /spawn", () => {
     expect(body.ceiling).toBe(1);
     expect(body.active).toBe(1);
     expect(counter).toBe(1);
-
-    await teardown(h);
-  });
-
-  it("derives a slug session_id from the label (sanitized + random suffix)", async () => {
-    const calls: AgentSpawnRequest[] = [];
-    const h = buildHarness((req) => {
-      calls.push(req);
-      return { sessionId: req.sessionId!, pid: 1, exited: new Promise<number | null>(() => {}), stdin: liveStdin(), kill: () => {} };
-    });
-    const { ws, role } = seed(h, { ceiling: 5 });
-
-    const res = await h.server.inject({
-      method: "POST",
-      url: "/spawn",
-      payload: {
-        workspace_id: ws.id,
-        role_id: role.id,
-        prompt: "go",
-        label: "Audit Auth!! Middleware",
-      },
-    });
-
-    expect(res.statusCode).toBe(200);
-    const body = res.json() as { session_id: string };
-    expect(body.session_id).toMatch(/^audit-auth-middleware-[a-z0-9]{4}$/);
-    // Spawner sees the same id we hand back to the caller.
-    expect(calls[0]!.sessionId).toBe(body.session_id);
-    // Session row keyed by the slug, not a UUID.
-    expect(h.sessions.get(body.session_id)).not.toBeNull();
-
-    await teardown(h);
-  });
-
-  it("falls back to a UUID when no label is provided", async () => {
-    const h = buildHarness((req) => ({
-      sessionId: req.sessionId!,
-      pid: 1,
-      exited: new Promise<number | null>(() => {}),
-      stdin: liveStdin(),
-      kill: () => {},
-    }));
-    const { ws, role } = seed(h, { ceiling: 1 });
-
-    const res = await h.server.inject({
-      method: "POST",
-      url: "/spawn",
-      payload: { workspace_id: ws.id, role_id: role.id, prompt: "hi" },
-    });
-
-    const body = res.json() as { session_id: string };
-    expect(body.session_id).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
-    );
-
-    await teardown(h);
-  });
-
-  it("two spawns with the same label produce distinct ids (suffix collision-resistant)", async () => {
-    const h = buildHarness((req) => ({
-      sessionId: req.sessionId!,
-      pid: 1,
-      exited: new Promise<number | null>(() => {}),
-      stdin: liveStdin(),
-      kill: () => {},
-    }));
-    const { ws, role } = seed(h, { ceiling: 5 });
-
-    const ids = new Set<string>();
-    for (let i = 0; i < 3; i++) {
-      const res = await h.server.inject({
-        method: "POST",
-        url: "/spawn",
-        payload: {
-          workspace_id: ws.id,
-          role_id: role.id,
-          prompt: "go",
-          label: "audit-auth",
-        },
-      });
-      expect(res.statusCode).toBe(200);
-      const body = res.json() as { session_id: string };
-      expect(body.session_id).toMatch(/^audit-auth-[a-z0-9]{4}$/);
-      ids.add(body.session_id);
-    }
-    expect(ids.size).toBe(3);
-
-    await teardown(h);
-  });
-
-  it("rejects a label that sanitizes to empty (e.g. only punctuation)", async () => {
-    let invocations = 0;
-    const h = buildHarness((req) => {
-      invocations += 1;
-      return { sessionId: req.sessionId!, pid: 1, exited: new Promise<number | null>(() => {}), stdin: liveStdin(), kill: () => {} };
-    });
-    const { ws, role } = seed(h, { ceiling: 1 });
-
-    const res = await h.server.inject({
-      method: "POST",
-      url: "/spawn",
-      payload: {
-        workspace_id: ws.id,
-        role_id: role.id,
-        prompt: "hi",
-        label: "!!!",
-      },
-    });
-
-    expect(res.statusCode).toBe(400);
-    expect((res.json() as { error: string }).error).toBe(
-      "label sanitizes to empty slug",
-    );
-    expect(invocations).toBe(0);
 
     await teardown(h);
   });
