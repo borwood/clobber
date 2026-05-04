@@ -7,6 +7,7 @@ import { registerWorkspaceRoutes } from "./routes/workspaces.ts";
 import { registerRoleRoutes } from "./routes/roles.ts";
 import { registerWorkspaceRoleRoutes } from "./routes/workspace-roles.ts";
 import { registerAgentRoutes } from "./routes/agent.ts";
+import { registerAgentAskRoutes } from "./routes/agent-ask.ts";
 import { createAgentRegistry } from "./agent-registry.ts";
 
 export type {
@@ -28,6 +29,8 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     agents: opts.agents,
     roles: opts.roles,
     sessionTokens: opts.sessionTokens,
+    agentQuestions: opts.agentQuestions,
+    agentQuestionWaiter: opts.agentQuestionWaiter,
     registry,
   });
   registerEventRoutes(app, { store: opts.store });
@@ -37,6 +40,8 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     roles: opts.roles,
     sessionTokens: opts.sessionTokens,
     summaries: opts.sessionSummaries,
+    agentQuestions: opts.agentQuestions,
+    agentQuestionWaiter: opts.agentQuestionWaiter,
     registry,
   });
   registerSpawnRoutes(app, {
@@ -51,6 +56,8 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     apiBase: opts.apiBase,
     cliEntry: opts.cliEntry,
     registry,
+    agentQuestions: opts.agentQuestions,
+    agentQuestionWaiter: opts.agentQuestionWaiter,
   });
   registerWorkspaceRoutes(app, {
     workspaces: opts.workspaces,
@@ -71,11 +78,20 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     workspaceRoles: opts.workspaceRoles,
     agents: opts.agents,
     agentStatuses: opts.agentStatuses,
+    agentQuestions: opts.agentQuestions,
+    agentQuestionWaiter: opts.agentQuestionWaiter,
     registry,
     spawner: opts.spawner,
     hookUrl: opts.hookUrl,
     apiBase: opts.apiBase,
     cliEntry: opts.cliEntry,
+  });
+  registerAgentAskRoutes(app, {
+    sessionTokens: opts.sessionTokens,
+    sessions: opts.sessions,
+    agentQuestions: opts.agentQuestions,
+    agentQuestionWaiter: opts.agentQuestionWaiter,
+    ...(opts.askTimeoutMs === undefined ? {} : { askTimeoutMs: opts.askTimeoutMs }),
   });
 
   return app;

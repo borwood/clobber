@@ -2,12 +2,16 @@ import type { AgentStore } from "./agent-store.ts";
 import type { SessionStore } from "./session-store.ts";
 import type { RoleStore } from "./role-store.ts";
 import type { SessionTokenStore } from "./session-token-store.ts";
+import type { AgentQuestionStore } from "./agent-question-store.ts";
+import type { AgentQuestionWaiter } from "./agent-question-waiter.ts";
 
 export interface SessionLifecycleDeps {
   readonly sessions: SessionStore;
   readonly agents: AgentStore;
   readonly roles: RoleStore;
   readonly sessionTokens: SessionTokenStore;
+  readonly agentQuestions: AgentQuestionStore;
+  readonly agentQuestionWaiter: AgentQuestionWaiter;
 }
 
 /**
@@ -20,6 +24,12 @@ export function endSession(sessionId: string, deps: SessionLifecycleDeps): void 
   const session = deps.sessions.get(sessionId);
   if (session === null) return;
   if (session.ended_at !== undefined) return;
+
+  const cancelledIds = deps.agentQuestions.cancelAllForSession(sessionId);
+  for (const id of cancelledIds) {
+    const row = deps.agentQuestions.get(id);
+    if (row !== null) deps.agentQuestionWaiter.notify(row);
+  }
 
   deps.sessions.markEnded(sessionId);
   deps.sessionTokens.revoke(sessionId);

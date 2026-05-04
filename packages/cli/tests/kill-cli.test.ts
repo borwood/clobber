@@ -14,6 +14,8 @@ import { createSessionStore } from "@clobber/server/session-store.ts";
 import { createWorkspaceSessionSummaries } from "@clobber/server/workspace-session-summaries.ts";
 import { createSessionTokenStore } from "@clobber/server/session-token-store.ts";
 import { createAgentStatusStore } from "@clobber/server/agent-status-store.ts";
+import { createAgentQuestionStore } from "@clobber/server/agent-question-store.ts";
+import { createAgentQuestionWaiter } from "@clobber/server/agent-question-waiter.ts";
 import type { AgentSpawner, SpawnedAgentInfo } from "@clobber/server/types.ts";
 import { run } from "../src/main.ts";
 
@@ -82,6 +84,8 @@ beforeAll(async () => {
     sessionSummaries: createWorkspaceSessionSummaries(db),
     sessionTokens: tokens,
     agentStatuses: createAgentStatusStore(db),
+    agentQuestions: createAgentQuestionStore(db),
+    agentQuestionWaiter: createAgentQuestionWaiter(),
     spawner,
     hookUrl: "http://test.invalid/hook",
     apiBase: "http://test.invalid",

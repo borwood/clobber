@@ -6,6 +6,8 @@ import type { SessionStore } from "../session-store.ts";
 import type { RoleStore } from "../role-store.ts";
 import type { SessionTokenStore } from "../session-token-store.ts";
 import type { AgentRegistry } from "../agent-registry.ts";
+import type { AgentQuestionStore } from "../agent-question-store.ts";
+import type { AgentQuestionWaiter } from "../agent-question-waiter.ts";
 import { endSession } from "../session-lifecycle.ts";
 
 export function registerHookRoutes(
@@ -17,6 +19,8 @@ export function registerHookRoutes(
     roles: RoleStore;
     sessionTokens: SessionTokenStore;
     registry: AgentRegistry;
+    agentQuestions: AgentQuestionStore;
+    agentQuestionWaiter: AgentQuestionWaiter;
   },
 ): void {
   app.post("/hook", async (request, reply) => {
@@ -40,6 +44,8 @@ function applySessionLifecycle(
     roles: RoleStore;
     sessionTokens: SessionTokenStore;
     registry: AgentRegistry;
+    agentQuestions: AgentQuestionStore;
+    agentQuestionWaiter: AgentQuestionWaiter;
   },
 ): void {
   const session = deps.sessions.get(payload.session_id);

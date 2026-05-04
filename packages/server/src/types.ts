@@ -8,6 +8,8 @@ import type { SessionStore } from "./session-store.ts";
 import type { WorkspaceSessionSummaries } from "./workspace-session-summaries.ts";
 import type { SessionTokenStore } from "./session-token-store.ts";
 import type { AgentStatusStore } from "./agent-status-store.ts";
+import type { AgentQuestionStore } from "./agent-question-store.ts";
+import type { AgentQuestionWaiter } from "./agent-question-waiter.ts";
 
 export interface AgentSpawnRequest {
   readonly hookUrl: string;
@@ -41,6 +43,9 @@ export interface ServerOptions {
   readonly sessionSummaries: WorkspaceSessionSummaries;
   readonly sessionTokens: SessionTokenStore;
   readonly agentStatuses: AgentStatusStore;
+  readonly agentQuestions: AgentQuestionStore;
+  readonly agentQuestionWaiter: AgentQuestionWaiter;
+  readonly askTimeoutMs?: number;
   readonly spawner: AgentSpawner;
   readonly hookUrl: string;
   readonly apiBase: string;

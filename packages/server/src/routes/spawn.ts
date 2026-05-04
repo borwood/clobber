@@ -8,6 +8,8 @@ import type { SessionStore } from "../session-store.ts";
 import type { SessionTokenStore } from "../session-token-store.ts";
 import type { AgentSpawner } from "../types.ts";
 import type { AgentRegistry } from "../agent-registry.ts";
+import type { AgentQuestionStore } from "../agent-question-store.ts";
+import type { AgentQuestionWaiter } from "../agent-question-waiter.ts";
 import { executeSpawn } from "../spawn-pipeline.ts";
 
 const SpawnBodySchema = z.object({
@@ -29,6 +31,8 @@ export interface SpawnRouteDeps {
   readonly apiBase: string;
   readonly cliEntry: string;
   readonly registry: AgentRegistry;
+  readonly agentQuestions: AgentQuestionStore;
+  readonly agentQuestionWaiter: AgentQuestionWaiter;
 }
 
 export function registerSpawnRoutes(app: FastifyInstance, deps: SpawnRouteDeps): void {

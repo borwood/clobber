@@ -86,6 +86,20 @@ const SCHEMA = `
     updated_at    INTEGER NOT NULL,
     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS agent_questions (
+    id            TEXT    PRIMARY KEY,
+    session_id    TEXT    NOT NULL,
+    question      TEXT    NOT NULL,
+    options_json  TEXT,
+    status        TEXT    NOT NULL,
+    answer        TEXT,
+    asked_at      INTEGER NOT NULL,
+    answered_at   INTEGER,
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_questions_session_status
+    ON agent_questions(session_id, status, asked_at DESC);
 `;
 
 export function createDatabase(path: string): Database {

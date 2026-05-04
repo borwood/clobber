@@ -12,6 +12,8 @@ import { createSessionStore } from "./session-store.ts";
 import { createWorkspaceSessionSummaries } from "./workspace-session-summaries.ts";
 import { createSessionTokenStore } from "./session-token-store.ts";
 import { createAgentStatusStore } from "./agent-status-store.ts";
+import { createAgentQuestionStore } from "./agent-question-store.ts";
+import { createAgentQuestionWaiter } from "./agent-question-waiter.ts";
 import { reapOrphanedSessions } from "./boot-reap.ts";
 
 const PORT = 3300;
@@ -58,7 +60,16 @@ const sessions = createSessionStore(db);
 const sessionSummaries = createWorkspaceSessionSummaries(db);
 const sessionTokens = createSessionTokenStore(db);
 const agentStatuses = createAgentStatusStore(db);
-reapOrphanedSessions({ sessions, agents, roles, sessionTokens });
+const agentQuestions = createAgentQuestionStore(db);
+const agentQuestionWaiter = createAgentQuestionWaiter();
+reapOrphanedSessions({
+  sessions,
+  agents,
+  roles,
+  sessionTokens,
+  agentQuestions,
+  agentQuestionWaiter,
+});
 const app = createServer({
   store,
   workspaces,
@@ -69,6 +80,8 @@ const app = createServer({
   sessionSummaries,
   sessionTokens,
   agentStatuses,
+  agentQuestions,
+  agentQuestionWaiter,
   spawner,
   hookUrl: HOOK_URL,
   apiBase: API_BASE,

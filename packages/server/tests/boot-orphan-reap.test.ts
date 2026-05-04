@@ -6,6 +6,8 @@ import { createRoleStore } from "../src/role-store.ts";
 import { createAgentStore } from "../src/agent-store.ts";
 import { createSessionStore } from "../src/session-store.ts";
 import { createSessionTokenStore } from "../src/session-token-store.ts";
+import { createAgentQuestionStore } from "../src/agent-question-store.ts";
+import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import { reapOrphanedSessions } from "../src/boot-reap.ts";
 
 interface Harness {
@@ -15,6 +17,8 @@ interface Harness {
   agents: ReturnType<typeof createAgentStore>;
   sessions: ReturnType<typeof createSessionStore>;
   sessionTokens: ReturnType<typeof createSessionTokenStore>;
+  agentQuestions: ReturnType<typeof createAgentQuestionStore>;
+  agentQuestionWaiter: ReturnType<typeof createAgentQuestionWaiter>;
 }
 
 function buildHarness(): Harness {
@@ -26,6 +30,8 @@ function buildHarness(): Harness {
     agents: createAgentStore(db),
     sessions: createSessionStore(db),
     sessionTokens: createSessionTokenStore(db),
+    agentQuestions: createAgentQuestionStore(db),
+    agentQuestionWaiter: createAgentQuestionWaiter(),
   };
 }
 
@@ -67,6 +73,8 @@ describe("reapOrphanedSessions (boot-time)", () => {
       agents: h.agents,
       roles: h.roles,
       sessionTokens: h.sessionTokens,
+      agentQuestions: h.agentQuestions,
+      agentQuestionWaiter: h.agentQuestionWaiter,
     });
 
     expect(typeof h.sessions.get(a.sessionId)!.ended_at).toBe("number");
@@ -84,6 +92,8 @@ describe("reapOrphanedSessions (boot-time)", () => {
       agents: h.agents,
       roles: h.roles,
       sessionTokens: h.sessionTokens,
+      agentQuestions: h.agentQuestions,
+      agentQuestionWaiter: h.agentQuestionWaiter,
     });
 
     expect(h.agents.get(ephemeral.agentId)).toBeNull();
@@ -102,6 +112,8 @@ describe("reapOrphanedSessions (boot-time)", () => {
       agents: h.agents,
       roles: h.roles,
       sessionTokens: h.sessionTokens,
+      agentQuestions: h.agentQuestions,
+      agentQuestionWaiter: h.agentQuestionWaiter,
     });
 
     expect(h.sessions.get(done.sessionId)!.ended_at).toBe(endedAt!);
@@ -118,6 +130,8 @@ describe("reapOrphanedSessions (boot-time)", () => {
       agents: h.agents,
       roles: h.roles,
       sessionTokens: h.sessionTokens,
+      agentQuestions: h.agentQuestions,
+      agentQuestionWaiter: h.agentQuestionWaiter,
     });
 
     expect(h.sessions.countActive(a.workspaceId, a.roleId)).toBe(0);
@@ -132,6 +146,8 @@ describe("reapOrphanedSessions (boot-time)", () => {
       agents: h.agents,
       roles: h.roles,
       sessionTokens: h.sessionTokens,
+      agentQuestions: h.agentQuestions,
+      agentQuestionWaiter: h.agentQuestionWaiter,
     });
 
     h.db.close();

@@ -3,4 +3,5 @@ export * from "./role.ts";
 export * from "./role-manifest.ts";
 export * from "./agent.ts";
 export * from "./agent-status.ts";
+export * from "./agent-question.ts";
 export * from "./session.ts";

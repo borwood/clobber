@@ -7,6 +7,8 @@ import type { WorkspaceStore } from "../workspace-store.ts";
 import type { WorkspaceRoleStore } from "../workspace-role-store.ts";
 import type { AgentStore } from "../agent-store.ts";
 import type { AgentStatusStore } from "../agent-status-store.ts";
+import type { AgentQuestionStore } from "../agent-question-store.ts";
+import type { AgentQuestionWaiter } from "../agent-question-waiter.ts";
 import type { AgentRegistry } from "../agent-registry.ts";
 import type { AgentSpawner } from "../types.ts";
 import { AgentStatusUpdateSchema } from "@clobber/shared";
@@ -29,6 +31,8 @@ export interface AgentRouteDeps {
   readonly workspaceRoles: WorkspaceRoleStore;
   readonly agents: AgentStore;
   readonly agentStatuses: AgentStatusStore;
+  readonly agentQuestions: AgentQuestionStore;
+  readonly agentQuestionWaiter: AgentQuestionWaiter;
   readonly registry: AgentRegistry;
   readonly spawner: AgentSpawner;
   readonly hookUrl: string;

@@ -10,6 +10,8 @@ import { generateTokenValue } from "./session-token-store.ts";
 import type { AgentSpawner, AgentSpawnRequest } from "./types.ts";
 import type { AgentRegistry } from "./agent-registry.ts";
 import type { RoleStore } from "./role-store.ts";
+import type { AgentQuestionStore } from "./agent-question-store.ts";
+import type { AgentQuestionWaiter } from "./agent-question-waiter.ts";
 import { endSession } from "./session-lifecycle.ts";
 
 export interface SpawnPipelineDeps {
@@ -23,6 +25,8 @@ export interface SpawnPipelineDeps {
   readonly cliEntry: string;
   readonly registry: AgentRegistry;
   readonly roles: RoleStore;
+  readonly agentQuestions: AgentQuestionStore;
+  readonly agentQuestionWaiter: AgentQuestionWaiter;
 }
 
 export interface SpawnPipelineInput {

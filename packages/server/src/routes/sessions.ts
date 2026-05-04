@@ -7,6 +7,8 @@ import type { RoleStore } from "../role-store.ts";
 import type { SessionTokenStore } from "../session-token-store.ts";
 import type { WorkspaceSessionSummaries } from "../workspace-session-summaries.ts";
 import type { AgentRegistry } from "../agent-registry.ts";
+import type { AgentQuestionStore } from "../agent-question-store.ts";
+import type { AgentQuestionWaiter } from "../agent-question-waiter.ts";
 import { readTranscript } from "../transcript-reader.ts";
 import { endSession } from "../session-lifecycle.ts";
 
@@ -31,6 +33,8 @@ export function registerSessionRoutes(
     sessionTokens: SessionTokenStore;
     summaries: WorkspaceSessionSummaries;
     registry: AgentRegistry;
+    agentQuestions: AgentQuestionStore;
+    agentQuestionWaiter: AgentQuestionWaiter;
   },
 ): void {
   app.get<{ Querystring: SessionsQuery }>("/sessions", async (request, reply) => {
