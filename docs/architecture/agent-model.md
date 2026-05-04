@@ -80,6 +80,39 @@ Not all of this lands at once. v1 covers spawn/ask/status/whoami. v2 covers pers
 | Milestone | Theme | Issues |
 |---|---|---|
 | `agent-runtime v1` | Foundations: CLI, runtime bundle, spawn-time materialization, spawn/ask/status endpoints | #14–#19, closes #10 |
-| `agent-runtime v2` | Persistent agents + workspace customization | TBD — placeholder milestone, no issues yet |
+| `agent-runtime v2` | Persistent agents + workspace customization. **Roles-as-data scope locked — see § below.** | filed against milestone |
 
-v2 won't be scoped until v1 is in hand and the actual ergonomics inform what we need.
+## Roles as data — v2 scope (decided 2026-05-04)
+
+The Manager-as-workspace-shell vision (above) requires roles to be **mutable, versioned, workspace-scoped data** — not files in `packages/runtime/roles/`. v1 ships role bundles as filesystem artifacts; v2 promotes them to first-class data.
+
+### Why now
+
+`packages/runtime/roles/` works for shipped roles, but it has a split-brain: the DB has a role row with `name + permission_mode + allowed_tools`, the filesystem has the bundle (system prompt, skills). They can drift out of sync — observed when a `worker` role was created via `POST /roles` (DB row) but had no on-disk bundle, and `executeSpawn` silently launched a vanilla claude with no system prompt or skills. The fix isn't to unify on filesystem (then the manager can't author roles) — it's to unify on data, with shipped bundles becoming **seeds** that clone into each workspace on creation.
+
+### Locked decisions
+
+| Decision | Choice |
+|---|---|
+| Scope | **Workspace-local.** Each workspace owns its own role copies. Cross-workspace pollution cut at the schema. |
+| Composition | **Fork + edit.** No inheritance graphs, no slot overrides. `clobber roles fork <id> <new-name>` copies the current version into a new role; edit freely from there. Cheap, traceable. |
+| Versioning | **Immutable `role_versions` table; `roles.current_version_id` pointer.** Edit = insert new version + bump pointer. Spawn pins `sessions.role_version_id` so live sessions keep their boot version; new spawns pick up edits. |
+| Editable surface (manager-authored) | `system_prompt`, `skills`, `allowed_tools`. |
+| Locked surface (dev-only seeds) | `hooks`, `permission_mode`. **Why:** hooks are bash with workspace permissions; `permission_mode` controls whether claude bypasses tool prompts. Both are "give the agent code execution outside the agent" if LLM-authored. Revisit when there's a sandbox/audit story. |
+| `allowed_tools` on fork | **Fully alterable** — expand or narrow. Forking is a starting-point convenience, not a constraint. |
+| Shipped roles | First-boot seed: ship `manager` and a generic `worker` template. Cloned per-workspace on workspace create. Edits to seed sources don't propagate to existing workspaces (intentional — workspaces own their roles). |
+
+### Implementation order
+
+1. Schema (`role_versions` table, `sessions.role_version_id`, `roles.workspace_id`); load bundles from DB at spawn.
+2. Seed shipped templates on workspace create; author the generic `worker` bundle.
+3. Read API + `clobber roles list/show`.
+4. Fork API + `clobber roles fork`.
+5. Edit API + `clobber roles edit`.
+
+### Deferred (not in v2)
+
+- Hooks editable by manager (needs a sandbox/audit story).
+- `permission_mode` editable.
+- Inheritance / slot-based composition (revisit if fork-and-drift becomes painful).
+- Role sharing across workspaces (export/import; "publish to library").

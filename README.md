@@ -29,4 +29,4 @@ packages/
   cli/      # `clobber` binary agents shell out to
 ```
 
-See `CLAUDE.md` for engineering rules.
+See `CLAUDE.md` for engineering rules and `docs/architecture/agent-model.md` for the design north-star (vocabulary in depth, IPC directions, session lifecycle, manager-as-workspace-shell, roles-as-data v2 scope).
