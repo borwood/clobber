@@ -56,8 +56,8 @@ describe("materializeBundle", () => {
     const raw = readFileSync(hooksPath, "utf8");
     expect(raw).not.toContain("__CLOBBER_HOOK_URL__");
     expect(raw).toContain("http://127.0.0.1:3300/hook");
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    expect(parsed["SessionStart"]).toBeDefined();
+    const parsed = JSON.parse(raw) as { hooks: Record<string, unknown> };
+    expect(parsed.hooks["SessionStart"]).toBeDefined();
   });
 
   it("creates a per-bundle bin dir with an executable `clobber` shim that points at the cli entry", () => {

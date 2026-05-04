@@ -1,10 +1,12 @@
 {
-  "SessionStart":     [{ "hooks": [{ "type": "http", "url": "__CLOBBER_HOOK_URL__", "async": false }] }],
-  "SessionEnd":       [{ "hooks": [{ "type": "http", "url": "__CLOBBER_HOOK_URL__", "async": false }] }],
-  "UserPromptSubmit": [{ "hooks": [{ "type": "http", "url": "__CLOBBER_HOOK_URL__", "async": false }] }],
-  "PreToolUse":       [{ "matcher": ".*", "hooks": [{ "type": "http", "url": "__CLOBBER_HOOK_URL__", "async": false }] }],
-  "PostToolUse":      [{ "matcher": ".*", "hooks": [{ "type": "http", "url": "__CLOBBER_HOOK_URL__", "async": false }] }],
-  "Notification":     [{ "hooks": [{ "type": "http", "url": "__CLOBBER_HOOK_URL__", "async": false }] }],
-  "Stop":             [{ "hooks": [{ "type": "http", "url": "__CLOBBER_HOOK_URL__", "async": false }] }],
-  "PreCompact":       [{ "hooks": [{ "type": "http", "url": "__CLOBBER_HOOK_URL__", "async": false }] }]
+  "hooks": {
+    "SessionStart":     [{ "hooks": [{ "type": "http", "url": "__CLOBBER_HOOK_URL__", "async": false }] }],
+    "SessionEnd":       [{ "hooks": [{ "type": "http", "url": "__CLOBBER_HOOK_URL__", "async": false }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "http", "url": "__CLOBBER_HOOK_URL__", "async": false }] }],
+    "PreToolUse":       [{ "matcher": ".*", "hooks": [{ "type": "http", "url": "__CLOBBER_HOOK_URL__", "async": false }] }],
+    "PostToolUse":      [{ "matcher": ".*", "hooks": [{ "type": "http", "url": "__CLOBBER_HOOK_URL__", "async": false }] }],
+    "Notification":     [{ "hooks": [{ "type": "http", "url": "__CLOBBER_HOOK_URL__", "async": false }] }],
+    "Stop":             [{ "hooks": [{ "type": "http", "url": "__CLOBBER_HOOK_URL__", "async": false }] }],
+    "PreCompact":       [{ "hooks": [{ "type": "http", "url": "__CLOBBER_HOOK_URL__", "async": false }] }]
+  }
 }

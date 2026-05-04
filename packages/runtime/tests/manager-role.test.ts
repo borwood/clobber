@@ -33,13 +33,14 @@ describe("managerRole", () => {
     }
   });
 
-  it("ships hooks/hooks.json with the __CLOBBER_HOOK_URL__ placeholder", () => {
+  it("ships hooks/hooks.json wrapped in { hooks } and with the __CLOBBER_HOOK_URL__ placeholder", () => {
     const pluginRoot = join(managerRole.bundleRoot, managerRole.manifest.pluginTemplatePath);
     const hooksPath = join(pluginRoot, "hooks", "hooks.json");
     expect(existsSync(hooksPath)).toBe(true);
     const raw = readFileSync(hooksPath, "utf8");
     expect(raw).toContain("__CLOBBER_HOOK_URL__");
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    expect(parsed["SessionStart"]).toBeDefined();
+    const parsed = JSON.parse(raw) as { hooks?: Record<string, unknown> };
+    expect(parsed.hooks).toBeDefined();
+    expect(parsed.hooks!["SessionStart"]).toBeDefined();
   });
 });
