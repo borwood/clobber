@@ -1,0 +1,5 @@
+{
+  "name": "worker",
+  "description": "Short-lived focused worker. Receives a single task from the manager, completes it, reports back, exits.",
+  "version": "0.0.1"
+}
