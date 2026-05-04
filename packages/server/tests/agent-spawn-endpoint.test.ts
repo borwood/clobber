@@ -189,7 +189,7 @@ describe("POST /agent/spawn", () => {
       agent_id: string;
       pid: number;
     };
-    expect(typeof body.session_id).toBe("string");
+    expect(body.session_id).toMatch(/^auditor-[a-z0-9]{4}$/);
     expect(typeof body.agent_id).toBe("string");
     expect(body.pid).toBe(4321);
 
@@ -197,6 +197,7 @@ describe("POST /agent/spawn", () => {
     const call = h.calls[h.calls.length - 1]!;
     expect(call.cwd).toBe(repoPath);
     expect(call.prompt).toBe("audit auth.ts");
+    expect(call.sessionId).toBe(body.session_id);
 
     const session = h.sessions.get(body.session_id);
     expect(session).not.toBeNull();

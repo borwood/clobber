@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { delimiter } from "node:path";
 import { loadRoleBundle, materializeBundle } from "@clobber/runtime";
 import type { Role, Workspace } from "@clobber/shared";
@@ -11,6 +10,7 @@ import type { AgentSpawner, AgentSpawnRequest } from "./types.ts";
 import type { AgentRegistry } from "./agent-registry.ts";
 import type { RoleStore } from "./role-store.ts";
 import { endSession } from "./session-lifecycle.ts";
+import { deriveSessionId, EmptyLabelSlugError } from "./session-id.ts";
 
 export interface SpawnPipelineDeps {
   readonly workspaceRoles: WorkspaceRoleStore;
@@ -54,10 +54,18 @@ export interface SpawnPipelineNoBundleError {
   readonly role: string;
 }
 
+export interface SpawnPipelineEmptyLabelError {
+  readonly ok: false;
+  readonly status: 400;
+  readonly error: "label sanitizes to empty slug";
+  readonly label: string;
+}
+
 export type SpawnPipelineResult =
   | SpawnPipelineSuccess
   | SpawnPipelineCapacityError
-  | SpawnPipelineNoBundleError;
+  | SpawnPipelineNoBundleError
+  | SpawnPipelineEmptyLabelError;
 
 export function executeSpawn(
   deps: SpawnPipelineDeps,
@@ -82,7 +90,20 @@ export function executeSpawn(
     };
   }
 
-  const sessionId = randomUUID();
+  let sessionId: string;
+  try {
+    sessionId = deriveSessionId(label);
+  } catch (err) {
+    if (err instanceof EmptyLabelSlugError) {
+      return {
+        ok: false,
+        status: 400,
+        error: "label sanitizes to empty slug",
+        label: err.label,
+      };
+    }
+    throw err;
+  }
   const token = generateTokenValue();
 
   const materialized = materializeBundle({
