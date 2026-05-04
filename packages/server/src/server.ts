@@ -67,6 +67,14 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     sessionTokens: opts.sessionTokens,
     sessions: opts.sessions,
     roles: opts.roles,
+    workspaces: opts.workspaces,
+    workspaceRoles: opts.workspaceRoles,
+    agents: opts.agents,
+    registry,
+    spawner: opts.spawner,
+    hookUrl: opts.hookUrl,
+    apiBase: opts.apiBase,
+    cliEntry: opts.cliEntry,
   });
 
   return app;

@@ -1,0 +1,244 @@
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { PassThrough } from "node:stream";
+import { createServer } from "@clobber/server/server.ts";
+import { createDatabase } from "@clobber/server/db.ts";
+import { createEventStore } from "@clobber/server/event-store.ts";
+import { createWorkspaceStore } from "@clobber/server/workspace-store.ts";
+import { createRoleStore } from "@clobber/server/role-store.ts";
+import { createWorkspaceRoleStore } from "@clobber/server/workspace-role-store.ts";
+import { createAgentStore } from "@clobber/server/agent-store.ts";
+import { createSessionStore } from "@clobber/server/session-store.ts";
+import { createWorkspaceSessionSummaries } from "@clobber/server/workspace-session-summaries.ts";
+import { createSessionTokenStore } from "@clobber/server/session-token-store.ts";
+import type {
+  AgentSpawner,
+  AgentSpawnRequest,
+  SpawnedAgentInfo,
+} from "@clobber/server/types.ts";
+import { run, runWithExit } from "../src/main.ts";
+
+interface Harness {
+  app: ReturnType<typeof createServer>;
+  db: ReturnType<typeof createDatabase>;
+  baseUrl: string;
+  managerToken: string;
+  workspaceId: string;
+  workerRoleId: string;
+  spawnerCalls: AgentSpawnRequest[];
+  repoPath: string;
+}
+
+let harness: Harness;
+
+function makeStdin(): NodeJS.WritableStream {
+  const s = new PassThrough();
+  s.resume();
+  return s;
+}
+
+beforeAll(async () => {
+  const repoPath = mkdtempSync(join(tmpdir(), "clobber-spawn-cli-"));
+  const db = createDatabase(":memory:");
+  const workspaces = createWorkspaceStore(db);
+  const roles = createRoleStore(db);
+  const workspaceRoles = createWorkspaceRoleStore(db);
+  const agents = createAgentStore(db);
+  const sessions = createSessionStore(db);
+  const tokens = createSessionTokenStore(db);
+
+  const ws = workspaces.create({ name: "ws", repo_path: repoPath });
+  const managerRole = roles.create({ name: "manager", persistent: true });
+  const workerRole = roles.create({ name: "worker", persistent: false });
+  workspaceRoles.setCeiling(ws.id, managerRole.id, 1);
+  workspaceRoles.setCeiling(ws.id, workerRole.id, 2);
+
+  const spawnerCalls: AgentSpawnRequest[] = [];
+  const spawner: AgentSpawner = (req): SpawnedAgentInfo => {
+    spawnerCalls.push(req);
+    if (req.sessionId === undefined) throw new Error("expected sessionId");
+    return {
+      sessionId: req.sessionId,
+      pid: 7777,
+      exited: new Promise<number | null>(() => {}),
+      stdin: makeStdin(),
+    };
+  };
+
+  const app = createServer({
+    store: createEventStore(db),
+    workspaces,
+    roles,
+    workspaceRoles,
+    agents,
+    sessions,
+    sessionSummaries: createWorkspaceSessionSummaries(db),
+    sessionTokens: tokens,
+    spawner,
+    hookUrl: "http://test.invalid/hook",
+    apiBase: "http://test.invalid",
+    cliEntry: "/dummy/cli.ts",
+  });
+  await app.listen({ port: 0, host: "127.0.0.1" });
+  const addr = app.server.address();
+  if (addr === null || typeof addr === "string") throw new Error("no port");
+  const baseUrl = `http://127.0.0.1:${addr.port}`;
+
+  const bootRes = await app.inject({
+    method: "POST",
+    url: "/spawn",
+    payload: { workspace_id: ws.id, role_id: managerRole.id, prompt: "boot" },
+  });
+  if (bootRes.statusCode !== 200) {
+    throw new Error(`boot failed: ${bootRes.statusCode} ${bootRes.body}`);
+  }
+  const bootBody = bootRes.json() as { session_id: string };
+  const managerToken = tokens.mint(bootBody.session_id);
+
+  harness = {
+    app,
+    db,
+    baseUrl,
+    managerToken,
+    workspaceId: ws.id,
+    workerRoleId: workerRole.id,
+    spawnerCalls,
+    repoPath,
+  };
+});
+
+afterAll(async () => {
+  await harness.app.close();
+  harness.db.close();
+  rmSync(harness.repoPath, { recursive: true, force: true });
+});
+
+function captureStreams() {
+  const stdout = new PassThrough();
+  const stderr = new PassThrough();
+  const out: Buffer[] = [];
+  const err: Buffer[] = [];
+  stdout.on("data", (c: Buffer) => out.push(c));
+  stderr.on("data", (c: Buffer) => err.push(c));
+  return {
+    stdout: stdout as unknown as NodeJS.WritableStream,
+    stderr: stderr as unknown as NodeJS.WritableStream,
+    out: () => Buffer.concat(out).toString("utf8"),
+    err: () => Buffer.concat(err).toString("utf8"),
+  };
+}
+
+describe("clobber CLI — spawn", () => {
+  it("posts to /agent/spawn and prints session info JSON on success", async () => {
+    const s = captureStreams();
+    const before = harness.spawnerCalls.length;
+    const code = await run({
+      argv: ["spawn", "worker", "--prompt", "audit auth.ts"],
+      env: {
+        CLOBBER_API_BASE: harness.baseUrl,
+        CLOBBER_SESSION_TOKEN: harness.managerToken,
+      },
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(0);
+    const parsed = JSON.parse(s.out()) as {
+      session_id: string;
+      agent_id: string;
+      pid: number;
+    };
+    expect(typeof parsed.session_id).toBe("string");
+    expect(typeof parsed.agent_id).toBe("string");
+    expect(parsed.pid).toBe(7777);
+
+    expect(harness.spawnerCalls.length).toBe(before + 1);
+    const call = harness.spawnerCalls[harness.spawnerCalls.length - 1]!;
+    expect(call.prompt).toBe("audit auth.ts");
+    expect(call.cwd).toBe(harness.repoPath);
+  });
+
+  it("forwards --label to the API", async () => {
+    const s = captureStreams();
+    const code = await run({
+      argv: [
+        "spawn",
+        "worker",
+        "--prompt",
+        "double-check the math",
+        "--label",
+        "math-checker",
+      ],
+      env: {
+        CLOBBER_API_BASE: harness.baseUrl,
+        CLOBBER_SESSION_TOKEN: harness.managerToken,
+      },
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(0);
+    const parsed = JSON.parse(s.out()) as { session_id: string; agent_id: string };
+    expect(typeof parsed.session_id).toBe("string");
+  });
+
+  it("exits 2 with a usage hint when role positional is missing", async () => {
+    const s = captureStreams();
+    const code = await run({
+      argv: ["spawn"],
+      env: {
+        CLOBBER_API_BASE: harness.baseUrl,
+        CLOBBER_SESSION_TOKEN: harness.managerToken,
+      },
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(2);
+    expect(s.err()).toMatch(/role/i);
+  });
+
+  it("exits 2 with a usage hint when --prompt is missing", async () => {
+    const s = captureStreams();
+    const code = await run({
+      argv: ["spawn", "worker"],
+      env: {
+        CLOBBER_API_BASE: harness.baseUrl,
+        CLOBBER_SESSION_TOKEN: harness.managerToken,
+      },
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(2);
+    expect(s.err()).toMatch(/--prompt/);
+  });
+
+  it("exits 2 when --prompt is given without a value", async () => {
+    const s = captureStreams();
+    const code = await run({
+      argv: ["spawn", "worker", "--prompt"],
+      env: {
+        CLOBBER_API_BASE: harness.baseUrl,
+        CLOBBER_SESSION_TOKEN: harness.managerToken,
+      },
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(2);
+    expect(s.err()).toMatch(/--prompt/);
+  });
+
+  it("surfaces the API error body when the role is unknown", async () => {
+    const s = captureStreams();
+    const code = await runWithExit({
+      argv: ["spawn", "ghost-role", "--prompt", "do x"],
+      env: {
+        CLOBBER_API_BASE: harness.baseUrl,
+        CLOBBER_SESSION_TOKEN: harness.managerToken,
+      },
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(1);
+    expect(s.err()).toMatch(/role not found/i);
+  });
+});

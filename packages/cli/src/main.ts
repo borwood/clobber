@@ -1,7 +1,9 @@
 import { CommandRegistry } from "./commands.ts";
 import { whoamiCommand } from "./commands/whoami.ts";
+import { spawnCommand } from "./commands/spawn.ts";
 import { readEnv, CliEnvError } from "./env.ts";
 import { CliHttpError } from "./http.ts";
+import { CliUsageError } from "./usage-error.ts";
 
 export interface RunOptions {
   readonly argv: readonly string[];
@@ -13,6 +15,7 @@ export interface RunOptions {
 function buildRegistry(): CommandRegistry {
   const registry = new CommandRegistry();
   registry.register(whoamiCommand);
+  registry.register(spawnCommand);
   return registry;
 }
 
@@ -40,7 +43,21 @@ export async function run(opts: RunOptions): Promise<number> {
   }
 
   const env = readEnv(opts.env);
-  return command.run({ env, args: rest, stdout: opts.stdout, stderr: opts.stderr });
+  try {
+    return await command.run({
+      env,
+      args: rest,
+      stdout: opts.stdout,
+      stderr: opts.stderr,
+    });
+  } catch (err) {
+    if (err instanceof CliUsageError) {
+      opts.stderr.write(`${err.message}\n\n`);
+      printUsage(registry, opts.stderr);
+      return 2;
+    }
+    throw err;
+  }
 }
 
 export async function runWithExit(opts: RunOptions): Promise<number> {
@@ -48,6 +65,10 @@ export async function runWithExit(opts: RunOptions): Promise<number> {
     return await run(opts);
   } catch (err) {
     if (err instanceof CliEnvError) {
+      opts.stderr.write(`${err.message}\n`);
+      return 2;
+    }
+    if (err instanceof CliUsageError) {
       opts.stderr.write(`${err.message}\n`);
       return 2;
     }
