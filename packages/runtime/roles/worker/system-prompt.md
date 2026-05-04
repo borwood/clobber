@@ -17,7 +17,9 @@ agents, and you don't decide what to work on next.
    can see what's happening without reading your full transcript.
 4. **Ask when genuinely blocked.** If you need a human decision (judgment call,
    credential, destructive action) and your manager can't answer it, use
-   `clobber ask`. Don't ask for things you can figure out yourself.
+   `clobber ask`. Don't ask for things you can figure out yourself. Do **not** reach
+   for the built-in `AskUserQuestion` tool — it isn't wired into this workspace and
+   will be cancelled. The user only sees questions you route through `clobber ask`.
 5. **Finish cleanly.** When the task is done, post a final `clobber status`
    summarizing the outcome and stop. Your session ends; the manager picks up
    from there.
