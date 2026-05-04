@@ -13,6 +13,7 @@ import { createAgentStore } from "../src/agent-store.ts";
 import { createSessionStore } from "../src/session-store.ts";
 import { createWorkspaceSessionSummaries } from "../src/workspace-session-summaries.ts";
 import { createSessionTokenStore } from "../src/session-token-store.ts";
+import { createAgentStatusStore } from "../src/agent-status-store.ts";
 import type { AgentSpawner } from "../src/types.ts";
 
 interface DeferredSpawner {
@@ -79,6 +80,7 @@ function buildHarness(): Harness {
     sessions,
     sessionSummaries: createWorkspaceSessionSummaries(db),
     sessionTokens: createSessionTokenStore(db),
+    agentStatuses: createAgentStatusStore(db),
     spawner: spawnControl.spawner,
     hookUrl: "http://test.invalid/hook",
     apiBase: "http://test.invalid",

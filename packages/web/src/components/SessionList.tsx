@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { SessionSummary } from "../api.ts";
+import type { AgentState, SessionSummary } from "../api.ts";
 
 interface Props {
   readonly sessions: readonly SessionSummary[];
@@ -14,6 +14,60 @@ function relativeTime(ts: number): string {
   if (delta < 60_000) return `${Math.floor(delta / 1000)}s ago`;
   if (delta < 3_600_000) return `${Math.floor(delta / 60_000)}m ago`;
   return `${Math.floor(delta / 3_600_000)}h ago`;
+}
+
+const STATE_DOT: Record<AgentState, string> = {
+  working: "bg-emerald-500",
+  blocked: "bg-amber-500",
+  idle: "bg-sky-500",
+  done: "bg-zinc-500",
+};
+
+interface CardTone {
+  readonly base: string;
+  readonly hover: string;
+  readonly selected: string;
+  readonly accent: string;
+}
+
+const STATE_CARD: Record<AgentState, CardTone> = {
+  working: {
+    base: "bg-emerald-950/60",
+    hover: "hover:bg-emerald-900/60",
+    selected: "bg-emerald-900/70",
+    accent: "border-l-emerald-500",
+  },
+  blocked: {
+    base: "bg-amber-950/60",
+    hover: "hover:bg-amber-900/60",
+    selected: "bg-amber-900/70",
+    accent: "border-l-amber-500",
+  },
+  idle: {
+    base: "bg-sky-950/60",
+    hover: "hover:bg-sky-900/60",
+    selected: "bg-sky-900/70",
+    accent: "border-l-sky-500",
+  },
+  done: {
+    base: "bg-zinc-900/80",
+    hover: "hover:bg-zinc-800",
+    selected: "bg-zinc-800",
+    accent: "border-l-zinc-500",
+  },
+};
+
+const NEUTRAL_CARD: CardTone = {
+  base: "",
+  hover: "hover:bg-zinc-900",
+  selected: "bg-zinc-900",
+  accent: "border-l-transparent",
+};
+
+function pickTone(s: SessionSummary, isEnded: boolean): CardTone {
+  if (isEnded) return NEUTRAL_CARD;
+  if (s.latest_status === undefined) return NEUTRAL_CARD;
+  return STATE_CARD[s.latest_status.state];
 }
 
 export function SessionList({ sessions, selectedId, onSelect, onEnd }: Props) {
@@ -35,19 +89,38 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd }: Props) {
         const isEnded = s.ended_at !== undefined;
         const isConfirming = confirmingId === s.session_id;
         const isEnding = endingId === s.session_id;
+        const tone = pickTone(s, isEnded);
         return (
           <li key={s.session_id} className="relative">
             <button
               type="button"
               onClick={() => onSelect(s.session_id)}
               className={
-                "w-full text-left px-4 py-3 pr-10 hover:bg-zinc-900 transition-colors " +
-                (isSelected ? "bg-zinc-900" : "")
+                "w-full text-left px-4 py-3 pr-10 border-l-4 transition-colors " +
+                tone.accent +
+                " " +
+                (isSelected ? tone.selected : tone.base + " " + tone.hover)
               }
             >
-              <div className="font-mono text-xs text-zinc-300 truncate">
-                {s.session_id}
+              <div className="flex items-center gap-2">
+                {s.latest_status !== undefined && !isEnded && (
+                  <span
+                    className={
+                      "inline-block w-2 h-2 rounded-full shrink-0 " +
+                      STATE_DOT[s.latest_status.state]
+                    }
+                    title={s.latest_status.state}
+                  />
+                )}
+                <div className="font-mono text-xs text-zinc-300 truncate">
+                  {s.session_id}
+                </div>
               </div>
+              {s.latest_status !== undefined && !isEnded && (
+                <div className="mt-1 text-xs text-zinc-300 truncate">
+                  {s.latest_status.summary}
+                </div>
+              )}
               <div className="mt-1 flex items-center gap-2 text-xs text-zinc-500">
                 {isEnded ? (
                   <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500">

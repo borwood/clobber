@@ -70,6 +70,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     workspaces: opts.workspaces,
     workspaceRoles: opts.workspaceRoles,
     agents: opts.agents,
+    agentStatuses: opts.agentStatuses,
     registry,
     spawner: opts.spawner,
     hookUrl: opts.hookUrl,

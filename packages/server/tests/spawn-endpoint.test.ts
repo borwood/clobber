@@ -13,6 +13,7 @@ import { createAgentStore } from "../src/agent-store.ts";
 import { createSessionStore } from "../src/session-store.ts";
 import { createWorkspaceSessionSummaries } from "../src/workspace-session-summaries.ts";
 import { createSessionTokenStore } from "../src/session-token-store.ts";
+import { createAgentStatusStore } from "../src/agent-status-store.ts";
 import type { AgentSpawner, AgentSpawnRequest } from "../src/server.ts";
 
 function liveStdin(): NodeJS.WritableStream {
@@ -49,6 +50,7 @@ function buildHarness(spawner: AgentSpawner): Harness {
     sessions,
     sessionSummaries: createWorkspaceSessionSummaries(db),
     sessionTokens: createSessionTokenStore(db),
+    agentStatuses: createAgentStatusStore(db),
     spawner,
     hookUrl: "http://127.0.0.1:3300/hook",
     apiBase: "http://127.0.0.1:3300",

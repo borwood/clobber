@@ -9,6 +9,7 @@ import { createAgentStore } from "../src/agent-store.ts";
 import { createSessionStore } from "../src/session-store.ts";
 import { createWorkspaceSessionSummaries } from "../src/workspace-session-summaries.ts";
 import { createSessionTokenStore } from "../src/session-token-store.ts";
+import { createAgentStatusStore } from "../src/agent-status-store.ts";
 import { stubSpawnedAgent } from "./_spawner-stub.ts";
 
 function buildHarness() {
@@ -23,6 +24,7 @@ function buildHarness() {
     sessions: createSessionStore(db),
     sessionSummaries: createWorkspaceSessionSummaries(db),
     sessionTokens: createSessionTokenStore(db),
+    agentStatuses: createAgentStatusStore(db),
     spawner: () => {
       invocations += 1;
       return stubSpawnedAgent({ sessionId: "x" });

@@ -13,14 +13,9 @@ import { createAgentStore } from "@clobber/server/agent-store.ts";
 import { createSessionStore } from "@clobber/server/session-store.ts";
 import { createWorkspaceSessionSummaries } from "@clobber/server/workspace-session-summaries.ts";
 import { createSessionTokenStore } from "@clobber/server/session-token-store.ts";
-import { createAgentStatusStore } from "@clobber/server/agent-status-store.ts";
+import { createAgentStatusStore, type AgentStatusStore } from "@clobber/server/agent-status-store.ts";
 import type { AgentSpawner, SpawnedAgentInfo } from "@clobber/server/types.ts";
 import { run } from "../src/main.ts";
-
-interface KillRecord {
-  readonly sessionId: string;
-  readonly signal: NodeJS.Signals;
-}
 
 interface Harness {
   app: ReturnType<typeof createServer>;
@@ -28,8 +23,7 @@ interface Harness {
   baseUrl: string;
   managerToken: string;
   managerSessionId: string;
-  childSessionId: string;
-  killCalls: KillRecord[];
+  agentStatuses: AgentStatusStore;
   repoPath: string;
 }
 
@@ -42,7 +36,7 @@ function makeStdin(): NodeJS.WritableStream {
 }
 
 beforeAll(async () => {
-  const repoPath = mkdtempSync(join(tmpdir(), "clobber-kill-cli-"));
+  const repoPath = mkdtempSync(join(tmpdir(), "clobber-status-cli-"));
   const db = createDatabase(":memory:");
   const workspaces = createWorkspaceStore(db);
   const roles = createRoleStore(db);
@@ -50,25 +44,22 @@ beforeAll(async () => {
   const agents = createAgentStore(db);
   const sessions = createSessionStore(db);
   const tokens = createSessionTokenStore(db);
+  const agentStatuses = createAgentStatusStore(db);
 
   const ws = workspaces.create({ name: "ws", repo_path: repoPath });
   const managerRole = roles.create({ name: "manager", persistent: true });
   workspaceRoles.setCeiling(ws.id, managerRole.id, 5);
 
-  const killCalls: KillRecord[] = [];
-  let pidCounter = 7000;
+  let pidCounter = 5000;
   const spawner: AgentSpawner = (req): SpawnedAgentInfo => {
     pidCounter += 1;
     if (req.sessionId === undefined) throw new Error("expected sessionId");
-    const sessionId = req.sessionId;
     return {
-      sessionId,
+      sessionId: req.sessionId,
       pid: pidCounter,
       exited: new Promise<number | null>(() => {}),
       stdin: makeStdin(),
-      kill: (signal) => {
-        killCalls.push({ sessionId, signal });
-      },
+      kill: () => {},
     };
   };
 
@@ -81,7 +72,7 @@ beforeAll(async () => {
     sessions,
     sessionSummaries: createWorkspaceSessionSummaries(db),
     sessionTokens: tokens,
-    agentStatuses: createAgentStatusStore(db),
+    agentStatuses,
     spawner,
     hookUrl: "http://test.invalid/hook",
     apiBase: "http://test.invalid",
@@ -97,22 +88,8 @@ beforeAll(async () => {
     url: "/spawn",
     payload: { workspace_id: ws.id, role_id: managerRole.id, prompt: "boot" },
   });
-  if (bootRes.statusCode !== 200) {
-    throw new Error(`boot failed: ${bootRes.statusCode} ${bootRes.body}`);
-  }
   const bootBody = bootRes.json() as { session_id: string };
   const managerToken = tokens.mint(bootBody.session_id);
-
-  const childRes = await app.inject({
-    method: "POST",
-    url: "/agent/spawn",
-    headers: { authorization: `Bearer ${managerToken}` },
-    payload: { role: "manager", prompt: "child work" },
-  });
-  if (childRes.statusCode !== 200) {
-    throw new Error(`child spawn failed: ${childRes.statusCode} ${childRes.body}`);
-  }
-  const childBody = childRes.json() as { session_id: string };
 
   harness = {
     app,
@@ -120,8 +97,7 @@ beforeAll(async () => {
     baseUrl,
     managerToken,
     managerSessionId: bootBody.session_id,
-    childSessionId: childBody.session_id,
-    killCalls,
+    agentStatuses,
     repoPath,
   };
 });
@@ -147,37 +123,74 @@ function captureStreams() {
   };
 }
 
-describe("clobber CLI — kill", () => {
-  it("`kill <session-id>` terminates the live agent and prints ok", async () => {
+const env = () => ({
+  CLOBBER_API_BASE: harness.baseUrl,
+  CLOBBER_SESSION_TOKEN: harness.managerToken,
+});
+
+describe("clobber CLI — status", () => {
+  it("`status working <summary>` upserts the caller's status and exits 0", async () => {
     const s = captureStreams();
     const code = await run({
-      argv: ["kill", harness.childSessionId],
-      env: {
-        CLOBBER_API_BASE: harness.baseUrl,
-        CLOBBER_SESSION_TOKEN: harness.managerToken,
-      },
+      argv: ["status", "working", "refactoring auth middleware"],
+      env: env(),
       stdout: s.stdout,
       stderr: s.stderr,
     });
     expect(code).toBe(0);
-    expect(s.out()).toMatch(/ok/);
-    expect(harness.killCalls).toEqual([
-      { sessionId: harness.childSessionId, signal: "SIGTERM" },
-    ]);
+
+    const status = harness.agentStatuses.get(harness.managerSessionId);
+    expect(status).not.toBeNull();
+    expect(status!.state).toBe("working");
+    expect(status!.summary).toBe("refactoring auth middleware");
   });
 
-  it("exits 2 with usage when no session id is given", async () => {
+  it("each call overwrites the previous status (last-write-wins)", async () => {
+    const s = captureStreams();
+    await run({
+      argv: ["status", "blocked", "waiting on schema decision"],
+      env: env(),
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    const status = harness.agentStatuses.get(harness.managerSessionId);
+    expect(status!.state).toBe("blocked");
+    expect(status!.summary).toBe("waiting on schema decision");
+  });
+
+  it("rejects an unknown state with exit code 2 and a usage hint", async () => {
     const s = captureStreams();
     const code = await run({
-      argv: ["kill"],
-      env: {
-        CLOBBER_API_BASE: harness.baseUrl,
-        CLOBBER_SESSION_TOKEN: harness.managerToken,
-      },
+      argv: ["status", "panicking", "everything is on fire"],
+      env: env(),
       stdout: s.stdout,
       stderr: s.stderr,
     });
     expect(code).toBe(2);
-    expect(s.err()).toMatch(/session/i);
+    expect(s.err()).toMatch(/state/i);
+  });
+
+  it("exits 2 when state is missing", async () => {
+    const s = captureStreams();
+    const code = await run({
+      argv: ["status"],
+      env: env(),
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(2);
+    expect(s.err()).toMatch(/state/i);
+  });
+
+  it("exits 2 when summary is missing", async () => {
+    const s = captureStreams();
+    const code = await run({
+      argv: ["status", "idle"],
+      env: env(),
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(2);
+    expect(s.err()).toMatch(/summary/i);
   });
 });

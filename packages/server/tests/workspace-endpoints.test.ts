@@ -12,6 +12,7 @@ import { createAgentStore } from "../src/agent-store.ts";
 import { createSessionStore } from "../src/session-store.ts";
 import { createWorkspaceSessionSummaries } from "../src/workspace-session-summaries.ts";
 import { createSessionTokenStore } from "../src/session-token-store.ts";
+import { createAgentStatusStore } from "../src/agent-status-store.ts";
 import { makeRepoFixture } from "./repo-fixture.ts";
 import { stubSpawnedAgent } from "./_spawner-stub.ts";
 import type { Workspace } from "@clobber/shared";
@@ -33,6 +34,7 @@ function buildServer() {
     sessions,
     sessionSummaries: createWorkspaceSessionSummaries(db),
     sessionTokens: createSessionTokenStore(db),
+    agentStatuses: createAgentStatusStore(db),
     spawner: () => stubSpawnedAgent(),
     hookUrl: "http://test.invalid/hook",
     apiBase: "http://test.invalid",

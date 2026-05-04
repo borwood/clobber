@@ -7,6 +7,7 @@ import type { AgentStore } from "./agent-store.ts";
 import type { SessionStore } from "./session-store.ts";
 import type { WorkspaceSessionSummaries } from "./workspace-session-summaries.ts";
 import type { SessionTokenStore } from "./session-token-store.ts";
+import type { AgentStatusStore } from "./agent-status-store.ts";
 
 export interface AgentSpawnRequest {
   readonly hookUrl: string;
@@ -39,6 +40,7 @@ export interface ServerOptions {
   readonly sessions: SessionStore;
   readonly sessionSummaries: WorkspaceSessionSummaries;
   readonly sessionTokens: SessionTokenStore;
+  readonly agentStatuses: AgentStatusStore;
   readonly spawner: AgentSpawner;
   readonly hookUrl: string;
   readonly apiBase: string;

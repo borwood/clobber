@@ -3,9 +3,16 @@ import type {
   CreateWorkspaceRequest,
   Role,
   WorkspaceRoleAssignment,
+  LatestAgentStatus,
 } from "@clobber/shared";
 
-export type { Workspace, Role, WorkspaceRoleAssignment } from "@clobber/shared";
+export type {
+  Workspace,
+  Role,
+  WorkspaceRoleAssignment,
+  LatestAgentStatus,
+  AgentState,
+} from "@clobber/shared";
 
 export interface SessionSummary {
   readonly session_id: string;
@@ -14,6 +21,7 @@ export interface SessionSummary {
   readonly event_count: number;
   readonly last_event_name?: string;
   readonly ended_at?: number;
+  readonly latest_status?: LatestAgentStatus;
 }
 
 export interface SpawnRequest {

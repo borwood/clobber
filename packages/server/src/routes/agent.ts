@@ -6,8 +6,10 @@ import type { RoleStore } from "../role-store.ts";
 import type { WorkspaceStore } from "../workspace-store.ts";
 import type { WorkspaceRoleStore } from "../workspace-role-store.ts";
 import type { AgentStore } from "../agent-store.ts";
+import type { AgentStatusStore } from "../agent-status-store.ts";
 import type { AgentRegistry } from "../agent-registry.ts";
 import type { AgentSpawner } from "../types.ts";
+import { AgentStatusUpdateSchema } from "@clobber/shared";
 import { executeSpawn } from "../spawn-pipeline.ts";
 import { endSession } from "../session-lifecycle.ts";
 import { readTranscript } from "../transcript-reader.ts";
@@ -26,6 +28,7 @@ export interface AgentRouteDeps {
   readonly workspaces: WorkspaceStore;
   readonly workspaceRoles: WorkspaceRoleStore;
   readonly agents: AgentStore;
+  readonly agentStatuses: AgentStatusStore;
   readonly registry: AgentRegistry;
   readonly spawner: AgentSpawner;
   readonly hookUrl: string;
@@ -166,6 +169,26 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
       return formatTranscript(lines, sel, parsed.detail);
     },
   );
+
+  app.post("/agent/status", async (request, reply) => {
+    const auth = resolveCallerSession(request, deps);
+    if (!auth.ok) {
+      reply.code(auth.status);
+      return { error: auth.error };
+    }
+    const parsed = AgentStatusUpdateSchema.safeParse(request.body);
+    if (!parsed.success) {
+      reply.code(400);
+      return { error: "invalid status update", issues: parsed.error.issues };
+    }
+    deps.agentStatuses.upsert({
+      session_id: auth.session.id,
+      state: parsed.data.state,
+      summary: parsed.data.summary,
+      ...(parsed.data.details === undefined ? {} : { details: parsed.data.details }),
+    });
+    return { ok: true };
+  });
 
   app.post<{ Params: { id: string } }>(
     "/agent/sessions/:id/kill",

@@ -14,6 +14,7 @@ import { createAgentStore } from "../src/agent-store.ts";
 import { createSessionStore } from "../src/session-store.ts";
 import { createWorkspaceSessionSummaries } from "../src/workspace-session-summaries.ts";
 import { createSessionTokenStore } from "../src/session-token-store.ts";
+import { createAgentStatusStore } from "../src/agent-status-store.ts";
 import type { SpawnedAgentInfo } from "../src/types.ts";
 
 interface RecordingStub {
@@ -76,6 +77,7 @@ function buildHarness(opts: { persistent: boolean }): Harness {
     sessions,
     sessionSummaries: createWorkspaceSessionSummaries(db),
     sessionTokens: createSessionTokenStore(db),
+    agentStatuses: createAgentStatusStore(db),
     spawner: () => stub.info,
     hookUrl: "http://test.invalid/hook",
     apiBase: "http://test.invalid",

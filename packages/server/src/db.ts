@@ -77,6 +77,15 @@ const SCHEMA = `
     created_at  INTEGER NOT NULL,
     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS agent_statuses (
+    session_id    TEXT    PRIMARY KEY,
+    state         TEXT    NOT NULL,
+    summary       TEXT    NOT NULL,
+    details_json  TEXT,
+    updated_at    INTEGER NOT NULL,
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+  );
 `;
 
 export function createDatabase(path: string): Database {

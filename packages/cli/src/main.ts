@@ -4,6 +4,7 @@ import { spawnCommand } from "./commands/spawn.ts";
 import { agentsCommand } from "./commands/agents.ts";
 import { killCommand } from "./commands/kill.ts";
 import { transcriptCommand } from "./commands/transcript.ts";
+import { statusCommand } from "./commands/status.ts";
 import { readEnv, CliEnvError } from "./env.ts";
 import { CliHttpError } from "./http.ts";
 import { CliUsageError } from "./usage-error.ts";
@@ -22,6 +23,7 @@ function buildRegistry(): CommandRegistry {
   registry.register(agentsCommand);
   registry.register(killCommand);
   registry.register(transcriptCommand);
+  registry.register(statusCommand);
   return registry;
 }
 

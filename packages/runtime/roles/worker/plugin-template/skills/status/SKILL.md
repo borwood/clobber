@@ -1,28 +1,38 @@
 ---
 name: status
-description: Report progress and the final outcome to the manager and user.
+description: Post your current state and a one-line summary so the manager and user can see what you're doing without reading your full transcript.
 ---
 
 # status
 
-`clobber status --post "<message>"` pushes a one-line update onto the workspace
-timeline. The user and your manager see these without having to read your full
-transcript.
-
 ```
-clobber status --post "ran the migration on staging — 0 rows changed, looking at why"
+clobber status <state> "<summary>"
 ```
 
-As a worker, you should post status:
+`<state>` is one of:
+
+- **working** — actively doing the task. This is your default while in motion.
+- **blocked** — can't make progress without input. Pair with `clobber ask` if
+  you genuinely need a human decision.
+- **idle** — paused, awaiting more guidance from the manager.
+- **done** — your task is finished. Pair this with one final summary line; the
+  manager picks up from there.
+
+`<summary>` is one short line, present tense, useful.
+
+```
+clobber status working "running migration on staging"
+clobber status blocked "can't decide between approach A and B — see clobber ask"
+clobber status done "added the route + 4 tests, all passing"
+```
+
+As a worker, post status:
 
 - **At the start**, once you understand the task: "starting on X, plan is Y."
-- **At checkpoints** during long-running work: "finished step 1, moving to step 2."
-- **At the end**, summarizing the outcome: "done — added route + 4 tests, all
-  passing." This is your handoff back to the manager.
-
-You can also run `clobber status` with no flags to print every agent currently
-alive in the workspace. You won't usually need to — the manager owns
-orchestration — but it's there if you need to confirm context.
+- **At checkpoints** during long-running work: "finished step 1, moving to 2."
+- **At the end**, summarizing the outcome: this is your handoff back to the
+  manager.
 
 Status posts are not for asking questions (use `clobber ask`) and not for full
-narration (the transcript already has that). One line, present tense, useful.
+narration (the transcript already has that). Each call overwrites the previous
+status — last-write-wins, one row per session.
