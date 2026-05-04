@@ -1,5 +1,6 @@
 import { useState } from "react";
-import type { AgentState, SessionSummary } from "../api.ts";
+import type { SessionSummary } from "../api.ts";
+import { STATE_DOT, pickTone } from "./state-tones.ts";
 
 interface Props {
   readonly sessions: readonly SessionSummary[];
@@ -14,60 +15,6 @@ function relativeTime(ts: number): string {
   if (delta < 60_000) return `${Math.floor(delta / 1000)}s ago`;
   if (delta < 3_600_000) return `${Math.floor(delta / 60_000)}m ago`;
   return `${Math.floor(delta / 3_600_000)}h ago`;
-}
-
-const STATE_DOT: Record<AgentState, string> = {
-  working: "bg-emerald-500",
-  blocked: "bg-amber-500",
-  idle: "bg-sky-500",
-  done: "bg-zinc-500",
-};
-
-interface CardTone {
-  readonly base: string;
-  readonly hover: string;
-  readonly selected: string;
-  readonly accent: string;
-}
-
-const STATE_CARD: Record<AgentState, CardTone> = {
-  working: {
-    base: "bg-emerald-950/60",
-    hover: "hover:bg-emerald-900/60",
-    selected: "bg-emerald-900/70",
-    accent: "border-l-emerald-500",
-  },
-  blocked: {
-    base: "bg-amber-950/60",
-    hover: "hover:bg-amber-900/60",
-    selected: "bg-amber-900/70",
-    accent: "border-l-amber-500",
-  },
-  idle: {
-    base: "bg-sky-950/60",
-    hover: "hover:bg-sky-900/60",
-    selected: "bg-sky-900/70",
-    accent: "border-l-sky-500",
-  },
-  done: {
-    base: "bg-zinc-900/80",
-    hover: "hover:bg-zinc-800",
-    selected: "bg-zinc-800",
-    accent: "border-l-zinc-500",
-  },
-};
-
-const NEUTRAL_CARD: CardTone = {
-  base: "",
-  hover: "hover:bg-zinc-900",
-  selected: "bg-zinc-900",
-  accent: "border-l-transparent",
-};
-
-function pickTone(s: SessionSummary, isEnded: boolean): CardTone {
-  if (isEnded) return NEUTRAL_CARD;
-  if (s.latest_status === undefined) return NEUTRAL_CARD;
-  return STATE_CARD[s.latest_status.state];
 }
 
 export function SessionList({ sessions, selectedId, onSelect, onEnd }: Props) {
@@ -90,6 +37,7 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd }: Props) {
         const isConfirming = confirmingId === s.session_id;
         const isEnding = endingId === s.session_id;
         const tone = pickTone(s, isEnded);
+        const primary = s.label ?? s.session_id;
         return (
           <li key={s.session_id} className="relative">
             <button
@@ -112,8 +60,11 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd }: Props) {
                     title={s.latest_status.state}
                   />
                 )}
-                <div className="font-mono text-xs text-zinc-300 truncate">
-                  {s.session_id}
+                <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 text-[10px] uppercase tracking-wider shrink-0">
+                  {s.role_name}
+                </span>
+                <div className="text-sm text-zinc-100 truncate font-medium">
+                  {primary}
                 </div>
               </div>
               {s.latest_status !== undefined && !isEnded && (
@@ -138,6 +89,11 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd }: Props) {
                 <span>{s.event_count} events</span>
                 <span className="ml-auto">{relativeTime(s.last_seen_at)}</span>
               </div>
+              {s.label !== undefined && (
+                <div className="mt-1 font-mono text-[10px] text-zinc-600 truncate">
+                  {s.session_id}
+                </div>
+              )}
             </button>
 
             {!isEnded && !isConfirming && (

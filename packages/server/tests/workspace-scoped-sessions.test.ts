@@ -245,6 +245,108 @@ describe("GET /sessions — workspace-scoped summaries", () => {
     await teardown(h);
   });
 
+  it("includes role_name on each summary", async () => {
+    const h = buildHarness();
+    const ws = h.workspaces.create({ name: "ws", repo_path: "/r" });
+    const role = h.roles.create({ name: "worker-bee", persistent: false });
+    const agent = h.agents.create({ workspace_id: ws.id, role_id: role.id });
+    const sessionId = randomUUID();
+    h.sessions.create({
+      id: sessionId,
+      agent_id: agent.id,
+      workspace_id: ws.id,
+      role_id: role.id,
+      pid: 1,
+    });
+
+    const res = (await h.server.inject({
+      method: "GET",
+      url: `/sessions?workspace_id=${ws.id}`,
+    })).json() as SessionSummary[];
+
+    expect(res).toHaveLength(1);
+    expect(res[0]!.role_name).toBe("worker-bee");
+
+    await teardown(h);
+  });
+
+  it("includes label when the spawned agent had one, omits otherwise", async () => {
+    const h = buildHarness();
+    const ws = h.workspaces.create({ name: "ws", repo_path: "/r" });
+    const role = h.roles.create({ name: "worker", persistent: false });
+
+    const labeledAgent = h.agents.create({
+      workspace_id: ws.id,
+      role_id: role.id,
+      label: "audit-auth",
+    });
+    const labeledId = randomUUID();
+    h.sessions.create({
+      id: labeledId,
+      agent_id: labeledAgent.id,
+      workspace_id: ws.id,
+      role_id: role.id,
+      pid: 1,
+    });
+
+    const unlabeledAgent = h.agents.create({ workspace_id: ws.id, role_id: role.id });
+    const unlabeledId = randomUUID();
+    h.sessions.create({
+      id: unlabeledId,
+      agent_id: unlabeledAgent.id,
+      workspace_id: ws.id,
+      role_id: role.id,
+      pid: 1,
+    });
+
+    const res = (await h.server.inject({
+      method: "GET",
+      url: `/sessions?workspace_id=${ws.id}`,
+    })).json() as SessionSummary[];
+
+    const labeled = res.find((s) => s.session_id === labeledId);
+    const unlabeled = res.find((s) => s.session_id === unlabeledId);
+    expect(labeled!.label).toBe("audit-auth");
+    expect(unlabeled!.label).toBeUndefined();
+
+    await teardown(h);
+  });
+
+  it("still surfaces sessions whose agent row was deleted (FK ON DELETE SET NULL)", async () => {
+    // FK on sessions.agent_id is ON DELETE SET NULL, so a session can outlive
+    // its agent. Summaries must keep showing the role + status even when label
+    // is gone with the agent.
+    const h = buildHarness();
+    const ws = h.workspaces.create({ name: "orphan-ws", repo_path: "/r" });
+    const role = h.roles.create({ name: "worker", persistent: false });
+    const agent = h.agents.create({
+      workspace_id: ws.id,
+      role_id: role.id,
+      label: "doomed-label",
+    });
+    const sessionId = randomUUID();
+    h.sessions.create({
+      id: sessionId,
+      agent_id: agent.id,
+      workspace_id: ws.id,
+      role_id: role.id,
+      pid: 1,
+    });
+    h.db.prepare("DELETE FROM agents WHERE id = ?").run(agent.id);
+
+    const res = (await h.server.inject({
+      method: "GET",
+      url: `/sessions?workspace_id=${ws.id}`,
+    })).json() as SessionSummary[];
+
+    expect(res).toHaveLength(1);
+    expect(res[0]!.session_id).toBe(sessionId);
+    expect(res[0]!.role_name).toBe("worker");
+    expect(res[0]!.label).toBeUndefined();
+
+    await teardown(h);
+  });
+
   it("only counts events for the asked workspace, even if same hook events flow for sessions elsewhere", async () => {
     const h = buildHarness();
     const a = seedSession(h, "a");

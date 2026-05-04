@@ -16,6 +16,8 @@ export type {
 
 export interface SessionSummary {
   readonly session_id: string;
+  readonly role_name: string;
+  readonly label?: string;
   readonly first_seen_at: number;
   readonly last_seen_at: number;
   readonly event_count: number;

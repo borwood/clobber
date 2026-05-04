@@ -8,6 +8,7 @@ import {
 } from "./api.ts";
 import { SpawnPanel } from "./components/SpawnPanel.tsx";
 import { SessionList } from "./components/SessionList.tsx";
+import { SessionHeader } from "./components/SessionHeader.tsx";
 import { TranscriptViewer } from "./components/TranscriptViewer.tsx";
 import { WorkspaceSwitcher } from "./components/WorkspaceSwitcher.tsx";
 import { RolePicker } from "./components/RolePicker.tsx";
@@ -163,22 +164,46 @@ export function App() {
         </aside>
 
         <section className="flex flex-col overflow-hidden">
-          <div className="flex items-center px-6 pt-4 pb-3 shrink-0">
-            <h2 className="text-sm uppercase tracking-wider text-zinc-500">
-              {selectedSession === null
-                ? "select a session"
-                : `transcript · ${selectedSession.slice(0, 8)}`}
-            </h2>
-            <label className="ml-auto flex items-center gap-2 text-xs text-zinc-500 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={showSystem}
-                onChange={(e) => setShowSystem(e.target.checked)}
-                className="accent-emerald-600"
-              />
-              show details
-            </label>
-          </div>
+          {(() => {
+            const selected =
+              selectedSession === null
+                ? undefined
+                : sessions.find((s) => s.session_id === selectedSession);
+            if (selected === undefined) {
+              return (
+                <div className="flex items-center px-6 py-3 shrink-0">
+                  <h2 className="text-sm uppercase tracking-wider text-zinc-500">
+                    select a session
+                  </h2>
+                  <label className="ml-auto flex items-center gap-2 text-xs text-zinc-500 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={showSystem}
+                      onChange={(e) => setShowSystem(e.target.checked)}
+                      className="accent-emerald-600"
+                    />
+                    show details
+                  </label>
+                </div>
+              );
+            }
+            return (
+              <div className="flex items-stretch shrink-0">
+                <div className="flex-1 min-w-0">
+                  <SessionHeader session={selected} />
+                </div>
+                <label className="flex items-center gap-2 px-6 text-xs text-zinc-500 cursor-pointer select-none border-l border-zinc-800">
+                  <input
+                    type="checkbox"
+                    checked={showSystem}
+                    onChange={(e) => setShowSystem(e.target.checked)}
+                    className="accent-emerald-600"
+                  />
+                  show details
+                </label>
+              </div>
+            );
+          })()}
           <TranscriptViewer
             key={selectedSession ?? "none"}
             lines={transcript}

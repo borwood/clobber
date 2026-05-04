@@ -3,6 +3,8 @@ import type { AgentState, LatestAgentStatus } from "@clobber/shared";
 
 export interface SessionSummary {
   readonly session_id: string;
+  readonly role_name: string;
+  readonly label?: string;
   readonly first_seen_at: number;
   readonly last_seen_at: number;
   readonly event_count: number;
@@ -17,6 +19,8 @@ export interface WorkspaceSessionSummaries {
 
 interface Row {
   session_id: string;
+  role_name: string;
+  label: string | null;
   first_seen_at: number;
   last_seen_at: number;
   event_count: number;
@@ -42,6 +46,8 @@ export function createWorkspaceSessionSummaries(db: Database): WorkspaceSessionS
   const stmt = db.prepare(`
     SELECT
       s.id AS session_id,
+      r.name AS role_name,
+      a.label AS label,
       COALESCE(MIN(e.received_at), s.started_at) AS first_seen_at,
       COALESCE(MAX(e.received_at), s.started_at) AS last_seen_at,
       COUNT(e.id) AS event_count,
@@ -57,6 +63,8 @@ export function createWorkspaceSessionSummaries(db: Database): WorkspaceSessionS
       st.summary    AS status_summary,
       st.updated_at AS status_updated_at
     FROM sessions s
+    JOIN roles r                ON r.id          = s.role_id
+    LEFT JOIN agents a          ON a.id          = s.agent_id
     LEFT JOIN events e          ON e.session_id  = s.id
     LEFT JOIN agent_statuses st ON st.session_id = s.id
     WHERE s.workspace_id = ?
@@ -71,6 +79,8 @@ export function createWorkspaceSessionSummaries(db: Database): WorkspaceSessionS
         const latest_status = pickStatus(row);
         return {
           session_id: row.session_id,
+          role_name: row.role_name,
+          ...(row.label === null ? {} : { label: row.label }),
           first_seen_at: row.first_seen_at,
           last_seen_at: row.last_seen_at,
           event_count: row.event_count,
