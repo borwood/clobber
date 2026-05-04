@@ -38,6 +38,12 @@ export function registerAgentAskRoutes(
       return { error: "invalid ask request", issues: parsed.error.issues };
     }
 
+    const supersededIds = deps.agentQuestions.cancelAllForSession(auth.session.id);
+    for (const id of supersededIds) {
+      const row = deps.agentQuestions.get(id);
+      if (row !== null) deps.agentQuestionWaiter.notify(row);
+    }
+
     const created = deps.agentQuestions.create({
       session_id: auth.session.id,
       question: parsed.data.question,

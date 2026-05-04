@@ -5,11 +5,18 @@ description: Surface a blocking question to the human user when your manager can
 
 # ask
 
-Run `clobber ask --prompt "<question>"` to put a question in front of the user
-and pause until they answer. The answer is returned as the command's stdout.
+Run `clobber ask "<question>"` to put a question in front of the user and
+pause until they answer. The answer is returned as the command's stdout.
 
 ```
-clobber ask --prompt "The migration script will drop the legacy_sessions table — confirm before I run it?"
+clobber ask "The migration script will drop the legacy_sessions table — confirm before I run it?"
+```
+
+If the answer is one of a small fixed set, pass each choice as a `--option`
+flag — the web ask widget renders them as buttons:
+
+```
+clobber ask "drop the table now or rollback first?" --option drop --option rollback
 ```
 
 You're a worker — your default audience is the manager who spawned you, not the

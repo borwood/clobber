@@ -5,11 +5,18 @@ description: Surface a blocking question to the human user and wait for an answe
 
 # ask
 
-Run `clobber ask --prompt "<question>"` to put a question in front of the user
-and pause until they answer. The answer is returned as the command's stdout.
+Run `clobber ask "<question>"` to put a question in front of the user and
+pause until they answer. The answer is returned as the command's stdout.
 
 ```
-clobber ask --prompt "Should I delete the deprecated /v1 endpoint, or keep it under a deprecation header for one more release?"
+clobber ask "Should I delete the deprecated /v1 endpoint, or keep it under a deprecation header for one more release?"
+```
+
+If the answer is one of a small fixed set, pass each choice as a `--option`
+flag — the web ask widget renders them as buttons:
+
+```
+clobber ask "merge or rebase?" --option merge --option rebase
 ```
 
 When to ask:

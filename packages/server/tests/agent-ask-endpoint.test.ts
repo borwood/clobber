@@ -208,6 +208,78 @@ describe("POST /agent/ask", () => {
     await teardown(h);
   });
 
+  it("supersedes a pre-existing open question for the same session", async () => {
+    const h = buildHarness();
+    const boot = await bootAgent(h);
+
+    // Q1 starts and the agent moves on without waiting for an answer.
+    const q1Promise = h.server.inject({
+      method: "POST",
+      url: "/agent/ask",
+      headers: { authorization: `Bearer ${boot.token}` },
+      payload: { question: "first?" },
+    });
+    for (let i = 0; i < 50; i++) {
+      if (h.questions.getOpenForSession(boot.sessionId) !== null) break;
+      await Bun.sleep(5);
+    }
+
+    // Q2 arrives for the same session — must cancel Q1 so the human can't
+    // accidentally answer the wrong one.
+    const q2Promise = h.server.inject({
+      method: "POST",
+      url: "/agent/ask",
+      headers: { authorization: `Bearer ${boot.token}` },
+      payload: { question: "second?" },
+    });
+
+    // Q1's blocking call resolves with cancelled.
+    const q1Res = await q1Promise;
+    expect(q1Res.statusCode).toBe(200);
+    expect(q1Res.json() as unknown).toEqual({ resolution: "cancelled" });
+
+    // Wait for Q2's row to land.
+    let q2Open: { id: string; question: string } | null = null;
+    for (let i = 0; i < 50; i++) {
+      const open = h.questions.getOpenForSession(boot.sessionId);
+      if (open !== null && open.question === "second?") {
+        q2Open = open;
+        break;
+      }
+      await Bun.sleep(5);
+    }
+    expect(q2Open).not.toBeNull();
+
+    // The widget query returns Q2 only — Q1 is gone.
+    const summariesRes = await h.server.inject({
+      method: "GET",
+      url: `/sessions?workspace_id=${boot.workspaceId}`,
+    });
+    const summaries = summariesRes.json() as Array<{
+      session_id: string;
+      open_question?: { id: string; question: string };
+    }>;
+    const own = summaries.find((s) => s.session_id === boot.sessionId)!;
+    expect(own.open_question?.question).toBe("second?");
+
+    // Answering Q2 resolves the in-flight call.
+    await h.server.inject({
+      method: "POST",
+      url: `/sessions/${boot.sessionId}/answer`,
+      payload: { question_id: q2Open!.id, answer: "ok" },
+    });
+    const q2Res = await q2Promise;
+    expect(q2Res.statusCode).toBe(200);
+    expect(q2Res.json() as unknown).toEqual({
+      resolution: "answered",
+      answer: "ok",
+    });
+
+    // No leftover open question after answering Q2.
+    expect(h.questions.getOpenForSession(boot.sessionId)).toBeNull();
+    await teardown(h);
+  });
+
   it("returns resolution=cancelled if the session is ended while the question is open", async () => {
     const h = buildHarness();
     const boot = await bootAgent(h);
