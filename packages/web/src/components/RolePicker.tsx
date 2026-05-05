@@ -19,7 +19,7 @@ export function RolePicker({ assignments, selectedRoleId, onSelect }: Props) {
 
   return (
     <ul className="space-y-1">
-      {spawnable.map(({ role, max_concurrent }) => {
+      {spawnable.map(({ role, max_concurrent, current_version }) => {
         const isSelected = role.id === selectedRoleId;
         return (
           <li key={role.id}>
@@ -34,7 +34,17 @@ export function RolePicker({ assignments, selectedRoleId, onSelect }: Props) {
               }
             >
               <div className="flex items-center justify-between">
-                <span className="font-medium text-zinc-200">{role.name}</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-medium text-zinc-200">{role.name}</span>
+                  {current_version !== undefined && (
+                    <span
+                      className="px-1 py-0.5 rounded bg-zinc-800 text-emerald-400 font-mono text-[10px]"
+                      title={current_version.id}
+                    >
+                      v{current_version.version}
+                    </span>
+                  )}
+                </div>
                 <span className="text-xs text-zinc-500 font-mono">
                   ceiling {max_concurrent}
                 </span>

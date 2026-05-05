@@ -28,6 +28,7 @@ export function SessionHeader({ session }: Props) {
       <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 text-[10px] uppercase tracking-wider shrink-0">
         {session.role_name}
       </span>
+      <RoleVersionBadge session={session} />
       {session.label !== undefined && (
         <span className="text-sm text-zinc-100 font-medium truncate">{session.label}</span>
       )}
@@ -39,6 +40,28 @@ export function SessionHeader({ session }: Props) {
       )}
       <CopyableId id={session.session_id} />
     </div>
+  );
+}
+
+function RoleVersionBadge({ session }: { session: SessionSummary }) {
+  const pinned = session.role_version;
+  const current = session.role_current_version;
+  if (pinned === undefined) return null;
+  const stale = current !== undefined && current.id !== pinned.id;
+  const tooltip = stale
+    ? `pinned v${pinned.version} — current is v${current!.version}`
+    : `pinned v${pinned.version}`;
+  return (
+    <span
+      className={
+        "px-1 py-0.5 rounded font-mono text-[10px] shrink-0 " +
+        (stale ? "bg-amber-950 text-amber-300" : "bg-zinc-800 text-emerald-400")
+      }
+      title={tooltip}
+    >
+      v{pinned.version}
+      {stale && <span className="ml-1 text-amber-400">→ v{current!.version}</span>}
+    </span>
   );
 }
 

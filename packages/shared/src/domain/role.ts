@@ -55,8 +55,15 @@ export type SetWorkspaceRoleCeilingRequest = z.infer<
   typeof SetWorkspaceRoleCeilingRequestSchema
 >;
 
+export const RoleVersionRefSchema = z.object({
+  id: z.string().uuid(),
+  version: z.number().int().positive(),
+});
+export type RoleVersionRef = z.infer<typeof RoleVersionRefSchema>;
+
 export const WorkspaceRoleAssignmentSchema = z.object({
   role: RoleSchema,
   max_concurrent: z.number().int().nonnegative(),
+  current_version: RoleVersionRefSchema.optional(),
 });
 export type WorkspaceRoleAssignment = z.infer<typeof WorkspaceRoleAssignmentSchema>;

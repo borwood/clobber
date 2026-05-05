@@ -4,6 +4,7 @@ import type {
   Role,
   WorkspaceRoleAssignment,
   LatestAgentStatus,
+  RoleVersionRef,
 } from "@clobber/shared";
 
 export type {
@@ -12,6 +13,7 @@ export type {
   WorkspaceRoleAssignment,
   LatestAgentStatus,
   AgentState,
+  RoleVersionRef,
 } from "@clobber/shared";
 
 export interface OpenQuestion {
@@ -32,6 +34,8 @@ export interface SessionSummary {
   readonly ended_at?: number;
   readonly latest_status?: LatestAgentStatus;
   readonly open_question?: OpenQuestion;
+  readonly role_version?: RoleVersionRef;
+  readonly role_current_version?: RoleVersionRef;
 }
 
 export interface SpawnRequest {

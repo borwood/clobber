@@ -29,6 +29,7 @@ interface JoinedRow extends CeilingRow {
   role_workspace_id: string | null;
   role_current_version_id: string | null;
   role_created_at: number;
+  current_version_number: number | null;
 }
 
 function rowToCeiling(row: CeilingRow): WorkspaceRoleCeiling {
@@ -48,7 +49,19 @@ function joinedRowToAssignment(row: JoinedRow): WorkspaceRoleAssignment {
   if (row.role_workspace_id !== null) roleInput["workspace_id"] = row.role_workspace_id;
   if (row.role_current_version_id !== null) roleInput["current_version_id"] = row.role_current_version_id;
   const role: Role = RoleSchema.parse(roleInput);
-  return { role, max_concurrent: row.max_concurrent };
+  const assignment: WorkspaceRoleAssignment = {
+    role,
+    max_concurrent: row.max_concurrent,
+    ...(row.role_current_version_id === null || row.current_version_number === null
+      ? {}
+      : {
+          current_version: {
+            id: row.role_current_version_id,
+            version: row.current_version_number,
+          },
+        }),
+  };
+  return assignment;
 }
 
 export function createWorkspaceRoleStore(db: Database): WorkspaceRoleStore {
@@ -72,9 +85,11 @@ export function createWorkspaceRoleStore(db: Database): WorkspaceRoleStore {
       r.persistent        AS role_persistent,
       r.workspace_id      AS role_workspace_id,
       r.current_version_id AS role_current_version_id,
-      r.created_at        AS role_created_at
+      r.created_at        AS role_created_at,
+      cv.version          AS current_version_number
     FROM workspace_role_ceilings wrc
     JOIN roles r ON r.id = wrc.role_id
+    LEFT JOIN role_versions cv ON cv.id = r.current_version_id
     WHERE wrc.workspace_id = ?
     ORDER BY r.created_at DESC, r.id DESC
   `);

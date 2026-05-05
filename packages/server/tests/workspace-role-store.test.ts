@@ -67,8 +67,24 @@ describe("workspace-role store", () => {
     expect(list).toHaveLength(2);
 
     const byName = new Map(list.map((entry) => [entry.role.name, entry]));
-    expect(byName.get("manager")).toEqual({ role: a, max_concurrent: 1 });
-    expect(byName.get("worker")).toEqual({ role: b, max_concurrent: 5 });
+    const managerEntry = byName.get("manager");
+    const workerEntry = byName.get("worker");
+    expect(managerEntry).toBeDefined();
+    expect(workerEntry).toBeDefined();
+    expect(managerEntry!.role).toEqual(a);
+    expect(managerEntry!.max_concurrent).toBe(1);
+    expect(workerEntry!.role).toEqual(b);
+    expect(workerEntry!.max_concurrent).toBe(5);
+    if (a.current_version_id !== undefined) {
+      expect(managerEntry!.current_version).toBeDefined();
+      expect(managerEntry!.current_version!.id).toBe(a.current_version_id);
+      expect(managerEntry!.current_version!.version).toBe(1);
+    }
+    if (b.current_version_id !== undefined) {
+      expect(workerEntry!.current_version).toBeDefined();
+      expect(workerEntry!.current_version!.id).toBe(b.current_version_id);
+      expect(workerEntry!.current_version!.version).toBe(1);
+    }
 
     db.close();
   });
