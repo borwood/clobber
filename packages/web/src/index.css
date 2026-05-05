@@ -1,1 +1,32 @@
 @import "tailwindcss";
+
+/* Dark-theme scrollbars (#41). Applied globally so transcript, sidebar,
+   modals, and any future scrollable panel match the zinc/black UI without
+   each component having to re-style. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #3f3f46 #18181b; /* zinc-700 thumb / zinc-900 track */
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #18181b; /* zinc-900 */
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #3f3f46; /* zinc-700 */
+  border-radius: 5px;
+  border: 2px solid #18181b;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #52525b; /* zinc-600 */
+}
+
+*::-webkit-scrollbar-corner {
+  background: #18181b;
+}
