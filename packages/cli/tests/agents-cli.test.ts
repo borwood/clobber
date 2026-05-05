@@ -8,6 +8,7 @@ import { createDatabase } from "@clobber/server/db.ts";
 import { createEventStore } from "@clobber/server/event-store.ts";
 import { createWorkspaceStore } from "@clobber/server/workspace-store.ts";
 import { createRoleStore } from "@clobber/server/role-store.ts";
+import { createRoleVersionStore } from "@clobber/server/role-version-store.ts";
 import { createWorkspaceRoleStore } from "@clobber/server/workspace-role-store.ts";
 import { createAgentStore } from "@clobber/server/agent-store.ts";
 import { createSessionStore } from "@clobber/server/session-store.ts";
@@ -42,6 +43,7 @@ beforeAll(async () => {
   const db = createDatabase(":memory:");
   const workspaces = createWorkspaceStore(db);
   const roles = createRoleStore(db);
+const roleVersions = createRoleVersionStore(db);
   const workspaceRoles = createWorkspaceRoleStore(db);
   const agents = createAgentStore(db);
   const sessions = createSessionStore(db);
@@ -68,6 +70,8 @@ beforeAll(async () => {
     store: createEventStore(db),
     workspaces,
     roles,
+
+    roleVersions,
     workspaceRoles,
     agents,
     sessions,

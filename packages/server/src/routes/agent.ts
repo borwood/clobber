@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { SessionTokenStore } from "../session-token-store.ts";
 import type { SessionStore } from "../session-store.ts";
 import type { RoleStore } from "../role-store.ts";
+import type { RoleVersionStore } from "../role-version-store.ts";
 import type { WorkspaceStore } from "../workspace-store.ts";
 import type { WorkspaceRoleStore } from "../workspace-role-store.ts";
 import type { AgentStore } from "../agent-store.ts";
@@ -27,6 +28,7 @@ export interface AgentRouteDeps {
   readonly sessionTokens: SessionTokenStore;
   readonly sessions: SessionStore;
   readonly roles: RoleStore;
+  readonly roleVersions: RoleVersionStore;
   readonly workspaces: WorkspaceStore;
   readonly workspaceRoles: WorkspaceRoleStore;
   readonly agents: AgentStore;

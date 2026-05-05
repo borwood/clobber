@@ -5,6 +5,7 @@ import { createDatabase } from "../src/db.ts";
 import { createEventStore } from "../src/event-store.ts";
 import { createWorkspaceStore } from "../src/workspace-store.ts";
 import { createRoleStore } from "../src/role-store.ts";
+import { createRoleVersionStore } from "../src/role-version-store.ts";
 import { createWorkspaceRoleStore } from "../src/workspace-role-store.ts";
 import { createAgentStore } from "../src/agent-store.ts";
 import { createSessionStore } from "../src/session-store.ts";
@@ -29,12 +30,15 @@ function buildHarness(): Harness {
   const db = createDatabase(":memory:");
   const workspaces = createWorkspaceStore(db);
   const roles = createRoleStore(db);
+const roleVersions = createRoleVersionStore(db);
   const agents = createAgentStore(db);
   const sessions = createSessionStore(db);
   const server = createServer({
     store: createEventStore(db),
     workspaces,
     roles,
+
+    roleVersions,
     workspaceRoles: createWorkspaceRoleStore(db),
     agents,
     sessions,

@@ -47,6 +47,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
   registerSpawnRoutes(app, {
     workspaces: opts.workspaces,
     roles: opts.roles,
+    roleVersions: opts.roleVersions,
     workspaceRoles: opts.workspaceRoles,
     agents: opts.agents,
     sessions: opts.sessions,
@@ -74,6 +75,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     sessionTokens: opts.sessionTokens,
     sessions: opts.sessions,
     roles: opts.roles,
+    roleVersions: opts.roleVersions,
     workspaces: opts.workspaces,
     workspaceRoles: opts.workspaceRoles,
     agents: opts.agents,

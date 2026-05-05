@@ -1,4 +1,5 @@
 import { Database } from "bun:sqlite";
+import { migrateRoleVersions } from "./role-version-migration.ts";
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS events (
@@ -19,15 +20,33 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_workspaces_created ON workspaces(created_at DESC);
 
   CREATE TABLE IF NOT EXISTS roles (
-    id                TEXT    PRIMARY KEY,
-    name              TEXT    NOT NULL UNIQUE,
-    description       TEXT,
-    permission_mode   TEXT,
-    allowed_tools     TEXT,
-    persistent        INTEGER NOT NULL,
-    created_at        INTEGER NOT NULL
+    id                 TEXT    PRIMARY KEY,
+    name               TEXT    NOT NULL UNIQUE,
+    description        TEXT,
+    permission_mode    TEXT,
+    allowed_tools      TEXT,
+    persistent         INTEGER NOT NULL,
+    workspace_id       TEXT,
+    current_version_id TEXT,
+    created_at         INTEGER NOT NULL,
+    FOREIGN KEY (workspace_id)       REFERENCES workspaces(id)     ON DELETE CASCADE
   );
-  CREATE INDEX IF NOT EXISTS idx_roles_created ON roles(created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_roles_created   ON roles(created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_roles_workspace ON roles(workspace_id);
+
+  CREATE TABLE IF NOT EXISTS role_versions (
+    id                 TEXT    PRIMARY KEY,
+    role_id            TEXT    NOT NULL,
+    version            INTEGER NOT NULL,
+    system_prompt      TEXT    NOT NULL,
+    skills_json        TEXT    NOT NULL,
+    allowed_tools_json TEXT    NOT NULL,
+    hooks_json         TEXT    NOT NULL,
+    created_at         INTEGER NOT NULL,
+    UNIQUE (role_id, version),
+    FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_role_versions_role ON role_versions(role_id, version DESC);
 
   CREATE TABLE IF NOT EXISTS workspace_role_ceilings (
     workspace_id    TEXT    NOT NULL,
@@ -57,13 +76,15 @@ const SCHEMA = `
     agent_id        TEXT,
     workspace_id    TEXT    NOT NULL,
     role_id         TEXT    NOT NULL,
+    role_version_id TEXT,
     pid             INTEGER NOT NULL,
     started_at      INTEGER NOT NULL,
     ended_at        INTEGER,
     transcript_path TEXT,
-    FOREIGN KEY (agent_id)     REFERENCES agents(id)     ON DELETE SET NULL,
-    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
-    FOREIGN KEY (role_id)      REFERENCES roles(id)      ON DELETE CASCADE
+    FOREIGN KEY (agent_id)        REFERENCES agents(id)        ON DELETE SET NULL,
+    FOREIGN KEY (workspace_id)    REFERENCES workspaces(id)    ON DELETE CASCADE,
+    FOREIGN KEY (role_id)         REFERENCES roles(id)         ON DELETE CASCADE,
+    FOREIGN KEY (role_version_id) REFERENCES role_versions(id) ON DELETE SET NULL
   );
   CREATE INDEX IF NOT EXISTS idx_sessions_workspace ON sessions(workspace_id, started_at DESC);
   CREATE INDEX IF NOT EXISTS idx_sessions_agent     ON sessions(agent_id);
@@ -107,6 +128,7 @@ export function createDatabase(path: string): Database {
   db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(SCHEMA);
+  migrateRoleVersions(db);
   return db;
 }
 

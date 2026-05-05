@@ -4,6 +4,7 @@ import { createDatabase } from "../src/db.ts";
 import { createEventStore } from "../src/event-store.ts";
 import { createWorkspaceStore } from "../src/workspace-store.ts";
 import { createRoleStore } from "../src/role-store.ts";
+import { createRoleVersionStore } from "../src/role-version-store.ts";
 import { createWorkspaceRoleStore } from "../src/workspace-role-store.ts";
 import { createAgentStore } from "../src/agent-store.ts";
 import { createSessionStore } from "../src/session-store.ts";
@@ -28,6 +29,8 @@ function buildServer(): Harness {
     store: createEventStore(db),
     workspaces: createWorkspaceStore(db),
     roles: createRoleStore(db),
+
+    roleVersions: createRoleVersionStore(db),
     workspaceRoles: createWorkspaceRoleStore(db),
     agents: createAgentStore(db),
     sessions: createSessionStore(db),

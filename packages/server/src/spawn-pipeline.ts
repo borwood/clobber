@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { delimiter } from "node:path";
-import { loadRoleBundle, materializeBundle } from "@clobber/runtime";
+import { materializeBundle } from "@clobber/runtime";
 import type { Role, Workspace } from "@clobber/shared";
 import type { WorkspaceRoleStore } from "./workspace-role-store.ts";
 import type { AgentStore } from "./agent-store.ts";
@@ -10,6 +10,7 @@ import { generateTokenValue } from "./session-token-store.ts";
 import type { AgentSpawner, AgentSpawnRequest } from "./types.ts";
 import type { AgentRegistry } from "./agent-registry.ts";
 import type { RoleStore } from "./role-store.ts";
+import type { RoleVersionStore } from "./role-version-store.ts";
 import type { AgentQuestionStore } from "./agent-question-store.ts";
 import type { AgentQuestionWaiter } from "./agent-question-waiter.ts";
 import { endSession } from "./session-lifecycle.ts";
@@ -25,6 +26,7 @@ export interface SpawnPipelineDeps {
   readonly cliEntry: string;
   readonly registry: AgentRegistry;
   readonly roles: RoleStore;
+  readonly roleVersions: RoleVersionStore;
   readonly agentQuestions: AgentQuestionStore;
   readonly agentQuestionWaiter: AgentQuestionWaiter;
 }
@@ -76,7 +78,8 @@ export function executeSpawn(
     return { ok: false, status: 403, error: "role at capacity", ceiling, active };
   }
 
-  const bundle = loadRoleBundle(role.name);
+  const versionId = role.current_version_id;
+  const bundle = versionId === undefined ? null : deps.roleVersions.loadAsBundle(versionId);
   if (bundle === null) {
     return {
       ok: false,
@@ -141,6 +144,7 @@ export function executeSpawn(
     agent_id: agent.id,
     workspace_id: workspace.id,
     role_id: role.id,
+    role_version_id: versionId,
     pid: spawned.pid,
   });
   deps.sessionTokens.register(sessionId, token);

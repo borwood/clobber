@@ -26,6 +26,8 @@ interface JoinedRow extends CeilingRow {
   role_permission_mode: string | null;
   role_allowed_tools: string | null;
   role_persistent: number;
+  role_workspace_id: string | null;
+  role_current_version_id: string | null;
   role_created_at: number;
 }
 
@@ -43,6 +45,8 @@ function joinedRowToAssignment(row: JoinedRow): WorkspaceRoleAssignment {
   if (row.role_description !== null) roleInput["description"] = row.role_description;
   if (row.role_permission_mode !== null) roleInput["permission_mode"] = row.role_permission_mode;
   if (row.role_allowed_tools !== null) roleInput["allowed_tools"] = JSON.parse(row.role_allowed_tools);
+  if (row.role_workspace_id !== null) roleInput["workspace_id"] = row.role_workspace_id;
+  if (row.role_current_version_id !== null) roleInput["current_version_id"] = row.role_current_version_id;
   const role: Role = RoleSchema.parse(roleInput);
   return { role, max_concurrent: row.max_concurrent };
 }
@@ -66,6 +70,8 @@ export function createWorkspaceRoleStore(db: Database): WorkspaceRoleStore {
       r.permission_mode   AS role_permission_mode,
       r.allowed_tools     AS role_allowed_tools,
       r.persistent        AS role_persistent,
+      r.workspace_id      AS role_workspace_id,
+      r.current_version_id AS role_current_version_id,
       r.created_at        AS role_created_at
     FROM workspace_role_ceilings wrc
     JOIN roles r ON r.id = wrc.role_id

@@ -2,6 +2,7 @@ import type { PermissionMode } from "@clobber/shared";
 import type { EventStore } from "./event-store.ts";
 import type { WorkspaceStore } from "./workspace-store.ts";
 import type { RoleStore } from "./role-store.ts";
+import type { RoleVersionStore } from "./role-version-store.ts";
 import type { WorkspaceRoleStore } from "./workspace-role-store.ts";
 import type { AgentStore } from "./agent-store.ts";
 import type { SessionStore } from "./session-store.ts";
@@ -37,6 +38,7 @@ export interface ServerOptions {
   readonly store: EventStore;
   readonly workspaces: WorkspaceStore;
   readonly roles: RoleStore;
+  readonly roleVersions: RoleVersionStore;
   readonly workspaceRoles: WorkspaceRoleStore;
   readonly agents: AgentStore;
   readonly sessions: SessionStore;

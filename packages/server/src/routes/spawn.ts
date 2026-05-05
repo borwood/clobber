@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { WorkspaceStore } from "../workspace-store.ts";
 import type { RoleStore } from "../role-store.ts";
+import type { RoleVersionStore } from "../role-version-store.ts";
 import type { WorkspaceRoleStore } from "../workspace-role-store.ts";
 import type { AgentStore } from "../agent-store.ts";
 import type { SessionStore } from "../session-store.ts";
@@ -22,6 +23,7 @@ const SpawnBodySchema = z.object({
 export interface SpawnRouteDeps {
   readonly workspaces: WorkspaceStore;
   readonly roles: RoleStore;
+  readonly roleVersions: RoleVersionStore;
   readonly workspaceRoles: WorkspaceRoleStore;
   readonly agents: AgentStore;
   readonly sessions: SessionStore;

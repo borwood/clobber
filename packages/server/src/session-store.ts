@@ -17,6 +17,7 @@ interface Row {
   agent_id: string | null;
   workspace_id: string;
   role_id: string;
+  role_version_id: string | null;
   pid: number;
   started_at: number;
   ended_at: number | null;
@@ -32,6 +33,7 @@ function rowToSession(row: Row): Session {
     started_at: row.started_at,
   };
   if (row.agent_id !== null) input["agent_id"] = row.agent_id;
+  if (row.role_version_id !== null) input["role_version_id"] = row.role_version_id;
   if (row.ended_at !== null) input["ended_at"] = row.ended_at;
   if (row.transcript_path !== null) input["transcript_path"] = row.transcript_path;
   return SessionSchema.parse(input);
@@ -40,8 +42,8 @@ function rowToSession(row: Row): Session {
 export function createSessionStore(db: Database): SessionStore {
   const insertStmt = db.prepare(
     `INSERT INTO sessions
-       (id, agent_id, workspace_id, role_id, pid, started_at, ended_at, transcript_path)
-     VALUES (?, ?, ?, ?, ?, ?, NULL, ?)`,
+       (id, agent_id, workspace_id, role_id, role_version_id, pid, started_at, ended_at, transcript_path)
+     VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
   );
   const getStmt = db.prepare("SELECT * FROM sessions WHERE id = ?");
   const countActiveStmt = db.prepare(
@@ -66,6 +68,8 @@ export function createSessionStore(db: Database): SessionStore {
   return {
     create(req) {
       const started_at = Date.now();
+      const role_version_id =
+        req.role_version_id === undefined ? null : req.role_version_id;
       const transcript_path =
         req.transcript_path === undefined ? null : req.transcript_path;
       insertStmt.run(
@@ -73,6 +77,7 @@ export function createSessionStore(db: Database): SessionStore {
         req.agent_id,
         req.workspace_id,
         req.role_id,
+        role_version_id,
         req.pid,
         started_at,
         transcript_path,
@@ -85,6 +90,7 @@ export function createSessionStore(db: Database): SessionStore {
         pid: req.pid,
         started_at,
       };
+      if (req.role_version_id !== undefined) out["role_version_id"] = req.role_version_id;
       if (req.transcript_path !== undefined) out["transcript_path"] = req.transcript_path;
       return SessionSchema.parse(out);
     },
