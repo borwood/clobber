@@ -247,26 +247,28 @@ export function App() {
           })()}
         </section>
 
-        <aside className="border-l border-zinc-800 overflow-y-auto p-4 space-y-5">
+        <aside className="border-l border-zinc-800 flex flex-col overflow-hidden">
           {workspaceId === null ? (
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm text-zinc-500 p-4">
               Create or select a workspace to spawn agents.
             </p>
           ) : (
             <>
-              <div className="space-y-2">
-                <h2 className="text-sm uppercase tracking-wider text-zinc-500">role</h2>
+              <div className="flex flex-col min-h-0 flex-1 p-4 pb-2 gap-2">
+                <h2 className="text-sm uppercase tracking-wider text-zinc-500 shrink-0">role</h2>
                 <RolePicker
                   assignments={assignments}
                   selectedRoleId={roleId}
                   onSelect={setRoleId}
                 />
               </div>
-              <SpawnPanel
-                workspaceId={workspaceId}
-                roleId={roleId}
-                onSpawned={(s) => setSelectedSession(s.session_id)}
-              />
+              <div className="border-t border-zinc-800 p-4 shrink-0 max-h-[60vh] overflow-y-auto">
+                <SpawnPanel
+                  workspaceId={workspaceId}
+                  roleId={roleId}
+                  onSpawned={(s) => setSelectedSession(s.session_id)}
+                />
+              </div>
             </>
           )}
         </aside>
