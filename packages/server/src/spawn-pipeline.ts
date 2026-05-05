@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { delimiter } from "node:path";
 import { materializeBundle } from "@clobber/runtime";
 import type { Role, Workspace } from "@clobber/shared";
+import { ensureOffice } from "./office-store.ts";
 import type { WorkspaceRoleStore } from "./workspace-role-store.ts";
 import type { AgentStore } from "./agent-store.ts";
 import type { SessionStore } from "./session-store.ts";
@@ -98,6 +99,17 @@ export function executeSpawn(
     hookUrl: deps.hookUrl,
     cliEntry: deps.cliEntry,
   });
+
+  const agent = deps.agents.create({
+    workspace_id: workspace.id,
+    role_id: role.id,
+    label,
+  });
+
+  const officeDir = role.persistent
+    ? ensureOffice(workspace.repo_path, agent.id)
+    : null;
+
   const baseEnv = process.env;
   const existingPath = baseEnv["PATH"] ?? "";
   const env: NodeJS.ProcessEnv = {
@@ -108,6 +120,7 @@ export function executeSpawn(
     CLOBBER_SESSION_ID: sessionId,
     CLOBBER_WORKSPACE_ID: workspace.id,
     CLOBBER_ROLE: role.name,
+    ...(officeDir === null ? {} : { CLOBBER_OFFICE_DIR: officeDir }),
   };
   const bundleExtras: Pick<
     AgentSpawnRequest,
@@ -117,12 +130,6 @@ export function executeSpawn(
     pluginDirs: [materialized.pluginDir],
     appendSystemPrompt: bundle.systemPrompt,
   };
-
-  const agent = deps.agents.create({
-    workspace_id: workspace.id,
-    role_id: role.id,
-    label,
-  });
 
   const spawnReq: AgentSpawnRequest = {
     hookUrl: deps.hookUrl,
