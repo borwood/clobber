@@ -39,6 +39,12 @@ export type Classified =
       readonly type: string;
       readonly summary?: string;
       readonly raw: TranscriptLine;
+    }
+  | {
+      readonly kind: "notification";
+      readonly summary: string;
+      readonly status?: string;
+      readonly raw: TranscriptLine;
     };
 
 export function classifyLine(line: TranscriptLine): Classified {
@@ -57,6 +63,10 @@ export function classifyLine(line: TranscriptLine): Classified {
           summary: `${count} result${count === 1 ? "" : "s"}`,
           raw: line,
         };
+      }
+      const notification = detectTaskNotification(content);
+      if (notification !== null) {
+        return { kind: "notification", ...notification, raw: line };
       }
       const injection = detectInjectedContext(content);
       if (injection !== null) {
@@ -107,6 +117,28 @@ function summarizeSystem(type: string, line: TranscriptLine): string | undefined
     return undefined;
   }
   return undefined;
+}
+
+const NOTIFICATION_PREFIX = "[SYSTEM NOTIFICATION";
+
+function detectTaskNotification(
+  content: string | readonly ContentBlock[],
+): { summary: string; status?: string } | null {
+  const text = extractLeadingText(content);
+  if (text === null) return null;
+  const trimmed = text.trimStart();
+  if (!trimmed.startsWith(NOTIFICATION_PREFIX)) return null;
+  const summaryMatch = trimmed.match(/<summary>([\s\S]*?)<\/summary>/);
+  const statusMatch = trimmed.match(/<status>([\s\S]*?)<\/status>/);
+  const status = statusMatch === null ? undefined : statusMatch[1]?.trim();
+  const rawSummary = summaryMatch === null ? undefined : summaryMatch[1]?.trim();
+  const summary =
+    rawSummary !== undefined && rawSummary.length > 0
+      ? rawSummary
+      : status !== undefined
+        ? `background task ${status}`
+        : "background task event";
+  return status === undefined ? { summary } : { summary, status };
 }
 
 const INJECTION_TAGS = [

@@ -60,6 +60,17 @@ export function TranscriptViewer({ lines, showSystem }: Props) {
               if (classified.kind === "assistant") {
                 return <AssistantBubble key={idx} line={classified.line} />;
               }
+              if (classified.kind === "notification") {
+                return (
+                  <NotificationCard
+                    key={idx}
+                    summary={classified.summary}
+                    {...(classified.status === undefined ? {} : { status: classified.status })}
+                    raw={classified.raw}
+                    showRaw={showSystem}
+                  />
+                );
+              }
               if (!showSystem) return null;
               return (
                 <SystemLine
@@ -166,6 +177,51 @@ function RawBlock({ block }: { block: ContentBlock }) {
     <pre className="whitespace-pre-wrap text-xs text-zinc-500 bg-zinc-950 p-2 rounded border border-zinc-800 overflow-x-auto">
       {JSON.stringify(block, null, 2)}
     </pre>
+  );
+}
+
+function NotificationCard({
+  summary,
+  status,
+  raw,
+  showRaw,
+}: {
+  summary: string;
+  status?: string;
+  raw: TranscriptLine;
+  showRaw: boolean;
+}) {
+  const tone =
+    status === "failed"
+      ? "border-red-900 bg-red-950/40 text-red-200"
+      : status === "completed"
+        ? "border-emerald-900 bg-emerald-950/30 text-emerald-200"
+        : "border-zinc-800 bg-zinc-900/60 text-zinc-200";
+  const dot =
+    status === "failed"
+      ? "bg-red-500"
+      : status === "completed"
+        ? "bg-emerald-500"
+        : "bg-zinc-500";
+  return (
+    <div
+      className={`flex items-start gap-2 px-3 py-2 rounded border text-xs ${tone}`}
+    >
+      <span className={`mt-1 inline-block w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex items-baseline gap-2">
+          <span className="uppercase tracking-wider text-[10px] opacity-70">
+            background task{status === undefined ? "" : ` · ${status}`}
+          </span>
+        </div>
+        <div className="break-words">{summary}</div>
+        {showRaw && (
+          <pre className="mt-1 whitespace-pre-wrap text-[10px] text-zinc-500 bg-zinc-950 p-2 rounded border border-zinc-800 overflow-x-auto">
+            {JSON.stringify(raw, null, 2)}
+          </pre>
+        )}
+      </div>
+    </div>
   );
 }
 
