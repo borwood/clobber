@@ -7,6 +7,7 @@ import type { SessionStore } from "../session-store.ts";
 import type { RoleStore } from "../role-store.ts";
 import type { RoleVersionStore } from "../role-version-store.ts";
 import { forkRole } from "../fork-role.ts";
+import { editRole, type RoleEditPatch } from "../edit-role.ts";
 import { resolveCallerSession } from "./_agent-auth.ts";
 
 const UUID_RE =
@@ -16,6 +17,21 @@ const ROLE_NAME_RE = /^[A-Za-z0-9_-]+$/;
 const ForkBodySchema = z.object({
   new_name: z.string().min(1).regex(ROLE_NAME_RE),
 });
+
+const RoleSkillSchema = z.object({
+  name: z.string().min(1),
+  body: z.string().min(1),
+});
+
+const EditBodySchema = z
+  .object({
+    system_prompt: z.string().min(1).optional(),
+    skills: z.array(RoleSkillSchema).optional(),
+    allowed_tools: z.array(z.string().min(1)).optional(),
+  })
+  .strict();
+
+const FORBIDDEN_EDIT_KEYS = ["hooks", "permission_mode"] as const;
 
 export interface AgentRolesRouteDeps {
   readonly db: Database;
@@ -169,6 +185,78 @@ export function registerAgentRolesRoutes(
         auth.session.workspace_id,
       );
       reply.code(201);
+      return result;
+    },
+  );
+
+  app.patch<{ Params: { idOrName: string } }>(
+    "/agent/roles/:idOrName",
+    async (request, reply) => {
+      const auth = resolveCallerSession(request, deps);
+      if (!auth.ok) {
+        reply.code(auth.status);
+        return { error: auth.error };
+      }
+      const rawBody =
+        request.body === null || typeof request.body !== "object"
+          ? null
+          : (request.body as Record<string, unknown>);
+      if (rawBody === null) {
+        reply.code(400);
+        return { error: "edit body must be a JSON object" };
+      }
+      for (const key of FORBIDDEN_EDIT_KEYS) {
+        if (key in rawBody) {
+          reply.code(400);
+          return { error: `${key} is not editable via PATCH /agent/roles/:id` };
+        }
+      }
+      const parsed = EditBodySchema.safeParse(rawBody);
+      if (!parsed.success) {
+        reply.code(400);
+        return { error: "invalid edit request", issues: parsed.error.issues };
+      }
+      if (
+        parsed.data.system_prompt === undefined &&
+        parsed.data.skills === undefined &&
+        parsed.data.allowed_tools === undefined
+      ) {
+        reply.code(400);
+        return {
+          error:
+            "edit body must include at least one of system_prompt, skills, allowed_tools",
+        };
+      }
+      const { idOrName } = request.params;
+      const role = UUID_RE.test(idOrName)
+        ? deps.roles.get(idOrName)
+        : deps.roles.findInWorkspace(auth.session.workspace_id, idOrName);
+      if (role === null || role.workspace_id !== auth.session.workspace_id) {
+        reply.code(404);
+        return { error: `role not found: ${idOrName}` };
+      }
+      if (role.current_version_id === undefined) {
+        reply.code(500);
+        return { error: "role has no current version" };
+      }
+      const currentVersion = deps.roleVersions.get(role.current_version_id);
+      if (currentVersion === null) {
+        reply.code(500);
+        return { error: "role current version missing" };
+      }
+      const patch: RoleEditPatch = {
+        ...(parsed.data.system_prompt === undefined
+          ? {}
+          : { system_prompt: parsed.data.system_prompt }),
+        ...(parsed.data.skills === undefined
+          ? {}
+          : { skills: parsed.data.skills }),
+        ...(parsed.data.allowed_tools === undefined
+          ? {}
+          : { allowed_tools: parsed.data.allowed_tools }),
+      };
+      const result = editRole(deps.db, role, currentVersion, patch);
+      reply.code(200);
       return result;
     },
   );

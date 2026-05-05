@@ -11,7 +11,7 @@ export class CliHttpError extends Error {
 }
 
 interface RequestOptions {
-  readonly method: "GET" | "POST" | "DELETE";
+  readonly method: "GET" | "POST" | "PATCH" | "DELETE";
   readonly path: string;
   readonly body?: unknown;
 }

@@ -1,6 +1,7 @@
 import type { Command, CommandContext } from "../commands.ts";
 import { request } from "../http.ts";
 import { CliUsageError } from "../usage-error.ts";
+import { runEdit } from "./roles-edit.ts";
 
 interface RoleListEntry {
   readonly id: string;
@@ -43,7 +44,7 @@ interface RoleDetailResponse {
   }>;
 }
 
-const SUBCOMMANDS = ["list", "show", "fork"] as const;
+const SUBCOMMANDS = ["list", "show", "fork", "edit"] as const;
 type Subcommand = (typeof SUBCOMMANDS)[number];
 
 function isSubcommand(name: string): name is Subcommand {
@@ -221,10 +222,16 @@ export const rolesCommand: Command = {
   name: "roles",
   summary: "List or inspect roles available in the current workspace.",
   usage:
-    "usage: clobber roles <list|show|fork> [args...]\n\n" +
+    "usage: clobber roles <list|show|fork|edit> [args...]\n\n" +
     "  roles list [--json]                          List workspace roles with version metadata.\n" +
     "  roles show <name|id> [--json]                Show full role + current version + history.\n" +
-    "  roles fork <source-name|id> <new-name> [--json]  Fork a role into a new editable workspace role.\n",
+    "  roles fork <source-name|id> <new-name> [--json]  Fork a role into a new editable workspace role.\n" +
+    "  roles edit <name|id> [flags] [--json]        Patch a role; bumps version. Flags:\n" +
+    "    --system-prompt-file FILE                  Replace system prompt from a file.\n" +
+    "    --system-prompt -                          Replace system prompt from stdin.\n" +
+    "    --allowed-tools tool1,tool2                Replace the allowed tool list.\n" +
+    "    --add-skill name=FILE                      Add (or replace) a skill (repeatable).\n" +
+    "    --remove-skill name                        Remove a skill by name (repeatable).\n",
   async run(ctx) {
     const [sub, ...rest] = ctx.args;
     if (sub === undefined) {
@@ -232,6 +239,9 @@ export const rolesCommand: Command = {
     }
     if (!isSubcommand(sub)) {
       throw new CliUsageError(`roles: unknown subcommand: ${sub}`);
+    }
+    if (sub === "edit") {
+      return runEdit(ctx, rest);
     }
     const { json, rest: subArgs } = takeJsonFlag(rest);
     if (sub === "list") {

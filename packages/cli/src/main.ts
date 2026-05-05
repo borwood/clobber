@@ -16,6 +16,7 @@ export interface RunOptions {
   readonly env: NodeJS.ProcessEnv;
   readonly stdout: NodeJS.WritableStream;
   readonly stderr: NodeJS.WritableStream;
+  readonly stdin?: NodeJS.ReadableStream;
 }
 
 function buildRegistry(): CommandRegistry {
@@ -78,6 +79,7 @@ export async function run(opts: RunOptions): Promise<number> {
       args: rest,
       stdout: opts.stdout,
       stderr: opts.stderr,
+      stdin: opts.stdin ?? process.stdin,
     });
   } catch (err) {
     if (err instanceof CliUsageError) {

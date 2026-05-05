@@ -5,6 +5,7 @@ export interface CommandContext {
   readonly args: readonly string[];
   readonly stdout: NodeJS.WritableStream;
   readonly stderr: NodeJS.WritableStream;
+  readonly stdin: NodeJS.ReadableStream;
 }
 
 export interface Command {
