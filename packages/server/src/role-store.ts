@@ -11,6 +11,7 @@ export interface RoleStore {
   findByName(name: string): Role | null;
   findInWorkspace(workspaceId: string, name: string): Role | null;
   list(): Role[];
+  listForWorkspace(workspaceId: string): Role[];
   delete(id: string): boolean;
 }
 
@@ -59,6 +60,9 @@ export function createRoleStore(db: Database): RoleStore {
   );
   const listStmt = db.prepare(
     "SELECT * FROM roles ORDER BY created_at DESC, id DESC",
+  );
+  const listForWorkspaceStmt = db.prepare(
+    "SELECT * FROM roles WHERE workspace_id = ? ORDER BY name ASC",
   );
   const deleteStmt = db.prepare("DELETE FROM roles WHERE id = ?");
 
@@ -114,6 +118,11 @@ export function createRoleStore(db: Database): RoleStore {
 
     list() {
       const rows = listStmt.all() as Row[];
+      return rows.map(rowToRole);
+    },
+
+    listForWorkspace(workspaceId) {
+      const rows = listForWorkspaceStmt.all(workspaceId) as Row[];
       return rows.map(rowToRole);
     },
 

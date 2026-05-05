@@ -6,6 +6,7 @@ import { killCommand } from "./commands/kill.ts";
 import { transcriptCommand } from "./commands/transcript.ts";
 import { statusCommand } from "./commands/status.ts";
 import { askCommand } from "./commands/ask.ts";
+import { rolesCommand } from "./commands/roles.ts";
 import { readEnv, CliEnvError } from "./env.ts";
 import { CliHttpError } from "./http.ts";
 import { CliUsageError } from "./usage-error.ts";
@@ -26,6 +27,7 @@ function buildRegistry(): CommandRegistry {
   registry.register(transcriptCommand);
   registry.register(statusCommand);
   registry.register(askCommand);
+  registry.register(rolesCommand);
   return registry;
 }
 

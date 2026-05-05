@@ -15,9 +15,16 @@ export interface CreateRoleVersionInput {
   readonly hooks_json: string;
 }
 
+export interface RoleVersionSummary {
+  readonly id: string;
+  readonly version: number;
+  readonly created_at: number;
+}
+
 export interface RoleVersionStore {
   create(input: CreateRoleVersionInput): RoleVersion;
   get(id: string): RoleVersion | null;
+  listForRole(roleId: string): RoleVersionSummary[];
   loadAsBundle(id: string): LoadedRole | null;
 }
 
@@ -52,6 +59,9 @@ export function createRoleVersionStore(db: Database): RoleVersionStore {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const getStmt = db.prepare("SELECT * FROM role_versions WHERE id = ?");
+  const listForRoleStmt = db.prepare(
+    "SELECT id, version, created_at FROM role_versions WHERE role_id = ? ORDER BY version DESC",
+  );
   const getRoleNameStmt = db.prepare(
     "SELECT name FROM roles WHERE id = ?",
   );
@@ -76,6 +86,10 @@ export function createRoleVersionStore(db: Database): RoleVersionStore {
     get(id) {
       const row = getStmt.get(id) as Row | null;
       return row === null ? null : rowToVersion(row);
+    },
+
+    listForRole(roleId) {
+      return listForRoleStmt.all(roleId) as RoleVersionSummary[];
     },
 
     loadAsBundle(id) {
