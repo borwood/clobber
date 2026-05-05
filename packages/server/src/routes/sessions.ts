@@ -11,6 +11,7 @@ import type { AgentQuestionStore } from "../agent-question-store.ts";
 import type { AgentQuestionWaiter } from "../agent-question-waiter.ts";
 import { readTranscript } from "../transcript-reader.ts";
 import { endSession, terminateSession } from "../session-lifecycle.ts";
+import { appendTranscriptNotification } from "../transcript-marker.ts";
 
 interface IdParam {
   id: string;
@@ -43,7 +44,10 @@ export function registerSessionRoutes(
       reply.code(400);
       return { error: "workspace_id query param is required" };
     }
-    return deps.summaries.list(workspaceId);
+    return deps.summaries.list(workspaceId).map((s) => ({
+      ...s,
+      busy: deps.registry.get(s.session_id)?.busy === true,
+    }));
   });
 
   app.get<{ Params: IdParam }>(
@@ -106,6 +110,41 @@ export function registerSessionRoutes(
         return { error: "session not found" };
       }
       terminateSession(request.params.id, deps);
+      return { ok: true };
+    },
+  );
+
+  app.post<{ Params: IdParam }>(
+    "/sessions/:id/interrupt",
+    async (request, reply) => {
+      const sessionId = request.params.id;
+      const session = deps.sessions.get(sessionId);
+      if (session === null) {
+        reply.code(404);
+        return { error: "session not found" };
+      }
+      if (session.ended_at !== undefined) {
+        reply.code(410);
+        return { error: "session ended" };
+      }
+      const live = deps.registry.get(sessionId);
+      if (live === null) {
+        reply.code(409);
+        return { error: "agent not running" };
+      }
+      if (!live.busy) {
+        reply.code(409);
+        return { error: "agent idle" };
+      }
+      live.kill("SIGINT");
+      deps.registry.setBusy(sessionId, false);
+      if (session.transcript_path !== undefined) {
+        appendTranscriptNotification(
+          session.transcript_path,
+          "interrupted",
+          "Interrupted by user",
+        );
+      }
       return { ok: true };
     },
   );

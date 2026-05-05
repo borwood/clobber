@@ -36,6 +36,7 @@ export interface SessionSummary {
   readonly open_question?: OpenQuestion;
   readonly role_version?: RoleVersionRef;
   readonly role_current_version?: RoleVersionRef;
+  readonly busy?: boolean;
 }
 
 export interface SpawnRequest {
@@ -96,6 +97,11 @@ export const api = {
   endSession: (sessionId: string) =>
     postJson<{ ok: true }>(
       `/sessions/${encodeURIComponent(sessionId)}/end`,
+      {},
+    ),
+  interruptSession: (sessionId: string) =>
+    postJson<{ ok: true }>(
+      `/sessions/${encodeURIComponent(sessionId)}/interrupt`,
       {},
     ),
   sendPrompt: (sessionId: string, prompt: string) =>

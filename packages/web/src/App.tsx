@@ -229,9 +229,17 @@ export function App() {
                 <PromptComposer
                   sessionId={selectedSession}
                   disabled={sel?.ended_at !== undefined}
+                  busy={sel?.busy === true}
                   onSend={async (prompt) => {
                     await api.sendPrompt(selectedSession, prompt);
                     setTranscript(await api.getTranscript(selectedSession));
+                  }}
+                  onInterrupt={async () => {
+                    await api.interruptSession(selectedSession);
+                    setTranscript(await api.getTranscript(selectedSession));
+                    if (workspaceId !== null) {
+                      setSessions(await api.listSessions(workspaceId));
+                    }
                   }}
                 />
               </>
