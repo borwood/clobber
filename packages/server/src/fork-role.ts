@@ -54,6 +54,7 @@ export function forkRole(
     skills_json: sourceVersion.skills_json,
     allowed_tools_json: sourceVersion.allowed_tools_json,
     hooks_json: sourceVersion.hooks_json,
+    triggers_json: sourceVersion.triggers_json,
   });
   setCurrentVersion.run(newVersion.id, id);
 

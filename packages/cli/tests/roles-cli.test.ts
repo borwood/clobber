@@ -292,4 +292,18 @@ describe("clobber CLI — roles show", () => {
     expect(code).not.toBe(0);
     expect(s.err()).toContain("not found");
   });
+
+  it("renders a Triggers section with (none) when the role has no triggers", async () => {
+    const s = captureStreams();
+    const code = await run({
+      argv: ["roles", "show", "worker"],
+      env: envFor(harness.managerToken),
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(0);
+    const out = s.out();
+    expect(out).toContain("## Triggers");
+    expect(out).toMatch(/## Triggers\n\(none\)/);
+  });
 });

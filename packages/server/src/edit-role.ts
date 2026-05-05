@@ -1,11 +1,12 @@
 import type { Database } from "bun:sqlite";
-import type { Role, RoleSkill, RoleVersion } from "@clobber/shared";
+import type { Role, RoleSkill, RoleTrigger, RoleVersion } from "@clobber/shared";
 import { createRoleVersionStore } from "./role-version-store.ts";
 
 export interface RoleEditPatch {
   readonly system_prompt?: string;
   readonly skills?: readonly RoleSkill[];
   readonly allowed_tools?: readonly string[];
+  readonly triggers?: readonly RoleTrigger[];
 }
 
 export interface EditRoleResult {
@@ -46,6 +47,11 @@ export function editRole(
       ? currentVersion.allowed_tools_json
       : JSON.stringify(patch.allowed_tools);
 
+  const newTriggersJson =
+    patch.triggers === undefined
+      ? currentVersion.triggers_json
+      : JSON.stringify(patch.triggers);
+
   const created = versions.create({
     role_id: role.id,
     version: nextVersion,
@@ -53,6 +59,7 @@ export function editRole(
     skills_json: newSkillsJson,
     allowed_tools_json: newAllowedToolsJson,
     hooks_json: currentVersion.hooks_json,
+    triggers_json: newTriggersJson,
   });
 
   setCurrentVersion.run(created.id, role.id);

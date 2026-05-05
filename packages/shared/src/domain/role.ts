@@ -20,6 +20,30 @@ export const RoleSkillSchema = z.object({
 });
 export type RoleSkill = z.infer<typeof RoleSkillSchema>;
 
+export const CronTriggerSchema = z.object({
+  kind: z.literal("cron"),
+  expr: z.string().min(1),
+});
+export const FileWatchTriggerSchema = z.object({
+  kind: z.literal("file-watch"),
+  glob: z.string().min(1),
+});
+export const WebhookTriggerSchema = z.object({
+  kind: z.literal("webhook"),
+  path: z.string().min(1).startsWith("/"),
+});
+export const IssueAssignedTriggerSchema = z.object({
+  kind: z.literal("issue-assigned"),
+  repo: z.string().min(1).optional(),
+});
+export const RoleTriggerSchema = z.discriminatedUnion("kind", [
+  CronTriggerSchema,
+  FileWatchTriggerSchema,
+  WebhookTriggerSchema,
+  IssueAssignedTriggerSchema,
+]);
+export type RoleTrigger = z.infer<typeof RoleTriggerSchema>;
+
 export const RoleVersionSchema = z.object({
   id: z.string().uuid(),
   role_id: z.string().uuid(),
@@ -28,6 +52,7 @@ export const RoleVersionSchema = z.object({
   skills_json: z.string(),
   allowed_tools_json: z.string(),
   hooks_json: z.string(),
+  triggers_json: z.string(),
   created_at: z.number().int().nonnegative(),
 });
 export type RoleVersion = z.infer<typeof RoleVersionSchema>;

@@ -8,6 +8,7 @@ export function migrateRoleVersions(db: Database): void {
   ensureColumn(db, "roles", "workspace_id", "TEXT");
   ensureColumn(db, "roles", "current_version_id", "TEXT");
   ensureColumn(db, "sessions", "role_version_id", "TEXT");
+  ensureColumn(db, "role_versions", "triggers_json", "TEXT NOT NULL DEFAULT '[]'");
   dropLegacyGlobalUniqueName(db);
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_roles_workspace ON roles(workspace_id);

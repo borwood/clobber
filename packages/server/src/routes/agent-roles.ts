@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { Database } from "bun:sqlite";
 import { z } from "zod";
-import type { Role } from "@clobber/shared";
+import { RoleTriggerSchema, type Role } from "@clobber/shared";
 import type { SessionTokenStore } from "../session-token-store.ts";
 import type { SessionStore } from "../session-store.ts";
 import type { RoleStore } from "../role-store.ts";
@@ -33,6 +33,7 @@ const EditBodySchema = z
     system_prompt: z.string().min(1).optional(),
     skills: z.array(RoleSkillSchema).optional(),
     allowed_tools: z.array(z.string().min(1)).optional(),
+    triggers: z.array(RoleTriggerSchema).optional(),
     description: z.string().min(1).optional(),
   })
   .strict();
@@ -93,6 +94,7 @@ interface RoleDetailResponse {
     readonly skills: unknown;
     readonly allowed_tools: unknown;
     readonly hooks: unknown;
+    readonly triggers: unknown;
     readonly created_at: number;
   };
   readonly version_history: ReadonlyArray<{
@@ -120,6 +122,7 @@ function buildDetail(
       skills: JSON.parse(version.skills_json),
       allowed_tools: JSON.parse(version.allowed_tools_json),
       hooks: JSON.parse(version.hooks_json),
+      triggers: JSON.parse(version.triggers_json),
       created_at: version.created_at,
     },
     version_history: deps.roleVersions.listForRole(role.id),
@@ -226,12 +229,13 @@ export function registerAgentRolesRoutes(
       const versionBumping =
         parsed.data.system_prompt !== undefined ||
         parsed.data.skills !== undefined ||
-        parsed.data.allowed_tools !== undefined;
+        parsed.data.allowed_tools !== undefined ||
+        parsed.data.triggers !== undefined;
       if (!versionBumping && parsed.data.description === undefined) {
         reply.code(400);
         return {
           error:
-            "edit body must include at least one of system_prompt, skills, allowed_tools, description",
+            "edit body must include at least one of system_prompt, skills, allowed_tools, triggers, description",
         };
       }
       const { idOrName } = request.params;
@@ -241,6 +245,14 @@ export function registerAgentRolesRoutes(
       if (role === null || role.workspace_id !== auth.session.workspace_id) {
         reply.code(404);
         return { error: `role not found: ${idOrName}` };
+      }
+      if (
+        parsed.data.triggers !== undefined &&
+        parsed.data.triggers.length > 0 &&
+        !role.persistent
+      ) {
+        reply.code(422);
+        return { error: "triggers are only allowed on persistent roles" };
       }
       if (parsed.data.description !== undefined) {
         deps.roles.updateDescription(role.id, parsed.data.description);
@@ -274,6 +286,9 @@ export function registerAgentRolesRoutes(
           ...(parsed.data.allowed_tools === undefined
             ? {}
             : { allowed_tools: parsed.data.allowed_tools }),
+          ...(parsed.data.triggers === undefined
+            ? {}
+            : { triggers: parsed.data.triggers }),
         };
         const result = editRole(deps.db, role, currentVersion, patch);
         response.version_id = result.version_id;

@@ -431,4 +431,125 @@ describe("clobber CLI — roles edit", () => {
     expect(code).toBe(2);
     expect(s.err()).toMatch(/system-prompt|conflict|both/i);
   });
+
+  it("--triggers JSON sets triggers on a persistent role", async () => {
+    const s = captureStreams();
+    const triggers = [{ kind: "cron", expr: "0 9 * * *" }];
+
+    const code = await run({
+      argv: [
+        "roles",
+        "edit",
+        "manager",
+        "--triggers",
+        JSON.stringify(triggers),
+      ],
+      env: envFor(harness.managerToken),
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(0);
+
+    const row = harness.db
+      .prepare(
+        `SELECT v.triggers_json FROM role_versions v
+         JOIN roles r ON r.current_version_id = v.id
+         WHERE r.name = 'manager' AND r.workspace_id = ?`,
+      )
+      .get(harness.workspaceId) as { triggers_json: string };
+    expect(JSON.parse(row.triggers_json)).toEqual(triggers);
+  });
+
+  it("--triggers-file reads triggers from a JSON file", async () => {
+    const s = captureStreams();
+    const file = join(harness.tmpDir, "triggers.json");
+    const triggers = [{ kind: "webhook", path: "/hooks/triage" }];
+    writeFileSync(file, JSON.stringify(triggers));
+
+    const code = await run({
+      argv: ["roles", "edit", "manager", "--triggers-file", file],
+      env: envFor(harness.managerToken),
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(0);
+
+    const row = harness.db
+      .prepare(
+        `SELECT v.triggers_json FROM role_versions v
+         JOIN roles r ON r.current_version_id = v.id
+         WHERE r.name = 'manager' AND r.workspace_id = ?`,
+      )
+      .get(harness.workspaceId) as { triggers_json: string };
+    expect(JSON.parse(row.triggers_json)).toEqual(triggers);
+  });
+
+  it("--triggers on an ephemeral role surfaces the 422 from the server", async () => {
+    const s = captureStreams();
+    let caught: Error | null = null;
+    try {
+      await run({
+        argv: [
+          "roles",
+          "edit",
+          "worker",
+          "--triggers",
+          '[{"kind":"cron","expr":"0 9 * * *"}]',
+        ],
+        env: envFor(harness.managerToken),
+        stdout: s.stdout,
+        stderr: s.stderr,
+      });
+    } catch (e) {
+      caught = e as Error;
+    }
+    expect(caught).not.toBeNull();
+    expect(caught!.message).toMatch(/persistent/i);
+  });
+
+  it("exits 2 when both --triggers and --triggers-file are passed", async () => {
+    const s = captureStreams();
+    const file = join(harness.tmpDir, "triggers-conflict.json");
+    writeFileSync(file, "[]");
+    const code = await run({
+      argv: [
+        "roles",
+        "edit",
+        "manager",
+        "--triggers",
+        "[]",
+        "--triggers-file",
+        file,
+      ],
+      env: envFor(harness.managerToken),
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(2);
+    expect(s.err()).toMatch(/triggers/i);
+  });
+
+  it("exits 2 when --triggers value is not a JSON array", async () => {
+    const s = captureStreams();
+    const code = await run({
+      argv: ["roles", "edit", "manager", "--triggers", '{"kind":"cron"}'],
+      env: envFor(harness.managerToken),
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(2);
+    expect(s.err()).toMatch(/array/i);
+  });
+
+  it("exits 2 when --triggers value is not valid JSON", async () => {
+    const s = captureStreams();
+    const code = await run({
+      argv: ["roles", "edit", "manager", "--triggers", "not json"],
+      env: envFor(harness.managerToken),
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(2);
+    expect(s.err()).toMatch(/json/i);
+  });
 });

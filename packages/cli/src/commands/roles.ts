@@ -35,6 +35,7 @@ interface RoleDetailResponse {
     readonly skills: readonly RoleSkill[];
     readonly allowed_tools: readonly string[];
     readonly hooks: unknown;
+    readonly triggers: ReadonlyArray<Record<string, unknown>>;
     readonly created_at: number;
   };
   readonly version_history: ReadonlyArray<{
@@ -104,6 +105,20 @@ async function runList(ctx: CommandContext, json: boolean): Promise<number> {
   return 0;
 }
 
+function formatTrigger(t: Record<string, unknown>): string {
+  const kind = t["kind"];
+  if (kind === "cron") return `cron — \`${String(t["expr"])}\``;
+  if (kind === "file-watch") return `file-watch — \`${String(t["glob"])}\``;
+  if (kind === "webhook") return `webhook — \`${String(t["path"])}\``;
+  if (kind === "issue-assigned") {
+    const repo = t["repo"];
+    return repo === undefined
+      ? "issue-assigned"
+      : `issue-assigned — repo \`${String(repo)}\``;
+  }
+  return JSON.stringify(t);
+}
+
 function renderShowMarkdown(role: RoleDetailResponse): string {
   const lines: string[] = [];
   lines.push(`# ${role.name}`);
@@ -126,6 +141,15 @@ function renderShowMarkdown(role: RoleDetailResponse): string {
   lines.push(`## System prompt (version ${role.current_version.version})`);
   lines.push("");
   lines.push(role.current_version.system_prompt.trimEnd());
+  lines.push("");
+  lines.push("## Triggers");
+  if (role.current_version.triggers.length === 0) {
+    lines.push("(none)");
+  } else {
+    for (const t of role.current_version.triggers) {
+      lines.push(`- ${formatTrigger(t)}`);
+    }
+  }
   lines.push("");
   lines.push("## Skills");
   if (role.current_version.skills.length === 0) {
@@ -275,7 +299,7 @@ export const rolesCommand: Command = {
     "  roles list [--json]                          List workspace roles with version metadata.\n" +
     "  roles show <name|id> [--json]                Show full role + current version + history.\n" +
     "  roles fork <source-name|id> <new-name> [--json]  Fork a role into a new editable workspace role.\n" +
-    "  roles edit <name|id> [flags] [--json]        Patch a role; system_prompt/skills/allowed_tools bump version, description does not.\n" +
+    "  roles edit <name|id> [flags] [--json]        Patch a role; system_prompt/skills/allowed_tools/triggers bump version, description does not.\n" +
     "  roles ceiling <name|id> <max> [--json]       Set the spawn ceiling for this role in this workspace.\n\n" +
     "Flags (roles edit):\n" +
     "  --system-prompt-file FILE      Replace system prompt from a file.\n" +
@@ -284,7 +308,9 @@ export const rolesCommand: Command = {
     "  --add-skill name=FILE          Add (or replace) a skill (repeatable).\n" +
     "  --remove-skill name            Remove a skill by name (repeatable).\n" +
     "  --description TEXT             Replace the role description (does not bump version).\n" +
-    "  --description-file FILE        Replace the role description from a file.\n\n" +
+    "  --description-file FILE        Replace the role description from a file.\n" +
+    "  --triggers JSON                Replace triggers (JSON array of trigger objects, persistent roles only).\n" +
+    "  --triggers-file FILE           Replace triggers from a JSON file.\n\n" +
     "Example:\n" +
     "  clobber roles fork worker my-worker\n" +
     "  clobber roles edit my-worker --description \"My experimental worker\"\n\n" +

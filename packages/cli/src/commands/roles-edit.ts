@@ -33,6 +33,8 @@ interface EditFlags {
   readonly removeSkills: readonly string[];
   readonly description?: string;
   readonly descriptionFile?: string;
+  readonly triggersJson?: string;
+  readonly triggersFile?: string;
 }
 
 function parseFlags(args: readonly string[]): EditFlags {
@@ -45,6 +47,8 @@ function parseFlags(args: readonly string[]): EditFlags {
   const removeSkills: string[] = [];
   let description: string | undefined;
   let descriptionFile: string | undefined;
+  let triggersJson: string | undefined;
+  let triggersFile: string | undefined;
 
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i]!;
@@ -128,6 +132,26 @@ function parseFlags(args: readonly string[]): EditFlags {
       i += 1;
       continue;
     }
+    if (arg === "--triggers") {
+      const value = args[i + 1];
+      if (value === undefined) {
+        throw new CliUsageError(
+          "roles edit: --triggers requires a JSON array (e.g. '[{\"kind\":\"cron\",\"expr\":\"0 9 * * *\"}]')",
+        );
+      }
+      triggersJson = value;
+      i += 1;
+      continue;
+    }
+    if (arg === "--triggers-file") {
+      const value = args[i + 1];
+      if (value === undefined) {
+        throw new CliUsageError("roles edit: --triggers-file requires a path");
+      }
+      triggersFile = value;
+      i += 1;
+      continue;
+    }
     if (arg.startsWith("--")) {
       throw new CliUsageError(`roles edit: unknown flag: ${arg}`);
     }
@@ -154,6 +178,11 @@ function parseFlags(args: readonly string[]): EditFlags {
       "roles edit: --description and --description-file both set; pick one source for the description",
     );
   }
+  if (triggersJson !== undefined && triggersFile !== undefined) {
+    throw new CliUsageError(
+      "roles edit: --triggers and --triggers-file both set; pick one source for the triggers",
+    );
+  }
   const hasAnyEdit =
     systemPromptFile !== undefined ||
     systemPromptStdin ||
@@ -161,10 +190,12 @@ function parseFlags(args: readonly string[]): EditFlags {
     addSkills.length > 0 ||
     removeSkills.length > 0 ||
     description !== undefined ||
-    descriptionFile !== undefined;
+    descriptionFile !== undefined ||
+    triggersJson !== undefined ||
+    triggersFile !== undefined;
   if (!hasAnyEdit) {
     throw new CliUsageError(
-      "roles edit: no edits provided (use --system-prompt-file, --system-prompt -, --allowed-tools, --add-skill, --remove-skill, --description, or --description-file)",
+      "roles edit: no edits provided (use --system-prompt-file, --system-prompt -, --allowed-tools, --add-skill, --remove-skill, --description, --description-file, --triggers, or --triggers-file)",
     );
   }
 
@@ -178,6 +209,8 @@ function parseFlags(args: readonly string[]): EditFlags {
     ...(allowedTools === undefined ? {} : { allowedTools }),
     ...(description === undefined ? {} : { description }),
     ...(descriptionFile === undefined ? {} : { descriptionFile }),
+    ...(triggersJson === undefined ? {} : { triggersJson }),
+    ...(triggersFile === undefined ? {} : { triggersFile }),
   };
   return flags;
 }
@@ -210,6 +243,27 @@ async function buildPatch(
     patch["description"] = flags.description;
   } else if (flags.descriptionFile !== undefined) {
     patch["description"] = readFileSync(flags.descriptionFile, "utf8");
+  }
+
+  if (flags.triggersJson !== undefined || flags.triggersFile !== undefined) {
+    const raw =
+      flags.triggersJson !== undefined
+        ? flags.triggersJson
+        : readFileSync(flags.triggersFile!, "utf8");
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (e) {
+      throw new CliUsageError(
+        `roles edit: --triggers value is not valid JSON: ${(e as Error).message}`,
+      );
+    }
+    if (!Array.isArray(parsed)) {
+      throw new CliUsageError(
+        "roles edit: --triggers must be a JSON array of trigger objects",
+      );
+    }
+    patch["triggers"] = parsed;
   }
 
   if (flags.addSkills.length > 0 || flags.removeSkills.length > 0) {

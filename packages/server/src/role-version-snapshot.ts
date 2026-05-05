@@ -8,6 +8,7 @@ export interface RoleVersionSnapshot {
   readonly skills_json: string;
   readonly allowed_tools_json: string;
   readonly hooks_json: string;
+  readonly triggers_json: string;
 }
 
 export interface SnapshotInputs {
@@ -28,6 +29,7 @@ export function snapshotShippedBundle(inputs: SnapshotInputs): RoleVersionSnapsh
     skills_json: JSON.stringify(skills),
     allowed_tools_json: JSON.stringify(allowedTools),
     hooks_json,
+    triggers_json: "[]",
   };
 }
 

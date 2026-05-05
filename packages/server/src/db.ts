@@ -42,6 +42,7 @@ const SCHEMA = `
     skills_json        TEXT    NOT NULL,
     allowed_tools_json TEXT    NOT NULL,
     hooks_json         TEXT    NOT NULL,
+    triggers_json      TEXT    NOT NULL DEFAULT '[]',
     created_at         INTEGER NOT NULL,
     UNIQUE (role_id, version),
     FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
