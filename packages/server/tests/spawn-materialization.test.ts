@@ -149,7 +149,7 @@ describe("POST /spawn — manager bundle materialization", () => {
     await teardown(h);
   });
 
-  it("returns 422 and does not spawn when the role has no bundle on disk (#21)", async () => {
+  it("returns 422 and does not spawn when the role has no current version (#21)", async () => {
     const h = buildHarness();
     const ws = h.workspaces.create({ name: "ws", repo_path: repoPath });
     const role = h.roles.create({ name: "no-bundle-here", persistent: false });
@@ -162,7 +162,7 @@ describe("POST /spawn — manager bundle materialization", () => {
     });
     expect(res.statusCode).toBe(422);
     const body = res.json() as { error: string; role: string };
-    expect(body.error).toMatch(/bundle/i);
+    expect(body.error).toMatch(/current version/i);
     expect(body.role).toBe("no-bundle-here");
 
     expect(existsSync(join(repoPath, ".claude"))).toBe(false);

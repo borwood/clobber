@@ -56,7 +56,7 @@ export interface SpawnPipelineCapacityError {
 export interface SpawnPipelineNoBundleError {
   readonly ok: false;
   readonly status: 422;
-  readonly error: "role has no bundle on disk";
+  readonly error: "role has no current version";
   readonly role: string;
 }
 
@@ -84,7 +84,7 @@ export function executeSpawn(
     return {
       ok: false,
       status: 422,
-      error: "role has no bundle on disk",
+      error: "role has no current version",
       role: role.name,
     };
   }

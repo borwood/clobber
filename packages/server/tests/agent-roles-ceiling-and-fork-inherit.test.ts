@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { makeRepoFixture, type RepoFixture } from "./repo-fixture.ts";
 import { createServer } from "../src/server.ts";
@@ -161,7 +163,7 @@ describe("forkRole inherits source ceiling so the fork is not stuck at capacity 
     await teardown(h);
   });
 
-  it("a freshly forked role does not return 'role at capacity' on spawn (capacity check passes)", async () => {
+  it("spawning a freshly forked role succeeds and materializes the plugin tree from DB-only state", async () => {
     const h = buildHarness();
     const boot = await bootInWorkspace(h);
 
@@ -182,7 +184,27 @@ describe("forkRole inherits source ceiling so the fork is not stuck at capacity 
         prompt: "hello",
       },
     });
-    expect(spawnRes.statusCode).not.toBe(403);
+    expect(spawnRes.statusCode).toBe(200);
+
+    const auditorPluginDir = join(repo.path, ".clobber", "roles", "auditor");
+    const pluginJsonPath = join(auditorPluginDir, ".claude-plugin", "plugin.json");
+    expect(existsSync(pluginJsonPath)).toBe(true);
+    const pluginJson = JSON.parse(readFileSync(pluginJsonPath, "utf8")) as {
+      name: string;
+    };
+    expect(pluginJson.name).toBe("auditor");
+
+    const hooksPath = join(auditorPluginDir, "hooks", "hooks.json");
+    expect(existsSync(hooksPath)).toBe(true);
+    const hooksRaw = readFileSync(hooksPath, "utf8");
+    expect(hooksRaw).not.toContain("__CLOBBER_HOOK_URL__");
+    expect(hooksRaw).toContain("http://test.invalid/hook");
+
+    for (const skill of ["whoami", "ask", "status"]) {
+      expect(
+        existsSync(join(auditorPluginDir, "skills", skill, "SKILL.md")),
+      ).toBe(true);
+    }
 
     await teardown(h);
   });

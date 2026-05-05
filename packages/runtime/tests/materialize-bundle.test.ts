@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { mkdtempSync, rmSync, readFileSync, existsSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { managerRole, materializeBundle } from "../src/index.ts";
+import { materializeBundle, type RoleBundleData } from "../src/index.ts";
 
 let repoPath: string;
 
@@ -14,10 +14,31 @@ afterEach(() => {
   rmSync(repoPath, { recursive: true, force: true });
 });
 
+const HOOKS_TEMPLATE = JSON.stringify({
+  hooks: {
+    SessionStart: [
+      { hooks: [{ type: "http", url: "__CLOBBER_HOOK_URL__", async: false }] },
+    ],
+  },
+});
+
+const sampleBundle: RoleBundleData = {
+  pluginName: "manager",
+  description: "Permanent inhabitant of a workspace.",
+  systemPrompt: "You are the manager.",
+  skills: [
+    { name: "whoami", body: "# whoami\n\nRun `clobber whoami`." },
+    { name: "spawn", body: "# spawn\n\nUse to start workers." },
+    { name: "ask", body: "# ask\n\nAsk the user." },
+    { name: "status", body: "# status\n\nReport status." },
+  ],
+  hooksJson: HOOKS_TEMPLATE,
+};
+
 describe("materializeBundle", () => {
   it("writes the role plugin tree under <repo>/.clobber/roles/<role>/", () => {
     const result = materializeBundle({
-      bundle: managerRole,
+      bundle: sampleBundle,
       repoPath,
       hookUrl: "http://127.0.0.1:3300/hook",
       cliEntry: "/abs/cli/index.ts",
@@ -34,9 +55,24 @@ describe("materializeBundle", () => {
     expect(whoami).toContain("clobber whoami");
   });
 
+  it("plugin.json carries the bundle's pluginName so forks materialize under their own name", () => {
+    const result = materializeBundle({
+      bundle: { ...sampleBundle, pluginName: "auditor" },
+      repoPath,
+      hookUrl: "http://x/hook",
+      cliEntry: "/abs/cli/index.ts",
+    });
+
+    expect(result.pluginDir).toBe(join(repoPath, ".clobber", "roles", "auditor"));
+    const manifest = JSON.parse(
+      readFileSync(join(result.pluginDir, ".claude-plugin", "plugin.json"), "utf8"),
+    ) as { name: string };
+    expect(manifest.name).toBe("auditor");
+  });
+
   it("never writes anything under <repo>/.claude/", () => {
     materializeBundle({
-      bundle: managerRole,
+      bundle: sampleBundle,
       repoPath,
       hookUrl: "http://127.0.0.1:3300/hook",
       cliEntry: "/abs/cli/index.ts",
@@ -46,7 +82,7 @@ describe("materializeBundle", () => {
 
   it("substitutes __CLOBBER_HOOK_URL__ in the materialized hooks/hooks.json", () => {
     const result = materializeBundle({
-      bundle: managerRole,
+      bundle: sampleBundle,
       repoPath,
       hookUrl: "http://127.0.0.1:3300/hook",
       cliEntry: "/abs/cli/index.ts",
@@ -62,7 +98,7 @@ describe("materializeBundle", () => {
 
   it("creates a per-bundle bin dir with an executable `clobber` shim that points at the cli entry", () => {
     const result = materializeBundle({
-      bundle: managerRole,
+      bundle: sampleBundle,
       repoPath,
       hookUrl: "http://x/hook",
       cliEntry: "/abs/cli/index.ts",
@@ -78,13 +114,13 @@ describe("materializeBundle", () => {
 
   it("is idempotent — running twice does not throw and leaves files in place", () => {
     materializeBundle({
-      bundle: managerRole,
+      bundle: sampleBundle,
       repoPath,
       hookUrl: "http://x/hook",
       cliEntry: "/abs/cli/index.ts",
     });
     materializeBundle({
-      bundle: managerRole,
+      bundle: sampleBundle,
       repoPath,
       hookUrl: "http://x/hook",
       cliEntry: "/abs/cli/index.ts",

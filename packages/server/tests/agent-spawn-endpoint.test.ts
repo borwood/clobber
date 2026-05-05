@@ -231,7 +231,7 @@ describe("POST /agent/spawn", () => {
     await teardown(h);
   });
 
-  it("returns 422 when the role exists but has no bundle on disk (#21)", async () => {
+  it("returns 422 when the role exists but has no current version (#21)", async () => {
     const h = buildHarness();
     const boot = await bootManager(h);
     const callsBefore = h.calls.length;
@@ -243,7 +243,7 @@ describe("POST /agent/spawn", () => {
     });
     expect(res.statusCode).toBe(422);
     const body = res.json() as { error: string; role: string };
-    expect(body.error).toMatch(/bundle/i);
+    expect(body.error).toMatch(/current version/i);
     expect(body.role).toBe("ghost-role");
     expect(h.calls.length).toBe(callsBefore);
     expect(h.sessions.countActive(boot.workspaceId, boot.ghostRoleId)).toBe(0);

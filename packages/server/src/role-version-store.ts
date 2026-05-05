@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { Database } from "bun:sqlite";
-import { loadRoleBundle, type LoadedRole } from "@clobber/runtime";
+import type { RoleBundleData } from "@clobber/runtime";
 import {
+  RoleSkillSchema,
   RoleVersionSchema,
   type RoleVersion,
 } from "@clobber/shared";
+import { z } from "zod";
 
 export interface CreateRoleVersionInput {
   readonly role_id: string;
@@ -25,7 +27,7 @@ export interface RoleVersionStore {
   create(input: CreateRoleVersionInput): RoleVersion;
   get(id: string): RoleVersion | null;
   listForRole(roleId: string): RoleVersionSummary[];
-  loadAsBundle(id: string): LoadedRole | null;
+  loadAsBundle(id: string): RoleBundleData | null;
 }
 
 interface Row {
@@ -38,6 +40,13 @@ interface Row {
   hooks_json: string;
   created_at: number;
 }
+
+interface RoleNameDescriptionRow {
+  name: string;
+  description: string | null;
+}
+
+const SkillsArraySchema = z.array(RoleSkillSchema);
 
 function rowToVersion(row: Row): RoleVersion {
   return RoleVersionSchema.parse({
@@ -62,8 +71,8 @@ export function createRoleVersionStore(db: Database): RoleVersionStore {
   const listForRoleStmt = db.prepare(
     "SELECT id, version, created_at FROM role_versions WHERE role_id = ? ORDER BY version DESC",
   );
-  const getRoleNameStmt = db.prepare(
-    "SELECT name FROM roles WHERE id = ?",
+  const getRoleStmt = db.prepare(
+    "SELECT name, description FROM roles WHERE id = ?",
   );
 
   return {
@@ -96,19 +105,22 @@ export function createRoleVersionStore(db: Database): RoleVersionStore {
       const row = getStmt.get(id) as Row | null;
       if (row === null) return null;
 
-      const roleNameRow = getRoleNameStmt.get(row.role_id) as
-        | { name: string }
+      const roleRow = getRoleStmt.get(row.role_id) as
+        | RoleNameDescriptionRow
         | null;
-      if (roleNameRow === null) return null;
+      if (roleRow === null) return null;
 
-      const shipped = loadRoleBundle(roleNameRow.name);
-      if (shipped === null) return null;
-
-      return {
-        bundleRoot: shipped.bundleRoot,
-        manifest: shipped.manifest,
+      const skills = SkillsArraySchema.parse(JSON.parse(row.skills_json));
+      const data: RoleBundleData = {
+        pluginName: roleRow.name,
+        ...(roleRow.description === null
+          ? {}
+          : { description: roleRow.description }),
         systemPrompt: row.system_prompt,
+        skills,
+        hooksJson: row.hooks_json,
       };
+      return data;
     },
   };
 }

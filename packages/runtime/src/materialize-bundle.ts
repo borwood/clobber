@@ -1,17 +1,17 @@
-import {
-  chmodSync,
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { PLUGIN_HOOKS_REL, type LoadedRole } from "./role-manifest/index.ts";
+import type { RoleSkill } from "@clobber/shared";
+
+export interface RoleBundleData {
+  readonly pluginName: string;
+  readonly description?: string;
+  readonly systemPrompt: string;
+  readonly skills: readonly RoleSkill[];
+  readonly hooksJson: string;
+}
 
 export interface MaterializeBundleOptions {
-  readonly bundle: LoadedRole;
+  readonly bundle: RoleBundleData;
   readonly repoPath: string;
   readonly hookUrl: string;
   readonly cliEntry: string;
@@ -23,23 +23,15 @@ export interface MaterializedBundle {
 }
 
 const HOOK_URL_PLACEHOLDER = "__CLOBBER_HOOK_URL__";
+const PLUGIN_VERSION = "0.0.1";
 
 export function materializeBundle(opts: MaterializeBundleOptions): MaterializedBundle {
-  const role = opts.bundle.manifest.name;
+  const { bundle } = opts;
+  const pluginDir = join(opts.repoPath, ".clobber", "roles", bundle.pluginName);
 
-  const srcPluginRoot = join(
-    opts.bundle.bundleRoot,
-    opts.bundle.manifest.pluginTemplatePath,
-  );
-  const pluginDir = join(opts.repoPath, ".clobber", "roles", role);
-  copyTree(srcPluginRoot, pluginDir);
-
-  const hooksAbs = join(pluginDir, PLUGIN_HOOKS_REL);
-  if (existsSync(hooksAbs)) {
-    const raw = readFileSync(hooksAbs, "utf8");
-    const substituted = raw.split(HOOK_URL_PLACEHOLDER).join(opts.hookUrl);
-    writeFileSync(hooksAbs, substituted);
-  }
+  writePluginManifest(pluginDir, bundle);
+  writeHooks(pluginDir, bundle.hooksJson, opts.hookUrl);
+  writeSkills(pluginDir, bundle.skills);
 
   const binDir = join(opts.repoPath, ".clobber", "bin");
   mkdirSync(binDir, { recursive: true });
@@ -51,18 +43,34 @@ export function materializeBundle(opts: MaterializeBundleOptions): MaterializedB
   return { pluginDir, binDir };
 }
 
-function copyTree(src: string, dest: string): void {
-  mkdirSync(dest, { recursive: true });
-  for (const entry of readdirSync(src, { withFileTypes: true })) {
-    const s = join(src, entry.name);
-    const d = join(dest, entry.name);
-    if (entry.isDirectory()) {
-      copyTree(s, d);
-    } else if (entry.isFile()) {
-      copyFileSync(s, d);
-    } else {
-      throw new Error(`unsupported file type in plugin template: ${s}`);
-    }
+function writePluginManifest(pluginDir: string, bundle: RoleBundleData): void {
+  const manifestDir = join(pluginDir, ".claude-plugin");
+  mkdirSync(manifestDir, { recursive: true });
+  const manifest: Record<string, string> = {
+    name: bundle.pluginName,
+    version: PLUGIN_VERSION,
+  };
+  if (bundle.description !== undefined) manifest["description"] = bundle.description;
+  writeFileSync(
+    join(manifestDir, "plugin.json"),
+    `${JSON.stringify(manifest, null, 2)}\n`,
+  );
+}
+
+function writeHooks(pluginDir: string, hooksJson: string, hookUrl: string): void {
+  const hooksDir = join(pluginDir, "hooks");
+  mkdirSync(hooksDir, { recursive: true });
+  const substituted = hooksJson.split(HOOK_URL_PLACEHOLDER).join(hookUrl);
+  writeFileSync(join(hooksDir, "hooks.json"), substituted);
+}
+
+function writeSkills(pluginDir: string, skills: readonly RoleSkill[]): void {
+  const skillsDir = join(pluginDir, "skills");
+  mkdirSync(skillsDir, { recursive: true });
+  for (const skill of skills) {
+    const skillDir = join(skillsDir, skill.name);
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(join(skillDir, "SKILL.md"), skill.body);
   }
 }
 

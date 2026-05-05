@@ -162,7 +162,7 @@ describe("backfill on createDatabase (#23)", () => {
 });
 
 describe("loadAsBundle (#23)", () => {
-  it("returns a LoadedRole-shaped value with systemPrompt sourced from the DB row", () => {
+  it("returns a RoleBundleData with systemPrompt and skills sourced entirely from the DB row", () => {
     const db = createDatabase(":memory:");
     const roles = createRoleStore(db);
     const versions = createRoleVersionStore(db);
@@ -177,8 +177,10 @@ describe("loadAsBundle (#23)", () => {
 
     const loaded = versions.loadAsBundle(versionId)!;
     expect(loaded.systemPrompt).toBe("MUTATED-VIA-DB");
-    expect(loaded.manifest.name).toBe("manager");
-    expect(typeof loaded.bundleRoot).toBe("string");
+    expect(loaded.pluginName).toBe("manager");
+    expect(Array.isArray(loaded.skills)).toBe(true);
+    expect(loaded.skills.length).toBeGreaterThan(0);
+    expect(typeof loaded.hooksJson).toBe("string");
 
     db.close();
   });
