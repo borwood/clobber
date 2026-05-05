@@ -39,6 +39,28 @@ export interface SessionSummary {
   readonly busy?: boolean;
 }
 
+export interface OfficePeek {
+  readonly file_count: number;
+  readonly latest: {
+    readonly name: string;
+    readonly mtime_ms: number;
+    readonly preview: string;
+  } | null;
+}
+
+export interface PersistentAgentCard {
+  readonly agent_id: string;
+  readonly label: string | null;
+  readonly role: { readonly id: string; readonly name: string };
+  readonly active_session: {
+    readonly id: string;
+    readonly started_at: number;
+    readonly busy: boolean;
+  } | null;
+  readonly last_started_at: number | null;
+  readonly office: OfficePeek;
+}
+
 export interface SpawnRequest {
   readonly workspace_id: string;
   readonly role_id: string;
@@ -92,6 +114,15 @@ export const api = {
       `/workspaces/${encodeURIComponent(workspaceId)}/roles`,
     ),
   spawn: (req: SpawnRequest) => postJson<SpawnResponse>("/spawn", req),
+  listPersistentAgents: (workspaceId: string) =>
+    getJson<{ agents: PersistentAgentCard[] }>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/persistent-agents`,
+    ),
+  wakePersistentAgent: (agentId: string) =>
+    postJson<SpawnResponse>(
+      `/persistent-agents/${encodeURIComponent(agentId)}/wake`,
+      {},
+    ),
   getTranscript: (sessionId: string) =>
     getJson<TranscriptLine[]>(`/sessions/${encodeURIComponent(sessionId)}/transcript`),
   endSession: (sessionId: string) =>

@@ -9,6 +9,7 @@ import { registerWorkspaceRoleRoutes } from "./routes/workspace-roles.ts";
 import { registerAgentRoutes } from "./routes/agent.ts";
 import { registerAgentRolesRoutes } from "./routes/agent-roles.ts";
 import { registerAgentAskRoutes } from "./routes/agent-ask.ts";
+import { registerPersistentAgentsRoutes } from "./routes/persistent-agents.ts";
 import { createAgentRegistry } from "./agent-registry.ts";
 import { createTriggerScheduler } from "./trigger-scheduler.ts";
 import { attachSessionToAgent, type SpawnPipelineDeps } from "./spawn-pipeline.ts";
@@ -98,6 +99,14 @@ export function createServer(opts: ServerOptions): FastifyInstance {
   registerWorkspaceRoutes(app, {
     db: opts.db,
     workspaces: opts.workspaces,
+  });
+  registerPersistentAgentsRoutes(app, {
+    workspaces: opts.workspaces,
+    agents: opts.agents,
+    roles: opts.roles,
+    sessions: opts.sessions,
+    registry,
+    spawnPipelineDeps,
   });
   registerRoleRoutes(app, { roles: opts.roles });
   registerWorkspaceRoleRoutes(app, {

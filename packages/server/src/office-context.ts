@@ -20,7 +20,10 @@ function listNotes(officeDir: string): readonly NoteEntry[] {
     const stat = statSync(join(officeDir, e.name));
     notes.push({ name: e.name, mtimeMs: stat.mtimeMs });
   }
-  notes.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  notes.sort((a, b) => {
+    if (a.mtimeMs !== b.mtimeMs) return b.mtimeMs - a.mtimeMs;
+    return a.name < b.name ? 1 : a.name > b.name ? -1 : 0;
+  });
   return notes;
 }
 

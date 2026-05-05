@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   api,
+  type PersistentAgentCard,
   type SessionSummary,
   type TranscriptLine,
   type Workspace,
@@ -14,8 +15,17 @@ import { WorkspaceSwitcher } from "./components/WorkspaceSwitcher.tsx";
 import { RolePicker } from "./components/RolePicker.tsx";
 import { PromptComposer } from "./components/PromptComposer.tsx";
 import { AskWidget } from "./components/AskWidget.tsx";
+import { WhiteboardView } from "./components/WhiteboardView.tsx";
+import { ViewSwitcher, type WorkspaceView } from "./components/ViewSwitcher.tsx";
 
 const POLL_MS = 1000;
+const VIEW_STORAGE_KEY = "clobber:workspace-view";
+
+function readStoredView(): WorkspaceView {
+  if (typeof localStorage === "undefined") return "mailbox";
+  const raw = localStorage.getItem(VIEW_STORAGE_KEY);
+  return raw === "whiteboard" ? "whiteboard" : "mailbox";
+}
 
 export function App() {
   const [workspaces, setWorkspaces] = useState<readonly Workspace[]>([]);
@@ -28,6 +38,16 @@ export function App() {
   const [transcript, setTranscript] = useState<readonly TranscriptLine[]>([]);
   const [showSystem, setShowSystem] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [view, setView] = useState<WorkspaceView>(() => readStoredView());
+  const [persistentAgents, setPersistentAgents] = useState<readonly PersistentAgentCard[]>([]);
+  const [now, setNow] = useState(() => Date.now());
+  const [wakingAgents, setWakingAgents] = useState<ReadonlySet<string>>(() => new Set());
+
+  function persistView(next: WorkspaceView): void {
+    setView(next);
+    if (typeof localStorage !== "undefined") localStorage.setItem(VIEW_STORAGE_KEY, next);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -103,6 +123,32 @@ export function App() {
   }, [workspaceId]);
 
   useEffect(() => {
+    setPersistentAgents([]);
+    if (workspaceId === null || view !== "whiteboard") return;
+    let cancelled = false;
+    async function tick() {
+      try {
+        const next = await api.listPersistentAgents(workspaceId!);
+        if (!cancelled) setPersistentAgents(next.agents);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+      }
+    }
+    void tick();
+    const id = setInterval(() => void tick(), POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [workspaceId, view]);
+
+  useEffect(() => {
+    if (view !== "whiteboard") return;
+    const id = setInterval(() => setNow(Date.now()), POLL_MS);
+    return () => clearInterval(id);
+  }, [view]);
+
+  useEffect(() => {
     if (selectedSession === null) {
       setTranscript([]);
       return;
@@ -140,9 +186,12 @@ export function App() {
         <span className="text-zinc-500 text-sm">
           {sessions.length} session{sessions.length === 1 ? "" : "s"}
         </span>
-        {error !== null && (
-          <span className="ml-auto text-red-400 text-xs font-mono">{error}</span>
-        )}
+        <div className="ml-auto flex items-center gap-3">
+          <ViewSwitcher value={view} onChange={persistView} />
+          {error !== null && (
+            <span className="text-red-400 text-xs font-mono">{error}</span>
+          )}
+        </div>
       </header>
 
       <main className="flex-1 grid grid-cols-[18rem_minmax(0,1fr)_22rem] gap-0 overflow-hidden">
@@ -165,12 +214,113 @@ export function App() {
         </aside>
 
         <section className="flex flex-col overflow-hidden">
-          {(() => {
-            const selected =
-              selectedSession === null
-                ? undefined
-                : sessions.find((s) => s.session_id === selectedSession);
-            if (selected === undefined) {
+          {view === "whiteboard" ? (
+            <WhiteboardView
+              agents={persistentAgents}
+              now={now}
+              busyAgentIds={wakingAgents}
+              onOpenSession={(sessionId) => {
+                persistView("mailbox");
+                setSelectedSession(sessionId);
+              }}
+              onWake={async (agentId) => {
+                setWakingAgents((prev) => {
+                  const next = new Set(prev);
+                  next.add(agentId);
+                  return next;
+                });
+                try {
+                  const result = await api.wakePersistentAgent(agentId);
+                  persistView("mailbox");
+                  setSelectedSession(result.session_id);
+                  if (workspaceId !== null) {
+                    setSessions(await api.listSessions(workspaceId));
+                  }
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : String(e));
+                } finally {
+                  setWakingAgents((prev) => {
+                    const next = new Set(prev);
+                    next.delete(agentId);
+                    return next;
+                  });
+                }
+              }}
+            />
+          ) : (
+            <MailboxContent
+              sessions={sessions}
+              selectedSession={selectedSession}
+              transcript={transcript}
+              showSystem={showSystem}
+              setShowSystem={setShowSystem}
+              workspaceId={workspaceId}
+              setSessions={setSessions}
+              setTranscript={setTranscript}
+            />
+          )}
+        </section>
+
+        <aside className="border-l border-zinc-800 flex flex-col overflow-hidden">
+          {workspaceId === null ? (
+            <p className="text-sm text-zinc-500 p-4">
+              Create or select a workspace to spawn agents.
+            </p>
+          ) : (
+            <>
+              <div className="flex flex-col min-h-0 flex-1 p-4 pb-2 gap-2">
+                <h2 className="text-sm uppercase tracking-wider text-zinc-500 shrink-0">role</h2>
+                <RolePicker
+                  assignments={assignments}
+                  selectedRoleId={roleId}
+                  onSelect={setRoleId}
+                />
+              </div>
+              <div className="border-t border-zinc-800 p-4 shrink-0 max-h-[60vh] overflow-y-auto">
+                <SpawnPanel
+                  workspaceId={workspaceId}
+                  roleId={roleId}
+                  onSpawned={(s) => setSelectedSession(s.session_id)}
+                />
+              </div>
+            </>
+          )}
+        </aside>
+      </main>
+    </div>
+  );
+}
+
+interface MailboxContentProps {
+  readonly sessions: readonly SessionSummary[];
+  readonly selectedSession: string | null;
+  readonly transcript: readonly TranscriptLine[];
+  readonly showSystem: boolean;
+  readonly setShowSystem: (b: boolean) => void;
+  readonly workspaceId: string | null;
+  readonly setSessions: (s: readonly SessionSummary[]) => void;
+  readonly setTranscript: (t: readonly TranscriptLine[]) => void;
+}
+
+function MailboxContent(props: MailboxContentProps) {
+  const {
+    sessions,
+    selectedSession,
+    transcript,
+    showSystem,
+    setShowSystem,
+    workspaceId,
+    setSessions,
+    setTranscript,
+  } = props;
+  return (
+    <>
+      {(() => {
+        const selected =
+          selectedSession === null
+            ? undefined
+            : sessions.find((s) => s.session_id === selectedSession);
+        if (selected === undefined) {
               return (
                 <div className="flex items-center px-6 py-3 shrink-0">
                   <h2 className="text-sm uppercase tracking-wider text-zinc-500">
@@ -245,34 +395,6 @@ export function App() {
               </>
             );
           })()}
-        </section>
-
-        <aside className="border-l border-zinc-800 flex flex-col overflow-hidden">
-          {workspaceId === null ? (
-            <p className="text-sm text-zinc-500 p-4">
-              Create or select a workspace to spawn agents.
-            </p>
-          ) : (
-            <>
-              <div className="flex flex-col min-h-0 flex-1 p-4 pb-2 gap-2">
-                <h2 className="text-sm uppercase tracking-wider text-zinc-500 shrink-0">role</h2>
-                <RolePicker
-                  assignments={assignments}
-                  selectedRoleId={roleId}
-                  onSelect={setRoleId}
-                />
-              </div>
-              <div className="border-t border-zinc-800 p-4 shrink-0 max-h-[60vh] overflow-y-auto">
-                <SpawnPanel
-                  workspaceId={workspaceId}
-                  roleId={roleId}
-                  onSpawned={(s) => setSelectedSession(s.session_id)}
-                />
-              </div>
-            </>
-          )}
-        </aside>
-      </main>
-    </div>
+    </>
   );
 }
