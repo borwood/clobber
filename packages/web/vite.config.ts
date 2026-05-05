@@ -13,6 +13,7 @@ export default defineConfig({
       "/sessions": "http://127.0.0.1:3300",
       "/spawn": "http://127.0.0.1:3300",
       "/workspaces": "http://127.0.0.1:3300",
+      "/persistent-agents": "http://127.0.0.1:3300",
       "/roles": "http://127.0.0.1:3300",
     },
   },
