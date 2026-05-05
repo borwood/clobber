@@ -14,7 +14,6 @@ clobber status <state> "<summary>"
 - **working** — actively doing the task. This is your default while in motion.
 - **blocked** — can't make progress without input. Pair with `clobber ask` if
   you genuinely need a human decision.
-- **idle** — paused, awaiting more guidance from the manager.
 - **done** — your task is finished. Pair this with one final summary line; the
   manager picks up from there.
 

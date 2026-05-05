@@ -95,7 +95,12 @@ interface AgentCard {
   agent_id: string;
   label: string | null;
   role: { id: string; name: string };
-  active_session: { id: string; started_at: number; busy: boolean } | null;
+  active_session: {
+    id: string;
+    started_at: number;
+    busy: boolean;
+    latest_status: { state: string; summary: string; updated_at: number } | null;
+  } | null;
   last_started_at: number | null;
   office: {
     file_count: number;
@@ -200,6 +205,78 @@ describe("GET /workspaces/:id/persistent-agents", () => {
     expect(typeof body.agents[0]!.active_session!.started_at).toBe("number");
     // The session was created without going through the registry, so busy=false.
     expect(body.agents[0]!.active_session!.busy).toBe(false);
+
+    await teardown(h);
+  });
+
+  it("includes the agent's self-reported latest_status on the active session", async () => {
+    const h = buildHarness();
+    const ws = h.workspaces.create({ name: "ws", repo_path: repoPath });
+    const role = h.roles.create({ name: "manager", persistent: true });
+    h.workspaceRoles.setCeiling(ws.id, role.id, 5);
+
+    const agent = h.agents.create({
+      workspace_id: ws.id,
+      role_id: role.id,
+      label: "boot",
+    });
+    h.sessions.create({
+      id: "session-with-status",
+      agent_id: agent.id,
+      workspace_id: ws.id,
+      role_id: role.id,
+      pid: 7777,
+    });
+    const statuses = createAgentStatusStore(h.db);
+    statuses.upsert({
+      session_id: "session-with-status",
+      state: "blocked",
+      summary: "waiting on schema decision for triggers",
+    });
+
+    const res = await h.server.inject({
+      method: "GET",
+      url: `/workspaces/${ws.id}/persistent-agents`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { agents: AgentCard[] };
+    const card = body.agents[0]!;
+    expect(card.active_session).not.toBeNull();
+    expect(card.active_session!.latest_status).not.toBeNull();
+    expect(card.active_session!.latest_status!.state).toBe("blocked");
+    expect(card.active_session!.latest_status!.summary).toBe(
+      "waiting on schema decision for triggers",
+    );
+
+    await teardown(h);
+  });
+
+  it("returns latest_status: null when an active session has no self-report yet", async () => {
+    const h = buildHarness();
+    const ws = h.workspaces.create({ name: "ws", repo_path: repoPath });
+    const role = h.roles.create({ name: "manager", persistent: true });
+    h.workspaceRoles.setCeiling(ws.id, role.id, 5);
+
+    const agent = h.agents.create({
+      workspace_id: ws.id,
+      role_id: role.id,
+      label: "boot",
+    });
+    h.sessions.create({
+      id: "session-no-status",
+      agent_id: agent.id,
+      workspace_id: ws.id,
+      role_id: role.id,
+      pid: 7777,
+    });
+
+    const res = await h.server.inject({
+      method: "GET",
+      url: `/workspaces/${ws.id}/persistent-agents`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { agents: AgentCard[] };
+    expect(body.agents[0]!.active_session!.latest_status).toBeNull();
 
     await teardown(h);
   });

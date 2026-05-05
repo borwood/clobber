@@ -106,6 +106,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     roles: opts.roles,
     sessions: opts.sessions,
     registry,
+    agentStatuses: opts.agentStatuses,
     spawnPipelineDeps,
   });
   registerRoleRoutes(app, { roles: opts.roles });

@@ -3,7 +3,6 @@ import type { AgentState, SessionSummary } from "../api.ts";
 export const STATE_DOT: Record<AgentState, string> = {
   working: "bg-emerald-500",
   blocked: "bg-amber-500",
-  idle: "bg-sky-500",
   done: "bg-zinc-500",
 };
 
@@ -26,12 +25,6 @@ export const STATE_CARD: Record<AgentState, CardTone> = {
     hover: "hover:bg-amber-900/60",
     selected: "bg-amber-900/70",
     accent: "border-l-amber-500",
-  },
-  idle: {
-    base: "bg-sky-950/60",
-    hover: "hover:bg-sky-900/60",
-    selected: "bg-sky-900/70",
-    accent: "border-l-sky-500",
   },
   done: {
     base: "bg-zinc-900/80",

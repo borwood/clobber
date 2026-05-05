@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const AGENT_STATES = ["working", "blocked", "idle", "done"] as const;
+export const AGENT_STATES = ["working", "blocked", "done"] as const;
 
 export const AgentStateSchema = z.enum(AGENT_STATES);
 export type AgentState = z.infer<typeof AgentStateSchema>;

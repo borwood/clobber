@@ -197,7 +197,7 @@ describe("clobber CLI — status", () => {
   it("exits 2 when summary is missing", async () => {
     const s = captureStreams();
     const code = await run({
-      argv: ["status", "idle"],
+      argv: ["status", "working"],
       env: env(),
       stdout: s.stdout,
       stderr: s.stderr,

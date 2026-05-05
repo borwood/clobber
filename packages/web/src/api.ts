@@ -56,6 +56,7 @@ export interface PersistentAgentCard {
     readonly id: string;
     readonly started_at: number;
     readonly busy: boolean;
+    readonly latest_status: LatestAgentStatus | null;
   } | null;
   readonly last_started_at: number | null;
   readonly office: OfficePeek;

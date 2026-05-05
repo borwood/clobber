@@ -1,9 +1,11 @@
 import type { FastifyInstance } from "fastify";
+import type { LatestAgentStatus } from "@clobber/shared";
 import type { WorkspaceStore } from "../workspace-store.ts";
 import type { AgentStore } from "../agent-store.ts";
 import type { RoleStore } from "../role-store.ts";
 import type { SessionStore } from "../session-store.ts";
 import type { AgentRegistry } from "../agent-registry.ts";
+import type { AgentStatusStore } from "../agent-status-store.ts";
 import { officePathFor } from "../office-store.ts";
 import { peekOffice, type OfficePeek } from "../office-peek.ts";
 import { attachSessionToAgent, type SpawnPipelineDeps } from "../spawn-pipeline.ts";
@@ -12,11 +14,18 @@ interface IdParam {
   id: string;
 }
 
+interface ActiveSession {
+  id: string;
+  started_at: number;
+  busy: boolean;
+  latest_status: LatestAgentStatus | null;
+}
+
 interface AgentCard {
   agent_id: string;
   label: string | null;
   role: { id: string; name: string };
-  active_session: { id: string; started_at: number; busy: boolean } | null;
+  active_session: ActiveSession | null;
   last_started_at: number | null;
   office: OfficePeek;
 }
@@ -27,6 +36,7 @@ export interface PersistentAgentsRouteDeps {
   readonly roles: RoleStore;
   readonly sessions: SessionStore;
   readonly registry: AgentRegistry;
+  readonly agentStatuses: AgentStatusStore;
   readonly spawnPipelineDeps: SpawnPipelineDeps;
 }
 
@@ -37,7 +47,7 @@ export function registerPersistentAgentsRoutes(
   app: FastifyInstance,
   deps: PersistentAgentsRouteDeps,
 ): void {
-  const { workspaces, agents, roles, sessions, registry, spawnPipelineDeps } = deps;
+  const { workspaces, agents, roles, sessions, registry, agentStatuses, spawnPipelineDeps } = deps;
 
   app.get<{ Params: IdParam }>(
     "/workspaces/:id/persistent-agents",
@@ -60,6 +70,11 @@ export function registerPersistentAgentsRoutes(
 
         const active = activeSessions.find((s) => s.agent_id === agent.id);
         const live = active === undefined ? null : registry.get(active.id);
+        const status = active === undefined ? null : agentStatuses.get(active.id);
+        const latest_status: LatestAgentStatus | null =
+          status === null
+            ? null
+            : { state: status.state, summary: status.summary, updated_at: status.updated_at };
 
         const lastSession = allWorkspaceSessions.find((s) => s.agent_id === agent.id);
 
@@ -74,6 +89,7 @@ export function registerPersistentAgentsRoutes(
                   id: active.id,
                   started_at: active.started_at,
                   busy: live === null ? false : live.busy,
+                  latest_status,
                 },
           last_started_at: lastSession === undefined ? null : lastSession.started_at,
           office: peekOffice(officePathFor(workspace.repo_path, agent.id)),
