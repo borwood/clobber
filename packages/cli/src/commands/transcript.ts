@@ -23,9 +23,19 @@ interface ParsedFlags {
   readonly format: "text" | "json";
 }
 
-const SELECTORS = ["--last", "--entry", "--from", "--to"] as const;
+// Map every accepted selector form (canonical + aliases) to its canonical
+// query-key name. --tail and -n both route to "last" so they're indistinguishable
+// downstream — the alias is a pure ergonomic shim.
+const SELECTOR_ALIASES: Readonly<Record<string, string>> = {
+  "--last": "last",
+  "--tail": "last",
+  "-n": "last",
+  "--entry": "entry",
+  "--from": "from",
+  "--to": "to",
+};
 
-function parseFlags(args: readonly string[]): ParsedFlags {
+export function parseTranscriptFlags(args: readonly string[]): ParsedFlags {
   const [sessionId, ...rest] = args;
   if (sessionId === undefined) {
     throw new CliUsageError("transcript: missing session id (usage: `transcript <session-id> [flags]`)");
@@ -46,6 +56,10 @@ function parseFlags(args: readonly string[]): ParsedFlags {
       i += 1;
       continue;
     }
+    if (flag === "--json") {
+      format = "json";
+      continue;
+    }
     if (flag === "--detail" || flag === "-d") {
       if (value !== "low" && value !== "medium" && value !== "full") {
         throw new CliUsageError("transcript: --detail must be 'low', 'medium', or 'full'");
@@ -60,15 +74,16 @@ function parseFlags(args: readonly string[]): ParsedFlags {
       i += 1;
       continue;
     }
-    if ((SELECTORS as readonly string[]).includes(flag)) {
+    const selectorKey = SELECTOR_ALIASES[flag];
+    if (selectorKey !== undefined) {
       if (value === undefined) throw new CliUsageError(`transcript: ${flag} needs a value`);
       selectorCount += 1;
       if (selectorCount > 1) {
         throw new CliUsageError(
-          "transcript: only one selector may be set (--last|--entry|--from|--to)",
+          "transcript: only one selector may be set (--last|--tail|-n|--entry|--from|--to)",
         );
       }
-      query.push(`${flag.slice(2)}=${encodeURIComponent(value)}`);
+      query.push(`${selectorKey}=${encodeURIComponent(value)}`);
       i += 1;
       continue;
     }
@@ -109,18 +124,20 @@ const TRANSCRIPT_USAGE = `usage: clobber transcript <session-id> [selector] [--d
 Read a session transcript with selectors and detail levels.
 
 Selectors (mutually exclusive — pick at most one):
-  --last <n>     Show the last N entries.
-  --entry <id>   Show the single entry with this id.
-  --from <id>    Show entries starting at this id (inclusive).
-  --to <id>      Show entries up to this id (inclusive).
+  --tail <n>, --last <n>, -n <n>   Show the last N entries.
+  --entry <id>                     Show the single entry with this id.
+  --from <id>                      Show entries starting at this id (inclusive).
+  --to <id>                        Show entries up to this id (inclusive).
 
 Flags:
-  --detail <low|medium|full>  How much payload to include per entry (alias: -d).
-  --limit <n>                 Cap the number of returned entries.
-  --format <text|json>        Output format (default: text).
+  -d, --detail <low|medium|full>  How much payload to include per entry.
+  --limit <n>                     Cap the number of returned entries.
+  --format <text|json>            Output format (default: text).
+  --json                          Shorthand for --format json.
 
 Example:
-  clobber transcript 0b2f4e1a-... --last 20 --detail medium
+  clobber transcript 0b2f4e1a-... --tail 20 --detail medium
+  clobber transcript 0b2f4e1a-... -n 5 --json
 
 Skill: see manager:transcript for selector strategy and investigation patterns.`;
 
@@ -129,7 +146,7 @@ export const transcriptCommand: Command = {
   summary: "Read a session transcript with selectors and detail levels.",
   usage: TRANSCRIPT_USAGE,
   async run(ctx) {
-    const flags = parseFlags(ctx.args);
+    const flags = parseTranscriptFlags(ctx.args);
     const path = `/agent/sessions/${encodeURIComponent(flags.sessionId)}/transcript${
       flags.query.length === 0 ? "" : `?${flags.query}`
     }`;

@@ -8,7 +8,7 @@ interface ParsedArgs {
   readonly summary: string;
 }
 
-function parseArgs(args: readonly string[]): ParsedArgs {
+export function parseStatusArgs(args: readonly string[]): ParsedArgs {
   const stateArg = args[0];
   if (stateArg === undefined) {
     throw new CliUsageError(`missing state (one of: ${AGENT_STATES.join(", ")})`);
@@ -18,14 +18,39 @@ function parseArgs(args: readonly string[]): ParsedArgs {
       `unknown state: ${stateArg} (must be one of: ${AGENT_STATES.join(", ")})`,
     );
   }
-  const summary = args[1];
+
+  let positionalSummary: string | undefined;
+  let flagSummary: string | undefined;
+  for (let i = 1; i < args.length; i += 1) {
+    const tok = args[i]!;
+    if (tok === "-m" || tok === "--message") {
+      const value = args[i + 1];
+      if (value === undefined || value.length === 0) {
+        throw new CliUsageError("-m requires a value");
+      }
+      flagSummary = value;
+      i += 1;
+      continue;
+    }
+    if (tok.startsWith("-") && tok.length > 1) {
+      throw new CliUsageError(`status: unknown flag: ${tok}`);
+    }
+    if (positionalSummary !== undefined) {
+      throw new CliUsageError(
+        `unexpected extra arguments: ${args.slice(i).join(" ")}`,
+      );
+    }
+    positionalSummary = tok;
+  }
+
+  if (positionalSummary !== undefined && flagSummary !== undefined) {
+    throw new CliUsageError(
+      "status: positional summary and -m both provided; pick one",
+    );
+  }
+  const summary = flagSummary ?? positionalSummary;
   if (summary === undefined || summary.length === 0) {
     throw new CliUsageError("missing summary");
-  }
-  if (args.length > 2) {
-    throw new CliUsageError(
-      `unexpected extra arguments: ${args.slice(2).join(" ")}`,
-    );
   }
   return { state: stateArg, summary };
 }
@@ -41,13 +66,15 @@ board reflects what you're doing right now.
 
 Positional:
   <state>    One of: ${AGENT_STATES.join(", ")}.
-  <summary>  One-line description of what you're doing.
+  <summary>  One-line description of what you're doing (or use -m).
 
 Flags:
-  (no flags)
+  -m, --message <text>   Alternative to the positional <summary>; useful
+                         when the summary contains shell-tricky chars.
 
-Example:
+Examples:
   clobber status working "drafting the migration for #34"
+  clobber status working -m "drafting the migration for #34"
 
 Skill: see manager:status / worker:status for cadence and tone guidance.`;
 
@@ -56,7 +83,7 @@ export const statusCommand: Command = {
   summary: "Post a structured status update for the current agent.",
   usage: STATUS_USAGE,
   async run(ctx) {
-    const parsed = parseArgs(ctx.args);
+    const parsed = parseStatusArgs(ctx.args);
     await request<{ ok: true }>(ctx.env, {
       method: "POST",
       path: "/agent/status",

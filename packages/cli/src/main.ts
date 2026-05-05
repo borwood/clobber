@@ -10,6 +10,7 @@ import { rolesCommand } from "./commands/roles.ts";
 import { readEnv, CliEnvError } from "./env.ts";
 import { CliHttpError } from "./http.ts";
 import { CliUsageError } from "./usage-error.ts";
+import pkg from "../package.json" with { type: "json" };
 
 export interface RunOptions {
   readonly argv: readonly string[];
@@ -33,7 +34,11 @@ function buildRegistry(): CommandRegistry {
 }
 
 function printUsage(registry: CommandRegistry, stdout: NodeJS.WritableStream): void {
-  stdout.write("usage: clobber <command> [args...]\n\ncommands:\n");
+  stdout.write("usage: clobber <command> [args...]\n\n");
+  stdout.write("global flags:\n");
+  stdout.write("  -V, --version   Print the clobber CLI version and exit.\n");
+  stdout.write("  -h, --help      Print this usage. Use `clobber <verb> --help` for verb-specific help.\n\n");
+  stdout.write("commands:\n");
   for (const cmd of registry.list()) {
     stdout.write(`  ${cmd.name.padEnd(12)} ${cmd.summary}\n`);
   }
@@ -54,6 +59,11 @@ function isHelpFlag(arg: string | undefined): boolean {
 export async function run(opts: RunOptions): Promise<number> {
   const registry = buildRegistry();
   const [name, ...rest] = opts.argv;
+
+  if (name === "--version" || name === "-V") {
+    opts.stdout.write(`${pkg.version}\n`);
+    return 0;
+  }
 
   if (name === undefined || name === "--help" || name === "-h" || name === "help") {
     printUsage(registry, opts.stdout);

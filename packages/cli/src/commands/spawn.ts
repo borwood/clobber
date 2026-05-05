@@ -14,28 +14,28 @@ interface ParsedArgs {
   readonly label: string;
 }
 
-function parseArgs(args: readonly string[]): ParsedArgs {
+export function parseSpawnArgs(args: readonly string[]): ParsedArgs {
   const positionals: string[] = [];
   let prompt: string | undefined;
   let label: string | undefined;
 
   for (let i = 0; i < args.length; i++) {
     const tok = args[i]!;
-    if (tok === "--prompt") {
+    if (tok === "--prompt" || tok === "-p") {
       const value = args[i + 1];
-      if (value === undefined || value.startsWith("--")) {
+      if (value === undefined || value.startsWith("-")) {
         throw new CliUsageError("--prompt requires a value");
       }
       prompt = value;
       i++;
-    } else if (tok === "--label") {
+    } else if (tok === "--label" || tok === "-l") {
       const value = args[i + 1];
-      if (value === undefined || value.startsWith("--")) {
+      if (value === undefined || value.startsWith("-")) {
         throw new CliUsageError("--label requires a value");
       }
       label = value;
       i++;
-    } else if (tok.startsWith("--")) {
+    } else if (tok.startsWith("--") || (tok.startsWith("-") && tok.length > 1)) {
       throw new CliUsageError(`unknown flag: ${tok}`);
     } else {
       positionals.push(tok);
@@ -68,10 +68,10 @@ exist in this workspace (see \`clobber roles list\`). Prints the new
 agent_id, session_id, and pid as JSON.
 
 Flags:
-  --prompt <text>   Initial user prompt for the worker (required).
-  --label <slug>    Short slug naming what the worker is doing
-                    (required, e.g. fix-flaky-test) so the workspace
-                    board stays legible.
+  -p, --prompt <text>   Initial user prompt for the worker (required).
+  -l, --label <slug>    Short slug naming what the worker is doing
+                        (required, e.g. fix-flaky-test) so the workspace
+                        board stays legible.
 
 Example:
   clobber spawn worker --prompt "investigate flaky test in agents.test.ts" \\
@@ -84,7 +84,7 @@ export const spawnCommand: Command = {
   summary: "Spawn a worker agent into the current workspace.",
   usage: SPAWN_USAGE,
   async run(ctx) {
-    const parsed = parseArgs(ctx.args);
+    const parsed = parseSpawnArgs(ctx.args);
     const body = {
       role: parsed.role,
       prompt: parsed.prompt,
