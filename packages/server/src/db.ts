@@ -122,6 +122,27 @@ const SCHEMA = `
   );
   CREATE INDEX IF NOT EXISTS idx_questions_session_status
     ON agent_questions(session_id, status, asked_at DESC);
+
+  CREATE TABLE IF NOT EXISTS trigger_dispatches (
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    workspace_id         TEXT    NOT NULL,
+    role_id              TEXT    NOT NULL,
+    agent_id             TEXT    NOT NULL,
+    trigger_kind         TEXT    NOT NULL,
+    trigger_payload_json TEXT    NOT NULL,
+    fired_at             INTEGER NOT NULL,
+    dispatch_outcome     TEXT    NOT NULL,
+    session_id           TEXT,
+    error                TEXT,
+    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+    FOREIGN KEY (role_id)      REFERENCES roles(id)      ON DELETE CASCADE,
+    FOREIGN KEY (agent_id)     REFERENCES agents(id)     ON DELETE CASCADE,
+    FOREIGN KEY (session_id)   REFERENCES sessions(id)   ON DELETE SET NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_trigger_dispatches_agent
+    ON trigger_dispatches(agent_id, fired_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_trigger_dispatches_workspace
+    ON trigger_dispatches(workspace_id, fired_at DESC);
 `;
 
 export function createDatabase(path: string): Database {

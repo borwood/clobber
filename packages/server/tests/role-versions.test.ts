@@ -18,6 +18,7 @@ import { createAgentStatusStore } from "../src/agent-status-store.ts";
 import { createAgentQuestionStore } from "../src/agent-question-store.ts";
 import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import type { AgentSpawnRequest, AgentSpawner } from "../src/types.ts";
+import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
 
 function tableColumns(db: ReturnType<typeof createDatabase>, table: string): readonly string[] {
   const rows = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
@@ -236,7 +237,9 @@ describe("executeSpawn pins sessions.role_version_id (#23)", () => {
         hookUrl: "http://127.0.0.1:3300/hook",
         apiBase: "http://127.0.0.1:3300",
         cliEntry: "/abs/cli/index.ts",
-      });
+      
+    dispatches: createTriggerDispatchStore(db),
+  });
       try {
         const ws = workspaces.create({ name: "ws", repo_path: repoPath });
         const role = roles.create({ name: "manager", persistent: true });

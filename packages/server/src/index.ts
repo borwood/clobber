@@ -15,6 +15,7 @@ import { createSessionTokenStore } from "./session-token-store.ts";
 import { createAgentStatusStore } from "./agent-status-store.ts";
 import { createAgentQuestionStore } from "./agent-question-store.ts";
 import { createAgentQuestionWaiter } from "./agent-question-waiter.ts";
+import { createTriggerDispatchStore } from "./trigger-dispatch-store.ts";
 import { reapOrphanedSessions } from "./boot-reap.ts";
 
 const PORT = 3300;
@@ -64,6 +65,7 @@ const sessionTokens = createSessionTokenStore(db);
 const agentStatuses = createAgentStatusStore(db);
 const agentQuestions = createAgentQuestionStore(db);
 const agentQuestionWaiter = createAgentQuestionWaiter();
+const dispatches = createTriggerDispatchStore(db);
 reapOrphanedSessions({
   sessions,
   agents,
@@ -86,6 +88,7 @@ const app = createServer({
   agentStatuses,
   agentQuestions,
   agentQuestionWaiter,
+  dispatches,
   spawner,
   hookUrl: HOOK_URL,
   apiBase: API_BASE,

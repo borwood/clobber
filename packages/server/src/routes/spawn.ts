@@ -11,6 +11,7 @@ import type { AgentSpawner } from "../types.ts";
 import type { AgentRegistry } from "../agent-registry.ts";
 import type { AgentQuestionStore } from "../agent-question-store.ts";
 import type { AgentQuestionWaiter } from "../agent-question-waiter.ts";
+import type { TriggerScheduler } from "../trigger-scheduler.ts";
 import { executeSpawn } from "../spawn-pipeline.ts";
 import { normalizeSpawnLabel } from "./_spawn-label.ts";
 
@@ -36,6 +37,7 @@ export interface SpawnRouteDeps {
   readonly registry: AgentRegistry;
   readonly agentQuestions: AgentQuestionStore;
   readonly agentQuestionWaiter: AgentQuestionWaiter;
+  readonly scheduler: Pick<TriggerScheduler, "reloadAgent">;
 }
 
 export function registerSpawnRoutes(app: FastifyInstance, deps: SpawnRouteDeps): void {
@@ -73,6 +75,9 @@ export function registerSpawnRoutes(app: FastifyInstance, deps: SpawnRouteDeps):
       const { ok: _ok, status, ...rest } = result;
       reply.code(status);
       return rest;
+    }
+    if (role.persistent) {
+      deps.scheduler.reloadAgent(result.agent_id);
     }
     return {
       agent_id: result.agent_id,

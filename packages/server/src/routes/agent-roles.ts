@@ -7,6 +7,7 @@ import type { SessionStore } from "../session-store.ts";
 import type { RoleStore } from "../role-store.ts";
 import type { RoleVersionStore } from "../role-version-store.ts";
 import type { WorkspaceRoleStore } from "../workspace-role-store.ts";
+import type { TriggerScheduler } from "../trigger-scheduler.ts";
 import { forkRole } from "../fork-role.ts";
 import { editRole, type RoleEditPatch } from "../edit-role.ts";
 import { resolveCallerSession } from "./_agent-auth.ts";
@@ -47,6 +48,7 @@ export interface AgentRolesRouteDeps {
   readonly roles: RoleStore;
   readonly roleVersions: RoleVersionStore;
   readonly workspaceRoles: WorkspaceRoleStore;
+  readonly scheduler: Pick<TriggerScheduler, "reloadRole">;
 }
 
 interface RoleListEntry {
@@ -293,6 +295,9 @@ export function registerAgentRolesRoutes(
         const result = editRole(deps.db, role, currentVersion, patch);
         response.version_id = result.version_id;
         response.version = result.version;
+        if (parsed.data.triggers !== undefined) {
+          deps.scheduler.reloadRole(role.id);
+        }
       }
       reply.code(200);
       return response;

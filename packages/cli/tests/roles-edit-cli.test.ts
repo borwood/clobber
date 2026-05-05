@@ -18,6 +18,7 @@ import { createAgentStatusStore } from "@clobber/server/agent-status-store.ts";
 import { createAgentQuestionStore } from "@clobber/server/agent-question-store.ts";
 import { createAgentQuestionWaiter } from "@clobber/server/agent-question-waiter.ts";
 import type { AgentSpawner, SpawnedAgentInfo } from "@clobber/server/types.ts";
+import { createTriggerDispatchStore } from "@clobber/server/trigger-dispatch-store.ts";
 import { run } from "../src/main.ts";
 
 interface Harness {
@@ -83,6 +84,8 @@ beforeAll(async () => {
     hookUrl: "http://test.invalid/hook",
     apiBase: "http://test.invalid",
     cliEntry: "/dummy/cli.ts",
+  
+    dispatches: createTriggerDispatchStore(db),
   });
   await app.listen({ port: 0, host: "127.0.0.1" });
   const addr = app.server.address();

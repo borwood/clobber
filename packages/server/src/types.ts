@@ -12,6 +12,8 @@ import type { SessionTokenStore } from "./session-token-store.ts";
 import type { AgentStatusStore } from "./agent-status-store.ts";
 import type { AgentQuestionStore } from "./agent-question-store.ts";
 import type { AgentQuestionWaiter } from "./agent-question-waiter.ts";
+import type { TriggerDispatchStore } from "./trigger-dispatch-store.ts";
+import type { Clock } from "./clock.ts";
 
 export interface AgentSpawnRequest {
   readonly hookUrl: string;
@@ -54,4 +56,6 @@ export interface ServerOptions {
   readonly hookUrl: string;
   readonly apiBase: string;
   readonly cliEntry: string;
+  readonly dispatches: TriggerDispatchStore;
+  readonly clock?: Clock;
 }

@@ -16,6 +16,7 @@ import { createSessionTokenStore } from "../src/session-token-store.ts";
 import { createAgentStatusStore } from "../src/agent-status-store.ts";
 import { createAgentQuestionStore } from "../src/agent-question-store.ts";
 import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
+import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
 import { makeRepoFixture } from "./repo-fixture.ts";
 import { stubSpawnedAgent } from "./_spawner-stub.ts";
 import type { Workspace } from "@clobber/shared";
@@ -48,6 +49,8 @@ const roleVersions = createRoleVersionStore(db);
     hookUrl: "http://test.invalid/hook",
     apiBase: "http://test.invalid",
     cliEntry: "/dummy/cli.ts",
+  
+    dispatches: createTriggerDispatchStore(db),
   });
   return { server, db };
 }

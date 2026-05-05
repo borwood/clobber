@@ -18,6 +18,7 @@ import { createAgentStatusStore } from "../src/agent-status-store.ts";
 import { createAgentQuestionStore } from "../src/agent-question-store.ts";
 import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import type { AgentSpawner, AgentSpawnRequest } from "../src/types.ts";
+import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
 
 let repoPath: string;
 
@@ -82,6 +83,8 @@ const roleVersions = createRoleVersionStore(db);
     hookUrl: "http://127.0.0.1:3300/hook",
     apiBase: "http://127.0.0.1:3300",
     cliEntry: "/abs/cli/index.ts",
+  
+    dispatches: createTriggerDispatchStore(db),
   });
   return { server, db, workspaces, roles, workspaceRoles, sessions, sessionTokens, calls };
 }

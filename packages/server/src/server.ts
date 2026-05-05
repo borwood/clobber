@@ -10,6 +10,9 @@ import { registerAgentRoutes } from "./routes/agent.ts";
 import { registerAgentRolesRoutes } from "./routes/agent-roles.ts";
 import { registerAgentAskRoutes } from "./routes/agent-ask.ts";
 import { createAgentRegistry } from "./agent-registry.ts";
+import { createTriggerScheduler } from "./trigger-scheduler.ts";
+import { attachSessionToAgent, type SpawnPipelineDeps } from "./spawn-pipeline.ts";
+import { createSystemClock } from "./clock.ts";
 
 export type {
   AgentSpawnRequest,
@@ -23,6 +26,36 @@ import type { ServerOptions } from "./types.ts";
 export function createServer(opts: ServerOptions): FastifyInstance {
   const app = Fastify({ logger: false });
   const registry = createAgentRegistry();
+  const clock = opts.clock === undefined ? createSystemClock() : opts.clock;
+
+  const spawnPipelineDeps: SpawnPipelineDeps = {
+    workspaceRoles: opts.workspaceRoles,
+    agents: opts.agents,
+    sessions: opts.sessions,
+    sessionTokens: opts.sessionTokens,
+    spawner: opts.spawner,
+    hookUrl: opts.hookUrl,
+    apiBase: opts.apiBase,
+    cliEntry: opts.cliEntry,
+    registry,
+    roles: opts.roles,
+    roleVersions: opts.roleVersions,
+    agentQuestions: opts.agentQuestions,
+    agentQuestionWaiter: opts.agentQuestionWaiter,
+  };
+
+  const scheduler = createTriggerScheduler({
+    db: opts.db,
+    clock,
+    workspaces: opts.workspaces,
+    roles: opts.roles,
+    roleVersions: opts.roleVersions,
+    agents: opts.agents,
+    sessions: opts.sessions,
+    registry,
+    dispatches: opts.dispatches,
+    attachSession: (input) => attachSessionToAgent(spawnPipelineDeps, input),
+  });
 
   registerHookRoutes(app, {
     store: opts.store,
@@ -60,6 +93,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     registry,
     agentQuestions: opts.agentQuestions,
     agentQuestionWaiter: opts.agentQuestionWaiter,
+    scheduler,
   });
   registerWorkspaceRoutes(app, {
     db: opts.db,
@@ -95,6 +129,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     roles: opts.roles,
     roleVersions: opts.roleVersions,
     workspaceRoles: opts.workspaceRoles,
+    scheduler,
   });
   registerAgentAskRoutes(app, {
     sessionTokens: opts.sessionTokens,
@@ -102,6 +137,11 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     agentQuestions: opts.agentQuestions,
     agentQuestionWaiter: opts.agentQuestionWaiter,
     ...(opts.askTimeoutMs === undefined ? {} : { askTimeoutMs: opts.askTimeoutMs }),
+  });
+
+  scheduler.start();
+  app.addHook("onClose", async () => {
+    scheduler.stop();
   });
 
   return app;

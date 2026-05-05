@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { delimiter } from "node:path";
 import { materializeBundle } from "@clobber/runtime";
-import type { Role, Workspace } from "@clobber/shared";
+import type { Agent, Role, Workspace } from "@clobber/shared";
 import { ensureOffice } from "./office-store.ts";
 import type { WorkspaceRoleStore } from "./workspace-role-store.ts";
 import type { AgentStore } from "./agent-store.ts";
@@ -72,12 +72,29 @@ export function executeSpawn(
 ): SpawnPipelineResult {
   const { workspace, role, prompt, label } = input;
 
-  const ceilingRow = deps.workspaceRoles.getCeiling(workspace.id, role.id);
-  const ceiling = ceilingRow === null ? 0 : ceilingRow.max_concurrent;
-  const active = deps.sessions.countActive(workspace.id, role.id);
-  if (active >= ceiling) {
-    return { ok: false, status: 403, error: "role at capacity", ceiling, active };
-  }
+  const capacity = checkCapacity(deps, workspace, role);
+  if (capacity !== null) return capacity;
+
+  const agent = deps.agents.create({
+    workspace_id: workspace.id,
+    role_id: role.id,
+    label,
+  });
+  return attachSessionToAgent(deps, { workspace, role, agent, prompt });
+}
+
+export interface AttachSessionInput {
+  readonly workspace: Workspace;
+  readonly role: Role;
+  readonly agent: Agent;
+  readonly prompt: string;
+}
+
+export function attachSessionToAgent(
+  deps: SpawnPipelineDeps,
+  input: AttachSessionInput,
+): SpawnPipelineSuccess | SpawnPipelineNoBundleError {
+  const { workspace, role, agent, prompt } = input;
 
   const versionId = role.current_version_id;
   const bundle = versionId === undefined ? null : deps.roleVersions.loadAsBundle(versionId);
@@ -98,12 +115,6 @@ export function executeSpawn(
     repoPath: workspace.repo_path,
     hookUrl: deps.hookUrl,
     cliEntry: deps.cliEntry,
-  });
-
-  const agent = deps.agents.create({
-    workspace_id: workspace.id,
-    role_id: role.id,
-    label,
   });
 
   const officeDir = role.persistent
@@ -163,4 +174,18 @@ export function executeSpawn(
   });
 
   return { ok: true, agent_id: agent.id, session_id: sessionId, pid: spawned.pid };
+}
+
+function checkCapacity(
+  deps: SpawnPipelineDeps,
+  workspace: Workspace,
+  role: Role,
+): SpawnPipelineCapacityError | null {
+  const ceilingRow = deps.workspaceRoles.getCeiling(workspace.id, role.id);
+  const ceiling = ceilingRow === null ? 0 : ceilingRow.max_concurrent;
+  const active = deps.sessions.countActive(workspace.id, role.id);
+  if (active >= ceiling) {
+    return { ok: false, status: 403, error: "role at capacity", ceiling, active };
+  }
+  return null;
 }

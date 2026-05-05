@@ -17,6 +17,7 @@ import { createSessionTokenStore } from "../src/session-token-store.ts";
 import { createAgentStatusStore } from "../src/agent-status-store.ts";
 import { createAgentQuestionStore } from "../src/agent-question-store.ts";
 import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
+import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
 import type {
   AgentSpawner,
   AgentSpawnRequest,
@@ -82,6 +83,8 @@ const roleVersions = createRoleVersionStore(db);
     hookUrl: "http://test.invalid/hook",
     apiBase: "http://test.invalid",
     cliEntry: "/dummy/cli.ts",
+  
+    dispatches: createTriggerDispatchStore(db),
   });
   return { server, db, workspaces, roles, workspaceRoles, sessions, tokens, calls };
 }
