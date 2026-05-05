@@ -102,11 +102,6 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd }: Props) {
                 <span>{s.event_count} events</span>
                 <span className="ml-auto">{relativeTime(s.last_seen_at)}</span>
               </div>
-              {s.label !== undefined && (
-                <div className="mt-1 font-mono text-[10px] text-zinc-600 truncate">
-                  {s.session_id}
-                </div>
-              )}
             </button>
 
             {!isEnded && !isConfirming && (
