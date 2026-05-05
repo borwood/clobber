@@ -176,7 +176,7 @@ describe("POST /sessions/:id/end", () => {
     await teardown(h);
   });
 
-  it("subsequent /sessions/:id/prompt returns 404 (registry cleared)", async () => {
+  it("subsequent /sessions/:id/prompt returns 410 'session ended' (#12)", async () => {
     const h = buildHarness({ persistent: false });
     const spawned = await spawn(h);
 
@@ -190,7 +190,8 @@ describe("POST /sessions/:id/end", () => {
       url: `/sessions/${spawned.session_id}/prompt`,
       payload: { prompt: "follow-up" },
     });
-    expect(promptRes.statusCode).toBe(404);
+    expect(promptRes.statusCode).toBe(410);
+    expect((promptRes.json() as { error: string }).error).toBe("session ended");
     await teardown(h);
   });
 });

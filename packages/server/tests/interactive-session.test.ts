@@ -253,7 +253,7 @@ describe("POST /sessions/:id/prompt — interactive sessions (issue #8)", () => 
     await teardown(h);
   });
 
-  it("returns 404 once the child has exited (registry unregistered, session ended)", async () => {
+  it("returns 410 'session ended' once the child has exited (#12)", async () => {
     const h = buildHarness();
     const spawned = await seedAndSpawn(h);
     await fireStop(h, spawned.session_id);
@@ -266,7 +266,29 @@ describe("POST /sessions/:id/prompt — interactive sessions (issue #8)", () => 
       url: `/sessions/${spawned.session_id}/prompt`,
       payload: { prompt: "after death" },
     });
-    expect(res.statusCode).toBe(404);
+    expect(res.statusCode).toBe(410);
+    expect((res.json() as { error: string }).error).toBe("session ended");
+
+    await teardown(h);
+  });
+
+  it("returns 410 'session ended' for a session whose row has ended_at, regardless of registry state (#12)", async () => {
+    // Boot-reaper scenario: ended_at is set but the in-memory registry was
+    // never populated (e.g. server restarted, the row is the orphan). The
+    // prompt route must read the row, not just the registry, to decide
+    // between 404 (never existed) and 410 (existed, now done).
+    const h = buildHarness();
+    const spawned = await seedAndSpawn(h);
+    await fireStop(h, spawned.session_id);
+    h.sessions.markEnded(spawned.session_id);
+
+    const res = await h.server.inject({
+      method: "POST",
+      url: `/sessions/${spawned.session_id}/prompt`,
+      payload: { prompt: "after death" },
+    });
+    expect(res.statusCode).toBe(410);
+    expect((res.json() as { error: string }).error).toBe("session ended");
 
     await teardown(h);
   });

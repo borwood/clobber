@@ -10,7 +10,7 @@ import type { AgentRegistry } from "../agent-registry.ts";
 import type { AgentQuestionStore } from "../agent-question-store.ts";
 import type { AgentQuestionWaiter } from "../agent-question-waiter.ts";
 import { readTranscript } from "../transcript-reader.ts";
-import { terminateSession } from "../session-lifecycle.ts";
+import { endSession, terminateSession } from "../session-lifecycle.ts";
 
 interface IdParam {
   id: string;
@@ -67,17 +67,32 @@ export function registerSessionRoutes(
         reply.code(400);
         return { error: "invalid prompt", issues: parsed.error.issues };
       }
-      const live = deps.registry.get(request.params.id);
-      if (live === null) {
+      const sessionId = request.params.id;
+      const session = deps.sessions.get(sessionId);
+      if (session === null) {
         reply.code(404);
         return { error: "session not found" };
+      }
+      if (session.ended_at !== undefined) {
+        reply.code(410);
+        return { error: "session ended" };
+      }
+      const live = deps.registry.get(sessionId);
+      // Registry empty for an un-ended row means the child died but the exit
+      // handler hasn't reaped yet (or this is a reboot orphan the boot reaper
+      // missed). Either way, treat the session as gone — reap now so the
+      // sidebar settles on the next poll.
+      if (live === null) {
+        endSession(sessionId, deps);
+        reply.code(410);
+        return { error: "session ended" };
       }
       if (live.busy) {
         reply.code(409);
         return { error: "agent busy" };
       }
       live.stdin.write(serializeUserMessage(parsed.data.prompt));
-      deps.registry.setBusy(request.params.id, true);
+      deps.registry.setBusy(sessionId, true);
       return { ok: true };
     },
   );
