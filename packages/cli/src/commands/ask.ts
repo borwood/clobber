@@ -40,12 +40,16 @@ Ask the human a question and block until they answer. Prints the answer
 to stdout on success (exit 0). Exits 1 with a stderr hint on timeout or
 session cancellation.
 
-Repeat --option to offer the human predefined choices, which the web ask
-widget renders as buttons. The human can still type a custom answer.
+Flags:
+  --option <value>   Offer the human a predefined choice (repeatable).
+                     The web ask widget renders these as buttons; the
+                     human can still type a custom answer.
 
-examples:
+Examples:
   ANSWER=$(clobber ask "ship the migration?")
-  clobber ask "merge or rebase?" --option merge --option rebase`;
+  clobber ask "merge or rebase?" --option merge --option rebase
+
+Skill: see manager:ask / worker:ask for when to ask vs. just decide.`;
 
 export const askCommand: Command = {
   name: "ask",

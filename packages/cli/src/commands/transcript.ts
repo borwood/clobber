@@ -104,9 +104,30 @@ function renderText(t: TranscriptResponse): string {
   return lines.join("\n");
 }
 
+const TRANSCRIPT_USAGE = `usage: clobber transcript <session-id> [selector] [--detail <level>] [--limit <n>] [--format <text|json>]
+
+Read a session transcript with selectors and detail levels.
+
+Selectors (mutually exclusive — pick at most one):
+  --last <n>     Show the last N entries.
+  --entry <id>   Show the single entry with this id.
+  --from <id>    Show entries starting at this id (inclusive).
+  --to <id>      Show entries up to this id (inclusive).
+
+Flags:
+  --detail <low|medium|full>  How much payload to include per entry (alias: -d).
+  --limit <n>                 Cap the number of returned entries.
+  --format <text|json>        Output format (default: text).
+
+Example:
+  clobber transcript 0b2f4e1a-... --last 20 --detail medium
+
+Skill: see manager:transcript for selector strategy and investigation patterns.`;
+
 export const transcriptCommand: Command = {
   name: "transcript",
   summary: "Read a session transcript with selectors and detail levels.",
+  usage: TRANSCRIPT_USAGE,
   async run(ctx) {
     const flags = parseFlags(ctx.args);
     const path = `/agent/sessions/${encodeURIComponent(flags.sessionId)}/transcript${

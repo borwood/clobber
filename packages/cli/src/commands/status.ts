@@ -34,9 +34,27 @@ function isAgentState(value: string): value is AgentState {
   return (AGENT_STATES as readonly string[]).includes(value);
 }
 
+const STATUS_USAGE = `usage: clobber status <state> <summary>
+
+Post a structured status update for the current agent so the workspace
+board reflects what you're doing right now.
+
+Positional:
+  <state>    One of: ${AGENT_STATES.join(", ")}.
+  <summary>  One-line description of what you're doing.
+
+Flags:
+  (no flags)
+
+Example:
+  clobber status working "drafting the migration for #34"
+
+Skill: see manager:status / worker:status for cadence and tone guidance.`;
+
 export const statusCommand: Command = {
   name: "status",
   summary: "Post a structured status update for the current agent.",
+  usage: STATUS_USAGE,
   async run(ctx) {
     const parsed = parseArgs(ctx.args);
     await request<{ ok: true }>(ctx.env, {

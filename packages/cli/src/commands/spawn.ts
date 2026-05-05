@@ -61,9 +61,28 @@ function parseArgs(args: readonly string[]): ParsedArgs {
   return { role, prompt, label };
 }
 
+const SPAWN_USAGE = `usage: clobber spawn <role> --prompt <text> --label <slug>
+
+Spawn a worker agent into the current workspace. The role must already
+exist in this workspace (see \`clobber roles list\`). Prints the new
+agent_id, session_id, and pid as JSON.
+
+Flags:
+  --prompt <text>   Initial user prompt for the worker (required).
+  --label <slug>    Short slug naming what the worker is doing
+                    (required, e.g. fix-flaky-test) so the workspace
+                    board stays legible.
+
+Example:
+  clobber spawn worker --prompt "investigate flaky test in agents.test.ts" \\
+                       --label fix-flaky-test
+
+Skill: see manager:spawn for when to spawn vs. continue an existing session.`;
+
 export const spawnCommand: Command = {
   name: "spawn",
   summary: "Spawn a worker agent into the current workspace.",
+  usage: SPAWN_USAGE,
   async run(ctx) {
     const parsed = parseArgs(ctx.args);
     const body = {

@@ -24,9 +24,25 @@ function isSubcommand(name: string): name is Subcommand {
   return (SUBCOMMANDS as readonly string[]).includes(name);
 }
 
+const AGENTS_USAGE = `usage: clobber agents <list>
+
+List or operate on live agents in the current workspace.
+
+Subcommands:
+  list   Print every live agent (session_id, role, label, state, pid) as JSON.
+
+Flags:
+  (no flags)
+
+Example:
+  clobber agents list
+
+Skill: see manager:agents for triage and load-balancing patterns.`;
+
 export const agentsCommand: Command = {
   name: "agents",
   summary: "List or operate on live agents in the current workspace.",
+  usage: AGENTS_USAGE,
   async run(ctx) {
     const [sub, ...rest] = ctx.args;
     if (sub === undefined) {
