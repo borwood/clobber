@@ -337,6 +337,89 @@ describe("PATCH /agent/roles/:idOrName", () => {
     await teardown(h);
   });
 
+  it("PATCH only description updates roles.description and does NOT bump version", async () => {
+    const h = buildHarness();
+    const boot = await bootInWorkspace(h, repo.path);
+    const before = readCurrentVersion(h, boot.workerRoleId);
+
+    const res = await h.server.inject({
+      method: "PATCH",
+      url: `/agent/roles/${boot.workerRoleId}`,
+      headers: { authorization: `Bearer ${boot.managerToken}` },
+      payload: { description: "rewritten description" },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      role_id: string;
+      description?: string;
+      version?: number;
+    };
+    expect(body.role_id).toBe(boot.workerRoleId);
+    expect(body.description).toBe("rewritten description");
+    expect(body.version).toBeUndefined();
+
+    const after = readCurrentVersion(h, boot.workerRoleId);
+    expect(after.id).toBe(before.id);
+    expect(after.version).toBe(1);
+
+    const descRow = h.db
+      .prepare("SELECT description FROM roles WHERE id = ?")
+      .get(boot.workerRoleId) as { description: string };
+    expect(descRow.description).toBe("rewritten description");
+
+    const totalVersions = h.db
+      .prepare("SELECT COUNT(*) AS n FROM role_versions WHERE role_id = ?")
+      .get(boot.workerRoleId) as { n: number };
+    expect(totalVersions.n).toBe(1);
+
+    await teardown(h);
+  });
+
+  it("PATCH description + system_prompt bumps version AND updates description", async () => {
+    const h = buildHarness();
+    const boot = await bootInWorkspace(h, repo.path);
+
+    const res = await h.server.inject({
+      method: "PATCH",
+      url: `/agent/roles/${boot.workerRoleId}`,
+      headers: { authorization: `Bearer ${boot.managerToken}` },
+      payload: { description: "new desc", system_prompt: "new prompt" },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      role_id: string;
+      description?: string;
+      version?: number;
+    };
+    expect(body.version).toBe(2);
+    expect(body.description).toBe("new desc");
+
+    const descRow = h.db
+      .prepare("SELECT description FROM roles WHERE id = ?")
+      .get(boot.workerRoleId) as { description: string };
+    expect(descRow.description).toBe("new desc");
+
+    const after = readCurrentVersion(h, boot.workerRoleId);
+    expect(after.system_prompt).toBe("new prompt");
+
+    await teardown(h);
+  });
+
+  it("rejects empty-string description with 400", async () => {
+    const h = buildHarness();
+    const boot = await bootInWorkspace(h, repo.path);
+
+    const res = await h.server.inject({
+      method: "PATCH",
+      url: `/agent/roles/${boot.workerRoleId}`,
+      headers: { authorization: `Bearer ${boot.managerToken}` },
+      payload: { description: "" },
+    });
+    expect(res.statusCode).toBe(400);
+
+    await teardown(h);
+  });
+
   it("rejects empty body with 400", async () => {
     const h = buildHarness();
     const boot = await bootInWorkspace(h, repo.path);

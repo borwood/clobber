@@ -13,6 +13,7 @@ export interface RoleStore {
   list(): Role[];
   listForWorkspace(workspaceId: string): Role[];
   delete(id: string): boolean;
+  updateDescription(id: string, description: string): void;
 }
 
 interface Row {
@@ -65,6 +66,9 @@ export function createRoleStore(db: Database): RoleStore {
     "SELECT * FROM roles WHERE workspace_id = ? ORDER BY name ASC",
   );
   const deleteStmt = db.prepare("DELETE FROM roles WHERE id = ?");
+  const updateDescriptionStmt = db.prepare(
+    "UPDATE roles SET description = ? WHERE id = ?",
+  );
 
   return {
     create(req) {
@@ -129,6 +133,10 @@ export function createRoleStore(db: Database): RoleStore {
     delete(id) {
       const result = deleteStmt.run(id);
       return result.changes > 0;
+    },
+
+    updateDescription(id, description) {
+      updateDescriptionStmt.run(description, id);
     },
   };
 }

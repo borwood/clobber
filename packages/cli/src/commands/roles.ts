@@ -274,12 +274,14 @@ export const rolesCommand: Command = {
     "  roles list [--json]                          List workspace roles with version metadata.\n" +
     "  roles show <name|id> [--json]                Show full role + current version + history.\n" +
     "  roles fork <source-name|id> <new-name> [--json]  Fork a role into a new editable workspace role.\n" +
-    "  roles edit <name|id> [flags] [--json]        Patch a role; bumps version. Flags:\n" +
+    "  roles edit <name|id> [flags] [--json]        Patch a role; system_prompt/skills/allowed_tools bump version, description does not. Flags:\n" +
     "    --system-prompt-file FILE                  Replace system prompt from a file.\n" +
     "    --system-prompt -                          Replace system prompt from stdin.\n" +
     "    --allowed-tools tool1,tool2                Replace the allowed tool list.\n" +
     "    --add-skill name=FILE                      Add (or replace) a skill (repeatable).\n" +
     "    --remove-skill name                        Remove a skill by name (repeatable).\n" +
+    "    --description TEXT                         Replace the role description (does not bump version).\n" +
+    "    --description-file FILE                    Replace the role description from a file.\n" +
     "  roles ceiling <name|id> <max> [--json]       Set the spawn ceiling for this role in this workspace.\n",
   async run(ctx) {
     const [sub, ...rest] = ctx.args;

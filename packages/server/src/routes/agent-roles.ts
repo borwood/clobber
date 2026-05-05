@@ -33,6 +33,7 @@ const EditBodySchema = z
     system_prompt: z.string().min(1).optional(),
     skills: z.array(RoleSkillSchema).optional(),
     allowed_tools: z.array(z.string().min(1)).optional(),
+    description: z.string().min(1).optional(),
   })
   .strict();
 
@@ -222,15 +223,15 @@ export function registerAgentRolesRoutes(
         reply.code(400);
         return { error: "invalid edit request", issues: parsed.error.issues };
       }
-      if (
-        parsed.data.system_prompt === undefined &&
-        parsed.data.skills === undefined &&
-        parsed.data.allowed_tools === undefined
-      ) {
+      const versionBumping =
+        parsed.data.system_prompt !== undefined ||
+        parsed.data.skills !== undefined ||
+        parsed.data.allowed_tools !== undefined;
+      if (!versionBumping && parsed.data.description === undefined) {
         reply.code(400);
         return {
           error:
-            "edit body must include at least one of system_prompt, skills, allowed_tools",
+            "edit body must include at least one of system_prompt, skills, allowed_tools, description",
         };
       }
       const { idOrName } = request.params;
@@ -241,29 +242,45 @@ export function registerAgentRolesRoutes(
         reply.code(404);
         return { error: `role not found: ${idOrName}` };
       }
-      if (role.current_version_id === undefined) {
-        reply.code(500);
-        return { error: "role has no current version" };
+      if (parsed.data.description !== undefined) {
+        deps.roles.updateDescription(role.id, parsed.data.description);
       }
-      const currentVersion = deps.roleVersions.get(role.current_version_id);
-      if (currentVersion === null) {
-        reply.code(500);
-        return { error: "role current version missing" };
+      const response: {
+        role_id: string;
+        version_id?: string;
+        version?: number;
+        description?: string;
+      } = { role_id: role.id };
+      if (parsed.data.description !== undefined) {
+        response.description = parsed.data.description;
       }
-      const patch: RoleEditPatch = {
-        ...(parsed.data.system_prompt === undefined
-          ? {}
-          : { system_prompt: parsed.data.system_prompt }),
-        ...(parsed.data.skills === undefined
-          ? {}
-          : { skills: parsed.data.skills }),
-        ...(parsed.data.allowed_tools === undefined
-          ? {}
-          : { allowed_tools: parsed.data.allowed_tools }),
-      };
-      const result = editRole(deps.db, role, currentVersion, patch);
+      if (versionBumping) {
+        if (role.current_version_id === undefined) {
+          reply.code(500);
+          return { error: "role has no current version" };
+        }
+        const currentVersion = deps.roleVersions.get(role.current_version_id);
+        if (currentVersion === null) {
+          reply.code(500);
+          return { error: "role current version missing" };
+        }
+        const patch: RoleEditPatch = {
+          ...(parsed.data.system_prompt === undefined
+            ? {}
+            : { system_prompt: parsed.data.system_prompt }),
+          ...(parsed.data.skills === undefined
+            ? {}
+            : { skills: parsed.data.skills }),
+          ...(parsed.data.allowed_tools === undefined
+            ? {}
+            : { allowed_tools: parsed.data.allowed_tools }),
+        };
+        const result = editRole(deps.db, role, currentVersion, patch);
+        response.version_id = result.version_id;
+        response.version = result.version;
+      }
       reply.code(200);
-      return result;
+      return response;
     },
   );
 

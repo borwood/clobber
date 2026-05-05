@@ -324,6 +324,68 @@ describe("clobber CLI — roles edit", () => {
     expect(typeof parsed.version).toBe("number");
   });
 
+  it("--description updates roles.description without bumping the version", async () => {
+    const s = captureStreams();
+    const before = readWorkerVersion();
+
+    const code = await run({
+      argv: ["roles", "edit", "worker", "--description", "the new desc"],
+      env: envFor(harness.managerToken),
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(0);
+
+    const after = readWorkerVersion();
+    expect(after.version).toBe(before.version);
+
+    const descRow = harness.db
+      .prepare("SELECT description FROM roles WHERE id = ?")
+      .get(harness.workerRoleId) as { description: string };
+    expect(descRow.description).toBe("the new desc");
+  });
+
+  it("--description-file reads the description from a file", async () => {
+    const s = captureStreams();
+    const file = join(harness.tmpDir, "desc.md");
+    writeFileSync(file, "rich\nmultiline\ndesc\n");
+
+    const code = await run({
+      argv: ["roles", "edit", "worker", "--description-file", file],
+      env: envFor(harness.managerToken),
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(0);
+
+    const descRow = harness.db
+      .prepare("SELECT description FROM roles WHERE id = ?")
+      .get(harness.workerRoleId) as { description: string };
+    expect(descRow.description).toBe("rich\nmultiline\ndesc\n");
+  });
+
+  it("exits 2 when both --description and --description-file are passed", async () => {
+    const s = captureStreams();
+    const file = join(harness.tmpDir, "desc-conflict.md");
+    writeFileSync(file, "x");
+    const code = await run({
+      argv: [
+        "roles",
+        "edit",
+        "worker",
+        "--description",
+        "x",
+        "--description-file",
+        file,
+      ],
+      env: envFor(harness.managerToken),
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(2);
+    expect(s.err()).toMatch(/description/i);
+  });
+
   it("exits 2 when target name/id is missing", async () => {
     const s = captureStreams();
     const code = await run({
