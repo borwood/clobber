@@ -18,32 +18,11 @@ import { createSessionTokenStore } from "../src/session-token-store.ts";
 import { createAgentStatusStore } from "../src/agent-status-store.ts";
 import { createAgentQuestionStore } from "../src/agent-question-store.ts";
 import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
-import type { SpawnedAgentInfo } from "../src/types.ts";
+import type { AgentSpawner, SpawnedAgentInfo } from "../src/types.ts";
 
-interface RecordingStub {
-  readonly info: SpawnedAgentInfo;
-  readonly stdin: PassThrough;
-  endedByStdinClose: boolean;
-}
-
-function recordingStub(sessionId: string): RecordingStub {
-  const stdin = new PassThrough();
-  stdin.resume();
-  const stub: RecordingStub = {
-    info: {
-      sessionId,
-      pid: 9000,
-      exited: new Promise<number | null>(() => {}),
-      stdin,
-      kill: () => {},
-    },
-    stdin,
-    endedByStdinClose: false,
-  };
-  stdin.on("end", () => {
-    stub.endedByStdinClose = true;
-  });
-  return stub;
+interface KillRecord {
+  readonly sessionId: string;
+  readonly signal: NodeJS.Signals;
 }
 
 interface Harness {
@@ -54,17 +33,15 @@ interface Harness {
   workspaceRoles: ReturnType<typeof createWorkspaceRoleStore>;
   agents: ReturnType<typeof createAgentStore>;
   sessions: ReturnType<typeof createSessionStore>;
-  stub: RecordingStub;
+  killCalls: KillRecord[];
   repoPath: string;
 }
 
 function buildHarness(opts: { persistent: boolean }): Harness {
   const db = createDatabase(":memory:");
-  const sessionId = randomUUID();
-  const stub = recordingStub(sessionId);
   const workspaces = createWorkspaceStore(db);
   const roles = createRoleStore(db);
-const roleVersions = createRoleVersionStore(db);
+  const roleVersions = createRoleVersionStore(db);
   const workspaceRoles = createWorkspaceRoleStore(db);
   const agents = createAgentStore(db);
   const sessions = createSessionStore(db);
@@ -72,12 +49,27 @@ const roleVersions = createRoleVersionStore(db);
   const ws = workspaces.create({ name: "ws", repo_path: repoPath });
   const role = roles.create({ name: "manager", persistent: opts.persistent });
   workspaceRoles.setCeiling(ws.id, role.id, 1);
+  const killCalls: KillRecord[] = [];
+  const spawner: AgentSpawner = (req): SpawnedAgentInfo => {
+    if (req.sessionId === undefined) throw new Error("expected sessionId");
+    const sessionId = req.sessionId;
+    const stdin = new PassThrough();
+    stdin.resume();
+    return {
+      sessionId,
+      pid: 9000,
+      exited: new Promise<number | null>(() => {}),
+      stdin,
+      kill: (signal) => {
+        killCalls.push({ sessionId, signal });
+      },
+    };
+  };
   const server = createServer({
     db,
     store: createEventStore(db),
     workspaces,
     roles,
-
     roleVersions,
     workspaceRoles,
     agents,
@@ -87,12 +79,12 @@ const roleVersions = createRoleVersionStore(db);
     agentStatuses: createAgentStatusStore(db),
     agentQuestions: createAgentQuestionStore(db),
     agentQuestionWaiter: createAgentQuestionWaiter(),
-    spawner: () => stub.info,
+    spawner,
     hookUrl: "http://test.invalid/hook",
     apiBase: "http://test.invalid",
     cliEntry: "/dummy/cli.ts",
   });
-  return { server, db, workspaces, roles, workspaceRoles, agents, sessions, stub, repoPath };
+  return { server, db, workspaces, roles, workspaceRoles, agents, sessions, killCalls, repoPath };
 }
 
 async function teardown(h: Harness) {
@@ -114,7 +106,7 @@ async function spawn(h: Harness): Promise<{ session_id: string; agent_id: string
 }
 
 describe("POST /sessions/:id/end", () => {
-  it("ends an active session, closes stdin, frees ceiling", async () => {
+  it("ends an active session by SIGTERM-ing the child, frees ceiling", async () => {
     const h = buildHarness({ persistent: false });
     const spawned = await spawn(h);
     expect(h.sessions.get(spawned.session_id)!.ended_at).toBeUndefined();
@@ -128,7 +120,9 @@ describe("POST /sessions/:id/end", () => {
 
     const session = h.sessions.get(spawned.session_id);
     expect(typeof session!.ended_at).toBe("number");
-    expect(h.stub.endedByStdinClose).toBe(true);
+    expect(h.killCalls).toEqual([
+      { sessionId: spawned.session_id, signal: "SIGTERM" },
+    ]);
     expect(h.agents.get(spawned.agent_id)).toBeNull();
 
     await teardown(h);

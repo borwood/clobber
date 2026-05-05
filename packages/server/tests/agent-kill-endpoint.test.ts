@@ -246,7 +246,9 @@ describe("POST /agent/sessions/:id/kill", () => {
       headers: { authorization: `Bearer ${boot.managerToken}` },
     });
     expect(res.statusCode).toBe(200);
-    expect(h.killCalls).toEqual([]);
+    expect(h.killCalls).toEqual([
+      { sessionId: child.sessionId, signal: "SIGTERM" },
+    ]);
     await teardown(h);
   });
 });

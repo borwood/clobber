@@ -14,7 +14,7 @@ import type { AgentRegistry } from "../agent-registry.ts";
 import type { AgentSpawner } from "../types.ts";
 import { AgentStatusUpdateSchema } from "@clobber/shared";
 import { executeSpawn } from "../spawn-pipeline.ts";
-import { endSession } from "../session-lifecycle.ts";
+import { terminateSession } from "../session-lifecycle.ts";
 import { readTranscript } from "../transcript-reader.ts";
 import {
   formatTranscript,
@@ -214,12 +214,7 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
       if (target.ended_at !== undefined) {
         return { ok: true };
       }
-      const live = deps.registry.get(target.id);
-      if (live !== null) {
-        live.kill("SIGTERM");
-        deps.registry.unregister(target.id);
-      }
-      endSession(target.id, deps);
+      terminateSession(target.id, deps);
       return { ok: true };
     },
   );

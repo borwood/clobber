@@ -10,7 +10,7 @@ import type { AgentRegistry } from "../agent-registry.ts";
 import type { AgentQuestionStore } from "../agent-question-store.ts";
 import type { AgentQuestionWaiter } from "../agent-question-waiter.ts";
 import { readTranscript } from "../transcript-reader.ts";
-import { endSession } from "../session-lifecycle.ts";
+import { terminateSession } from "../session-lifecycle.ts";
 
 interface IdParam {
   id: string;
@@ -90,12 +90,7 @@ export function registerSessionRoutes(
         reply.code(404);
         return { error: "session not found" };
       }
-      const live = deps.registry.get(request.params.id);
-      if (live !== null) {
-        live.stdin.end();
-        deps.registry.unregister(request.params.id);
-      }
-      endSession(request.params.id, deps);
+      terminateSession(request.params.id, deps);
       return { ok: true };
     },
   );

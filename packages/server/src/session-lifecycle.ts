@@ -4,6 +4,7 @@ import type { RoleStore } from "./role-store.ts";
 import type { SessionTokenStore } from "./session-token-store.ts";
 import type { AgentQuestionStore } from "./agent-question-store.ts";
 import type { AgentQuestionWaiter } from "./agent-question-waiter.ts";
+import type { AgentRegistry } from "./agent-registry.ts";
 
 export interface SessionLifecycleDeps {
   readonly sessions: SessionStore;
@@ -12,6 +13,10 @@ export interface SessionLifecycleDeps {
   readonly sessionTokens: SessionTokenStore;
   readonly agentQuestions: AgentQuestionStore;
   readonly agentQuestionWaiter: AgentQuestionWaiter;
+}
+
+export interface SessionTerminationDeps extends SessionLifecycleDeps {
+  readonly registry: AgentRegistry;
 }
 
 /**
@@ -37,4 +42,22 @@ export function endSession(sessionId: string, deps: SessionLifecycleDeps): void 
   const role = deps.roles.get(session.role_id);
   if (role === null) return;
   if (!role.persistent) deps.agents.delete(session.agent_id);
+}
+
+/**
+ * Terminate an active session: SIGTERM the live child if registered, then run
+ * `endSession` to mark the row ended and revoke its CLI token. Idempotent —
+ * `endSession` is safe to call twice (the spawn-pipeline exit handler will
+ * also call it once the child actually dies).
+ */
+export function terminateSession(
+  sessionId: string,
+  deps: SessionTerminationDeps,
+): void {
+  const live = deps.registry.get(sessionId);
+  if (live !== null) {
+    live.kill("SIGTERM");
+    deps.registry.unregister(sessionId);
+  }
+  endSession(sessionId, deps);
 }
