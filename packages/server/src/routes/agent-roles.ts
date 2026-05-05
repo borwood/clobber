@@ -6,6 +6,7 @@ import type { SessionTokenStore } from "../session-token-store.ts";
 import type { SessionStore } from "../session-store.ts";
 import type { RoleStore } from "../role-store.ts";
 import type { RoleVersionStore } from "../role-version-store.ts";
+import type { WorkspaceRoleStore } from "../workspace-role-store.ts";
 import { forkRole } from "../fork-role.ts";
 import { editRole, type RoleEditPatch } from "../edit-role.ts";
 import { resolveCallerSession } from "./_agent-auth.ts";
@@ -16,6 +17,10 @@ const ROLE_NAME_RE = /^[A-Za-z0-9_-]+$/;
 
 const ForkBodySchema = z.object({
   new_name: z.string().min(1).regex(ROLE_NAME_RE),
+});
+
+const CeilingBodySchema = z.object({
+  max_concurrent: z.number().int().nonnegative(),
 });
 
 const RoleSkillSchema = z.object({
@@ -39,6 +44,7 @@ export interface AgentRolesRouteDeps {
   readonly sessions: SessionStore;
   readonly roles: RoleStore;
   readonly roleVersions: RoleVersionStore;
+  readonly workspaceRoles: WorkspaceRoleStore;
 }
 
 interface RoleListEntry {
@@ -256,6 +262,37 @@ export function registerAgentRolesRoutes(
           : { allowed_tools: parsed.data.allowed_tools }),
       };
       const result = editRole(deps.db, role, currentVersion, patch);
+      reply.code(200);
+      return result;
+    },
+  );
+
+  app.put<{ Params: { idOrName: string } }>(
+    "/agent/roles/:idOrName/ceiling",
+    async (request, reply) => {
+      const auth = resolveCallerSession(request, deps);
+      if (!auth.ok) {
+        reply.code(auth.status);
+        return { error: auth.error };
+      }
+      const parsed = CeilingBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        reply.code(400);
+        return { error: "invalid ceiling request", issues: parsed.error.issues };
+      }
+      const { idOrName } = request.params;
+      const role = UUID_RE.test(idOrName)
+        ? deps.roles.get(idOrName)
+        : deps.roles.findInWorkspace(auth.session.workspace_id, idOrName);
+      if (role === null || role.workspace_id !== auth.session.workspace_id) {
+        reply.code(404);
+        return { error: `role not found: ${idOrName}` };
+      }
+      const result = deps.workspaceRoles.setCeiling(
+        auth.session.workspace_id,
+        role.id,
+        parsed.data.max_concurrent,
+      );
       reply.code(200);
       return result;
     },

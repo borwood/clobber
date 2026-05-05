@@ -94,6 +94,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     sessions: opts.sessions,
     roles: opts.roles,
     roleVersions: opts.roleVersions,
+    workspaceRoles: opts.workspaceRoles,
   });
   registerAgentAskRoutes(app, {
     sessionTokens: opts.sessionTokens,

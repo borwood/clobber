@@ -57,5 +57,17 @@ export function forkRole(
   });
   setCurrentVersion.run(newVersion.id, id);
 
+  const sourceCeilingRow = db
+    .prepare(
+      "SELECT max_concurrent FROM workspace_role_ceilings WHERE workspace_id = ? AND role_id = ?",
+    )
+    .get(workspaceId, source.id) as { max_concurrent: number } | null;
+  const inheritedCeiling = sourceCeilingRow === null ? 1 : sourceCeilingRow.max_concurrent;
+  db.prepare(
+    `INSERT INTO workspace_role_ceilings (workspace_id, role_id, max_concurrent)
+     VALUES (?, ?, ?)
+     ON CONFLICT (workspace_id, role_id) DO UPDATE SET max_concurrent = excluded.max_concurrent`,
+  ).run(workspaceId, id, inheritedCeiling);
+
   return { role_id: id, version_id: newVersion.id, version: 1 };
 }

@@ -44,7 +44,7 @@ interface RoleDetailResponse {
   }>;
 }
 
-const SUBCOMMANDS = ["list", "show", "fork", "edit"] as const;
+const SUBCOMMANDS = ["list", "show", "fork", "edit", "ceiling"] as const;
 type Subcommand = (typeof SUBCOMMANDS)[number];
 
 function isSubcommand(name: string): name is Subcommand {
@@ -190,6 +190,54 @@ async function runFork(
   return 0;
 }
 
+interface CeilingResponse {
+  readonly workspace_id: string;
+  readonly role_id: string;
+  readonly max_concurrent: number;
+}
+
+async function runCeiling(
+  ctx: CommandContext,
+  json: boolean,
+  rest: readonly string[],
+): Promise<number> {
+  const [target, raw, ...extra] = rest;
+  if (target === undefined) {
+    throw new CliUsageError(
+      "roles ceiling: missing role name or id (usage: `roles ceiling <name|id> <max>`)",
+    );
+  }
+  if (raw === undefined) {
+    throw new CliUsageError(
+      "roles ceiling: missing max_concurrent (usage: `roles ceiling <name|id> <max>`)",
+    );
+  }
+  if (extra.length > 0) {
+    throw new CliUsageError(
+      `roles ceiling: unexpected arguments: ${extra.join(" ")}`,
+    );
+  }
+  if (!/^\d+$/.test(raw)) {
+    throw new CliUsageError(
+      `roles ceiling: max_concurrent must be a non-negative integer, got: ${raw}`,
+    );
+  }
+  const max = Number(raw);
+  const result = await request<CeilingResponse>(ctx.env, {
+    method: "PUT",
+    path: `/agent/roles/${encodeURIComponent(target)}/ceiling`,
+    body: { max_concurrent: max },
+  });
+  if (json) {
+    ctx.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return 0;
+  }
+  ctx.stdout.write(
+    `set ceiling on ${target} -> ${result.max_concurrent}\n`,
+  );
+  return 0;
+}
+
 async function runShow(
   ctx: CommandContext,
   json: boolean,
@@ -222,7 +270,7 @@ export const rolesCommand: Command = {
   name: "roles",
   summary: "List or inspect roles available in the current workspace.",
   usage:
-    "usage: clobber roles <list|show|fork|edit> [args...]\n\n" +
+    "usage: clobber roles <list|show|fork|edit|ceiling> [args...]\n\n" +
     "  roles list [--json]                          List workspace roles with version metadata.\n" +
     "  roles show <name|id> [--json]                Show full role + current version + history.\n" +
     "  roles fork <source-name|id> <new-name> [--json]  Fork a role into a new editable workspace role.\n" +
@@ -231,7 +279,8 @@ export const rolesCommand: Command = {
     "    --system-prompt -                          Replace system prompt from stdin.\n" +
     "    --allowed-tools tool1,tool2                Replace the allowed tool list.\n" +
     "    --add-skill name=FILE                      Add (or replace) a skill (repeatable).\n" +
-    "    --remove-skill name                        Remove a skill by name (repeatable).\n",
+    "    --remove-skill name                        Remove a skill by name (repeatable).\n" +
+    "  roles ceiling <name|id> <max> [--json]       Set the spawn ceiling for this role in this workspace.\n",
   async run(ctx) {
     const [sub, ...rest] = ctx.args;
     if (sub === undefined) {
@@ -254,6 +303,9 @@ export const rolesCommand: Command = {
     }
     if (sub === "fork") {
       return runFork(ctx, json, subArgs);
+    }
+    if (sub === "ceiling") {
+      return runCeiling(ctx, json, subArgs);
     }
     return runShow(ctx, json, subArgs);
   },
