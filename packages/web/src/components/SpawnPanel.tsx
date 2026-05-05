@@ -16,15 +16,16 @@ export function SpawnPanel({ workspaceId, roleId, onSpawned }: Props) {
   async function submit() {
     if (roleId === null) return;
     if (prompt.trim().length === 0) return;
+    const trimmedLabel = label.trim();
+    if (trimmedLabel.length === 0) return;
     setBusy(true);
     setError(null);
     try {
-      const trimmedLabel = label.trim();
       const res = await api.spawn({
         workspace_id: workspaceId,
         role_id: roleId,
         prompt,
-        ...(trimmedLabel.length === 0 ? {} : { label: trimmedLabel }),
+        label: trimmedLabel,
       });
       onSpawned(res);
       setPrompt("");
@@ -36,19 +37,23 @@ export function SpawnPanel({ workspaceId, roleId, onSpawned }: Props) {
     }
   }
 
-  const disabled = roleId === null || busy || prompt.trim().length === 0;
+  const disabled =
+    roleId === null ||
+    busy ||
+    prompt.trim().length === 0 ||
+    label.trim().length === 0;
 
   return (
     <div className="space-y-3">
       <h2 className="text-sm uppercase tracking-wider text-zinc-500">spawn</h2>
 
       <label className="block">
-        <span className="block text-xs text-zinc-400 mb-1">label (optional)</span>
+        <span className="block text-xs text-zinc-400 mb-1">label</span>
         <input
           type="text"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
-          placeholder="e.g. primary"
+          placeholder="e.g. fix-flaky-test"
           className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded text-sm focus:outline-none focus:border-zinc-600"
         />
       </label>

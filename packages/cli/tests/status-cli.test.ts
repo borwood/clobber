@@ -95,7 +95,7 @@ const roleVersions = createRoleVersionStore(db);
   const bootRes = await app.inject({
     method: "POST",
     url: "/spawn",
-    payload: { workspace_id: ws.id, role_id: managerRole.id, prompt: "boot" },
+    payload: { workspace_id: ws.id, role_id: managerRole.id, prompt: "boot", label: "boot" },
   });
   const bootBody = bootRes.json() as { session_id: string };
   const managerToken = tokens.mint(bootBody.session_id);

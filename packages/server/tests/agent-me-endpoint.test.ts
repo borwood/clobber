@@ -97,7 +97,7 @@ async function spawnAndMint(h: Harness): Promise<{ sessionId: string; token: str
   const res = await h.server.inject({
     method: "POST",
     url: "/spawn",
-    payload: { workspace_id: h.workspaceId, role_id: h.roleId, prompt: "go" },
+    payload: { workspace_id: h.workspaceId, role_id: h.roleId, prompt: "go", label: "boot" },
   });
   expect(res.statusCode).toBe(200);
   const body = res.json() as { session_id: string };

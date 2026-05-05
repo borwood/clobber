@@ -245,7 +245,7 @@ describe("executeSpawn pins sessions.role_version_id (#23)", () => {
         const res = await server.inject({
           method: "POST",
           url: "/spawn",
-          payload: { workspace_id: ws.id, role_id: role.id, prompt: "go" },
+          payload: { workspace_id: ws.id, role_id: role.id, prompt: "go", label: "boot" },
         });
         expect(res.statusCode).toBe(200);
         const body = res.json() as { session_id: string };

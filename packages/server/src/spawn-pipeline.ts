@@ -35,7 +35,7 @@ export interface SpawnPipelineInput {
   readonly workspace: Workspace;
   readonly role: Role;
   readonly prompt: string;
-  readonly label?: string;
+  readonly label: string;
 }
 
 export interface SpawnPipelineSuccess {
@@ -121,7 +121,7 @@ export function executeSpawn(
   const agent = deps.agents.create({
     workspace_id: workspace.id,
     role_id: role.id,
-    ...(label === undefined ? {} : { label }),
+    label,
   });
 
   const spawnReq: AgentSpawnRequest = {

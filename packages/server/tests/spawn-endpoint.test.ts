@@ -176,7 +176,7 @@ describe("POST /spawn", () => {
     const res = await h.server.inject({
       method: "POST",
       url: "/spawn",
-      payload: { workspace_id: ws.id, role_id: role.id, prompt: "hi" },
+      payload: { workspace_id: ws.id, role_id: role.id, prompt: "hi", label: "boot" },
     });
     const body = res.json() as { session_id: string };
 
@@ -207,6 +207,7 @@ describe("POST /spawn", () => {
         workspace_id: "00000000-0000-4000-8000-000000000000",
         role_id: role.id,
         prompt: "hi",
+        label: "boot",
       },
     });
 
@@ -231,6 +232,7 @@ describe("POST /spawn", () => {
         workspace_id: ws.id,
         role_id: "00000000-0000-4000-8000-000000000000",
         prompt: "hi",
+        label: "boot",
       },
     });
 
@@ -251,7 +253,7 @@ describe("POST /spawn", () => {
     const res = await h.server.inject({
       method: "POST",
       url: "/spawn",
-      payload: { workspace_id: ws.id, role_id: role.id, prompt: "hi" },
+      payload: { workspace_id: ws.id, role_id: role.id, prompt: "hi", label: "boot" },
     });
 
     expect(res.statusCode).toBe(403);
@@ -274,14 +276,14 @@ describe("POST /spawn", () => {
     const first = await h.server.inject({
       method: "POST",
       url: "/spawn",
-      payload: { workspace_id: ws.id, role_id: role.id, prompt: "hi" },
+      payload: { workspace_id: ws.id, role_id: role.id, prompt: "hi", label: "boot" },
     });
     expect(first.statusCode).toBe(200);
 
     const second = await h.server.inject({
       method: "POST",
       url: "/spawn",
-      payload: { workspace_id: ws.id, role_id: role.id, prompt: "hi again" },
+      payload: { workspace_id: ws.id, role_id: role.id, prompt: "hi again", label: "boot" },
     });
     expect(second.statusCode).toBe(403);
     const body = second.json() as { ceiling: number; active: number };
@@ -302,7 +304,7 @@ describe("POST /spawn", () => {
     const first = await h.server.inject({
       method: "POST",
       url: "/spawn",
-      payload: { workspace_id: ws.id, role_id: role.id, prompt: "hi" },
+      payload: { workspace_id: ws.id, role_id: role.id, prompt: "hi", label: "boot" },
     });
     const firstId = (first.json() as { session_id: string }).session_id;
     h.sessions.markEnded(firstId);
@@ -310,7 +312,7 @@ describe("POST /spawn", () => {
     const second = await h.server.inject({
       method: "POST",
       url: "/spawn",
-      payload: { workspace_id: ws.id, role_id: role.id, prompt: "again" },
+      payload: { workspace_id: ws.id, role_id: role.id, prompt: "again", label: "boot" },
     });
     expect(second.statusCode).toBe(200);
     expect(counter).toBe(2);

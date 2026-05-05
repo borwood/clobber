@@ -12,12 +12,13 @@ import type { AgentRegistry } from "../agent-registry.ts";
 import type { AgentQuestionStore } from "../agent-question-store.ts";
 import type { AgentQuestionWaiter } from "../agent-question-waiter.ts";
 import { executeSpawn } from "../spawn-pipeline.ts";
+import { normalizeSpawnLabel } from "./_spawn-label.ts";
 
 const SpawnBodySchema = z.object({
   workspace_id: z.string().uuid(),
   role_id: z.string().uuid(),
   prompt: z.string().min(1),
-  label: z.string().min(1).optional(),
+  label: z.string().optional(),
 });
 
 export interface SpawnRouteDeps {
@@ -44,7 +45,12 @@ export function registerSpawnRoutes(app: FastifyInstance, deps: SpawnRouteDeps):
       reply.code(400);
       return { error: "invalid spawn request", issues: parsed.error.issues };
     }
-    const { workspace_id, role_id, prompt, label } = parsed.data;
+    const { workspace_id, role_id, prompt } = parsed.data;
+    const label = normalizeSpawnLabel(parsed.data.label);
+    if (label === null) {
+      reply.code(400);
+      return { error: "label is required" };
+    }
 
     const workspace = deps.workspaces.get(workspace_id);
     if (workspace === null) {
@@ -61,7 +67,7 @@ export function registerSpawnRoutes(app: FastifyInstance, deps: SpawnRouteDeps):
       workspace,
       role,
       prompt,
-      ...(label === undefined ? {} : { label }),
+      label,
     });
     if (!result.ok) {
       const { ok: _ok, status, ...rest } = result;

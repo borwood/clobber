@@ -99,7 +99,7 @@ async function spawn(h: Harness): Promise<{ session_id: string; agent_id: string
   const res = await h.server.inject({
     method: "POST",
     url: "/spawn",
-    payload: { workspace_id: wsId, role_id: roleId, prompt: "go" },
+    payload: { workspace_id: wsId, role_id: roleId, prompt: "go", label: "boot" },
   });
   expect(res.statusCode).toBe(200);
   return res.json() as { session_id: string; agent_id: string };

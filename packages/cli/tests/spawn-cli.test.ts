@@ -98,7 +98,7 @@ const roleVersions = createRoleVersionStore(db);
   const bootRes = await app.inject({
     method: "POST",
     url: "/spawn",
-    payload: { workspace_id: ws.id, role_id: managerRole.id, prompt: "boot" },
+    payload: { workspace_id: ws.id, role_id: managerRole.id, prompt: "boot", label: "boot" },
   });
   if (bootRes.statusCode !== 200) {
     throw new Error(`boot failed: ${bootRes.statusCode} ${bootRes.body}`);
@@ -143,7 +143,7 @@ describe("clobber CLI — spawn", () => {
     const s = captureStreams();
     const before = harness.spawnerCalls.length;
     const code = await run({
-      argv: ["spawn", "manager", "--prompt", "audit auth.ts"],
+      argv: ["spawn", "manager", "--prompt", "audit auth.ts", "--label", "audit-auth"],
       env: {
         CLOBBER_API_BASE: harness.baseUrl,
         CLOBBER_SESSION_TOKEN: harness.managerToken,
@@ -235,10 +235,40 @@ describe("clobber CLI — spawn", () => {
     expect(s.err()).toMatch(/--prompt/);
   });
 
+  it("exits 2 with a usage hint when --label is missing (#36)", async () => {
+    const s = captureStreams();
+    const code = await run({
+      argv: ["spawn", "manager", "--prompt", "audit auth.ts"],
+      env: {
+        CLOBBER_API_BASE: harness.baseUrl,
+        CLOBBER_SESSION_TOKEN: harness.managerToken,
+      },
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(2);
+    expect(s.err()).toMatch(/--label/);
+  });
+
+  it("exits 2 when --label is given without a value", async () => {
+    const s = captureStreams();
+    const code = await run({
+      argv: ["spawn", "manager", "--prompt", "x", "--label"],
+      env: {
+        CLOBBER_API_BASE: harness.baseUrl,
+        CLOBBER_SESSION_TOKEN: harness.managerToken,
+      },
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(2);
+    expect(s.err()).toMatch(/--label/);
+  });
+
   it("surfaces the API error body when the role is unknown", async () => {
     const s = captureStreams();
     const code = await runWithExit({
-      argv: ["spawn", "ghost-role", "--prompt", "do x"],
+      argv: ["spawn", "ghost-role", "--prompt", "do x", "--label", "boot"],
       env: {
         CLOBBER_API_BASE: harness.baseUrl,
         CLOBBER_SESSION_TOKEN: harness.managerToken,

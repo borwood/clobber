@@ -119,7 +119,7 @@ async function bootManager(h: Harness, repo: string): Promise<Booted> {
   const res = await h.server.inject({
     method: "POST",
     url: "/spawn",
-    payload: { workspace_id: ws.id, role_id: managerRole.id, prompt: "boot" },
+    payload: { workspace_id: ws.id, role_id: managerRole.id, prompt: "boot", label: "boot" },
   });
   if (res.statusCode !== 200) throw new Error(`boot failed: ${res.body}`);
   const body = res.json() as { session_id: string };
@@ -212,7 +212,7 @@ describe("GET /agent/agents", () => {
       method: "POST",
       url: "/agent/spawn",
       headers: { authorization: `Bearer ${boot.managerToken}` },
-      payload: { role: "manager", prompt: "do x" },
+      payload: { role: "manager", prompt: "do x", label: "boot" },
     });
     const child = spawn1.json() as { session_id: string };
     await h.server.inject({

@@ -120,7 +120,7 @@ async function bootInWorkspace(h: Harness, repoPath: string): Promise<Booted> {
   const bootRes = await h.server.inject({
     method: "POST",
     url: "/spawn",
-    payload: { workspace_id: ws.id, role_id: managerRow.id, prompt: "boot" },
+    payload: { workspace_id: ws.id, role_id: managerRow.id, prompt: "boot", label: "boot" },
   });
   if (bootRes.statusCode !== 200) throw new Error(`boot: ${bootRes.body}`);
   const boot = bootRes.json() as { session_id: string };

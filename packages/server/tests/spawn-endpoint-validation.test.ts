@@ -57,6 +57,7 @@ describe("POST /spawn — request validation", () => {
       payload: {
         workspace_id: "00000000-0000-4000-8000-000000000001",
         role_id: "00000000-0000-4000-8000-000000000002",
+        label: "boot",
       },
     });
 
@@ -72,7 +73,7 @@ describe("POST /spawn — request validation", () => {
     const res = await h.server.inject({
       method: "POST",
       url: "/spawn",
-      payload: { role_id: "00000000-0000-4000-8000-000000000002", prompt: "hi" },
+      payload: { role_id: "00000000-0000-4000-8000-000000000002", prompt: "hi", label: "boot" },
     });
 
     expect(res.statusCode).toBe(400);
@@ -87,7 +88,7 @@ describe("POST /spawn — request validation", () => {
     const res = await h.server.inject({
       method: "POST",
       url: "/spawn",
-      payload: { workspace_id: "00000000-0000-4000-8000-000000000001", prompt: "hi" },
+      payload: { workspace_id: "00000000-0000-4000-8000-000000000001", prompt: "hi", label: "boot" },
     });
 
     expect(res.statusCode).toBe(400);
@@ -106,11 +107,49 @@ describe("POST /spawn — request validation", () => {
         workspace_id: "not-a-uuid",
         role_id: "00000000-0000-4000-8000-000000000002",
         prompt: "hi",
+        label: "boot",
       },
     });
 
     expect(res.statusCode).toBe(400);
 
+    await h.server.close();
+    h.db.close();
+  });
+
+  it("rejects a request with no label with 400 and 'label is required' (#36)", async () => {
+    const h = buildHarness();
+    const res = await h.server.inject({
+      method: "POST",
+      url: "/spawn",
+      payload: {
+        workspace_id: "00000000-0000-4000-8000-000000000001",
+        role_id: "00000000-0000-4000-8000-000000000002",
+        prompt: "hi",
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    expect((res.json() as { error: string }).error).toBe("label is required");
+    expect(h.invocationCount()).toBe(0);
+    await h.server.close();
+    h.db.close();
+  });
+
+  it("rejects a request with empty/whitespace label with 400 (#36)", async () => {
+    const h = buildHarness();
+    const res = await h.server.inject({
+      method: "POST",
+      url: "/spawn",
+      payload: {
+        workspace_id: "00000000-0000-4000-8000-000000000001",
+        role_id: "00000000-0000-4000-8000-000000000002",
+        prompt: "hi",
+        label: "   ",
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    expect((res.json() as { error: string }).error).toBe("label is required");
+    expect(h.invocationCount()).toBe(0);
     await h.server.close();
     h.db.close();
   });

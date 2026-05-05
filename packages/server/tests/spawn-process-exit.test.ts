@@ -137,7 +137,7 @@ async function spawn(
   const res = await h.server.inject({
     method: "POST",
     url: "/spawn",
-    payload: { workspace_id: ws.id, role_id: role.id, prompt },
+    payload: { workspace_id: ws.id, role_id: role.id, prompt, label: "boot" },
   });
   expect(res.statusCode).toBe(200);
   return res.json() as { agent_id: string; session_id: string; pid: number };
@@ -214,7 +214,7 @@ describe("process-exit reaper (issue #5)", () => {
     const blocked = await h.server.inject({
       method: "POST",
       url: "/spawn",
-      payload: { workspace_id: ws.id, role_id: role.id, prompt: "second" },
+      payload: { workspace_id: ws.id, role_id: role.id, prompt: "second", label: "boot" },
     });
     expect(blocked.statusCode).toBe(403);
 

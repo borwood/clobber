@@ -101,7 +101,7 @@ describe("POST /spawn — manager bundle materialization", () => {
     const res = await h.server.inject({
       method: "POST",
       url: "/spawn",
-      payload: { workspace_id: ws.id, role_id: role.id, prompt: "go" },
+      payload: { workspace_id: ws.id, role_id: role.id, prompt: "go", label: "boot" },
     });
     expect(res.statusCode).toBe(200);
     const body = res.json() as { session_id: string; pid: number };
@@ -158,7 +158,7 @@ describe("POST /spawn — manager bundle materialization", () => {
     const res = await h.server.inject({
       method: "POST",
       url: "/spawn",
-      payload: { workspace_id: ws.id, role_id: role.id, prompt: "go" },
+      payload: { workspace_id: ws.id, role_id: role.id, prompt: "go", label: "boot" },
     });
     expect(res.statusCode).toBe(422);
     const body = res.json() as { error: string; role: string };
@@ -183,7 +183,7 @@ describe("endSession revokes the session token (issue #16)", () => {
     const res = await h.server.inject({
       method: "POST",
       url: "/spawn",
-      payload: { workspace_id: ws.id, role_id: role.id, prompt: "go" },
+      payload: { workspace_id: ws.id, role_id: role.id, prompt: "go", label: "boot" },
     });
     const body = res.json() as { session_id: string };
     const token = h.calls[0]!.env!["CLOBBER_SESSION_TOKEN"]!;

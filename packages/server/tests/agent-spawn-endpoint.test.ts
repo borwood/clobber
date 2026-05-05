@@ -117,7 +117,7 @@ async function bootManager(h: Harness): Promise<BootedManager> {
   const res = await h.server.inject({
     method: "POST",
     url: "/spawn",
-    payload: { workspace_id: ws.id, role_id: managerRole.id, prompt: "boot" },
+    payload: { workspace_id: ws.id, role_id: managerRole.id, prompt: "boot", label: "boot" },
   });
   expect(res.statusCode).toBe(200);
   const body = res.json() as { session_id: string };
@@ -137,7 +137,7 @@ describe("POST /agent/spawn", () => {
     const res = await h.server.inject({
       method: "POST",
       url: "/agent/spawn",
-      payload: { role: "worker", prompt: "do x" },
+      payload: { role: "worker", prompt: "do x", label: "boot" },
     });
     expect(res.statusCode).toBe(401);
     await teardown(h);
@@ -149,7 +149,7 @@ describe("POST /agent/spawn", () => {
       method: "POST",
       url: "/agent/spawn",
       headers: { authorization: "Bearer not-a-real-token" },
-      payload: { role: "worker", prompt: "do x" },
+      payload: { role: "worker", prompt: "do x", label: "boot" },
     });
     expect(res.statusCode).toBe(401);
     await teardown(h);
@@ -162,7 +162,7 @@ describe("POST /agent/spawn", () => {
       method: "POST",
       url: "/agent/spawn",
       headers: { authorization: `Bearer ${boot.managerToken}` },
-      payload: { role: "manager" },
+      payload: { role: "manager", label: "boot" },
     });
     expect(res.statusCode).toBe(400);
     await teardown(h);
@@ -175,7 +175,7 @@ describe("POST /agent/spawn", () => {
       method: "POST",
       url: "/agent/spawn",
       headers: { authorization: `Bearer ${boot.managerToken}` },
-      payload: { role: "nonexistent", prompt: "do x" },
+      payload: { role: "nonexistent", prompt: "do x", label: "boot" },
     });
     expect(res.statusCode).toBe(404);
     expect((res.json() as { error: string }).error).toMatch(/role/i);
@@ -224,7 +224,7 @@ describe("POST /agent/spawn", () => {
       method: "POST",
       url: "/agent/spawn",
       headers: { authorization: `Bearer ${boot.managerToken}` },
-      payload: { role: "manager", prompt: "x" },
+      payload: { role: "manager", prompt: "x", label: "boot" },
     });
     expect(res.statusCode).toBe(403);
     expect((res.json() as { error: string }).error).toMatch(/capacity/i);
@@ -239,7 +239,7 @@ describe("POST /agent/spawn", () => {
       method: "POST",
       url: "/agent/spawn",
       headers: { authorization: `Bearer ${boot.managerToken}` },
-      payload: { role: "ghost-role", prompt: "x" },
+      payload: { role: "ghost-role", prompt: "x", label: "boot" },
     });
     expect(res.statusCode).toBe(422);
     const body = res.json() as { error: string; role: string };
@@ -260,9 +260,41 @@ describe("POST /agent/spawn", () => {
       method: "POST",
       url: "/agent/spawn",
       headers: { authorization: `Bearer ${boot.managerToken}` },
-      payload: { role: "manager", prompt: "x" },
+      payload: { role: "manager", prompt: "x", label: "x" },
     });
     expect(res.statusCode).toBe(401);
+    await teardown(h);
+  });
+
+  it("returns 400 'label is required' when label is missing (#36)", async () => {
+    const h = buildHarness();
+    const boot = await bootManager(h);
+    const callsBefore = h.calls.length;
+    const res = await h.server.inject({
+      method: "POST",
+      url: "/agent/spawn",
+      headers: { authorization: `Bearer ${boot.managerToken}` },
+      payload: { role: "manager", prompt: "audit auth.ts" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect((res.json() as { error: string }).error).toBe("label is required");
+    expect(h.calls.length).toBe(callsBefore);
+    await teardown(h);
+  });
+
+  it("returns 400 'label is required' when label is empty/whitespace (#36)", async () => {
+    const h = buildHarness();
+    const boot = await bootManager(h);
+    const callsBefore = h.calls.length;
+    const res = await h.server.inject({
+      method: "POST",
+      url: "/agent/spawn",
+      headers: { authorization: `Bearer ${boot.managerToken}` },
+      payload: { role: "manager", prompt: "audit auth.ts", label: "   " },
+    });
+    expect(res.statusCode).toBe(400);
+    expect((res.json() as { error: string }).error).toBe("label is required");
+    expect(h.calls.length).toBe(callsBefore);
     await teardown(h);
   });
 });

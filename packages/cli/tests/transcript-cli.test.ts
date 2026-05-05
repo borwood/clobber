@@ -123,7 +123,7 @@ const roleVersions = createRoleVersionStore(db);
   const bootRes = await app.inject({
     method: "POST",
     url: "/spawn",
-    payload: { workspace_id: ws.id, role_id: managerRole.id, prompt: "boot" },
+    payload: { workspace_id: ws.id, role_id: managerRole.id, prompt: "boot", label: "boot" },
   });
   const bootBody = bootRes.json() as { session_id: string };
   const managerToken = tokens.mint(bootBody.session_id);
@@ -132,7 +132,7 @@ const roleVersions = createRoleVersionStore(db);
     method: "POST",
     url: "/agent/spawn",
     headers: { authorization: `Bearer ${managerToken}` },
-    payload: { role: "manager", prompt: "do work" },
+    payload: { role: "manager", prompt: "do work", label: "boot" },
   });
   const childBody = childRes.json() as { session_id: string };
 

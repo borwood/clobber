@@ -94,7 +94,7 @@ const roleVersions = createRoleVersionStore(db);
   const bootRes = await app.inject({
     method: "POST",
     url: "/spawn",
-    payload: { workspace_id: ws.id, role_id: managerRole.id, prompt: "boot" },
+    payload: { workspace_id: ws.id, role_id: managerRole.id, prompt: "boot", label: "boot" },
   });
   if (bootRes.statusCode !== 200) {
     throw new Error(`boot failed: ${bootRes.statusCode} ${bootRes.body}`);

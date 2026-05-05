@@ -111,7 +111,7 @@ async function bootAgent(h: Harness): Promise<BootedAgent> {
   const res = await h.server.inject({
     method: "POST",
     url: "/spawn",
-    payload: { workspace_id: ws.id, role_id: role.id, prompt: "boot" },
+    payload: { workspace_id: ws.id, role_id: role.id, prompt: "boot", label: "boot" },
   });
   expect(res.statusCode).toBe(200);
   const body = res.json() as { session_id: string };
@@ -350,7 +350,7 @@ describe("POST /sessions/:id/answer", () => {
     const spawnRes = await h.server.inject({
       method: "POST",
       url: "/spawn",
-      payload: { workspace_id: a.workspaceId, role_id: secondRole.id, prompt: "go" },
+      payload: { workspace_id: a.workspaceId, role_id: secondRole.id, prompt: "go", label: "boot" },
     });
     const otherId = (spawnRes.json() as { session_id: string }).session_id;
 

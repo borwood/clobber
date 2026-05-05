@@ -114,7 +114,7 @@ async function bootManager(h: Harness, repo: string): Promise<Booted> {
   const res = await h.server.inject({
     method: "POST",
     url: "/spawn",
-    payload: { workspace_id: ws.id, role_id: role.id, prompt: "boot" },
+    payload: { workspace_id: ws.id, role_id: role.id, prompt: "boot", label: "boot" },
   });
   if (res.statusCode !== 200) throw new Error(`boot failed: ${res.body}`);
   const body = res.json() as { session_id: string };

@@ -104,7 +104,7 @@ const roleVersions = createRoleVersionStore(db);
   const bootRes = await app.inject({
     method: "POST",
     url: "/spawn",
-    payload: { workspace_id: ws.id, role_id: managerRole.id, prompt: "boot" },
+    payload: { workspace_id: ws.id, role_id: managerRole.id, prompt: "boot", label: "boot" },
   });
   if (bootRes.statusCode !== 200) {
     throw new Error(`boot failed: ${bootRes.statusCode} ${bootRes.body}`);
@@ -116,7 +116,7 @@ const roleVersions = createRoleVersionStore(db);
     method: "POST",
     url: "/agent/spawn",
     headers: { authorization: `Bearer ${managerToken}` },
-    payload: { role: "manager", prompt: "child work" },
+    payload: { role: "manager", prompt: "child work", label: "boot" },
   });
   if (childRes.statusCode !== 200) {
     throw new Error(`child spawn failed: ${childRes.statusCode} ${childRes.body}`);

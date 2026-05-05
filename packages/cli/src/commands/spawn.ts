@@ -11,7 +11,7 @@ interface SpawnResponse {
 interface ParsedArgs {
   readonly role: string;
   readonly prompt: string;
-  readonly label: string | undefined;
+  readonly label: string;
 }
 
 function parseArgs(args: readonly string[]): ParsedArgs {
@@ -52,6 +52,11 @@ function parseArgs(args: readonly string[]): ParsedArgs {
   if (prompt === undefined) {
     throw new CliUsageError("--prompt is required");
   }
+  if (label === undefined) {
+    throw new CliUsageError(
+      "--label is required (e.g. --label fix-flaky-test) — names a worker by what it's doing so the workspace board stays legible",
+    );
+  }
 
   return { role, prompt, label };
 }
@@ -61,10 +66,10 @@ export const spawnCommand: Command = {
   summary: "Spawn a worker agent into the current workspace.",
   async run(ctx) {
     const parsed = parseArgs(ctx.args);
-    const body: { role: string; prompt: string; label?: string } = {
+    const body = {
       role: parsed.role,
       prompt: parsed.prompt,
-      ...(parsed.label === undefined ? {} : { label: parsed.label }),
+      label: parsed.label,
     };
     const result = await request<SpawnResponse>(ctx.env, {
       method: "POST",

@@ -144,7 +144,7 @@ async function seedAndSpawn(h: Harness, persistent = true): Promise<Spawned> {
   const res = await h.server.inject({
     method: "POST",
     url: "/spawn",
-    payload: { workspace_id: ws.id, role_id: role.id, prompt: "initial" },
+    payload: { workspace_id: ws.id, role_id: role.id, prompt: "initial", label: "boot" },
   });
   expect(res.statusCode).toBe(200);
   return res.json() as Spawned;

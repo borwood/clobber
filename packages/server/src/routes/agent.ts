@@ -23,6 +23,7 @@ import {
   type TranscriptQuery,
 } from "../transcript-formatter.ts";
 import { resolveCallerSession } from "./_agent-auth.ts";
+import { normalizeSpawnLabel } from "./_spawn-label.ts";
 
 export interface AgentRouteDeps {
   readonly sessionTokens: SessionTokenStore;
@@ -45,7 +46,7 @@ export interface AgentRouteDeps {
 const AgentSpawnBodySchema = z.object({
   role: z.string().min(1),
   prompt: z.string().min(1),
-  label: z.string().min(1).optional(),
+  label: z.string().optional(),
 });
 
 export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps): void {
@@ -112,7 +113,12 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
       reply.code(400);
       return { error: "invalid spawn request", issues: parsed.error.issues };
     }
-    const { role: roleName, prompt, label } = parsed.data;
+    const { role: roleName, prompt } = parsed.data;
+    const label = normalizeSpawnLabel(parsed.data.label);
+    if (label === null) {
+      reply.code(400);
+      return { error: "label is required" };
+    }
 
     const workspace = deps.workspaces.get(auth.session.workspace_id);
     if (workspace === null) {
@@ -131,7 +137,7 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
       workspace,
       role,
       prompt,
-      ...(label === undefined ? {} : { label }),
+      label,
     });
     if (!result.ok) {
       const { ok: _ok, status, ...rest } = result;
