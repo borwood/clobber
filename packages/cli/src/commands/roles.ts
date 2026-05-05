@@ -43,7 +43,7 @@ interface RoleDetailResponse {
   }>;
 }
 
-const SUBCOMMANDS = ["list", "show"] as const;
+const SUBCOMMANDS = ["list", "show", "fork"] as const;
 type Subcommand = (typeof SUBCOMMANDS)[number];
 
 function isSubcommand(name: string): name is Subcommand {
@@ -147,6 +147,48 @@ function renderShowMarkdown(role: RoleDetailResponse): string {
   return lines.join("\n");
 }
 
+interface ForkResponse {
+  readonly role_id: string;
+  readonly version_id: string;
+  readonly version: number;
+}
+
+async function runFork(
+  ctx: CommandContext,
+  json: boolean,
+  rest: readonly string[],
+): Promise<number> {
+  const [source, newName, ...extra] = rest;
+  if (source === undefined) {
+    throw new CliUsageError(
+      "roles fork: missing source name or id (usage: `roles fork <source-name|id> <new-name>`)",
+    );
+  }
+  if (newName === undefined) {
+    throw new CliUsageError(
+      "roles fork: missing new-name (usage: `roles fork <source-name|id> <new-name>`)",
+    );
+  }
+  if (extra.length > 0) {
+    throw new CliUsageError(
+      `roles fork: unexpected arguments: ${extra.join(" ")}`,
+    );
+  }
+  const result = await request<ForkResponse>(ctx.env, {
+    method: "POST",
+    path: `/agent/roles/${encodeURIComponent(source)}/fork`,
+    body: { new_name: newName },
+  });
+  if (json) {
+    ctx.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return 0;
+  }
+  ctx.stdout.write(
+    `forked ${source} -> ${newName} (id: ${result.role_id}, version: v${result.version})\n`,
+  );
+  return 0;
+}
+
 async function runShow(
   ctx: CommandContext,
   json: boolean,
@@ -179,9 +221,10 @@ export const rolesCommand: Command = {
   name: "roles",
   summary: "List or inspect roles available in the current workspace.",
   usage:
-    "usage: clobber roles <list|show> [args...]\n\n" +
-    "  roles list [--json]            List workspace roles with version metadata.\n" +
-    "  roles show <name|id> [--json]  Show full role + current version + history.\n",
+    "usage: clobber roles <list|show|fork> [args...]\n\n" +
+    "  roles list [--json]                          List workspace roles with version metadata.\n" +
+    "  roles show <name|id> [--json]                Show full role + current version + history.\n" +
+    "  roles fork <source-name|id> <new-name> [--json]  Fork a role into a new editable workspace role.\n",
   async run(ctx) {
     const [sub, ...rest] = ctx.args;
     if (sub === undefined) {
@@ -198,6 +241,9 @@ export const rolesCommand: Command = {
         );
       }
       return runList(ctx, json);
+    }
+    if (sub === "fork") {
+      return runFork(ctx, json, subArgs);
     }
     return runShow(ctx, json, subArgs);
   },

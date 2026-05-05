@@ -1,15 +1,24 @@
 import type { FastifyInstance } from "fastify";
+import type { Database } from "bun:sqlite";
+import { z } from "zod";
 import type { Role } from "@clobber/shared";
 import type { SessionTokenStore } from "../session-token-store.ts";
 import type { SessionStore } from "../session-store.ts";
 import type { RoleStore } from "../role-store.ts";
 import type { RoleVersionStore } from "../role-version-store.ts";
+import { forkRole } from "../fork-role.ts";
 import { resolveCallerSession } from "./_agent-auth.ts";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ROLE_NAME_RE = /^[A-Za-z0-9_-]+$/;
+
+const ForkBodySchema = z.object({
+  new_name: z.string().min(1).regex(ROLE_NAME_RE),
+});
 
 export interface AgentRolesRouteDeps {
+  readonly db: Database;
   readonly sessionTokens: SessionTokenStore;
   readonly sessions: SessionStore;
   readonly roles: RoleStore;
@@ -114,6 +123,55 @@ export function registerAgentRolesRoutes(
     }
     return { roles: entries };
   });
+
+  app.post<{ Params: { idOrName: string } }>(
+    "/agent/roles/:idOrName/fork",
+    async (request, reply) => {
+      const auth = resolveCallerSession(request, deps);
+      if (!auth.ok) {
+        reply.code(auth.status);
+        return { error: auth.error };
+      }
+      const parsed = ForkBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        reply.code(400);
+        return { error: "invalid fork request", issues: parsed.error.issues };
+      }
+      const { idOrName } = request.params;
+      const source = UUID_RE.test(idOrName)
+        ? deps.roles.get(idOrName)
+        : deps.roles.findInWorkspace(auth.session.workspace_id, idOrName);
+      if (source === null || source.workspace_id !== auth.session.workspace_id) {
+        reply.code(404);
+        return { error: `role not found: ${idOrName}` };
+      }
+      if (source.current_version_id === undefined) {
+        reply.code(500);
+        return { error: "source role has no current version" };
+      }
+      const sourceVersion = deps.roleVersions.get(source.current_version_id);
+      if (sourceVersion === null) {
+        reply.code(500);
+        return { error: "source role version missing" };
+      }
+      if (
+        deps.roles.findInWorkspace(auth.session.workspace_id, parsed.data.new_name) !==
+        null
+      ) {
+        reply.code(409);
+        return { error: `role name already exists: ${parsed.data.new_name}` };
+      }
+      const result = forkRole(
+        deps.db,
+        source,
+        sourceVersion,
+        parsed.data.new_name,
+        auth.session.workspace_id,
+      );
+      reply.code(201);
+      return result;
+    },
+  );
 
   app.get<{ Params: { idOrName: string } }>(
     "/agent/roles/:idOrName",

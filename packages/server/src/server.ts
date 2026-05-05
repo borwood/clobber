@@ -89,6 +89,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     cliEntry: opts.cliEntry,
   });
   registerAgentRolesRoutes(app, {
+    db: opts.db,
     sessionTokens: opts.sessionTokens,
     sessions: opts.sessions,
     roles: opts.roles,
