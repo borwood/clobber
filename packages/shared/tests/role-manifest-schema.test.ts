@@ -7,6 +7,8 @@ const baseManifest = {
   systemPromptPath: "system-prompt.md",
   pluginTemplatePath: "plugin-template",
   allowedCliCommands: ["whoami"],
+  persistent: true,
+  defaultCeiling: 1,
 };
 
 describe("RoleManifestSchema", () => {

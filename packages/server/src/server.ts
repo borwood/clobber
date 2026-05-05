@@ -61,9 +61,8 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     agentQuestionWaiter: opts.agentQuestionWaiter,
   });
   registerWorkspaceRoutes(app, {
+    db: opts.db,
     workspaces: opts.workspaces,
-    roles: opts.roles,
-    workspaceRoles: opts.workspaceRoles,
   });
   registerRoleRoutes(app, { roles: opts.roles });
   registerWorkspaceRoleRoutes(app, {

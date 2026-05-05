@@ -96,6 +96,7 @@ const roleVersions = createRoleVersionStore(db);
   };
 
   const app = createServer({
+    db,
     store: createEventStore(db),
     workspaces,
     roles,

@@ -2,12 +2,15 @@ import type { Database } from "bun:sqlite";
 import { loadRoleBundle } from "@clobber/runtime";
 import { snapshotShippedBundle } from "./role-version-snapshot.ts";
 import { createRoleVersionStore } from "./role-version-store.ts";
+import { backfillUnseededWorkspaces } from "./seed-workspace-roles.ts";
 
 export function migrateRoleVersions(db: Database): void {
   ensureColumn(db, "roles", "workspace_id", "TEXT");
   ensureColumn(db, "roles", "current_version_id", "TEXT");
   ensureColumn(db, "sessions", "role_version_id", "TEXT");
+  dropLegacyGlobalUniqueName(db);
   backfillRoleVersions(db);
+  backfillUnseededWorkspaces(db);
 }
 
 function ensureColumn(
@@ -21,6 +24,49 @@ function ensureColumn(
   ).map((r) => r.name);
   if (cols.includes(column)) return;
   db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+}
+
+function dropLegacyGlobalUniqueName(db: Database): void {
+  const indexes = db
+    .prepare("PRAGMA index_list(roles)")
+    .all() as Array<{ name: string; unique: number; origin: string }>;
+  const hasLegacyUnique = indexes.some(
+    (i) => i.unique === 1 && i.origin === "u" && hasOnlyNameColumn(db, i.name),
+  );
+  if (!hasLegacyUnique) return;
+
+  db.exec("PRAGMA foreign_keys = OFF");
+  db.exec(`
+    CREATE TABLE roles_new (
+      id                 TEXT    PRIMARY KEY,
+      name               TEXT    NOT NULL,
+      description        TEXT,
+      permission_mode    TEXT,
+      allowed_tools      TEXT,
+      persistent         INTEGER NOT NULL,
+      workspace_id       TEXT,
+      current_version_id TEXT,
+      created_at         INTEGER NOT NULL,
+      UNIQUE (workspace_id, name),
+      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+    );
+    INSERT INTO roles_new (id, name, description, permission_mode, allowed_tools, persistent, workspace_id, current_version_id, created_at)
+      SELECT id, name, description, permission_mode, allowed_tools, persistent, workspace_id, current_version_id, created_at FROM roles;
+    DROP TABLE roles;
+    ALTER TABLE roles_new RENAME TO roles;
+    CREATE INDEX IF NOT EXISTS idx_roles_created   ON roles(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_roles_workspace ON roles(workspace_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_roles_global_name
+      ON roles(name) WHERE workspace_id IS NULL;
+  `);
+  db.exec("PRAGMA foreign_keys = ON");
+}
+
+function hasOnlyNameColumn(db: Database, indexName: string): boolean {
+  const info = db
+    .prepare(`PRAGMA index_info(${JSON.stringify(indexName)})`)
+    .all() as Array<{ name: string }>;
+  return info.length === 1 && info[0]!.name === "name";
 }
 
 interface UnversionedRow {

@@ -217,6 +217,7 @@ describe("executeSpawn pins sessions.role_version_id (#23)", () => {
         };
       };
       const server = createServer({
+        db,
         store: createEventStore(db),
         workspaces,
         roles,

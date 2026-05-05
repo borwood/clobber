@@ -76,6 +76,7 @@ const roleVersions = createRoleVersionStore(db);
   const sessions = createSessionStore(db);
   const spawnControl = deferredExitSpawner();
   const server = createServer({
+    db,
     store,
     workspaces,
     roles,

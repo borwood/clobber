@@ -13,5 +13,9 @@ export const workerRole = defineRole({
     systemPromptPath: "system-prompt.md",
     pluginTemplatePath: "plugin-template",
     allowedCliCommands: ["whoami", "ask", "status"],
+    persistent: false,
+    defaultCeiling: 3,
+    permissionMode: "bypassPermissions",
+    allowedTools: ["Bash", "Read", "Edit", "Write", "Glob", "Grep"],
   },
 });

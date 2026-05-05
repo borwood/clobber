@@ -13,5 +13,9 @@ export const managerRole = defineRole({
     systemPromptPath: "system-prompt.md",
     pluginTemplatePath: "plugin-template",
     allowedCliCommands: ["whoami", "spawn", "ask", "status", "agents", "transcript", "kill"],
+    persistent: true,
+    defaultCeiling: 1,
+    permissionMode: "bypassPermissions",
+    allowedTools: ["Bash", "Read", "Edit", "Write", "Glob", "Grep"],
   },
 });

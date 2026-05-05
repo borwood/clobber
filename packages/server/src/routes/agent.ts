@@ -119,7 +119,9 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
       reply.code(500);
       return { error: "workspace missing for session" };
     }
-    const role = deps.roles.findByName(roleName);
+    const role =
+      deps.roles.findInWorkspace(workspace.id, roleName) ??
+      deps.roles.findByName(roleName);
     if (role === null) {
       reply.code(404);
       return { error: `role not found: ${roleName}` };

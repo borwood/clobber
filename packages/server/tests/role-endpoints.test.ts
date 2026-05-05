@@ -19,6 +19,7 @@ import type { Role } from "@clobber/shared";
 function buildServer() {
   const db = createDatabase(":memory:");
   const server = createServer({
+    db,
     store: createEventStore(db),
     workspaces: createWorkspaceStore(db),
     roles: createRoleStore(db),

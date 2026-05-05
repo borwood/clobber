@@ -73,6 +73,7 @@ reapOrphanedSessions({
   agentQuestionWaiter,
 });
 const app = createServer({
+  db,
   store,
   workspaces,
   roles,

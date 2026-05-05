@@ -19,6 +19,7 @@ function buildHarness() {
   const db = createDatabase(":memory:");
   let invocations = 0;
   const server = createServer({
+    db,
     store: createEventStore(db),
     workspaces: createWorkspaceStore(db),
     roles: createRoleStore(db),

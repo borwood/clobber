@@ -21,7 +21,7 @@ const SCHEMA = `
 
   CREATE TABLE IF NOT EXISTS roles (
     id                 TEXT    PRIMARY KEY,
-    name               TEXT    NOT NULL UNIQUE,
+    name               TEXT    NOT NULL,
     description        TEXT,
     permission_mode    TEXT,
     allowed_tools      TEXT,
@@ -29,10 +29,13 @@ const SCHEMA = `
     workspace_id       TEXT,
     current_version_id TEXT,
     created_at         INTEGER NOT NULL,
+    UNIQUE (workspace_id, name),
     FOREIGN KEY (workspace_id)       REFERENCES workspaces(id)     ON DELETE CASCADE
   );
   CREATE INDEX IF NOT EXISTS idx_roles_created   ON roles(created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_roles_workspace ON roles(workspace_id);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_roles_global_name
+    ON roles(name) WHERE workspace_id IS NULL;
 
   CREATE TABLE IF NOT EXISTS role_versions (
     id                 TEXT    PRIMARY KEY,

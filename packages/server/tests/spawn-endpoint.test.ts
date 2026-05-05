@@ -46,6 +46,7 @@ function buildHarness(spawner: AgentSpawner): Harness {
   const agents = createAgentStore(db);
   const sessions = createSessionStore(db);
   const server = createServer({
+    db,
     store,
     workspaces,
     roles,

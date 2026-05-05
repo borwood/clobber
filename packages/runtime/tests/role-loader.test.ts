@@ -36,6 +36,8 @@ const validManifest = {
   systemPromptPath: "system-prompt.md",
   pluginTemplatePath: "plugin-template",
   allowedCliCommands: ["whoami"],
+  persistent: false,
+  defaultCeiling: 1,
 } as const;
 
 describe("defineRole", () => {

@@ -73,6 +73,7 @@ const roleVersions = createRoleVersionStore(db);
   const role = roles.create({ name: "manager", persistent: opts.persistent });
   workspaceRoles.setCeiling(ws.id, role.id, 1);
   const server = createServer({
+    db,
     store: createEventStore(db),
     workspaces,
     roles,

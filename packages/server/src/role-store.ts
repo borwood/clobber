@@ -9,6 +9,7 @@ export interface RoleStore {
   create(req: CreateRoleRequest): Role;
   get(id: string): Role | null;
   findByName(name: string): Role | null;
+  findInWorkspace(workspaceId: string, name: string): Role | null;
   list(): Role[];
   delete(id: string): boolean;
 }
@@ -50,7 +51,12 @@ export function createRoleStore(db: Database): RoleStore {
     "UPDATE roles SET current_version_id = ? WHERE id = ?",
   );
   const getStmt = db.prepare("SELECT * FROM roles WHERE id = ?");
-  const findByNameStmt = db.prepare("SELECT * FROM roles WHERE name = ?");
+  const findByNameStmt = db.prepare(
+    "SELECT * FROM roles WHERE name = ? AND workspace_id IS NULL",
+  );
+  const findInWorkspaceStmt = db.prepare(
+    "SELECT * FROM roles WHERE name = ? AND workspace_id = ?",
+  );
   const listStmt = db.prepare(
     "SELECT * FROM roles ORDER BY created_at DESC, id DESC",
   );
@@ -98,6 +104,11 @@ export function createRoleStore(db: Database): RoleStore {
 
     findByName(name) {
       const row = findByNameStmt.get(name) as Row | null;
+      return row === null ? null : rowToRole(row);
+    },
+
+    findInWorkspace(workspaceId, name) {
+      const row = findInWorkspaceStmt.get(name, workspaceId) as Row | null;
       return row === null ? null : rowToRole(row);
     },
 

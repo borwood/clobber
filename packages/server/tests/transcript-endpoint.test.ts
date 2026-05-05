@@ -38,6 +38,7 @@ const roleVersions = createRoleVersionStore(db);
   const agents = createAgentStore(db);
   const sessions = createSessionStore(db);
   const server = createServer({
+    db,
     store: createEventStore(db),
     workspaces,
     roles,

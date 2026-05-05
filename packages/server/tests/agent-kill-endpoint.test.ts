@@ -67,6 +67,7 @@ const roleVersions = createRoleVersionStore(db);
     };
   };
   const server = createServer({
+    db,
     store: createEventStore(db),
     workspaces,
     roles,

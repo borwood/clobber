@@ -26,6 +26,7 @@ interface Harness {
 function buildServer(): Harness {
   const db = createDatabase(":memory:");
   const server = createServer({
+    db,
     store: createEventStore(db),
     workspaces: createWorkspaceStore(db),
     roles: createRoleStore(db),
@@ -138,10 +139,10 @@ describe("workspace-role endpoints", () => {
       url: "/roles",
       payload: { name: "lead", persistent: true },
     })).json() as Role;
-    const worker = (await server.inject({
+    const specialist = (await server.inject({
       method: "POST",
       url: "/roles",
-      payload: { name: "worker", persistent: false },
+      payload: { name: "specialist", persistent: false },
     })).json() as Role;
 
     await server.inject({
@@ -151,7 +152,7 @@ describe("workspace-role endpoints", () => {
     });
     await server.inject({
       method: "PUT",
-      url: `/workspaces/${ws.id}/roles/${worker.id}`,
+      url: `/workspaces/${ws.id}/roles/${specialist.id}`,
       payload: { max_concurrent: 5 },
     });
 
@@ -160,10 +161,13 @@ describe("workspace-role endpoints", () => {
       url: `/workspaces/${ws.id}/roles`,
     })).json() as WorkspaceRoleAssignment[];
 
+    const byRoleId = new Map(list.map((entry) => [entry.role.id, entry]));
+    expect(byRoleId.get(lead.id)).toEqual({ role: lead, max_concurrent: 1 });
+    expect(byRoleId.get(specialist.id)).toEqual({ role: specialist, max_concurrent: 5 });
+
     const byName = new Map(list.map((entry) => [entry.role.name, entry]));
-    expect(byName.get("lead")).toEqual({ role: lead, max_concurrent: 1 });
-    expect(byName.get("worker")).toEqual({ role: worker, max_concurrent: 5 });
     expect(byName.get("manager")?.max_concurrent).toBe(1);
+    expect(byName.get("worker")?.max_concurrent).toBe(3);
 
     await teardown(h);
   });

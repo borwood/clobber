@@ -1,3 +1,4 @@
+import type { Database } from "bun:sqlite";
 import type { PermissionMode } from "@clobber/shared";
 import type { EventStore } from "./event-store.ts";
 import type { WorkspaceStore } from "./workspace-store.ts";
@@ -35,6 +36,7 @@ export interface SpawnedAgentInfo {
 export type AgentSpawner = (req: AgentSpawnRequest) => SpawnedAgentInfo;
 
 export interface ServerOptions {
+  readonly db: Database;
   readonly store: EventStore;
   readonly workspaces: WorkspaceStore;
   readonly roles: RoleStore;

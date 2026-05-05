@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PermissionModeSchema } from "../hooks/payloads.ts";
 
 const RelativeBundlePath = z
   .string()
@@ -17,6 +18,10 @@ export const RoleManifestSchema = z
     systemPromptPath: RelativeBundlePath,
     pluginTemplatePath: RelativeBundlePath,
     allowedCliCommands: z.array(z.string().min(1)).readonly(),
+    persistent: z.boolean(),
+    defaultCeiling: z.number().int().nonnegative(),
+    permissionMode: PermissionModeSchema.optional(),
+    allowedTools: z.array(z.string().min(1)).readonly().optional(),
   })
   .refine(
     (m) =>

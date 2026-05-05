@@ -91,6 +91,7 @@ const roleVersions = createRoleVersionStore(db);
   const sessions = createSessionStore(db);
   const control = controlledSpawner();
   const server = createServer({
+    db,
     store,
     workspaces,
     roles,
