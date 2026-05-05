@@ -33,9 +33,6 @@ const SCHEMA = `
     FOREIGN KEY (workspace_id)       REFERENCES workspaces(id)     ON DELETE CASCADE
   );
   CREATE INDEX IF NOT EXISTS idx_roles_created   ON roles(created_at DESC);
-  CREATE INDEX IF NOT EXISTS idx_roles_workspace ON roles(workspace_id);
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_roles_global_name
-    ON roles(name) WHERE workspace_id IS NULL;
 
   CREATE TABLE IF NOT EXISTS role_versions (
     id                 TEXT    PRIMARY KEY,

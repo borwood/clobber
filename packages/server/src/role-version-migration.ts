@@ -9,6 +9,11 @@ export function migrateRoleVersions(db: Database): void {
   ensureColumn(db, "roles", "current_version_id", "TEXT");
   ensureColumn(db, "sessions", "role_version_id", "TEXT");
   dropLegacyGlobalUniqueName(db);
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_roles_workspace ON roles(workspace_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_roles_global_name
+      ON roles(name) WHERE workspace_id IS NULL;
+  `);
   backfillRoleVersions(db);
   backfillUnseededWorkspaces(db);
 }
