@@ -1,4 +1,5 @@
 import { useState, type KeyboardEvent } from "react";
+import { classifyComposerKey } from "./composer-key.ts";
 
 interface Props {
   readonly sessionId: string;
@@ -51,15 +52,19 @@ export function PromptComposer({
   }
 
   function onKey(e: KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+    const action = classifyComposerKey(e, {
+      hasTextSelection: hasTextSelection(),
+    });
+    if (action === "send") {
       e.preventDefault();
       void send();
       return;
     }
-    // Ctrl+C interrupts only when there's no active text selection — otherwise
-    // we'd hijack the browser's copy shortcut.
-    if (e.key === "c" && e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
-      if (hasTextSelection()) return;
+    if (action === "newline") {
+      // Default textarea behavior already inserts a newline; nothing to do.
+      return;
+    }
+    if (action === "interrupt") {
       if (!canInterrupt) return;
       e.preventDefault();
       void interrupt();
@@ -78,7 +83,7 @@ export function PromptComposer({
             ? "Session ended."
             : busy
               ? "Agent is working… (Ctrl+C to interrupt)"
-              : "Follow-up prompt… (⌘/Ctrl+Enter to send)"
+              : "Follow-up prompt… (Enter to send, Shift+Enter for newline)"
         }
         rows={3}
         className="w-full resize-none rounded border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600 disabled:opacity-50"
