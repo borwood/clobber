@@ -166,7 +166,8 @@ describe("clobber CLI — spawn", () => {
 
     expect(harness.spawnerCalls.length).toBe(before + 1);
     const call = harness.spawnerCalls[harness.spawnerCalls.length - 1]!;
-    expect(call.prompt).toBe("audit auth.ts");
+    // Manager is persistent → office-context prefix prepended; user prompt is the suffix.
+    expect(call.prompt.endsWith("audit auth.ts")).toBe(true);
     expect(call.cwd).toBe(harness.repoPath);
   });
 

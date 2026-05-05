@@ -174,6 +174,10 @@ describe("TriggerScheduler — cron firing", () => {
     h.clock.advance(30_000);
     expect(h.spawnCalls.length).toBe(1);
     expect(h.spawnCalls[0]!.prompt).toContain("0 9 * * *");
+    // The triggered-wake spawn goes through attachSessionToAgent, so it gets the
+    // same office-context prefix as a manual /spawn for a persistent role.
+    expect(h.spawnCalls[0]!.prompt).toContain("[Previously in this office]");
+    expect(h.spawnCalls[0]!.prompt).toContain("[End of previously]");
 
     // The new session should be tied to the manager agent
     const active = h.sessions.listActiveForWorkspace(h.workspaceId);
@@ -215,6 +219,9 @@ describe("TriggerScheduler — cron firing", () => {
 
     const text = Buffer.concat(writes).toString("utf8");
     expect(text).toContain("0 9 * * *");
+    // Live-agent injection does NOT get the office-context prefix — the agent is
+    // already in-flight and has its own context. Only fresh spawns get the prefix.
+    expect(text).not.toContain("[Previously in this office]");
     expect(text).toBe(
       serializeUserMessage("a cron fired: 0 9 * * *"),
     );

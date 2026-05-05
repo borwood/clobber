@@ -1,4 +1,6 @@
----
+import type { RoleSkill } from "@clobber/shared";
+
+const BODY = `---
 name: office-notes
 description: Read and write notes in your office directory — your permanent on-disk presence across sessions.
 ---
@@ -9,8 +11,8 @@ You are a **persistent agent**. You have an *office* — a directory on disk tha
 belongs to you and only you, and that survives across sessions. Workers don't
 get one. You do.
 
-The path to your office is in the environment variable **`CLOBBER_OFFICE_DIR`**.
-It points at `<workspace>/.clobber/offices/<your-agent-id>/`.
+The path to your office is in the environment variable **\`CLOBBER_OFFICE_DIR\`**.
+It points at \`<workspace>/.clobber/offices/<your-agent-id>/\`.
 
 ## What to use it for
 
@@ -26,10 +28,10 @@ place to check when you sit down.
 
 ## On wake (start of every session)
 
-1. List the directory: `ls "$CLOBBER_OFFICE_DIR"`.
-2. Read the most recent file (highest mtime). That's your last note to
-   yourself.
-3. Skim older files only if their names look relevant to the current prompt.
+The server already prepends a \`[Previously in this office] ... [End of previously]\`
+block to your boot prompt summarising the most recent notes. Use it as your
+first read. If you need the full body of a note, \`cat\` it from
+\`$CLOBBER_OFFICE_DIR\`.
 
 If the directory is empty, this is a fresh office — no prior context. That's
 fine; leave a note before you end the session.
@@ -38,24 +40,30 @@ fine; leave a note before you end the session.
 
 Write a fresh note before the session ends. Filename convention:
 
-```
+\`\`\`
 notes-YYYY-MM-DD-HHMMSS.md
-```
+\`\`\`
 
 …so newest is always last alphabetically. Keep notes terse — one screen, not
 a journal. Future-you will thank present-you for being concise.
 
 ## Do
 
-- `cat "$CLOBBER_OFFICE_DIR/<filename>"` to read
-- `cat > "$CLOBBER_OFFICE_DIR/notes-...md" <<EOF ... EOF` to write
-- Use the `Write` tool against `$CLOBBER_OFFICE_DIR/<filename>` for multi-line content
+- \`cat "$CLOBBER_OFFICE_DIR/<filename>"\` to read
+- \`cat > "$CLOBBER_OFFICE_DIR/notes-...md" <<EOF ... EOF\` to write
+- Use the \`Write\` tool against \`$CLOBBER_OFFICE_DIR/<filename>\` for multi-line content
 
 ## Don't
 
 - Don't write into another agent's office. You only own your own directory.
 - Don't store secrets here unless you'd be comfortable with anyone in the
-  workspace reading them — `.clobber/` lives next to the repo.
+  workspace reading them — \`.clobber/\` lives next to the repo.
 - Don't expect the office to exist for ephemeral roles. If
-  `CLOBBER_OFFICE_DIR` is unset, you're an ephemeral agent — there's no office
+  \`CLOBBER_OFFICE_DIR\` is unset, you're an ephemeral agent — there's no office
   and this skill doesn't apply.
+`;
+
+export const OFFICE_NOTES_SKILL: RoleSkill = {
+  name: "office-notes",
+  body: BODY,
+};

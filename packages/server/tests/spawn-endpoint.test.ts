@@ -146,12 +146,13 @@ describe("POST /spawn", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]).toMatchObject({
       hookUrl: "http://127.0.0.1:3300/hook",
-      prompt: "do the thing",
       cwd: repoPath,
       sessionId: body.session_id,
       permissionMode: "bypassPermissions",
       allowedTools: ["Bash", "Read"],
     });
+    // Persistent role spawns get an office-context prefix prepended; user prompt is the suffix.
+    expect(calls[0]!.prompt.endsWith("do the thing")).toBe(true);
 
     const agent = h.agents.get(body.agent_id);
     expect(agent).not.toBeNull();

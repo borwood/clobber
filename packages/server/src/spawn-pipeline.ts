@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { delimiter } from "node:path";
-import { materializeBundle } from "@clobber/runtime";
+import { materializeBundle, type RoleBundleData } from "@clobber/runtime";
 import type { Agent, Role, Workspace } from "@clobber/shared";
 import { ensureOffice } from "./office-store.ts";
+import { composeOfficeContext } from "./office-context.ts";
+import { OFFICE_NOTES_SKILL } from "./office-notes-skill.ts";
 import type { WorkspaceRoleStore } from "./workspace-role-store.ts";
 import type { AgentStore } from "./agent-store.ts";
 import type { SessionStore } from "./session-store.ts";
@@ -110,16 +112,23 @@ export function attachSessionToAgent(
   const sessionId = randomUUID();
   const token = generateTokenValue();
 
+  const officeDir = role.persistent
+    ? ensureOffice(workspace.repo_path, agent.id)
+    : null;
+
+  const effectiveBundle: RoleBundleData = officeDir === null
+    ? bundle
+    : injectOfficeNotesSkill(bundle);
+  const effectivePrompt = officeDir === null
+    ? prompt
+    : `${composeOfficeContext(officeDir)}\n\n${prompt}`;
+
   const materialized = materializeBundle({
-    bundle,
+    bundle: effectiveBundle,
     repoPath: workspace.repo_path,
     hookUrl: deps.hookUrl,
     cliEntry: deps.cliEntry,
   });
-
-  const officeDir = role.persistent
-    ? ensureOffice(workspace.repo_path, agent.id)
-    : null;
 
   const baseEnv = process.env;
   const existingPath = baseEnv["PATH"] ?? "";
@@ -139,12 +148,12 @@ export function attachSessionToAgent(
   > = {
     env,
     pluginDirs: [materialized.pluginDir],
-    appendSystemPrompt: bundle.systemPrompt,
+    appendSystemPrompt: effectiveBundle.systemPrompt,
   };
 
   const spawnReq: AgentSpawnRequest = {
     hookUrl: deps.hookUrl,
-    prompt,
+    prompt: effectivePrompt,
     cwd: workspace.repo_path,
     sessionId,
     ...(role.permission_mode === undefined
@@ -174,6 +183,12 @@ export function attachSessionToAgent(
   });
 
   return { ok: true, agent_id: agent.id, session_id: sessionId, pid: spawned.pid };
+}
+
+function injectOfficeNotesSkill(bundle: RoleBundleData): RoleBundleData {
+  const already = bundle.skills.some((s) => s.name === OFFICE_NOTES_SKILL.name);
+  if (already) return bundle;
+  return { ...bundle, skills: [...bundle.skills, OFFICE_NOTES_SKILL] };
 }
 
 function checkCapacity(
