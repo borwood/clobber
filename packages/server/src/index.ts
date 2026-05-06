@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { spawnAgent } from "@clobber/runtime";
 import { createServer, type AgentSpawner } from "./server.ts";
 import { createDatabase } from "./db.ts";
+import { resolveDatabasePath } from "./db-path.ts";
 import { createEventStore } from "./event-store.ts";
 import { createWorkspaceStore } from "./workspace-store.ts";
 import { createRoleStore } from "./role-store.ts";
@@ -21,8 +22,11 @@ import { reapOrphanedSessions } from "./boot-reap.ts";
 const PORT = 3300;
 const API_BASE = `http://127.0.0.1:${PORT}`;
 const HOOK_URL = `${API_BASE}/hook`;
-const envDb = process.env["CLOBBER_DB"];
-const DB_PATH = envDb && envDb.length > 0 ? envDb : "./clobber.db";
+const DB_PATH = resolveDatabasePath({
+  envValue: process.env["CLOBBER_DB"],
+  serverIndexUrl: import.meta.url,
+  cwd: process.cwd(),
+});
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI_ENTRY = resolve(HERE, "../../cli/src/index.ts");
