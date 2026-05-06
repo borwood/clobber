@@ -14,6 +14,16 @@ get one. You do.
 The path to your office is in the environment variable **\`CLOBBER_OFFICE_DIR\`**.
 It points at \`<workspace>/.clobber/offices/<your-agent-id>/\`.
 
+## First, resolve the path
+
+**First command on entry:** \`echo "\$CLOBBER_OFFICE_DIR"\`.
+
+Use that exact resolved string for every read and write. Don't extrapolate the
+path from your role name or label — your office is keyed by your agent UUID,
+which you can't guess. Skipping this step has produced orphan directories like
+\`offices/manager-default/\` in the past, because \`Write\` happily creates any
+missing parent directory it's pointed at.
+
 ## What to use it for
 
 - **Notes to your future self.** Decisions you've made, things you're waiting
