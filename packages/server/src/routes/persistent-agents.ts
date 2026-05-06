@@ -1,33 +1,12 @@
 import type { FastifyInstance } from "fastify";
-import type { LatestAgentStatus } from "@clobber/shared";
 import type { WorkspaceStore } from "../workspace-store.ts";
 import type { AgentStore } from "../agent-store.ts";
 import type { RoleStore } from "../role-store.ts";
 import type { SessionStore } from "../session-store.ts";
-import type { AgentRegistry } from "../agent-registry.ts";
-import type { AgentStatusStore } from "../agent-status-store.ts";
-import { officePathFor } from "../office-store.ts";
-import { peekOffice, type OfficePeek } from "../office-peek.ts";
 import { attachSessionToAgent, type SpawnPipelineDeps } from "../spawn-pipeline.ts";
 
 interface IdParam {
   id: string;
-}
-
-interface ActiveSession {
-  id: string;
-  started_at: number;
-  busy: boolean;
-  latest_status: LatestAgentStatus | null;
-}
-
-interface AgentCard {
-  agent_id: string;
-  label: string | null;
-  role: { id: string; name: string };
-  active_session: ActiveSession | null;
-  last_started_at: number | null;
-  office: OfficePeek;
 }
 
 export interface PersistentAgentsRouteDeps {
@@ -35,8 +14,6 @@ export interface PersistentAgentsRouteDeps {
   readonly agents: AgentStore;
   readonly roles: RoleStore;
   readonly sessions: SessionStore;
-  readonly registry: AgentRegistry;
-  readonly agentStatuses: AgentStatusStore;
   readonly spawnPipelineDeps: SpawnPipelineDeps;
 }
 
@@ -47,58 +24,7 @@ export function registerPersistentAgentsRoutes(
   app: FastifyInstance,
   deps: PersistentAgentsRouteDeps,
 ): void {
-  const { workspaces, agents, roles, sessions, registry, agentStatuses, spawnPipelineDeps } = deps;
-
-  app.get<{ Params: IdParam }>(
-    "/workspaces/:id/persistent-agents",
-    async (request, reply) => {
-      const workspace = workspaces.get(request.params.id);
-      if (workspace === null) {
-        reply.code(404);
-        return { error: "workspace not found" };
-      }
-
-      const allAgents = agents.listForWorkspace(workspace.id);
-      const activeSessions = sessions.listActiveForWorkspace(workspace.id);
-      const allWorkspaceSessions = sessions.listForWorkspace(workspace.id);
-
-      const cards: AgentCard[] = [];
-      for (const agent of allAgents) {
-        const role = roles.get(agent.role_id);
-        if (role === null) continue;
-        if (!role.persistent) continue;
-
-        const active = activeSessions.find((s) => s.agent_id === agent.id);
-        const live = active === undefined ? null : registry.get(active.id);
-        const status = active === undefined ? null : agentStatuses.get(active.id);
-        const latest_status: LatestAgentStatus | null =
-          status === null
-            ? null
-            : { state: status.state, summary: status.summary, updated_at: status.updated_at };
-
-        const lastSession = allWorkspaceSessions.find((s) => s.agent_id === agent.id);
-
-        cards.push({
-          agent_id: agent.id,
-          label: agent.label === undefined ? null : agent.label,
-          role: { id: role.id, name: role.name },
-          active_session:
-            active === undefined
-              ? null
-              : {
-                  id: active.id,
-                  started_at: active.started_at,
-                  busy: live === null ? false : live.busy,
-                  latest_status,
-                },
-          last_started_at: lastSession === undefined ? null : lastSession.started_at,
-          office: peekOffice(officePathFor(workspace.repo_path, agent.id)),
-        });
-      }
-
-      return { agents: cards };
-    },
-  );
+  const { workspaces, agents, roles, sessions, spawnPipelineDeps } = deps;
 
   app.post<{ Params: IdParam }>(
     "/persistent-agents/:id/wake",

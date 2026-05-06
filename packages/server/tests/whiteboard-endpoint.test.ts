@@ -23,7 +23,7 @@ import type { AgentSpawner } from "../src/types.ts";
 let repoPath: string;
 
 beforeEach(() => {
-  repoPath = mkdtempSync(join(tmpdir(), "clobber-persistent-agents-"));
+  repoPath = mkdtempSync(join(tmpdir(), "clobber-whiteboard-"));
 });
 
 afterEach(() => {
@@ -91,16 +91,18 @@ async function teardown(h: Harness): Promise<void> {
   h.db.close();
 }
 
-interface AgentCard {
+interface SessionView {
+  id: string;
+  started_at: number;
+  busy: boolean;
+  latest_status: { state: string; summary: string; updated_at: number } | null;
+}
+
+interface OfficeCard {
   agent_id: string;
   label: string | null;
   role: { id: string; name: string };
-  active_session: {
-    id: string;
-    started_at: number;
-    busy: boolean;
-    latest_status: { state: string; summary: string; updated_at: number } | null;
-  } | null;
+  active_session: SessionView | null;
   last_started_at: number | null;
   office: {
     file_count: number;
@@ -112,33 +114,46 @@ interface AgentCard {
   };
 }
 
-describe("GET /workspaces/:id/persistent-agents", () => {
+interface DeskCard {
+  agent_id: string;
+  label: string | null;
+  role: { id: string; name: string };
+  session: SessionView;
+}
+
+interface WhiteboardBody {
+  offices: OfficeCard[];
+  desks: DeskCard[];
+}
+
+describe("GET /workspaces/:id/whiteboard", () => {
   it("404s for an unknown workspace", async () => {
     const h = buildHarness();
     const res = await h.server.inject({
       method: "GET",
-      url: "/workspaces/00000000-0000-0000-0000-000000000000/persistent-agents",
+      url: "/workspaces/00000000-0000-0000-0000-000000000000/whiteboard",
     });
     expect(res.statusCode).toBe(404);
     await teardown(h);
   });
 
-  it("returns an empty list when the workspace has no persistent agents yet", async () => {
+  it("returns empty offices and desks when the workspace has no agents", async () => {
     const h = buildHarness();
     const ws = h.workspaces.create({ name: "ws", repo_path: repoPath });
 
     const res = await h.server.inject({
       method: "GET",
-      url: `/workspaces/${ws.id}/persistent-agents`,
+      url: `/workspaces/${ws.id}/whiteboard`,
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as { agents: AgentCard[] };
-    expect(body.agents).toEqual([]);
+    const body = res.json() as WhiteboardBody;
+    expect(body.offices).toEqual([]);
+    expect(body.desks).toEqual([]);
 
     await teardown(h);
   });
 
-  it("only lists persistent agents — ephemeral agents are excluded", async () => {
+  it("places persistent agents in offices and excludes ephemerals from offices", async () => {
     const h = buildHarness();
     const ws = h.workspaces.create({ name: "ws", repo_path: repoPath });
     const persistentRole = h.roles.create({ name: "manager", persistent: true });
@@ -159,22 +174,23 @@ describe("GET /workspaces/:id/persistent-agents", () => {
 
     const res = await h.server.inject({
       method: "GET",
-      url: `/workspaces/${ws.id}/persistent-agents`,
+      url: `/workspaces/${ws.id}/whiteboard`,
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as { agents: AgentCard[] };
-    expect(body.agents).toHaveLength(1);
-    expect(body.agents[0]!.agent_id).toBe(persistentAgent.id);
-    expect(body.agents[0]!.role.name).toBe("manager");
-    expect(body.agents[0]!.label).toBe("primary");
-    expect(body.agents[0]!.active_session).toBeNull();
-    expect(body.agents[0]!.office.file_count).toBe(0);
-    expect(body.agents[0]!.office.latest).toBeNull();
+    const body = res.json() as WhiteboardBody;
+    expect(body.offices).toHaveLength(1);
+    expect(body.offices[0]!.agent_id).toBe(persistentAgent.id);
+    expect(body.offices[0]!.role.name).toBe("manager");
+    expect(body.offices[0]!.label).toBe("primary");
+    expect(body.offices[0]!.active_session).toBeNull();
+    expect(body.offices[0]!.office.file_count).toBe(0);
+
+    expect(body.desks).toEqual([]);
 
     await teardown(h);
   });
 
-  it("surfaces an active session when the agent has one in flight", async () => {
+  it("surfaces an active session on the persistent agent's office card", async () => {
     const h = buildHarness();
     const ws = h.workspaces.create({ name: "ws", repo_path: repoPath });
     const role = h.roles.create({ name: "manager", persistent: true });
@@ -195,21 +211,20 @@ describe("GET /workspaces/:id/persistent-agents", () => {
 
     const res = await h.server.inject({
       method: "GET",
-      url: `/workspaces/${ws.id}/persistent-agents`,
+      url: `/workspaces/${ws.id}/whiteboard`,
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as { agents: AgentCard[] };
-    expect(body.agents).toHaveLength(1);
-    expect(body.agents[0]!.active_session).not.toBeNull();
-    expect(body.agents[0]!.active_session!.id).toBe("session-active-1");
-    expect(typeof body.agents[0]!.active_session!.started_at).toBe("number");
-    // The session was created without going through the registry, so busy=false.
-    expect(body.agents[0]!.active_session!.busy).toBe(false);
+    const body = res.json() as WhiteboardBody;
+    expect(body.offices).toHaveLength(1);
+    expect(body.offices[0]!.active_session).not.toBeNull();
+    expect(body.offices[0]!.active_session!.id).toBe("session-active-1");
+    expect(typeof body.offices[0]!.active_session!.started_at).toBe("number");
+    expect(body.offices[0]!.active_session!.busy).toBe(false);
 
     await teardown(h);
   });
 
-  it("includes the agent's self-reported latest_status on the active session", async () => {
+  it("includes latest_status on the office's active session", async () => {
     const h = buildHarness();
     const ws = h.workspaces.create({ name: "ws", repo_path: repoPath });
     const role = h.roles.create({ name: "manager", persistent: true });
@@ -236,12 +251,11 @@ describe("GET /workspaces/:id/persistent-agents", () => {
 
     const res = await h.server.inject({
       method: "GET",
-      url: `/workspaces/${ws.id}/persistent-agents`,
+      url: `/workspaces/${ws.id}/whiteboard`,
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as { agents: AgentCard[] };
-    const card = body.agents[0]!;
-    expect(card.active_session).not.toBeNull();
+    const body = res.json() as WhiteboardBody;
+    const card = body.offices[0]!;
     expect(card.active_session!.latest_status).not.toBeNull();
     expect(card.active_session!.latest_status!.state).toBe("blocked");
     expect(card.active_session!.latest_status!.summary).toBe(
@@ -251,7 +265,7 @@ describe("GET /workspaces/:id/persistent-agents", () => {
     await teardown(h);
   });
 
-  it("returns latest_status: null when an active session has no self-report yet", async () => {
+  it("returns latest_status: null when an office's active session has no self-report yet", async () => {
     const h = buildHarness();
     const ws = h.workspaces.create({ name: "ws", repo_path: repoPath });
     const role = h.roles.create({ name: "manager", persistent: true });
@@ -272,16 +286,16 @@ describe("GET /workspaces/:id/persistent-agents", () => {
 
     const res = await h.server.inject({
       method: "GET",
-      url: `/workspaces/${ws.id}/persistent-agents`,
+      url: `/workspaces/${ws.id}/whiteboard`,
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as { agents: AgentCard[] };
-    expect(body.agents[0]!.active_session!.latest_status).toBeNull();
+    const body = res.json() as WhiteboardBody;
+    expect(body.offices[0]!.active_session!.latest_status).toBeNull();
 
     await teardown(h);
   });
 
-  it("returns a peek of the latest office note when files are present", async () => {
+  it("peeks the latest office note when files are present", async () => {
     const h = buildHarness();
     const ws = h.workspaces.create({ name: "ws", repo_path: repoPath });
     const role = h.roles.create({ name: "manager", persistent: true });
@@ -299,14 +313,123 @@ describe("GET /workspaces/:id/persistent-agents", () => {
 
     const res = await h.server.inject({
       method: "GET",
-      url: `/workspaces/${ws.id}/persistent-agents`,
+      url: `/workspaces/${ws.id}/whiteboard`,
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as { agents: AgentCard[] };
-    expect(body.agents[0]!.office.file_count).toBe(2);
-    expect(body.agents[0]!.office.latest).not.toBeNull();
-    expect(body.agents[0]!.office.latest!.name).toBe("notes-2026-05-05-120000.md");
-    expect(body.agents[0]!.office.latest!.preview).toContain("newest content");
+    const body = res.json() as WhiteboardBody;
+    expect(body.offices[0]!.office.file_count).toBe(2);
+    expect(body.offices[0]!.office.latest).not.toBeNull();
+    expect(body.offices[0]!.office.latest!.name).toBe("notes-2026-05-05-120000.md");
+    expect(body.offices[0]!.office.latest!.preview).toContain("newest content");
+
+    await teardown(h);
+  });
+
+  it("places ephemeral agents on desks while their session is active", async () => {
+    const h = buildHarness();
+    const ws = h.workspaces.create({ name: "ws", repo_path: repoPath });
+    const role = h.roles.create({ name: "worker", persistent: false });
+    h.workspaceRoles.setCeiling(ws.id, role.id, 5);
+
+    const agent = h.agents.create({
+      workspace_id: ws.id,
+      role_id: role.id,
+      label: "task-A",
+    });
+    h.sessions.create({
+      id: "ephemeral-session-1",
+      agent_id: agent.id,
+      workspace_id: ws.id,
+      role_id: role.id,
+      pid: 8888,
+    });
+
+    const res = await h.server.inject({
+      method: "GET",
+      url: `/workspaces/${ws.id}/whiteboard`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as WhiteboardBody;
+    expect(body.offices).toEqual([]);
+    expect(body.desks).toHaveLength(1);
+    expect(body.desks[0]!.agent_id).toBe(agent.id);
+    expect(body.desks[0]!.role.name).toBe("worker");
+    expect(body.desks[0]!.label).toBe("task-A");
+    expect(body.desks[0]!.session.id).toBe("ephemeral-session-1");
+    expect(body.desks[0]!.session.busy).toBe(false);
+    expect(body.desks[0]!.session.latest_status).toBeNull();
+
+    await teardown(h);
+  });
+
+  it("surfaces the ephemeral session's latest_status on the desk", async () => {
+    const h = buildHarness();
+    const ws = h.workspaces.create({ name: "ws", repo_path: repoPath });
+    const role = h.roles.create({ name: "worker", persistent: false });
+    h.workspaceRoles.setCeiling(ws.id, role.id, 5);
+
+    const agent = h.agents.create({
+      workspace_id: ws.id,
+      role_id: role.id,
+      label: "task-B",
+    });
+    h.sessions.create({
+      id: "ephemeral-session-2",
+      agent_id: agent.id,
+      workspace_id: ws.id,
+      role_id: role.id,
+      pid: 8889,
+    });
+    const statuses = createAgentStatusStore(h.db);
+    statuses.upsert({
+      session_id: "ephemeral-session-2",
+      state: "working",
+      summary: "running migration on staging",
+    });
+
+    const res = await h.server.inject({
+      method: "GET",
+      url: `/workspaces/${ws.id}/whiteboard`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as WhiteboardBody;
+    expect(body.desks[0]!.session.latest_status).not.toBeNull();
+    expect(body.desks[0]!.session.latest_status!.state).toBe("working");
+    expect(body.desks[0]!.session.latest_status!.summary).toBe(
+      "running migration on staging",
+    );
+
+    await teardown(h);
+  });
+
+  it("hides ephemeral agents from the whiteboard when their session has ended", async () => {
+    const h = buildHarness();
+    const ws = h.workspaces.create({ name: "ws", repo_path: repoPath });
+    const role = h.roles.create({ name: "worker", persistent: false });
+    h.workspaceRoles.setCeiling(ws.id, role.id, 5);
+
+    const agent = h.agents.create({
+      workspace_id: ws.id,
+      role_id: role.id,
+      label: "task-C",
+    });
+    h.sessions.create({
+      id: "ephemeral-session-3",
+      agent_id: agent.id,
+      workspace_id: ws.id,
+      role_id: role.id,
+      pid: 8890,
+    });
+    h.sessions.markEnded("ephemeral-session-3");
+
+    const res = await h.server.inject({
+      method: "GET",
+      url: `/workspaces/${ws.id}/whiteboard`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as WhiteboardBody;
+    expect(body.offices).toEqual([]);
+    expect(body.desks).toEqual([]);
 
     await teardown(h);
   });

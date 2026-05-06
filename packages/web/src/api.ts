@@ -48,18 +48,32 @@ export interface OfficePeek {
   } | null;
 }
 
-export interface PersistentAgentCard {
+export interface SessionView {
+  readonly id: string;
+  readonly started_at: number;
+  readonly busy: boolean;
+  readonly latest_status: LatestAgentStatus | null;
+}
+
+export interface OfficeCard {
   readonly agent_id: string;
   readonly label: string | null;
   readonly role: { readonly id: string; readonly name: string };
-  readonly active_session: {
-    readonly id: string;
-    readonly started_at: number;
-    readonly busy: boolean;
-    readonly latest_status: LatestAgentStatus | null;
-  } | null;
+  readonly active_session: SessionView | null;
   readonly last_started_at: number | null;
   readonly office: OfficePeek;
+}
+
+export interface DeskCard {
+  readonly agent_id: string;
+  readonly label: string | null;
+  readonly role: { readonly id: string; readonly name: string };
+  readonly session: SessionView;
+}
+
+export interface Whiteboard {
+  readonly offices: readonly OfficeCard[];
+  readonly desks: readonly DeskCard[];
 }
 
 export interface SpawnRequest {
@@ -115,10 +129,8 @@ export const api = {
       `/workspaces/${encodeURIComponent(workspaceId)}/roles`,
     ),
   spawn: (req: SpawnRequest) => postJson<SpawnResponse>("/spawn", req),
-  listPersistentAgents: (workspaceId: string) =>
-    getJson<{ agents: PersistentAgentCard[] }>(
-      `/workspaces/${encodeURIComponent(workspaceId)}/persistent-agents`,
-    ),
+  getWhiteboard: (workspaceId: string) =>
+    getJson<Whiteboard>(`/workspaces/${encodeURIComponent(workspaceId)}/whiteboard`),
   wakePersistentAgent: (agentId: string) =>
     postJson<SpawnResponse>(
       `/persistent-agents/${encodeURIComponent(agentId)}/wake`,

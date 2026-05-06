@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import {
   api,
-  type PersistentAgentCard,
+  type DeskCard,
+  type OfficeCard,
   type SessionSummary,
   type TranscriptLine,
   type Workspace,
@@ -40,7 +41,8 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
 
   const [view, setView] = useState<WorkspaceView>(() => readStoredView());
-  const [persistentAgents, setPersistentAgents] = useState<readonly PersistentAgentCard[]>([]);
+  const [offices, setOffices] = useState<readonly OfficeCard[]>([]);
+  const [desks, setDesks] = useState<readonly DeskCard[]>([]);
   const [now, setNow] = useState(() => Date.now());
   const [wakingAgents, setWakingAgents] = useState<ReadonlySet<string>>(() => new Set());
 
@@ -123,13 +125,16 @@ export function App() {
   }, [workspaceId]);
 
   useEffect(() => {
-    setPersistentAgents([]);
+    setOffices([]);
+    setDesks([]);
     if (workspaceId === null || view !== "whiteboard") return;
     let cancelled = false;
     async function tick() {
       try {
-        const next = await api.listPersistentAgents(workspaceId!);
-        if (!cancelled) setPersistentAgents(next.agents);
+        const next = await api.getWhiteboard(workspaceId!);
+        if (cancelled) return;
+        setOffices(next.offices);
+        setDesks(next.desks);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       }
@@ -216,9 +221,10 @@ export function App() {
         <section className="flex flex-col overflow-hidden">
           {view === "whiteboard" ? (
             <WhiteboardView
-              agents={persistentAgents}
+              offices={offices}
+              desks={desks}
               now={now}
-              busyAgentIds={wakingAgents}
+              wakingAgentIds={wakingAgents}
               onOpenSession={(sessionId) => {
                 persistView("mailbox");
                 setSelectedSession(sessionId);
