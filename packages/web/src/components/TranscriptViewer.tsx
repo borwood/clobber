@@ -3,12 +3,14 @@ import type { TranscriptLine } from "../api.ts";
 import {
   classifyLine,
   shouldShowAssistantLabel,
+  shouldHideThinkingPulse,
   previewToolInput,
   type AssistantLine,
   type UserLine,
   type ContentBlock,
 } from "../transcript-types.ts";
 import { Markdown } from "./Markdown.tsx";
+import { ThinkingChip } from "./ThinkingChip.tsx";
 
 interface Props {
   readonly lines: readonly TranscriptLine[];
@@ -71,6 +73,10 @@ export function TranscriptViewer({ lines, showSystem }: Props) {
                     showLabel={shouldShowAssistantLabel(classified, idx, { showSystem })}
                   />
                 );
+              }
+              if (c.kind === "thinking-pulse") {
+                if (shouldHideThinkingPulse(classified, idx)) return null;
+                return <ThinkingChip key={idx} startMs={c.timestamp} />;
               }
               if (c.kind === "notification") {
                 return (
