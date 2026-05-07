@@ -9,3 +9,17 @@ export function serializeUserMessage(content: string): string {
     message: { role: "user", content },
   }) + "\n";
 }
+
+/**
+ * Aborts the in-flight turn without ending the session. claude responds with
+ * a `control_response` and a `result` of subtype `error_during_execution`,
+ * then accepts the next user message normally. SIGINT, by contrast, would
+ * exit the process.
+ */
+export function serializeInterruptRequest(requestId: string): string {
+  return JSON.stringify({
+    type: "control_request",
+    request_id: requestId,
+    request: { subtype: "interrupt" },
+  }) + "\n";
+}

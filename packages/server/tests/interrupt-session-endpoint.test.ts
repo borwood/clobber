@@ -27,11 +27,17 @@ interface KillRecord {
   readonly signal: NodeJS.Signals;
 }
 
+interface StdinWrite {
+  readonly sessionId: string;
+  readonly data: string;
+}
+
 interface Harness {
   server: ReturnType<typeof createServer>;
   db: ReturnType<typeof createDatabase>;
   sessions: ReturnType<typeof createSessionStore>;
   killCalls: KillRecord[];
+  stdinWrites: StdinWrite[];
   repoPath: string;
 }
 
@@ -48,10 +54,14 @@ function buildHarness(): Harness {
   const role = roles.create({ name: "manager", persistent: false });
   workspaceRoles.setCeiling(ws.id, role.id, 1);
   const killCalls: KillRecord[] = [];
+  const stdinWrites: StdinWrite[] = [];
   const spawner: AgentSpawner = (req): SpawnedAgentInfo => {
     if (req.sessionId === undefined) throw new Error("expected sessionId");
     const sessionId = req.sessionId;
     const stdin = new PassThrough();
+    stdin.on("data", (chunk: Buffer) =>
+      stdinWrites.push({ sessionId, data: chunk.toString() }),
+    );
     stdin.resume();
     return {
       sessionId,
@@ -83,7 +93,7 @@ function buildHarness(): Harness {
   
     dispatches: createTriggerDispatchStore(db),
   });
-  return { server, db, sessions, killCalls, repoPath };
+  return { server, db, sessions, killCalls, stdinWrites, repoPath };
 }
 
 async function teardown(h: Harness) {
@@ -160,7 +170,7 @@ describe("POST /sessions/:id/interrupt", () => {
     await teardown(h);
   });
 
-  it("SIGINT-s the live child while a turn is in flight and clears busy", async () => {
+  it("writes a stream-json control_request interrupt to stdin and clears busy (does NOT kill)", async () => {
     const h = buildHarness();
     const spawned = await spawn(h);
 
@@ -170,12 +180,26 @@ describe("POST /sessions/:id/interrupt", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json() as unknown).toEqual({ ok: true });
-    expect(h.killCalls).toEqual([
-      { sessionId: spawned.session_id, signal: "SIGINT" },
-    ]);
 
-    // After interrupt the agent must be considered idle, so a follow-up
-    // prompt should write to stdin (200) instead of returning 409.
+    // No signal sent — SIGINT would terminate `claude -p`, ending the session.
+    expect(h.killCalls).toEqual([]);
+
+    // One control_request line written to stdin.
+    const interruptWrites = h.stdinWrites.filter(
+      (w) => w.sessionId === spawned.session_id && w.data.includes('"control_request"'),
+    );
+    expect(interruptWrites).toHaveLength(1);
+    const parsed = JSON.parse(interruptWrites[0]!.data.trim()) as {
+      type: string;
+      request_id: string;
+      request: { subtype: string };
+    };
+    expect(parsed.type).toBe("control_request");
+    expect(parsed.request.subtype).toBe("interrupt");
+    expect(typeof parsed.request_id).toBe("string");
+    expect(parsed.request_id.length).toBeGreaterThan(0);
+
+    // Busy cleared — a follow-up prompt should land (claude is still alive).
     const promptRes = await h.server.inject({
       method: "POST",
       url: `/sessions/${spawned.session_id}/prompt`,
@@ -224,9 +248,7 @@ describe("POST /sessions/:id/interrupt", () => {
       url: `/sessions/${spawned.session_id}/interrupt`,
     });
     expect(res.statusCode).toBe(200);
-    expect(h.killCalls).toEqual([
-      { sessionId: spawned.session_id, signal: "SIGINT" },
-    ]);
+    expect(h.killCalls).toEqual([]);
     await teardown(h);
   });
 
