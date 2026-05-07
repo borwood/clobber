@@ -86,18 +86,22 @@ function truncatePreview(value: string): string {
 }
 
 // Returns true when the assistant label should render at `idx`. Within a run
-// of consecutive assistant lines the label renders only on the first; user
-// messages and tool_result/system lines reset the run. Filtered lines (e.g.
-// claude's interrupt marker) are invisible and do NOT reset the run.
+// of consecutive *visible* assistant lines, the label renders only on the
+// first. The run is reset by any visible non-assistant line (user, notification,
+// or — when showSystem is on — a system line like tool_result/attachment).
+// Invisible lines are transparent: filtered (claude's interrupt marker) is
+// always invisible; system lines are invisible when showSystem is off.
 export function shouldShowAssistantLabel(
   classified: readonly Classified[],
   idx: number,
+  opts: { readonly showSystem: boolean },
 ): boolean {
   if (classified[idx]?.kind !== "assistant") return true;
   for (let i = idx - 1; i >= 0; i--) {
     const prev = classified[i];
     if (prev === undefined) return true;
     if (prev.kind === "filtered") continue;
+    if (prev.kind === "system" && !opts.showSystem) continue;
     return prev.kind !== "assistant";
   }
   return true;

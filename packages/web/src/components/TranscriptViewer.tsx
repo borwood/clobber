@@ -68,7 +68,7 @@ export function TranscriptViewer({ lines, showSystem }: Props) {
                   <AssistantBubble
                     key={idx}
                     line={c.line}
-                    showLabel={shouldShowAssistantLabel(classified, idx)}
+                    showLabel={shouldShowAssistantLabel(classified, idx, { showSystem })}
                   />
                 );
               }
