@@ -114,7 +114,9 @@ function UserBubble({ line }: { line: UserLine }) {
   if (typeof content === "string") {
     return (
       <Bubble label="user" tone="zinc">
-        <Markdown text={content} />
+        <div className={USER_TEXT_BG}>
+          <Markdown text={content} />
+        </div>
       </Bubble>
     );
   }
@@ -129,7 +131,11 @@ function UserBubble({ line }: { line: UserLine }) {
 
 function UserContentBlock({ block }: { block: ContentBlock }) {
   if (block.type === "text") {
-    return <Markdown text={block.text} />;
+    return (
+      <div className={USER_TEXT_BG}>
+        <Markdown text={block.text} />
+      </div>
+    );
   }
   if (block.type === "tool_result") {
     const text =
@@ -164,7 +170,11 @@ function AssistantBubble({
 
 function AssistantContentBlock({ block }: { block: ContentBlock }) {
   if (block.type === "text") {
-    return <Markdown text={block.text} />;
+    return (
+      <div className={ASSISTANT_TEXT_BG}>
+        <Markdown text={block.text} />
+      </div>
+    );
   }
   if (block.type === "thinking") {
     if (block.thinking.trim().length === 0) return null;
@@ -281,15 +291,13 @@ interface BubbleProps {
 }
 
 function Bubble({ label, tone, children }: BubbleProps) {
-  // User: emerald accent (matches the existing border tone). Assistant:
-  // subtle zinc grey. Both subdued enough that nested tool_use cards
-  // (bg-zinc-950) still pop visually on top.
-  const styles =
-    tone === "emerald"
-      ? "border-emerald-900 bg-emerald-950/30"
-      : "border-zinc-700 bg-zinc-900/40";
+  // Border accent stays on the column (signals speaker). Bg colors are
+  // applied per text block (see ASSISTANT_TEXT_BG / USER_TEXT_BG below)
+  // so that tool_use boxes — which have their own dark bg — don't sit
+  // inside a coloured wash.
+  const accent = tone === "emerald" ? "border-emerald-900" : "border-zinc-800";
   return (
-    <div className={`border-l-2 ${styles} pl-3 pr-3 py-2 rounded-r space-y-2`}>
+    <div className={`border-l-2 ${accent} pl-3 space-y-2`}>
       {label !== null && (
         <div className="text-xs uppercase tracking-wider text-zinc-500">{label}</div>
       )}
@@ -297,3 +305,6 @@ function Bubble({ label, tone, children }: BubbleProps) {
     </div>
   );
 }
+
+const ASSISTANT_TEXT_BG = "bg-zinc-900/40 border border-zinc-800/60 rounded px-3 py-2";
+const USER_TEXT_BG = "bg-emerald-950/30 border border-emerald-900/40 rounded px-3 py-2";
