@@ -136,4 +136,20 @@ describe("buildClaudeArgs", () => {
     const args = buildClaudeArgs({ sessionId: "abc" });
     expect(args).not.toContain("--append-system-prompt");
   });
+
+  it("passes --name when displayName is provided (sets claude's session label)", () => {
+    const args = buildClaudeArgs({ sessionId: "abc", displayName: "deploy-fix" });
+    expect(args).toContain("--name");
+    expect(args[args.indexOf("--name") + 1]).toBe("deploy-fix");
+  });
+
+  it("omits --name when displayName is not provided", () => {
+    const args = buildClaudeArgs({ sessionId: "abc" });
+    expect(args).not.toContain("--name");
+  });
+
+  it("omits --name when displayName is the empty string", () => {
+    const args = buildClaudeArgs({ sessionId: "abc", displayName: "" });
+    expect(args).not.toContain("--name");
+  });
 });

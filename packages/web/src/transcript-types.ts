@@ -35,6 +35,11 @@ export type Classified =
   | { readonly kind: "user"; readonly line: UserLine }
   | { readonly kind: "assistant"; readonly line: AssistantLine }
   | {
+      readonly kind: "thinking-pulse";
+      readonly timestamp: number | null;
+      readonly raw: TranscriptLine;
+    }
+  | {
       readonly kind: "system";
       readonly type: string;
       readonly summary?: string;
@@ -47,6 +52,88 @@ export type Classified =
       readonly raw: TranscriptLine;
     }
   | { readonly kind: "filtered"; readonly raw: TranscriptLine };
+
+// Returns a one-line preview of a tool call's input, suitable for a
+// collapsed tool-call card. Tries common identifying fields in priority
+// order, falls back to the first non-empty string value, then null.
+//
+// Per-tool cards with status indicators / result hints are out of scope
+// here — see #40 for the richer summary surface that lands on top.
+const PREVIEW_PRIORITY_KEYS = [
+  "file_path",
+  "path",
+  "command",
+  "pattern",
+  "prompt",
+  "description",
+] as const;
+
+export function previewToolInput(input: unknown): string | null {
+  if (typeof input !== "object" || input === null) return null;
+  const obj = input as Record<string, unknown>;
+  for (const key of PREVIEW_PRIORITY_KEYS) {
+    const value = obj[key];
+    if (typeof value === "string" && value.length > 0) {
+      return truncatePreview(value);
+    }
+  }
+  for (const value of Object.values(obj)) {
+    if (typeof value === "string" && value.length > 0) {
+      return truncatePreview(value);
+    }
+  }
+  return null;
+}
+
+function truncatePreview(value: string): string {
+  const firstLine = value.split("\n", 1)[0] ?? "";
+  return firstLine.length > 120 ? firstLine.slice(0, 120) : firstLine;
+}
+
+// Returns true when the assistant label should render at `idx`. Within a run
+// of consecutive *visible* assistant lines, the label renders only on the
+// first. The run is reset by any visible non-assistant line (user, notification,
+// or — when showSystem is on — a system line like tool_result/attachment).
+// Invisible lines are transparent: filtered (claude's interrupt marker) is
+// always invisible; system lines are invisible when showSystem is off.
+// Thinking-pulse lines are also transparent — the chip is a prelude to the
+// assistant's response, not a separate turn from the user's mental model.
+export function shouldShowAssistantLabel(
+  classified: readonly Classified[],
+  idx: number,
+  opts: { readonly showSystem: boolean },
+): boolean {
+  if (classified[idx]?.kind !== "assistant") return true;
+  for (let i = idx - 1; i >= 0; i--) {
+    const prev = classified[i];
+    if (prev === undefined) return true;
+    if (prev.kind === "filtered") continue;
+    if (prev.kind === "thinking-pulse") continue;
+    if (prev.kind === "system" && !opts.showSystem) continue;
+    return prev.kind !== "assistant";
+  }
+  return true;
+}
+
+// A thinking-pulse line is "live" only when nothing else has been written
+// since it. Once any other content (assistant text, tool_use, tool_result,
+// user, notification, system) lands afterwards, the pulse is over and the
+// chip should disappear — matching the native claude CLI's transient
+// thinking widget. Other thinking-pulse and filtered lines are transparent
+// and don't dismiss the chip.
+export function shouldHideThinkingPulse(
+  classified: readonly Classified[],
+  idx: number,
+): boolean {
+  if (classified[idx]?.kind !== "thinking-pulse") return false;
+  for (let i = idx + 1; i < classified.length; i++) {
+    const next = classified[i];
+    if (next === undefined) return false;
+    if (next.kind === "filtered" || next.kind === "thinking-pulse") continue;
+    return true;
+  }
+  return false;
+}
 
 export function classifyLine(line: TranscriptLine): Classified {
   const type = line["type"];
@@ -88,6 +175,21 @@ export function classifyLine(line: TranscriptLine): Classified {
   if (type === "assistant") {
     const message = line["message"];
     if (isAssistantMessage(message)) {
+      // Claude writes thinking-only assistant lines as separate JSONL records
+      // when it's still mid-turn. Render those as a transient pulse chip; the
+      // real response will land in a later assistant line.
+      if (
+        message.content.length > 0 &&
+        message.content.every(
+          (b) => b.type === "thinking" && b.thinking.trim().length === 0,
+        )
+      ) {
+        return {
+          kind: "thinking-pulse",
+          timestamp: parseTimestamp(line["timestamp"]),
+          raw: line,
+        };
+      }
       return { kind: "assistant", line: { type: "assistant", message } };
     }
   }
@@ -135,7 +237,13 @@ function isInterruptMarker(content: string | readonly ContentBlock[]): boolean {
   return text.trim() === INTERRUPT_MARKER;
 }
 
+// Two formats appear in transcripts:
+// 1. Our server-injected marker (interrupt, etc.) — leading text starts with
+//    `[SYSTEM NOTIFICATION` followed by a `<task-notification>` block.
+// 2. Claude's native background-task notifications — leading text starts
+//    directly with `<task-notification>` (no header).
 const NOTIFICATION_PREFIX = "[SYSTEM NOTIFICATION";
+const TASK_NOTIFICATION_TAG = "<task-notification>";
 
 function detectTaskNotification(
   content: string | readonly ContentBlock[],
@@ -143,7 +251,10 @@ function detectTaskNotification(
   const text = extractLeadingText(content);
   if (text === null) return null;
   const trimmed = text.trimStart();
-  if (!trimmed.startsWith(NOTIFICATION_PREFIX)) return null;
+  const matches =
+    trimmed.startsWith(NOTIFICATION_PREFIX) ||
+    trimmed.startsWith(TASK_NOTIFICATION_TAG);
+  if (!matches) return null;
   const summaryMatch = trimmed.match(/<summary>([\s\S]*?)<\/summary>/);
   const statusMatch = trimmed.match(/<status>([\s\S]*?)<\/status>/);
   const status = statusMatch === null ? undefined : statusMatch[1]?.trim();
@@ -215,4 +326,10 @@ function isAssistantMessage(value: unknown): value is AssistantLine["message"] {
 function isContentBlock(value: unknown): value is ContentBlock {
   if (value === null || typeof value !== "object") return false;
   return typeof (value as Record<string, unknown>)["type"] === "string";
+}
+
+function parseTimestamp(value: unknown): number | null {
+  if (typeof value !== "string") return null;
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? ms : null;
 }
