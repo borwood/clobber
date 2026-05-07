@@ -10,6 +10,7 @@ import type { SessionStore } from "./session-store.ts";
 import type { WorkspaceSessionSummaries } from "./workspace-session-summaries.ts";
 import type { SessionTokenStore } from "./session-token-store.ts";
 import type { AgentStatusStore } from "./agent-status-store.ts";
+import type { AgentStatusLogStore } from "./agent-status-log-store.ts";
 import type { AgentQuestionStore } from "./agent-question-store.ts";
 import type { AgentQuestionWaiter } from "./agent-question-waiter.ts";
 import type { TriggerDispatchStore } from "./trigger-dispatch-store.ts";
@@ -49,6 +50,7 @@ export interface ServerOptions {
   readonly sessionSummaries: WorkspaceSessionSummaries;
   readonly sessionTokens: SessionTokenStore;
   readonly agentStatuses: AgentStatusStore;
+  readonly agentStatusLog: AgentStatusLogStore;
   readonly agentQuestions: AgentQuestionStore;
   readonly agentQuestionWaiter: AgentQuestionWaiter;
   readonly askTimeoutMs?: number;

@@ -27,6 +27,7 @@ import { createSessionStore } from "../src/session-store.ts";
 import { createWorkspaceSessionSummaries } from "../src/workspace-session-summaries.ts";
 import { createSessionTokenStore } from "../src/session-token-store.ts";
 import { createAgentStatusStore } from "../src/agent-status-store.ts";
+import { createAgentStatusLogStore } from "../src/agent-status-log-store.ts";
 import { createAgentQuestionStore } from "../src/agent-question-store.ts";
 import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
@@ -88,6 +89,7 @@ function buildHarness(): Harness {
     sessionSummaries: createWorkspaceSessionSummaries(db),
     sessionTokens,
     agentStatuses: createAgentStatusStore(db),
+    agentStatusLog: createAgentStatusLogStore(db),
     agentQuestions: createAgentQuestionStore(db),
     agentQuestionWaiter: createAgentQuestionWaiter(),
     spawner,

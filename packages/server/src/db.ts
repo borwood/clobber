@@ -109,6 +109,26 @@ const SCHEMA = `
     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
   );
 
+  CREATE TABLE IF NOT EXISTS agent_status_log (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_id      TEXT    NOT NULL,
+    session_id    TEXT    NOT NULL,
+    event_id      INTEGER,
+    kind          TEXT    NOT NULL,
+    state         TEXT    NOT NULL,
+    summary       TEXT    NOT NULL,
+    details_json  TEXT,
+    created_at    INTEGER NOT NULL,
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+    FOREIGN KEY (event_id)   REFERENCES events(id)   ON DELETE SET NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_status_log_agent
+    ON agent_status_log(agent_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_status_log_session
+    ON agent_status_log(session_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_status_log_kind
+    ON agent_status_log(kind, created_at DESC);
+
   CREATE TABLE IF NOT EXISTS agent_questions (
     id            TEXT    PRIMARY KEY,
     session_id    TEXT    NOT NULL,

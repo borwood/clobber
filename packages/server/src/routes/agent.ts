@@ -8,6 +8,7 @@ import type { WorkspaceStore } from "../workspace-store.ts";
 import type { WorkspaceRoleStore } from "../workspace-role-store.ts";
 import type { AgentStore } from "../agent-store.ts";
 import type { AgentStatusStore } from "../agent-status-store.ts";
+import type { AgentStatusLogStore } from "../agent-status-log-store.ts";
 import type { AgentQuestionStore } from "../agent-question-store.ts";
 import type { AgentQuestionWaiter } from "../agent-question-waiter.ts";
 import type { AgentRegistry } from "../agent-registry.ts";
@@ -34,6 +35,7 @@ export interface AgentRouteDeps {
   readonly workspaceRoles: WorkspaceRoleStore;
   readonly agents: AgentStore;
   readonly agentStatuses: AgentStatusStore;
+  readonly agentStatusLog: AgentStatusLogStore;
   readonly agentQuestions: AgentQuestionStore;
   readonly agentQuestionWaiter: AgentQuestionWaiter;
   readonly registry: AgentRegistry;
@@ -197,6 +199,18 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
     }
     deps.agentStatuses.upsert({
       session_id: auth.session.id,
+      state: parsed.data.state,
+      summary: parsed.data.summary,
+      ...(parsed.data.details === undefined ? {} : { details: parsed.data.details }),
+    });
+    // Active sessions always carry agent_id; the FK only nulls it on agent
+    // delete, which terminates the session's process before the agent can
+    // post status. Type narrowing for an invariant the runtime guarantees.
+    const agentId = auth.session.agent_id!;
+    deps.agentStatusLog.append({
+      agent_id: agentId,
+      session_id: auth.session.id,
+      kind: "status",
       state: parsed.data.state,
       summary: parsed.data.summary,
       ...(parsed.data.details === undefined ? {} : { details: parsed.data.details }),

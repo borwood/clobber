@@ -14,6 +14,7 @@ import { createSessionStore } from "./session-store.ts";
 import { createWorkspaceSessionSummaries } from "./workspace-session-summaries.ts";
 import { createSessionTokenStore } from "./session-token-store.ts";
 import { createAgentStatusStore } from "./agent-status-store.ts";
+import { createAgentStatusLogStore } from "./agent-status-log-store.ts";
 import { createAgentQuestionStore } from "./agent-question-store.ts";
 import { createAgentQuestionWaiter } from "./agent-question-waiter.ts";
 import { createTriggerDispatchStore } from "./trigger-dispatch-store.ts";
@@ -67,6 +68,7 @@ const sessions = createSessionStore(db);
 const sessionSummaries = createWorkspaceSessionSummaries(db);
 const sessionTokens = createSessionTokenStore(db);
 const agentStatuses = createAgentStatusStore(db);
+const agentStatusLog = createAgentStatusLogStore(db);
 const agentQuestions = createAgentQuestionStore(db);
 const agentQuestionWaiter = createAgentQuestionWaiter();
 const dispatches = createTriggerDispatchStore(db);
@@ -90,6 +92,7 @@ const app = createServer({
   sessionSummaries,
   sessionTokens,
   agentStatuses,
+  agentStatusLog,
   agentQuestions,
   agentQuestionWaiter,
   dispatches,
