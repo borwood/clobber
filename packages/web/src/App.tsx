@@ -383,6 +383,7 @@ function MailboxContent(props: MailboxContentProps) {
                   />
                 )}
                 <PromptComposer
+                  key={selectedSession}
                   sessionId={selectedSession}
                   disabled={sel?.ended_at !== undefined}
                   busy={sel?.busy === true}
