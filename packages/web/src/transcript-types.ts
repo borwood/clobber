@@ -48,6 +48,61 @@ export type Classified =
     }
   | { readonly kind: "filtered"; readonly raw: TranscriptLine };
 
+// Returns a one-line preview of a tool call's input, suitable for a
+// collapsed tool-call card. Tries common identifying fields in priority
+// order, falls back to the first non-empty string value, then null.
+//
+// Per-tool cards with status indicators / result hints are out of scope
+// here — see #40 for the richer summary surface that lands on top.
+const PREVIEW_PRIORITY_KEYS = [
+  "file_path",
+  "path",
+  "command",
+  "pattern",
+  "prompt",
+  "description",
+] as const;
+
+export function previewToolInput(input: unknown): string | null {
+  if (typeof input !== "object" || input === null) return null;
+  const obj = input as Record<string, unknown>;
+  for (const key of PREVIEW_PRIORITY_KEYS) {
+    const value = obj[key];
+    if (typeof value === "string" && value.length > 0) {
+      return truncatePreview(value);
+    }
+  }
+  for (const value of Object.values(obj)) {
+    if (typeof value === "string" && value.length > 0) {
+      return truncatePreview(value);
+    }
+  }
+  return null;
+}
+
+function truncatePreview(value: string): string {
+  const firstLine = value.split("\n", 1)[0] ?? "";
+  return firstLine.length > 120 ? firstLine.slice(0, 120) : firstLine;
+}
+
+// Returns true when the assistant label should render at `idx`. Within a run
+// of consecutive assistant lines the label renders only on the first; user
+// messages and tool_result/system lines reset the run. Filtered lines (e.g.
+// claude's interrupt marker) are invisible and do NOT reset the run.
+export function shouldShowAssistantLabel(
+  classified: readonly Classified[],
+  idx: number,
+): boolean {
+  if (classified[idx]?.kind !== "assistant") return true;
+  for (let i = idx - 1; i >= 0; i--) {
+    const prev = classified[i];
+    if (prev === undefined) return true;
+    if (prev.kind === "filtered") continue;
+    return prev.kind !== "assistant";
+  }
+  return true;
+}
+
 export function classifyLine(line: TranscriptLine): Classified {
   const type = line["type"];
   const typeLabel = typeof type === "string" ? type : "unknown";

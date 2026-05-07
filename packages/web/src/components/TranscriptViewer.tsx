@@ -1,11 +1,14 @@
-import { useLayoutEffect, useRef, useState, type UIEvent } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type UIEvent } from "react";
 import type { TranscriptLine } from "../api.ts";
 import {
   classifyLine,
+  shouldShowAssistantLabel,
+  previewToolInput,
   type AssistantLine,
   type UserLine,
   type ContentBlock,
 } from "../transcript-types.ts";
+import { Markdown } from "./Markdown.tsx";
 
 interface Props {
   readonly lines: readonly TranscriptLine[];
@@ -17,6 +20,7 @@ const PIN_THRESHOLD_PX = 100;
 export function TranscriptViewer({ lines, showSystem }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [pinned, setPinned] = useState(true);
+  const classified = useMemo(() => lines.map(classifyLine), [lines]);
 
   useLayoutEffect(() => {
     if (!pinned) return;
@@ -52,24 +56,29 @@ export function TranscriptViewer({ lines, showSystem }: Props) {
           </p>
         ) : (
           <div className="space-y-3">
-            {lines.map((line, idx) => {
-              const classified = classifyLine(line);
-              if (classified.kind === "filtered") {
+            {classified.map((c, idx) => {
+              if (c.kind === "filtered") {
                 return null;
               }
-              if (classified.kind === "user") {
-                return <UserBubble key={idx} line={classified.line} />;
+              if (c.kind === "user") {
+                return <UserBubble key={idx} line={c.line} />;
               }
-              if (classified.kind === "assistant") {
-                return <AssistantBubble key={idx} line={classified.line} />;
+              if (c.kind === "assistant") {
+                return (
+                  <AssistantBubble
+                    key={idx}
+                    line={c.line}
+                    showLabel={shouldShowAssistantLabel(classified, idx)}
+                  />
+                );
               }
-              if (classified.kind === "notification") {
+              if (c.kind === "notification") {
                 return (
                   <NotificationCard
                     key={idx}
-                    summary={classified.summary}
-                    {...(classified.status === undefined ? {} : { status: classified.status })}
-                    raw={classified.raw}
+                    summary={c.summary}
+                    {...(c.status === undefined ? {} : { status: c.status })}
+                    raw={c.raw}
                     showRaw={showSystem}
                   />
                 );
@@ -78,9 +87,9 @@ export function TranscriptViewer({ lines, showSystem }: Props) {
               return (
                 <SystemLine
                   key={idx}
-                  type={classified.type}
-                  {...(classified.summary === undefined ? {} : { summary: classified.summary })}
-                  raw={classified.raw}
+                  type={c.type}
+                  {...(c.summary === undefined ? {} : { summary: c.summary })}
+                  raw={c.raw}
                 />
               );
             })}
@@ -105,7 +114,7 @@ function UserBubble({ line }: { line: UserLine }) {
   if (typeof content === "string") {
     return (
       <Bubble label="user" tone="zinc">
-        <pre className="whitespace-pre-wrap text-sm text-zinc-200">{content}</pre>
+        <Markdown text={content} />
       </Bubble>
     );
   }
@@ -120,7 +129,7 @@ function UserBubble({ line }: { line: UserLine }) {
 
 function UserContentBlock({ block }: { block: ContentBlock }) {
   if (block.type === "text") {
-    return <pre className="whitespace-pre-wrap text-sm text-zinc-200">{block.text}</pre>;
+    return <Markdown text={block.text} />;
   }
   if (block.type === "tool_result") {
     const text =
@@ -137,9 +146,15 @@ function UserContentBlock({ block }: { block: ContentBlock }) {
   return <RawBlock block={block} />;
 }
 
-function AssistantBubble({ line }: { line: AssistantLine }) {
+function AssistantBubble({
+  line,
+  showLabel,
+}: {
+  line: AssistantLine;
+  showLabel: boolean;
+}) {
   return (
-    <Bubble label="assistant" tone="emerald">
+    <Bubble label={showLabel ? "assistant" : null} tone="emerald">
       {line.message.content.map((block, i) => (
         <AssistantContentBlock key={i} block={block} />
       ))}
@@ -149,7 +164,7 @@ function AssistantBubble({ line }: { line: AssistantLine }) {
 
 function AssistantContentBlock({ block }: { block: ContentBlock }) {
   if (block.type === "text") {
-    return <pre className="whitespace-pre-wrap text-sm text-zinc-100">{block.text}</pre>;
+    return <Markdown text={block.text} />;
   }
   if (block.type === "thinking") {
     if (block.thinking.trim().length === 0) return null;
@@ -161,15 +176,22 @@ function AssistantContentBlock({ block }: { block: ContentBlock }) {
     );
   }
   if (block.type === "tool_use") {
+    const preview = previewToolInput(block.input);
     return (
-      <div className="text-xs">
-        <div className="text-emerald-400 mb-1 font-mono">
-          {block.name} · {block.id.slice(0, 12)}…
-        </div>
-        <pre className="whitespace-pre-wrap text-zinc-300 bg-zinc-950 p-2 rounded border border-zinc-800 overflow-x-auto">
+      <details className="text-xs group">
+        <summary className="cursor-pointer list-none flex items-baseline gap-2 hover:bg-zinc-900/40 rounded px-1 py-0.5 -mx-1">
+          <span className="text-zinc-600 group-open:rotate-90 transition-transform inline-block w-2 select-none">
+            ▸
+          </span>
+          <span className="text-emerald-400 font-mono shrink-0">{block.name}</span>
+          {preview !== null && (
+            <span className="text-zinc-400 truncate font-mono">{preview}</span>
+          )}
+        </summary>
+        <pre className="whitespace-pre-wrap text-zinc-300 bg-zinc-950 p-2 mt-1 rounded border border-zinc-800 overflow-x-auto">
           {JSON.stringify(block.input, null, 2)}
         </pre>
-      </div>
+      </details>
     );
   }
   return <RawBlock block={block} />;
@@ -253,7 +275,7 @@ function SystemLine({
 }
 
 interface BubbleProps {
-  readonly label: string;
+  readonly label: string | null;
   readonly tone: "zinc" | "emerald";
   readonly children: React.ReactNode;
 }
@@ -262,7 +284,9 @@ function Bubble({ label, tone, children }: BubbleProps) {
   const accent = tone === "emerald" ? "border-emerald-900" : "border-zinc-800";
   return (
     <div className={`border-l-2 ${accent} pl-3 space-y-2`}>
-      <div className="text-xs uppercase tracking-wider text-zinc-500">{label}</div>
+      {label !== null && (
+        <div className="text-xs uppercase tracking-wider text-zinc-500">{label}</div>
+      )}
       {children}
     </div>
   );
