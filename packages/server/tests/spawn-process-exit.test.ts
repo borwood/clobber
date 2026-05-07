@@ -15,6 +15,7 @@ import { createSessionStore } from "../src/session-store.ts";
 import { createWorkspaceSessionSummaries } from "../src/workspace-session-summaries.ts";
 import { createSessionTokenStore } from "../src/session-token-store.ts";
 import { createAgentStatusStore } from "../src/agent-status-store.ts";
+import { createAgentStatusLogStore } from "../src/agent-status-log-store.ts";
 import { createAgentQuestionStore } from "../src/agent-question-store.ts";
 import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import type { AgentSpawner } from "../src/types.ts";
@@ -89,6 +90,7 @@ const roleVersions = createRoleVersionStore(db);
     sessionSummaries: createWorkspaceSessionSummaries(db),
     sessionTokens: createSessionTokenStore(db),
     agentStatuses: createAgentStatusStore(db),
+    agentStatusLog: createAgentStatusLogStore(db),
     agentQuestions: createAgentQuestionStore(db),
     agentQuestionWaiter: createAgentQuestionWaiter(),
     spawner: spawnControl.spawner,

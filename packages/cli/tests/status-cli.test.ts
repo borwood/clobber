@@ -15,6 +15,7 @@ import { createSessionStore } from "@clobber/server/session-store.ts";
 import { createWorkspaceSessionSummaries } from "@clobber/server/workspace-session-summaries.ts";
 import { createSessionTokenStore } from "@clobber/server/session-token-store.ts";
 import { createAgentStatusStore, type AgentStatusStore } from "@clobber/server/agent-status-store.ts";
+import { createAgentStatusLogStore } from "@clobber/server/agent-status-log-store.ts";
 import { createAgentQuestionStore } from "@clobber/server/agent-question-store.ts";
 import { createAgentQuestionWaiter } from "@clobber/server/agent-question-waiter.ts";
 import type { AgentSpawner, SpawnedAgentInfo } from "@clobber/server/types.ts";
@@ -50,6 +51,7 @@ const roleVersions = createRoleVersionStore(db);
   const sessions = createSessionStore(db);
   const tokens = createSessionTokenStore(db);
   const agentStatuses = createAgentStatusStore(db);
+  const agentStatusLog = createAgentStatusLogStore(db);
 
   const ws = workspaces.create({ name: "ws", repo_path: repoPath });
   const managerRole = roles.create({ name: "manager", persistent: true });
@@ -81,6 +83,7 @@ const roleVersions = createRoleVersionStore(db);
     sessionSummaries: createWorkspaceSessionSummaries(db),
     sessionTokens: tokens,
     agentStatuses,
+    agentStatusLog,
     agentQuestions: createAgentQuestionStore(db),
     agentQuestionWaiter: createAgentQuestionWaiter(),
     spawner,

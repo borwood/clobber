@@ -131,6 +131,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     workspaceRoles: opts.workspaceRoles,
     agents: opts.agents,
     agentStatuses: opts.agentStatuses,
+    agentStatusLog: opts.agentStatusLog,
     agentQuestions: opts.agentQuestions,
     agentQuestionWaiter: opts.agentQuestionWaiter,
     registry,
