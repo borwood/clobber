@@ -213,7 +213,7 @@ describe("POST /sessions/:id/interrupt", () => {
     await teardown(h);
   });
 
-  it("succeeds without a transcript path (path may not be set yet)", async () => {
+  it("succeeds when the transcript file does not yet exist on disk", async () => {
     const h = buildHarness();
     const spawned = await spawn(h);
 

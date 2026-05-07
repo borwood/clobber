@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { delimiter } from "node:path";
-import { materializeBundle, type RoleBundleData } from "@clobber/runtime";
+import {
+  materializeBundle,
+  deriveTranscriptPath,
+  type RoleBundleData,
+} from "@clobber/runtime";
 import type { Agent, Role, Workspace } from "@clobber/shared";
 import { ensureOffice } from "./office-store.ts";
 import { composeOfficeContext } from "./office-context.ts";
@@ -173,6 +177,7 @@ export function attachSessionToAgent(
     role_id: role.id,
     role_version_id: versionId,
     pid: spawned.pid,
+    transcript_path: deriveTranscriptPath(workspace.repo_path, sessionId),
   });
   deps.sessionTokens.register(sessionId, token);
   deps.registry.register(sessionId, spawned.stdin, spawned.kill);
