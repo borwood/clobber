@@ -7,3 +7,4 @@ export * from "./materialize-bundle.ts";
 export { loadRoleBundle, enumerateShippedRoles } from "./role-bundles.ts";
 export { managerRole } from "../roles/manager/manifest.ts";
 export { workerRole } from "../roles/worker/manifest.ts";
+export { workerBeeRole } from "../roles/worker-bee/manifest.ts";
