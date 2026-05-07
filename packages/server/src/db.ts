@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite";
 import { migrateRoleVersions } from "./role-version-migration.ts";
+import { migrateSessionLabel } from "./session-label-migration.ts";
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS events (
@@ -78,6 +79,7 @@ const SCHEMA = `
     workspace_id    TEXT    NOT NULL,
     role_id         TEXT    NOT NULL,
     role_version_id TEXT,
+    label           TEXT,
     pid             INTEGER NOT NULL,
     started_at      INTEGER NOT NULL,
     ended_at        INTEGER,
@@ -171,6 +173,7 @@ export function createDatabase(path: string): Database {
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(SCHEMA);
   migrateRoleVersions(db);
+  migrateSessionLabel(db);
   return db;
 }
 

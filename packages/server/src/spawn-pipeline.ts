@@ -180,6 +180,9 @@ export function attachSessionToAgent(
     workspace_id: workspace.id,
     role_id: role.id,
     role_version_id: versionId,
+    // Denormalize the agent's label onto the session so the sidebar can
+    // still show it after the agent row is deleted on non-persistent end.
+    ...(agent.label === undefined ? {} : { label: agent.label }),
     pid: spawned.pid,
     transcript_path: deriveTranscriptPath(workspace.repo_path, sessionId),
   });

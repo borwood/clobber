@@ -88,7 +88,11 @@ export function createWorkspaceSessionSummaries(db: Database): WorkspaceSessionS
     SELECT
       s.id AS session_id,
       r.name AS role_name,
-      a.label AS label,
+      -- Prefer session's own label (denormalized at spawn) so the name
+      -- survives non-persistent agent deletion on end. Fall back to the
+      -- live agent's label only for sessions written before this column
+      -- existed AND whose agent is still around.
+      COALESCE(s.label, a.label) AS label,
       COALESCE(MIN(e.received_at), s.started_at) AS first_seen_at,
       COALESCE(MAX(e.received_at), s.started_at) AS last_seen_at,
       COUNT(e.id) AS event_count,
