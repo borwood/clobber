@@ -194,7 +194,13 @@ function isInterruptMarker(content: string | readonly ContentBlock[]): boolean {
   return text.trim() === INTERRUPT_MARKER;
 }
 
+// Two formats appear in transcripts:
+// 1. Our server-injected marker (interrupt, etc.) — leading text starts with
+//    `[SYSTEM NOTIFICATION` followed by a `<task-notification>` block.
+// 2. Claude's native background-task notifications — leading text starts
+//    directly with `<task-notification>` (no header).
 const NOTIFICATION_PREFIX = "[SYSTEM NOTIFICATION";
+const TASK_NOTIFICATION_TAG = "<task-notification>";
 
 function detectTaskNotification(
   content: string | readonly ContentBlock[],
@@ -202,7 +208,10 @@ function detectTaskNotification(
   const text = extractLeadingText(content);
   if (text === null) return null;
   const trimmed = text.trimStart();
-  if (!trimmed.startsWith(NOTIFICATION_PREFIX)) return null;
+  const matches =
+    trimmed.startsWith(NOTIFICATION_PREFIX) ||
+    trimmed.startsWith(TASK_NOTIFICATION_TAG);
+  if (!matches) return null;
   const summaryMatch = trimmed.match(/<summary>([\s\S]*?)<\/summary>/);
   const statusMatch = trimmed.match(/<status>([\s\S]*?)<\/status>/);
   const status = statusMatch === null ? undefined : statusMatch[1]?.trim();

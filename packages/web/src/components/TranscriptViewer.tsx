@@ -281,9 +281,15 @@ interface BubbleProps {
 }
 
 function Bubble({ label, tone, children }: BubbleProps) {
-  const accent = tone === "emerald" ? "border-emerald-900" : "border-zinc-800";
+  // User: emerald accent (matches the existing border tone). Assistant:
+  // subtle zinc grey. Both subdued enough that nested tool_use cards
+  // (bg-zinc-950) still pop visually on top.
+  const styles =
+    tone === "emerald"
+      ? "border-emerald-900 bg-emerald-950/30"
+      : "border-zinc-700 bg-zinc-900/40";
   return (
-    <div className={`border-l-2 ${accent} pl-3 space-y-2`}>
+    <div className={`border-l-2 ${styles} pl-3 pr-3 py-2 rounded-r space-y-2`}>
       {label !== null && (
         <div className="text-xs uppercase tracking-wider text-zinc-500">{label}</div>
       )}

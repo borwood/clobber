@@ -66,4 +66,37 @@ describe("classifyLine: task-notification", () => {
     const c = classifyLine(line);
     expect(c.kind).toBe("user");
   });
+
+  it("classifies a BARE <task-notification> block (no SYSTEM NOTIFICATION header) as kind: notification", () => {
+    const text = `<task-notification>
+<task-id>bxy1</task-id>
+<tool-use-id>toolu_abc</tool-use-id>
+<output-file>/tmp/output.txt</output-file>
+<status>failed</status>
+<summary>Background command "Run tests" failed with exit code 1</summary>
+</task-notification>`;
+    const line = { type: "user", message: { role: "user", content: text } };
+    const c = classifyLine(line);
+    expect(c.kind).toBe("notification");
+    if (c.kind !== "notification") return;
+    expect(c.status).toBe("failed");
+    expect(c.summary).toBe('Background command "Run tests" failed with exit code 1');
+  });
+
+  it("classifies bare <task-notification> with content blocks (text first)", () => {
+    const text = `<task-notification>
+<task-id>z</task-id>
+<status>completed</status>
+<summary>done</summary>
+</task-notification>`;
+    const line = {
+      type: "user",
+      message: { role: "user", content: [{ type: "text", text }] },
+    };
+    const c = classifyLine(line);
+    expect(c.kind).toBe("notification");
+    if (c.kind !== "notification") return;
+    expect(c.status).toBe("completed");
+    expect(c.summary).toBe("done");
+  });
 });
