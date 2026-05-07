@@ -54,6 +54,9 @@ export function TranscriptViewer({ lines, showSystem }: Props) {
           <div className="space-y-3">
             {lines.map((line, idx) => {
               const classified = classifyLine(line);
+              if (classified.kind === "filtered") {
+                return null;
+              }
               if (classified.kind === "user") {
                 return <UserBubble key={idx} line={classified.line} />;
               }
