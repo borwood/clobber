@@ -103,14 +103,14 @@ function tmpDbPath(prefix: string): string {
 }
 
 describe("workspace seed — POST /workspaces (#24)", () => {
-  it("creates workspace-scoped manager + worker rows on workspace create", async () => {
+  it("creates workspace-scoped rows for every shipped role on workspace create", async () => {
     const h = buildHarness();
     const ws = await createWorkspaceViaApi(h, "alpha");
 
     const all = h.roles.list();
     const inWs = all.filter((r) => r.workspace_id === ws.id);
     const names = inWs.map((r) => r.name).sort();
-    expect(names).toEqual(["manager", "worker"]);
+    expect(names).toEqual(["manager", "worker", "worker-bee"]);
 
     for (const r of inWs) {
       expect(r.workspace_id).toBe(ws.id);
@@ -164,21 +164,22 @@ describe("workspace seed — POST /workspaces (#24)", () => {
     await teardown(h);
   });
 
-  it("inserts default ceilings (manager=1, worker=3) on workspace create", async () => {
+  it("inserts default ceilings (manager=1, worker=3, worker-bee=3) on workspace create", async () => {
     const h = buildHarness();
     const ws = await createWorkspaceViaApi(h, "alpha");
 
     const assignments = await listAssignments(h, ws.id);
-    expect(assignments).toHaveLength(2);
+    expect(assignments).toHaveLength(3);
 
     const byName = new Map(assignments.map((a) => [a.role.name, a]));
     expect(byName.get("manager")!.max_concurrent).toBe(1);
     expect(byName.get("worker")!.max_concurrent).toBe(3);
+    expect(byName.get("worker-bee")!.max_concurrent).toBe(3);
 
     await teardown(h);
   });
 
-  it("each workspace gets its own pair of manager+worker rows (workspace-scoped)", async () => {
+  it("each workspace gets its own copy of every shipped role (workspace-scoped)", async () => {
     const h = buildHarness();
     const a = await createWorkspaceViaApi(h, "alpha");
     const b = await createWorkspaceViaApi(h, "beta");
@@ -186,8 +187,8 @@ describe("workspace seed — POST /workspaces (#24)", () => {
     const aRoles = h.roles.list().filter((r) => r.workspace_id === a.id);
     const bRoles = h.roles.list().filter((r) => r.workspace_id === b.id);
 
-    expect(aRoles).toHaveLength(2);
-    expect(bRoles).toHaveLength(2);
+    expect(aRoles).toHaveLength(3);
+    expect(bRoles).toHaveLength(3);
 
     const aManager = aRoles.find((r) => r.name === "manager")!;
     const bManager = bRoles.find((r) => r.name === "manager")!;
@@ -239,7 +240,11 @@ describe("workspace seed — boot-time backfill (#24)", () => {
         name: string;
         persistent: number;
       }>;
-      expect(roleRows.map((r) => r.name).sort()).toEqual(["manager", "worker"]);
+      expect(roleRows.map((r) => r.name).sort()).toEqual([
+        "manager",
+        "worker",
+        "worker-bee",
+      ]);
 
       const ceilings = db2
         .prepare(
@@ -255,6 +260,7 @@ describe("workspace seed — boot-time backfill (#24)", () => {
       const byName = new Map(ceilings.map((c) => [c.name, c.max_concurrent]));
       expect(byName.get("manager")).toBe(1);
       expect(byName.get("worker")).toBe(3);
+      expect(byName.get("worker-bee")).toBe(3);
 
       db2.close();
     } finally {
@@ -284,7 +290,7 @@ describe("workspace seed — boot-time backfill (#24)", () => {
           .prepare("SELECT COUNT(*) AS n FROM roles WHERE workspace_id = ?")
           .get("22222222-2222-4222-8222-222222222222") as { n: number }
       ).n;
-      expect(firstCount).toBe(2);
+      expect(firstCount).toBe(3);
       db2.close();
 
       const db3 = createDatabase(path);
@@ -293,7 +299,7 @@ describe("workspace seed — boot-time backfill (#24)", () => {
           .prepare("SELECT COUNT(*) AS n FROM roles WHERE workspace_id = ?")
           .get("22222222-2222-4222-8222-222222222222") as { n: number }
       ).n;
-      expect(secondCount).toBe(2);
+      expect(secondCount).toBe(3);
       db3.close();
     } finally {
       rmSync(path, { force: true });
