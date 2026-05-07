@@ -166,6 +166,10 @@ export function attachSessionToAgent(
     ...(role.allowed_tools === undefined
       ? {}
       : { allowedTools: role.allowed_tools }),
+    // Surface clobber's per-agent label as claude's --name. Visible in
+    // claude's session picker, prompt-box header, and terminal title;
+    // also written to the transcript as a `custom-title` line each boot.
+    ...(agent.label === undefined ? {} : { displayName: agent.label }),
     ...bundleExtras,
   };
   const spawned = deps.spawner(spawnReq);

@@ -26,6 +26,7 @@ export interface AgentSpawnRequest {
   readonly env?: NodeJS.ProcessEnv;
   readonly pluginDirs?: readonly string[];
   readonly appendSystemPrompt?: string;
+  readonly displayName?: string;
 }
 
 export interface SpawnedAgentInfo {

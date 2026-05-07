@@ -19,6 +19,7 @@ export interface SpawnAgentOptions {
   readonly permissionMode?: PermissionMode;
   readonly allowedTools?: readonly string[];
   readonly appendSystemPrompt?: string;
+  readonly displayName?: string;
   readonly claudeBin?: string;
   readonly env?: NodeJS.ProcessEnv;
 }
@@ -45,6 +46,7 @@ export function spawnAgent(opts: SpawnAgentOptions): SpawnedAgent {
     ...(opts.appendSystemPrompt === undefined
       ? {}
       : { appendSystemPrompt: opts.appendSystemPrompt }),
+    ...(opts.displayName === undefined ? {} : { displayName: opts.displayName }),
   });
 
   const bin = opts.claudeBin === undefined ? "claude" : opts.claudeBin;

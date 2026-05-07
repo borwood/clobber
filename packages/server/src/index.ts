@@ -44,6 +44,7 @@ const spawner: AgentSpawner = (req) => {
     ...(req.appendSystemPrompt === undefined
       ? {}
       : { appendSystemPrompt: req.appendSystemPrompt }),
+    ...(req.displayName === undefined ? {} : { displayName: req.displayName }),
     ...(req.env === undefined ? {} : { env: req.env }),
   });
   return {
