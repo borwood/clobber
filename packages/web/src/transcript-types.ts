@@ -45,7 +45,8 @@ export type Classified =
       readonly summary: string;
       readonly status?: string;
       readonly raw: TranscriptLine;
-    };
+    }
+  | { readonly kind: "filtered"; readonly raw: TranscriptLine };
 
 export function classifyLine(line: TranscriptLine): Classified {
   const type = line["type"];
@@ -63,6 +64,9 @@ export function classifyLine(line: TranscriptLine): Classified {
           summary: `${count} result${count === 1 ? "" : "s"}`,
           raw: line,
         };
+      }
+      if (isInterruptMarker(content)) {
+        return { kind: "filtered", raw: line };
       }
       const notification = detectTaskNotification(content);
       if (notification !== null) {
@@ -117,6 +121,18 @@ function summarizeSystem(type: string, line: TranscriptLine): string | undefined
     return undefined;
   }
   return undefined;
+}
+
+// Synthetic user-turn marker that claude inserts into its transcript when a
+// turn is aborted via the stream-json `control_request` interrupt. Matches
+// the native `claude` CLI's filter behavior — keeps the transcript readable
+// without a phantom user message every time the user hits interrupt.
+const INTERRUPT_MARKER = "[Request interrupted by user]";
+
+function isInterruptMarker(content: string | readonly ContentBlock[]): boolean {
+  const text = extractLeadingText(content);
+  if (text === null) return false;
+  return text.trim() === INTERRUPT_MARKER;
 }
 
 const NOTIFICATION_PREFIX = "[SYSTEM NOTIFICATION";

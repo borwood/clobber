@@ -1,6 +1,10 @@
 import type { FastifyInstance } from "fastify";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { serializeUserMessage } from "@clobber/runtime";
+import {
+  serializeUserMessage,
+  serializeInterruptRequest,
+} from "@clobber/runtime";
 import type { SessionStore } from "../session-store.ts";
 import type { AgentStore } from "../agent-store.ts";
 import type { RoleStore } from "../role-store.ts";
@@ -136,7 +140,10 @@ export function registerSessionRoutes(
         reply.code(409);
         return { error: "agent idle" };
       }
-      live.kill("SIGINT");
+      // Stream-json control message — aborts the in-flight turn but keeps
+      // the child alive for follow-up prompts. SIGINT would terminate
+      // `claude -p`, ending the session entirely.
+      live.stdin.write(serializeInterruptRequest(randomUUID()));
       deps.registry.setBusy(sessionId, false);
       if (session.transcript_path !== undefined) {
         appendTranscriptNotification(
