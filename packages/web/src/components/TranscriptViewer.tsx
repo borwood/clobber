@@ -306,5 +306,5 @@ function Bubble({ label, tone, children }: BubbleProps) {
   );
 }
 
-const ASSISTANT_TEXT_BG = "bg-zinc-900/40 border border-zinc-800/60 rounded px-3 py-2";
-const USER_TEXT_BG = "bg-emerald-950/30 border border-emerald-900/40 rounded px-3 py-2";
+const ASSISTANT_TEXT_BG = "bg-emerald-950/30 border border-emerald-900/40 rounded px-3 py-2";
+const USER_TEXT_BG = "bg-zinc-900/40 border border-zinc-800/60 rounded px-3 py-2";
