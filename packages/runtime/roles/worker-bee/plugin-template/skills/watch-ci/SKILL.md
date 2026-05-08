@@ -44,6 +44,21 @@ checks complete.)
 Mark the `watch-ci` item in your `TodoWrite` list as `completed` — that's the
 end of the SDLC pipeline.
 
-Post one final `clobber status done "<one-line outcome>"` summarizing what
-shipped and what (if anything) you'd flag for the manager. That's your
-handoff; your session ends and the manager picks up from there.
+Then submit your structured **final report**:
+
+```
+clobber report \
+  --well   "<what went well — one line>" \
+  --badly  "<what went badly or could have been better — one line>" \
+  --useful "<what would have made this easier (a missing skill, a missing
+            piece of context, a tool you wished existed) — one line>"
+```
+
+The `--useful` field is load-bearing: the manager triages it into internal
+tickets so the workspace gets better at its own work over time. If you
+genuinely have nothing in one of the three fields, omit that flag rather
+than padding it. If you're truly out of time, `clobber report "<free-text
+summary>"` is the degraded fallback.
+
+Finally, post `clobber status done "<one-line outcome>"` as your handoff
+to the manager. Your session ends; the manager picks up from there.

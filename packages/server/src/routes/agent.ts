@@ -13,7 +13,7 @@ import type { AgentQuestionStore } from "../agent-question-store.ts";
 import type { AgentQuestionWaiter } from "../agent-question-waiter.ts";
 import type { AgentRegistry } from "../agent-registry.ts";
 import type { AgentSpawner } from "../types.ts";
-import { AgentStatusUpdateSchema } from "@clobber/shared";
+import { AgentStatusUpdateSchema, FinalReportSchema, summarizeFinalReport } from "@clobber/shared";
 import { executeSpawn } from "../spawn-pipeline.ts";
 import { terminateSession } from "../session-lifecycle.ts";
 import { readTranscript } from "../transcript-reader.ts";
@@ -214,6 +214,36 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
       state: parsed.data.state,
       summary: parsed.data.summary,
       ...(parsed.data.details === undefined ? {} : { details: parsed.data.details }),
+    });
+    return { ok: true };
+  });
+
+  app.post("/agent/report", async (request, reply) => {
+    const auth = resolveCallerSession(request, deps);
+    if (!auth.ok) {
+      reply.code(auth.status);
+      return { error: auth.error };
+    }
+    const parsed = FinalReportSchema.safeParse(request.body);
+    if (!parsed.success) {
+      reply.code(400);
+      return { error: "invalid final report", issues: parsed.error.issues };
+    }
+    const agentId = auth.session.agent_id!;
+    const existing = deps.agentStatusLog
+      .listForAgent(agentId, { kind: "final-report" })
+      .filter((row) => row.session_id === auth.session.id);
+    if (existing.length > 0) {
+      reply.code(409);
+      return { error: "final report already submitted for this session" };
+    }
+    deps.agentStatusLog.append({
+      agent_id: agentId,
+      session_id: auth.session.id,
+      kind: "final-report",
+      state: "final",
+      summary: summarizeFinalReport(parsed.data),
+      details: parsed.data,
     });
     return { ok: true };
   });

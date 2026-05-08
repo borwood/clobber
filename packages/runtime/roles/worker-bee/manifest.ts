@@ -12,7 +12,7 @@ export const workerBeeRole = defineRole({
       "Autonomous SDLC worker. Spawned with one issue assignment; walks research → failing-test → implement → open-pr → watch-ci unattended; reports back via final-report.",
     systemPromptPath: "system-prompt.md",
     pluginTemplatePath: "plugin-template",
-    allowedCliCommands: ["whoami", "ask", "status"],
+    allowedCliCommands: ["whoami", "ask", "status", "report"],
     persistent: false,
     defaultCeiling: 3,
     permissionMode: "bypassPermissions",
