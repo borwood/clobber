@@ -43,15 +43,11 @@ Closes #<issue-num>
 Pass the body via a heredoc (`--body "$(cat <<'EOF' ... EOF)"`) so quoting and
 backticks survive the shell.
 
-## Status
-
-Post `clobber status working "phase: open-pr — opened #<num>"` once the PR
-URL is in hand.
-
 ## Done when
 
 - Branch is pushed.
 - PR is open and not in draft (unless the assignment said draft is fine).
 - PR body has Summary, Test plan, and the right `Closes #N` link.
 
-Move to `watch-ci/` next.
+Mark the `open-pr` item in your `TodoWrite` list as `completed` and the next
+phase's item as `in_progress`. Then move to `watch-ci/`.

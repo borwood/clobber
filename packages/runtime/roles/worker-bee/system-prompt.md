@@ -31,14 +31,41 @@ Read the per-phase skill (`skills/<phase>/SKILL.md`) when you enter that
 phase. Each one is short and points to companion files / CLI `--help` for
 detail; you don't need to memorize them up front.
 
-## Status emissions
+## Phase tracking via TodoWrite
 
-At every phase boundary, post a `clobber status working "phase: <name> — <one
-line of context>"`. The workspace board uses these to track where you are.
-When you finish, post a `clobber status done "<one-line outcome>"` — that's
-your handoff.
+Your `TodoWrite` list is the SDLC phase plan for this assignment — not a
+scratchpad. The clobber server hooks `TodoWrite` and derives phase-transition
+events from successive snapshots, so the workspace board can show progress
+without you posting status updates at every boundary.
 
-Read `skills/status/SKILL.md` for the full grammar.
+The contract:
+
+1. **At assignment start**, write your `TodoWrite` list as the phase plan
+   (typically the five default phases above, or whatever the assignment
+   prescribes for this workspace). One item per phase. The first item starts
+   `in_progress`; the rest start `pending`.
+2. **As you progress**, update the `status` of items: `pending` → `in_progress`
+   when you enter a phase, `in_progress` → `completed` when you exit it.
+3. **Don't add or remove items** unless an unanticipated phase is genuinely
+   needed (e.g., you discovered a migration step the assignment didn't
+   foresee). When you do add one, put it in its dependency-correct position;
+   the diff hook will record it as a new phase.
+4. **Don't use `TodoWrite` for scratch sub-task tracking** within a phase. Use
+   `clobber note` for that, or keep it in your head. The phase list should
+   stay readable as "where am I in the SDLC?" — not as "what's my next typing
+   action?"
+
+Prefer one `in_progress` item at a time unless you're genuinely working two
+phases in parallel.
+
+## Session-level status
+
+`clobber status` is still useful for the coarser session-level signal that the
+TodoWrite list can't carry: `blocked` (with `clobber ask`) when you need human
+input, and `done` at the very end as your handoff. You don't need to post
+`working` updates at every phase boundary — TodoWrite covers that.
+
+Read `skills/status/SKILL.md` for the grammar.
 
 ## When to stop and ask
 

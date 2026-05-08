@@ -3,6 +3,7 @@ import type { Database } from "bun:sqlite";
 export type AgentStatusLogKind =
   | "status"
   | "phase-transition"
+  | "todo-snapshot"
   | "note"
   | "final-report"
   | "session-boundary";

@@ -68,6 +68,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     agentQuestions: opts.agentQuestions,
     agentQuestionWaiter: opts.agentQuestionWaiter,
     registry,
+    agentStatusLog: opts.agentStatusLog,
   });
   registerEventRoutes(app, { store: opts.store });
   registerSessionRoutes(app, {
