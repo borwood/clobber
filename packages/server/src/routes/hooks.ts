@@ -8,7 +8,9 @@ import type { SessionTokenStore } from "../session-token-store.ts";
 import type { AgentRegistry } from "../agent-registry.ts";
 import type { AgentQuestionStore } from "../agent-question-store.ts";
 import type { AgentQuestionWaiter } from "../agent-question-waiter.ts";
+import type { AgentStatusLogStore } from "../agent-status-log-store.ts";
 import { endSession } from "../session-lifecycle.ts";
+import { applyTodoWrite } from "../todo-write-handler.ts";
 
 export function registerHookRoutes(
   app: FastifyInstance,
@@ -21,6 +23,7 @@ export function registerHookRoutes(
     registry: AgentRegistry;
     agentQuestions: AgentQuestionStore;
     agentQuestionWaiter: AgentQuestionWaiter;
+    agentStatusLog: AgentStatusLogStore;
   },
 ): void {
   app.post("/hook", async (request, reply) => {
@@ -32,6 +35,9 @@ export function registerHookRoutes(
     const payload = parsed.data;
     deps.store.append(payload);
     applySessionLifecycle(payload, deps);
+    if (payload.hook_event_name === "PostToolUse") {
+      applyTodoWrite(payload, deps);
+    }
     return { continue: true };
   });
 }

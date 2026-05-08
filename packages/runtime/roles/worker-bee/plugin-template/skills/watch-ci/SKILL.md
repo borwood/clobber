@@ -36,15 +36,14 @@ checks complete.)
 - If the failure is genuinely opaque after one careful read, post `clobber
   status blocked "<one line>"` and `clobber ask` for direction. Don't loop.
 
-## Status
-
-Post `clobber status working "phase: watch-ci — green"` when all checks pass.
-
 ## Done when
 
 - All required checks are green.
 - The PR is in a state a reviewer can merge without further work from you.
 
-That's the end of the pipeline. Post one final `clobber status done "<one-
-line outcome>"` summarizing what shipped and what (if anything) you'd flag
-for the manager. Your session ends; the manager picks up from there.
+Mark the `watch-ci` item in your `TodoWrite` list as `completed` — that's the
+end of the SDLC pipeline.
+
+Post one final `clobber status done "<one-line outcome>"` summarizing what
+shipped and what (if anything) you'd flag for the manager. That's your
+handoff; your session ends and the manager picks up from there.

@@ -26,11 +26,6 @@ Make the test you just wrote go green, and don't break anything else.
 - **Comments that explain *what* the code does.** Good names beat comments.
   Comments are for *why* a non-obvious choice was made.
 
-## Status
-
-Post `clobber status working "phase: implement — <one line>"` when the suite
-is green and types check.
-
 ## Done when
 
 - The new test passes.
@@ -38,4 +33,5 @@ is green and types check.
 - The type-checker is silent.
 - No new lint warnings (run the repo's lint script if it has one).
 
-Move to `open-pr/` next.
+Mark the `implement` item in your `TodoWrite` list as `completed` and the
+next phase's item as `in_progress`. Then move to `open-pr/`.

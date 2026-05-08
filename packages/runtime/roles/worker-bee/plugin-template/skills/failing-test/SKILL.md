@@ -25,11 +25,6 @@ it is. Fix the test before moving on.
 If it fails for the wrong reason (e.g. a setup error), fix the setup first —
 a test that fails for the wrong reason gives no signal.
 
-## Status
-
-Post `clobber status working "phase: failing-test — <one line>"` once the
-test is written and failing as intended.
-
 ## Conventions
 
 - **Integration over unit** unless `CLAUDE.md` says otherwise. Most clobber
@@ -45,4 +40,5 @@ test is written and failing as intended.
 - It fails when run, for the expected reason.
 - The failure message points at the gap your impl phase will close.
 
-Move to `implement/` next.
+Mark the `failing-test` item in your `TodoWrite` list as `completed` and the
+next phase's item as `in_progress`. Then move to `implement/`.

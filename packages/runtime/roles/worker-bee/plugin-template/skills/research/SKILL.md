@@ -22,9 +22,7 @@ earned the right to understand.
 
 ## Output
 
-Post one `clobber status working "phase: research — <one line>"` summarizing
-what you read and what you intend to do next. Keep the orientation short —
-3–6 bullets in your scratchpad is enough.
+Keep the orientation short — 3–6 bullets in your scratchpad is enough.
 
 If the issue's `## Open questions` section has unresolved items that gate the
 implementation, this is the moment to use `clobber ask` (see
@@ -36,4 +34,5 @@ implementation, this is the moment to use `clobber ask` (see
 - You know what test will demonstrate the bug or the feature.
 - You've checked there isn't already an open PR doing this.
 
-Move to `failing-test/` next.
+Mark the `research` item in your `TodoWrite` list as `completed` and the next
+phase's item as `in_progress`. Then move to `failing-test/`.
