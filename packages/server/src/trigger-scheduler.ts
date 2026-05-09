@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import parser from "cron-parser";
-import { serializeUserMessage } from "@clobber/runtime";
+import type { RuntimeProvider } from "@clobber/runtime";
 import {
   RoleTriggerSchema,
   type Agent,
@@ -38,6 +38,7 @@ export interface TriggerSchedulerDeps {
   readonly agents: AgentStore;
   readonly sessions: SessionStore;
   readonly registry: AgentRegistry;
+  readonly runtimeProvider: RuntimeProvider;
   readonly dispatches: TriggerDispatchStore;
   readonly attachSession: AttachSessionFn;
   readonly synthesizePrompt?: (trigger: RoleTrigger) => string;
@@ -168,7 +169,21 @@ export function createTriggerScheduler(
       return;
     }
 
-    live.stdin.write(serializeUserMessage(prompt));
+    if (!deps.runtimeProvider.capabilities.livePromptInjection) {
+      deps.dispatches.append({
+        workspace_id: entry.workspaceId,
+        role_id: entry.roleId,
+        agent_id: entry.agentId,
+        trigger_kind: entry.trigger.kind,
+        trigger_payload: entry.trigger,
+        fired_at: firedAt,
+        dispatch_outcome: "errored",
+        error: "runtime does not support live prompt injection",
+      });
+      return;
+    }
+
+    live.stdin.write(deps.runtimeProvider.serializeUserPrompt(prompt));
     deps.registry.setBusy(live.sessionId, true);
     deps.dispatches.append({
       workspace_id: entry.workspaceId,

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import type { RuntimeProvider } from "@clobber/runtime";
 import type { SessionTokenStore } from "../session-token-store.ts";
 import type { SessionStore } from "../session-store.ts";
 import type { RoleStore } from "../role-store.ts";
@@ -43,6 +44,7 @@ export interface AgentRouteDeps {
   readonly hookUrl: string;
   readonly apiBase: string;
   readonly cliEntry: string;
+  readonly runtimeProvider: RuntimeProvider;
 }
 
 const AgentSpawnBodySchema = z.object({

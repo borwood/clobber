@@ -1,6 +1,7 @@
 import { Database } from "bun:sqlite";
 import { migrateRoleVersions } from "./role-version-migration.ts";
 import { migrateSessionLabel } from "./session-label-migration.ts";
+import { migrateSessionRuntime } from "./session-runtime-migration.ts";
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS events (
@@ -79,6 +80,8 @@ const SCHEMA = `
     workspace_id    TEXT    NOT NULL,
     role_id         TEXT    NOT NULL,
     role_version_id TEXT,
+    runtime_provider  TEXT NOT NULL DEFAULT 'claude',
+    provider_thread_id TEXT,
     label           TEXT,
     pid             INTEGER NOT NULL,
     started_at      INTEGER NOT NULL,
@@ -174,6 +177,7 @@ export function createDatabase(path: string): Database {
   db.exec(SCHEMA);
   migrateRoleVersions(db);
   migrateSessionLabel(db);
+  migrateSessionRuntime(db);
   return db;
 }
 

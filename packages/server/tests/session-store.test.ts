@@ -1,4 +1,8 @@
 import { describe, it, expect } from "bun:test";
+import { Database } from "bun:sqlite";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { createDatabase } from "../src/db.ts";
 import { createWorkspaceStore } from "../src/workspace-store.ts";
 import { createRoleStore } from "../src/role-store.ts";
@@ -21,6 +25,11 @@ function seed(deps: ReturnType<typeof open>) {
   return { ws, role, agent };
 }
 
+function tmpDbPath(): string {
+  const dir = mkdtempSync(join(tmpdir(), "clobber-session-runtime-"));
+  return join(dir, "clobber.db");
+}
+
 describe("session store", () => {
   it("create persists a session and get reads it back", () => {
     const deps = open();
@@ -38,6 +47,8 @@ describe("session store", () => {
     expect(created.agent_id).toBe(agent.id);
     expect(created.workspace_id).toBe(ws.id);
     expect(created.role_id).toBe(role.id);
+    expect(created.runtime_provider).toBe("claude");
+    expect(created.provider_thread_id).toBeUndefined();
     expect(created.pid).toBe(1234);
     expect(created.started_at).toBeGreaterThan(0);
     expect(created.ended_at).toBeUndefined();
@@ -45,6 +56,66 @@ describe("session store", () => {
 
     expect(deps.sessions.get("claude-session-1")).toEqual(created);
     deps.db.close();
+  });
+
+  it("create persists runtime provider and provider thread identity", () => {
+    const deps = open();
+    const { ws, role, agent } = seed(deps);
+
+    const created = deps.sessions.create({
+      id: "local-run-1",
+      agent_id: agent.id,
+      workspace_id: ws.id,
+      role_id: role.id,
+      runtime_provider: "codex",
+      provider_thread_id: "codex-thread-1",
+      pid: 1234,
+    });
+
+    expect(created.runtime_provider).toBe("codex");
+    expect(created.provider_thread_id).toBe("codex-thread-1");
+    expect(deps.sessions.get("local-run-1")).toEqual(created);
+    deps.db.close();
+  });
+
+  it("backfills runtime identity columns for a legacy sessions table", () => {
+    const path = tmpDbPath();
+    try {
+      const legacy = new Database(path);
+      legacy.exec(`
+        CREATE TABLE sessions (
+          id              TEXT    PRIMARY KEY,
+          agent_id        TEXT,
+          workspace_id    TEXT    NOT NULL,
+          role_id         TEXT    NOT NULL,
+          role_version_id TEXT,
+          label           TEXT,
+          pid             INTEGER NOT NULL,
+          started_at      INTEGER NOT NULL,
+          ended_at        INTEGER,
+          transcript_path TEXT
+        );
+        INSERT INTO sessions (id, workspace_id, role_id, pid, started_at)
+        VALUES ('legacy-session-1', 'workspace-1', 'role-1', 777, 123456);
+      `);
+      legacy.close();
+
+      const db = createDatabase(path);
+      const row = db
+        .prepare(
+          "SELECT runtime_provider, provider_thread_id FROM sessions WHERE id = ?",
+        )
+        .get("legacy-session-1") as {
+        runtime_provider: string;
+        provider_thread_id: string | null;
+      };
+
+      expect(row.runtime_provider).toBe("claude");
+      expect(row.provider_thread_id).toBe("legacy-session-1");
+      db.close();
+    } finally {
+      rmSync(dirname(path), { recursive: true, force: true });
+    }
   });
 
   it("create accepts an optional transcript_path", () => {

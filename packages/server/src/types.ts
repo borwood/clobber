@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import type { PermissionMode } from "@clobber/shared";
+import type { RuntimeProvider, RuntimeSpawnRequest } from "@clobber/runtime";
 import type { EventStore } from "./event-store.ts";
 import type { WorkspaceStore } from "./workspace-store.ts";
 import type { RoleStore } from "./role-store.ts";
@@ -16,18 +16,7 @@ import type { AgentQuestionWaiter } from "./agent-question-waiter.ts";
 import type { TriggerDispatchStore } from "./trigger-dispatch-store.ts";
 import type { Clock } from "./clock.ts";
 
-export interface AgentSpawnRequest {
-  readonly hookUrl: string;
-  readonly prompt: string;
-  readonly cwd: string;
-  readonly sessionId?: string;
-  readonly permissionMode?: PermissionMode;
-  readonly allowedTools?: readonly string[];
-  readonly env?: NodeJS.ProcessEnv;
-  readonly pluginDirs?: readonly string[];
-  readonly appendSystemPrompt?: string;
-  readonly displayName?: string;
-}
+export type AgentSpawnRequest = RuntimeSpawnRequest;
 
 export interface SpawnedAgentInfo {
   readonly sessionId: string;
@@ -55,6 +44,7 @@ export interface ServerOptions {
   readonly agentQuestions: AgentQuestionStore;
   readonly agentQuestionWaiter: AgentQuestionWaiter;
   readonly askTimeoutMs?: number;
+  readonly runtimeProvider?: RuntimeProvider;
   readonly spawner: AgentSpawner;
   readonly hookUrl: string;
   readonly apiBase: string;

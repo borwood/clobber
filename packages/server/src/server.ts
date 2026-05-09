@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance } from "fastify";
+import { claudeRuntimeProvider } from "@clobber/runtime";
 import { registerHookRoutes } from "./routes/hooks.ts";
 import { registerEventRoutes } from "./routes/events.ts";
 import { registerSessionRoutes } from "./routes/sessions.ts";
@@ -29,6 +30,8 @@ export function createServer(opts: ServerOptions): FastifyInstance {
   const app = Fastify({ logger: false });
   const registry = createAgentRegistry();
   const clock = opts.clock === undefined ? createSystemClock() : opts.clock;
+  const runtimeProvider =
+    opts.runtimeProvider === undefined ? claudeRuntimeProvider : opts.runtimeProvider;
 
   const spawnPipelineDeps: SpawnPipelineDeps = {
     workspaceRoles: opts.workspaceRoles,
@@ -42,6 +45,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     registry,
     roles: opts.roles,
     roleVersions: opts.roleVersions,
+    runtimeProvider,
     agentQuestions: opts.agentQuestions,
     agentQuestionWaiter: opts.agentQuestionWaiter,
   };
@@ -55,6 +59,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     agents: opts.agents,
     sessions: opts.sessions,
     registry,
+    runtimeProvider,
     dispatches: opts.dispatches,
     attachSession: (input) => attachSessionToAgent(spawnPipelineDeps, input),
   });
@@ -80,6 +85,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     agentQuestions: opts.agentQuestions,
     agentQuestionWaiter: opts.agentQuestionWaiter,
     registry,
+    runtimeProvider,
   });
   registerSpawnRoutes(app, {
     workspaces: opts.workspaces,
@@ -96,6 +102,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     registry,
     agentQuestions: opts.agentQuestions,
     agentQuestionWaiter: opts.agentQuestionWaiter,
+    runtimeProvider,
     scheduler,
   });
   registerWorkspaceRoutes(app, {
@@ -140,6 +147,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     hookUrl: opts.hookUrl,
     apiBase: opts.apiBase,
     cliEntry: opts.cliEntry,
+    runtimeProvider,
   });
   registerAgentRolesRoutes(app, {
     db: opts.db,

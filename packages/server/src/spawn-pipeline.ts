@@ -1,10 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { delimiter } from "node:path";
-import {
-  materializeBundle,
-  deriveTranscriptPath,
-  type RoleBundleData,
-} from "@clobber/runtime";
+import type { RoleBundleData, RuntimeProvider } from "@clobber/runtime";
 import type { Agent, Role, Workspace } from "@clobber/shared";
 import { ensureOffice } from "./office-store.ts";
 import { composeOfficeContext } from "./office-context.ts";
@@ -14,7 +10,7 @@ import type { AgentStore } from "./agent-store.ts";
 import type { SessionStore } from "./session-store.ts";
 import type { SessionTokenStore } from "./session-token-store.ts";
 import { generateTokenValue } from "./session-token-store.ts";
-import type { AgentSpawner, AgentSpawnRequest } from "./types.ts";
+import type { AgentSpawner } from "./types.ts";
 import type { AgentRegistry } from "./agent-registry.ts";
 import type { RoleStore } from "./role-store.ts";
 import type { RoleVersionStore } from "./role-version-store.ts";
@@ -34,6 +30,7 @@ export interface SpawnPipelineDeps {
   readonly registry: AgentRegistry;
   readonly roles: RoleStore;
   readonly roleVersions: RoleVersionStore;
+  readonly runtimeProvider: RuntimeProvider;
   readonly agentQuestions: AgentQuestionStore;
   readonly agentQuestionWaiter: AgentQuestionWaiter;
 }
@@ -127,7 +124,7 @@ export function attachSessionToAgent(
     ? prompt
     : `${composeOfficeContext(officeDir)}\n\n${prompt}`;
 
-  const materialized = materializeBundle({
+  const materialized = deps.runtimeProvider.prepareBundle({
     bundle: effectiveBundle,
     repoPath: workspace.repo_path,
     hookUrl: deps.hookUrl,
@@ -146,16 +143,7 @@ export function attachSessionToAgent(
     CLOBBER_ROLE: role.name,
     ...(officeDir === null ? {} : { CLOBBER_OFFICE_DIR: officeDir }),
   };
-  const bundleExtras: Pick<
-    AgentSpawnRequest,
-    "env" | "pluginDirs" | "appendSystemPrompt"
-  > = {
-    env,
-    pluginDirs: [materialized.pluginDir],
-    appendSystemPrompt: effectiveBundle.systemPrompt,
-  };
-
-  const spawnReq: AgentSpawnRequest = {
+  const spawnReq = deps.runtimeProvider.buildSpawnRequest({
     hookUrl: deps.hookUrl,
     prompt: effectivePrompt,
     cwd: workspace.repo_path,
@@ -166,13 +154,13 @@ export function attachSessionToAgent(
     ...(role.allowed_tools === undefined
       ? {}
       : { allowedTools: role.allowed_tools }),
-    // Surface clobber's per-agent label as claude's --name. Visible in
-    // claude's session picker, prompt-box header, and terminal title;
-    // also written to the transcript as a `custom-title` line each boot.
+    env,
+    materialized,
+    systemPrompt: effectiveBundle.systemPrompt,
     ...(agent.label === undefined ? {} : { displayName: agent.label }),
-    ...bundleExtras,
-  };
+  });
   const spawned = deps.spawner(spawnReq);
+  const providerThreadId = deps.runtimeProvider.initialProviderThreadId(sessionId);
 
   deps.sessions.create({
     id: sessionId,
@@ -180,11 +168,13 @@ export function attachSessionToAgent(
     workspace_id: workspace.id,
     role_id: role.id,
     role_version_id: versionId,
+    runtime_provider: deps.runtimeProvider.id,
+    ...(providerThreadId === undefined ? {} : { provider_thread_id: providerThreadId }),
     // Denormalize the agent's label onto the session so the sidebar can
     // still show it after the agent row is deleted on non-persistent end.
     ...(agent.label === undefined ? {} : { label: agent.label }),
     pid: spawned.pid,
-    transcript_path: deriveTranscriptPath(workspace.repo_path, sessionId),
+    transcript_path: deps.runtimeProvider.transcriptPath(workspace.repo_path, sessionId),
   });
   deps.sessionTokens.register(sessionId, token);
   deps.registry.register(sessionId, spawned.stdin, spawned.kill);

@@ -165,6 +165,8 @@ describe("POST /spawn", () => {
     const session = h.sessions.get(body.session_id);
     expect(session).not.toBeNull();
     expect(session!.agent_id).toBe(body.agent_id);
+    expect(session!.runtime_provider).toBe("claude");
+    expect(session!.provider_thread_id).toBe(body.session_id);
     expect(session!.pid).toBe(9001);
     expect(session!.ended_at).toBeUndefined();
 

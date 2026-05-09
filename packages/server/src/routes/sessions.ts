@@ -1,10 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import {
-  serializeUserMessage,
-  serializeInterruptRequest,
-} from "@clobber/runtime";
+import type { RuntimeProvider } from "@clobber/runtime";
 import type { SessionStore } from "../session-store.ts";
 import type { AgentStore } from "../agent-store.ts";
 import type { RoleStore } from "../role-store.ts";
@@ -38,6 +35,7 @@ export function registerSessionRoutes(
     sessionTokens: SessionTokenStore;
     summaries: WorkspaceSessionSummaries;
     registry: AgentRegistry;
+    runtimeProvider: RuntimeProvider;
     agentQuestions: AgentQuestionStore;
     agentQuestionWaiter: AgentQuestionWaiter;
   },
@@ -99,7 +97,11 @@ export function registerSessionRoutes(
         reply.code(409);
         return { error: "agent busy" };
       }
-      live.stdin.write(serializeUserMessage(parsed.data.prompt));
+      if (!deps.runtimeProvider.capabilities.livePromptInjection) {
+        reply.code(409);
+        return { error: "runtime does not support live prompt injection" };
+      }
+      live.stdin.write(deps.runtimeProvider.serializeUserPrompt(parsed.data.prompt));
       deps.registry.setBusy(sessionId, true);
       return { ok: true };
     },
@@ -140,10 +142,11 @@ export function registerSessionRoutes(
         reply.code(409);
         return { error: "agent idle" };
       }
-      // Stream-json control message — aborts the in-flight turn but keeps
-      // the child alive for follow-up prompts. SIGINT would terminate
-      // `claude -p`, ending the session entirely.
-      live.stdin.write(serializeInterruptRequest(randomUUID()));
+      if (!deps.runtimeProvider.capabilities.interrupt) {
+        reply.code(409);
+        return { error: "runtime does not support interrupt" };
+      }
+      live.stdin.write(deps.runtimeProvider.serializeInterrupt(randomUUID()));
       deps.registry.setBusy(sessionId, false);
       if (session.transcript_path !== undefined) {
         appendTranscriptNotification(

@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
+import { claudeRuntimeProvider } from "@clobber/runtime";
 import { createServer } from "../src/server.ts";
 import { createDatabase } from "../src/db.ts";
 import { createEventStore } from "../src/event-store.ts";
@@ -90,6 +91,11 @@ function buildHarness(): Harness {
     hookUrl: "http://test.invalid/hook",
     apiBase: "http://test.invalid",
     cliEntry: "/dummy/cli.ts",
+    runtimeProvider: {
+      ...claudeRuntimeProvider,
+      transcriptPath: (_cwd, sessionId) =>
+        join(repoPath, "transcripts", `${sessionId}.jsonl`),
+    },
   
     dispatches: createTriggerDispatchStore(db),
   });
