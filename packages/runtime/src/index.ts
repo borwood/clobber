@@ -3,6 +3,8 @@ export * from "./spawn-agent.ts";
 export * from "./stream-json.ts";
 export * from "./transcript-path.ts";
 export * from "./runtime-provider.ts";
+export * from "./runtime-events.ts";
+export * from "./codex-jsonl.ts";
 export * from "./role-manifest/index.ts";
 export * from "./materialize-bundle.ts";
 export { loadRoleBundle, enumerateShippedRoles } from "./role-bundles.ts";

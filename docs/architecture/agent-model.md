@@ -70,6 +70,10 @@ handled by a resumable recorded session. Supporting both cleanly requires the
 provider boundary to avoid assuming one logical session always equals one
 long-lived process.
 
+See [Codex Runtime Spike](./codex-runtime-spike.md) for the first captured
+`codex exec --json` event shapes and the recommended initial Codex capability
+set.
+
 ## Session lifecycle
 
 ```
