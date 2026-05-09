@@ -92,8 +92,8 @@ Rationale:
   `codex exec resume <provider_thread_id> --json` spawn commands.
 - Decide how Codex roles are materialized: config/profile, generated prompt
   prefix, skills/plugins, or a combination.
-- Add a server path for turn-lifetime providers: prompt injection currently
-  assumes a live stdin-backed process.
+- Implement the production Codex provider on top of the turn-lifetime server
+  path from #103.
 - Update session state after `provider-thread-started` when
   `provider_thread_id` was unknown at local spawn time.
 - Expand fixtures with real command execution, approval, failure, and cancelled

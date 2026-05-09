@@ -70,6 +70,12 @@ handled by a resumable recorded session. Supporting both cleanly requires the
 provider boundary to avoid assuming one logical session always equals one
 long-lived process.
 
+For turn-lifetime runtimes, a clean process exit does not end the Clobber
+session. Follow-up prompts start a new provider process using
+`sessions.provider_thread_id`; missing or unrecoverable provider threads surface
+as explicit prompt errors instead of being mistaken for ordinary live-stdin
+session death.
+
 See [Codex Runtime Spike](./codex-runtime-spike.md) for the first captured
 `codex exec --json` event shapes and the recommended initial Codex capability
 set.

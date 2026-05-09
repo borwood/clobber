@@ -251,6 +251,28 @@ describe("session store", () => {
     deps.db.close();
   });
 
+  it("updatePid stores the latest process embodiment pid for active sessions only", () => {
+    const deps = open();
+    const { ws, role, agent } = seed(deps);
+    deps.sessions.create({
+      id: "s1",
+      agent_id: agent.id,
+      workspace_id: ws.id,
+      role_id: role.id,
+      pid: 1,
+    });
+
+    expect(deps.sessions.updatePid("s1", 2)).toBe(true);
+    expect(deps.sessions.get("s1")!.pid).toBe(2);
+
+    deps.sessions.markEnded("s1");
+    expect(deps.sessions.updatePid("s1", 3)).toBe(false);
+    expect(deps.sessions.get("s1")!.pid).toBe(2);
+    expect(deps.sessions.updatePid("missing", 4)).toBe(false);
+
+    deps.db.close();
+  });
+
   it("listForWorkspace returns sessions newest-first scoped to the workspace", () => {
     const deps = open();
     const { ws, role, agent } = seed(deps);

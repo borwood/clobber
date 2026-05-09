@@ -6,6 +6,7 @@ export interface SessionStore {
   get(id: string): Session | null;
   countActive(workspaceId: string, roleId: string): number;
   markEnded(id: string): boolean;
+  updatePid(id: string, pid: number): boolean;
   updateTranscriptPath(id: string, path: string): boolean;
   listForWorkspace(workspaceId: string): Session[];
   listActiveForWorkspace(workspaceId: string): Session[];
@@ -59,6 +60,9 @@ export function createSessionStore(db: Database): SessionStore {
   );
   const markEndedStmt = db.prepare(
     "UPDATE sessions SET ended_at = ? WHERE id = ? AND ended_at IS NULL",
+  );
+  const updatePidStmt = db.prepare(
+    "UPDATE sessions SET pid = ? WHERE id = ? AND ended_at IS NULL",
   );
   const updateTranscriptStmt = db.prepare(
     "UPDATE sessions SET transcript_path = ? WHERE id = ?",
@@ -128,6 +132,11 @@ export function createSessionStore(db: Database): SessionStore {
 
     markEnded(id) {
       const result = markEndedStmt.run(Date.now(), id);
+      return result.changes > 0;
+    },
+
+    updatePid(id, pid) {
+      const result = updatePidStmt.run(pid, id);
       return result.changes > 0;
     },
 

@@ -98,6 +98,7 @@ function makeHarness(initial: Date): Harness {
   };
 
   const spawnDeps: SpawnPipelineDeps = {
+    workspaces,
     workspaceRoles,
     agents,
     sessions,

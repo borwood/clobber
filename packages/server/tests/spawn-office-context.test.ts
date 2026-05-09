@@ -224,6 +224,7 @@ describe("spawn — office continuity at spawn (#55)", () => {
     });
 
     const spawnDeps: SpawnPipelineDeps = {
+      workspaces,
       workspaceRoles,
       agents,
       sessions,

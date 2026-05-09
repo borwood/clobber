@@ -13,6 +13,7 @@ import type { AgentQuestionWaiter } from "../agent-question-waiter.ts";
 import { readTranscript } from "../transcript-reader.ts";
 import { endSession, terminateSession } from "../session-lifecycle.ts";
 import { appendTranscriptNotification } from "../transcript-marker.ts";
+import type { ResumeTurnSuccess, ResumeTurnError } from "../spawn-pipeline.ts";
 
 interface IdParam {
   id: string;
@@ -36,6 +37,10 @@ export function registerSessionRoutes(
     summaries: WorkspaceSessionSummaries;
     registry: AgentRegistry;
     runtimeProvider: RuntimeProvider;
+    resumeTurn: (input: {
+      readonly sessionId: string;
+      readonly prompt: string;
+    }) => ResumeTurnSuccess | ResumeTurnError;
     agentQuestions: AgentQuestionStore;
     agentQuestionWaiter: AgentQuestionWaiter;
   },
@@ -89,9 +94,26 @@ export function registerSessionRoutes(
       // missed). Either way, treat the session as gone — reap now so the
       // sidebar settles on the next poll.
       if (live === null) {
+        if (deps.runtimeProvider.capabilities.processLifetime === "turn") {
+          const resumed = deps.resumeTurn({
+            sessionId,
+            prompt: parsed.data.prompt,
+          });
+          if (!resumed.ok) {
+            reply.code(resumed.status);
+            return resumed.detail === undefined
+              ? { error: resumed.error }
+              : { error: resumed.error, detail: resumed.detail };
+          }
+          return { ok: true, pid: resumed.pid };
+        }
         endSession(sessionId, deps);
         reply.code(410);
         return { error: "session ended" };
+      }
+      if (deps.runtimeProvider.capabilities.processLifetime === "turn") {
+        reply.code(409);
+        return { error: "agent busy" };
       }
       if (live.busy) {
         reply.code(409);

@@ -14,7 +14,11 @@ import { registerPersistentAgentsRoutes } from "./routes/persistent-agents.ts";
 import { registerWhiteboardRoutes } from "./routes/whiteboard.ts";
 import { createAgentRegistry } from "./agent-registry.ts";
 import { createTriggerScheduler } from "./trigger-scheduler.ts";
-import { attachSessionToAgent, type SpawnPipelineDeps } from "./spawn-pipeline.ts";
+import {
+  attachSessionToAgent,
+  resumeSessionTurn,
+  type SpawnPipelineDeps,
+} from "./spawn-pipeline.ts";
 import { createSystemClock } from "./clock.ts";
 
 export type {
@@ -34,6 +38,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     opts.runtimeProvider === undefined ? claudeRuntimeProvider : opts.runtimeProvider;
 
   const spawnPipelineDeps: SpawnPipelineDeps = {
+    workspaces: opts.workspaces,
     workspaceRoles: opts.workspaceRoles,
     agents: opts.agents,
     sessions: opts.sessions,
@@ -86,6 +91,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     agentQuestionWaiter: opts.agentQuestionWaiter,
     registry,
     runtimeProvider,
+    resumeTurn: (input) => resumeSessionTurn(spawnPipelineDeps, input),
   });
   registerSpawnRoutes(app, {
     workspaces: opts.workspaces,

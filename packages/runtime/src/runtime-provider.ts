@@ -43,11 +43,17 @@ export interface RuntimeSpawnOptions {
   readonly displayName?: string;
 }
 
+export interface RuntimeResumeOptions extends RuntimeSpawnOptions {
+  readonly providerThreadId: string;
+}
+
 export interface RuntimeSpawnRequest {
   readonly hookUrl: string;
   readonly prompt: string;
   readonly cwd: string;
   readonly sessionId: string;
+  readonly providerThreadId?: string;
+  readonly resume?: boolean;
   readonly permissionMode?: PermissionMode;
   readonly allowedTools?: readonly string[];
   readonly env: NodeJS.ProcessEnv;
@@ -65,6 +71,7 @@ export interface RuntimeProvider {
   readonly capabilities: RuntimeProviderCapabilities;
   prepareBundle(opts: PrepareBundleOptions): MaterializedBundle;
   buildSpawnRequest(opts: RuntimeSpawnOptions): RuntimeSpawnRequest;
+  buildResumeRequest?(opts: RuntimeResumeOptions): RuntimeSpawnRequest;
   initialProviderThreadId(sessionId: string): string | undefined;
   serializeUserPrompt(prompt: string): string;
   serializeInterrupt(requestId: string): string;
