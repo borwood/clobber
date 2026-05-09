@@ -14,6 +14,7 @@ export interface CreateRoleVersionInput {
   readonly system_prompt: string;
   readonly skills_json: string;
   readonly allowed_tools_json: string;
+  readonly allowed_cli_commands_json: string;
   readonly hooks_json: string;
   readonly triggers_json: string;
 }
@@ -38,6 +39,7 @@ interface Row {
   system_prompt: string;
   skills_json: string;
   allowed_tools_json: string;
+  allowed_cli_commands_json: string;
   hooks_json: string;
   triggers_json: string;
   created_at: number;
@@ -58,6 +60,7 @@ function rowToVersion(row: Row): RoleVersion {
     system_prompt: row.system_prompt,
     skills_json: row.skills_json,
     allowed_tools_json: row.allowed_tools_json,
+    allowed_cli_commands_json: row.allowed_cli_commands_json,
     hooks_json: row.hooks_json,
     triggers_json: row.triggers_json,
     created_at: row.created_at,
@@ -67,8 +70,8 @@ function rowToVersion(row: Row): RoleVersion {
 export function createRoleVersionStore(db: Database): RoleVersionStore {
   const insertStmt = db.prepare(
     `INSERT INTO role_versions
-       (id, role_id, version, system_prompt, skills_json, allowed_tools_json, hooks_json, triggers_json, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, role_id, version, system_prompt, skills_json, allowed_tools_json, allowed_cli_commands_json, hooks_json, triggers_json, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const getStmt = db.prepare("SELECT * FROM role_versions WHERE id = ?");
   const listForRoleStmt = db.prepare(
@@ -89,6 +92,7 @@ export function createRoleVersionStore(db: Database): RoleVersionStore {
         input.system_prompt,
         input.skills_json,
         input.allowed_tools_json,
+        input.allowed_cli_commands_json,
         input.hooks_json,
         input.triggers_json,
         created_at,

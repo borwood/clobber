@@ -23,7 +23,7 @@ import {
   parseTranscriptQuery,
   type TranscriptQuery,
 } from "../transcript-formatter.ts";
-import { resolveCallerSession } from "./_agent-auth.ts";
+import { authorizeCommand, resolveCallerSession } from "./_agent-auth.ts";
 import { normalizeSpawnLabel } from "./_spawn-label.ts";
 
 export interface AgentRouteDeps {
@@ -58,6 +58,11 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
       reply.code(auth.status);
       return { error: auth.error };
     }
+    const authz = authorizeCommand(auth.session, "whoami", deps);
+    if (!authz.ok) {
+      reply.code(authz.status);
+      return { error: authz.error };
+    }
     const role = deps.roles.get(auth.session.role_id);
     if (role === null) {
       reply.code(500);
@@ -76,6 +81,11 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
     if (!auth.ok) {
       reply.code(auth.status);
       return { error: auth.error };
+    }
+    const authz = authorizeCommand(auth.session, "agents", deps);
+    if (!authz.ok) {
+      reply.code(authz.status);
+      return { error: authz.error };
     }
     const sessions = deps.sessions.listActiveForWorkspace(auth.session.workspace_id);
     const agents = sessions.map((session) => {
@@ -108,6 +118,11 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
     if (!auth.ok) {
       reply.code(auth.status);
       return { error: auth.error };
+    }
+    const authz = authorizeCommand(auth.session, "spawn", deps);
+    if (!authz.ok) {
+      reply.code(authz.status);
+      return { error: authz.error };
     }
 
     const parsed = AgentSpawnBodySchema.safeParse(request.body);
@@ -161,6 +176,11 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
         reply.code(auth.status);
         return { error: auth.error };
       }
+      const authz = authorizeCommand(auth.session, "transcript", deps);
+      if (!authz.ok) {
+        reply.code(authz.status);
+        return { error: authz.error };
+      }
       const target = deps.sessions.get(request.params.id);
       if (target === null || target.workspace_id !== auth.session.workspace_id) {
         reply.code(404);
@@ -191,6 +211,11 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
     if (!auth.ok) {
       reply.code(auth.status);
       return { error: auth.error };
+    }
+    const authz = authorizeCommand(auth.session, "status", deps);
+    if (!authz.ok) {
+      reply.code(authz.status);
+      return { error: authz.error };
     }
     const parsed = AgentStatusUpdateSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -224,6 +249,11 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
       reply.code(auth.status);
       return { error: auth.error };
     }
+    const authz = authorizeCommand(auth.session, "report", deps);
+    if (!authz.ok) {
+      reply.code(authz.status);
+      return { error: authz.error };
+    }
     const parsed = FinalReportSchema.safeParse(request.body);
     if (!parsed.success) {
       reply.code(400);
@@ -255,6 +285,11 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
       if (!auth.ok) {
         reply.code(auth.status);
         return { error: auth.error };
+      }
+      const authz = authorizeCommand(auth.session, "kill", deps);
+      if (!authz.ok) {
+        reply.code(authz.status);
+        return { error: authz.error };
       }
       const target = deps.sessions.get(request.params.id);
       if (target === null || target.workspace_id !== auth.session.workspace_id) {

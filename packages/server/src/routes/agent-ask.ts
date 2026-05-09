@@ -2,18 +2,22 @@ import type { FastifyInstance } from "fastify";
 import { AgentAskRequestSchema, AgentAnswerRequestSchema } from "@clobber/shared";
 import type { SessionTokenStore } from "../session-token-store.ts";
 import type { SessionStore } from "../session-store.ts";
+import type { RoleStore } from "../role-store.ts";
+import type { RoleVersionStore } from "../role-version-store.ts";
 import type { AgentQuestionStore } from "../agent-question-store.ts";
 import type {
   AgentQuestionWaiter,
 } from "../agent-question-waiter.ts";
 import { QuestionTimeoutError } from "../agent-question-waiter.ts";
-import { resolveCallerSession } from "./_agent-auth.ts";
+import { authorizeCommand, resolveCallerSession } from "./_agent-auth.ts";
 
 const DEFAULT_ASK_TIMEOUT_MS = 30 * 60 * 1000;
 
 export interface AgentAskRouteDeps {
   readonly sessionTokens: SessionTokenStore;
   readonly sessions: SessionStore;
+  readonly roles: RoleStore;
+  readonly roleVersions: RoleVersionStore;
   readonly agentQuestions: AgentQuestionStore;
   readonly agentQuestionWaiter: AgentQuestionWaiter;
   readonly askTimeoutMs?: number;
@@ -30,6 +34,11 @@ export function registerAgentAskRoutes(
     if (!auth.ok) {
       reply.code(auth.status);
       return { error: auth.error };
+    }
+    const authz = authorizeCommand(auth.session, "ask", deps);
+    if (!authz.ok) {
+      reply.code(authz.status);
+      return { error: authz.error };
     }
 
     const parsed = AgentAskRequestSchema.safeParse(request.body);

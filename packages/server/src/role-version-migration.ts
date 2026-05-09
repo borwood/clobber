@@ -9,6 +9,12 @@ export function migrateRoleVersions(db: Database): void {
   ensureColumn(db, "roles", "current_version_id", "TEXT");
   ensureColumn(db, "sessions", "role_version_id", "TEXT");
   ensureColumn(db, "role_versions", "triggers_json", "TEXT NOT NULL DEFAULT '[]'");
+  ensureColumn(
+    db,
+    "role_versions",
+    "allowed_cli_commands_json",
+    "TEXT NOT NULL DEFAULT '[]'",
+  );
   dropLegacyGlobalUniqueName(db);
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_roles_workspace ON roles(workspace_id);
@@ -16,6 +22,7 @@ export function migrateRoleVersions(db: Database): void {
       ON roles(name) WHERE workspace_id IS NULL;
   `);
   backfillRoleVersions(db);
+  backfillCliAllowLists(db);
   backfillUnseededWorkspaces(db);
 }
 
@@ -79,6 +86,39 @@ interface UnversionedRow {
   id: string;
   name: string;
   allowed_tools: string | null;
+}
+
+interface CliAllowListBackfillRow {
+  version_id: string;
+  role_name: string;
+}
+
+// Existing role_versions rows pre-date the allowed_cli_commands_json column;
+// the column default is '[]' (default-deny). For shipped roles we can recover
+// the intended allow-list from the matching bundle's manifest. Forked or
+// unknown roles stay at '[]' — they had no enforcement before, but now must
+// be re-edited to opt into commands.
+function backfillCliAllowLists(db: Database): void {
+  const rows = db
+    .prepare(
+      `SELECT rv.id AS version_id, r.name AS role_name
+         FROM role_versions rv
+         JOIN roles r ON r.id = rv.role_id
+         WHERE rv.allowed_cli_commands_json = '[]'`,
+    )
+    .all() as CliAllowListBackfillRow[];
+  if (rows.length === 0) return;
+  const update = db.prepare(
+    "UPDATE role_versions SET allowed_cli_commands_json = ? WHERE id = ?",
+  );
+  for (const row of rows) {
+    const loaded = loadRoleBundle(row.role_name);
+    if (loaded === null) continue;
+    update.run(
+      JSON.stringify([...loaded.manifest.allowedCliCommands]),
+      row.version_id,
+    );
+  }
 }
 
 function backfillRoleVersions(db: Database): void {

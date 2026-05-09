@@ -29,3 +29,20 @@ export const RoleManifestSchema = z
     { message: "allowedCliCommands must be unique", path: ["allowedCliCommands"] },
   );
 export type RoleManifest = z.infer<typeof RoleManifestSchema>;
+
+export const CLI_COMMAND_WILDCARD = "*";
+
+// Returns true iff `commandName` is permitted by the allow-list.
+//
+// Names may be plain top-level verbs (e.g. "spawn") or dotted sub-verbs
+// (e.g. "roles.fork"). A list containing "*" permits any command. Sub-verb
+// matching is exact: a list with ["roles.list"] permits "roles.list" but
+// not "roles.fork". Future extension point: "roles.*" could allow any
+// roles.<x>; not implemented yet to keep semantics narrow.
+export function isCliCommandAllowed(
+  allowed: readonly string[],
+  commandName: string,
+): boolean {
+  if (allowed.includes(CLI_COMMAND_WILDCARD)) return true;
+  return allowed.includes(commandName);
+}

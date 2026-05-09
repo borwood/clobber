@@ -12,7 +12,7 @@ export const managerRole = defineRole({
       "Permanent inhabitant of a workspace. Decomposes work, spawns workers, asks the user when blocked.",
     systemPromptPath: "system-prompt.md",
     pluginTemplatePath: "plugin-template",
-    allowedCliCommands: ["whoami", "spawn", "ask", "status", "agents", "transcript", "kill"],
+    allowedCliCommands: ["*"],
     persistent: true,
     defaultCeiling: 1,
     permissionMode: "bypassPermissions",

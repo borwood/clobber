@@ -10,7 +10,7 @@ import type { WorkspaceRoleStore } from "../workspace-role-store.ts";
 import type { TriggerScheduler } from "../trigger-scheduler.ts";
 import { forkRole } from "../fork-role.ts";
 import { editRole, type RoleEditPatch } from "../edit-role.ts";
-import { resolveCallerSession } from "./_agent-auth.ts";
+import { authorizeCommand, resolveCallerSession } from "./_agent-auth.ts";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -143,6 +143,11 @@ export function registerAgentRolesRoutes(
       reply.code(auth.status);
       return { error: auth.error };
     }
+    const authz = authorizeCommand(auth.session, "roles.list", deps);
+    if (!authz.ok) {
+      reply.code(authz.status);
+      return { error: authz.error };
+    }
     const roles = deps.roles.listForWorkspace(auth.session.workspace_id);
     const entries: RoleListEntry[] = [];
     for (const role of roles) {
@@ -159,6 +164,11 @@ export function registerAgentRolesRoutes(
       if (!auth.ok) {
         reply.code(auth.status);
         return { error: auth.error };
+      }
+      const authz = authorizeCommand(auth.session, "roles.fork", deps);
+      if (!authz.ok) {
+        reply.code(authz.status);
+        return { error: authz.error };
       }
       const parsed = ForkBodySchema.safeParse(request.body);
       if (!parsed.success) {
@@ -208,6 +218,11 @@ export function registerAgentRolesRoutes(
       if (!auth.ok) {
         reply.code(auth.status);
         return { error: auth.error };
+      }
+      const authz = authorizeCommand(auth.session, "roles.edit", deps);
+      if (!authz.ok) {
+        reply.code(authz.status);
+        return { error: authz.error };
       }
       const rawBody =
         request.body === null || typeof request.body !== "object"
@@ -312,6 +327,11 @@ export function registerAgentRolesRoutes(
         reply.code(auth.status);
         return { error: auth.error };
       }
+      const authz = authorizeCommand(auth.session, "roles.ceiling", deps);
+      if (!authz.ok) {
+        reply.code(authz.status);
+        return { error: authz.error };
+      }
       const parsed = CeilingBodySchema.safeParse(request.body);
       if (!parsed.success) {
         reply.code(400);
@@ -342,6 +362,11 @@ export function registerAgentRolesRoutes(
       if (!auth.ok) {
         reply.code(auth.status);
         return { error: auth.error };
+      }
+      const authz = authorizeCommand(auth.session, "roles.show", deps);
+      if (!authz.ok) {
+        reply.code(authz.status);
+        return { error: authz.error };
       }
       const { idOrName } = request.params;
       const role = UUID_RE.test(idOrName)
