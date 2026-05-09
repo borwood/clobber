@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance } from "fastify";
+import { claudeRuntimeProvider } from "@clobber/runtime";
 import { registerHookRoutes } from "./routes/hooks.ts";
 import { registerEventRoutes } from "./routes/events.ts";
 import { registerSessionRoutes } from "./routes/sessions.ts";
@@ -13,7 +14,11 @@ import { registerPersistentAgentsRoutes } from "./routes/persistent-agents.ts";
 import { registerWhiteboardRoutes } from "./routes/whiteboard.ts";
 import { createAgentRegistry } from "./agent-registry.ts";
 import { createTriggerScheduler } from "./trigger-scheduler.ts";
-import { attachSessionToAgent, type SpawnPipelineDeps } from "./spawn-pipeline.ts";
+import {
+  attachSessionToAgent,
+  resumeSessionTurn,
+  type SpawnPipelineDeps,
+} from "./spawn-pipeline.ts";
 import { createSystemClock } from "./clock.ts";
 
 export type {
@@ -29,8 +34,11 @@ export function createServer(opts: ServerOptions): FastifyInstance {
   const app = Fastify({ logger: false });
   const registry = createAgentRegistry();
   const clock = opts.clock === undefined ? createSystemClock() : opts.clock;
+  const runtimeProvider =
+    opts.runtimeProvider === undefined ? claudeRuntimeProvider : opts.runtimeProvider;
 
   const spawnPipelineDeps: SpawnPipelineDeps = {
+    workspaces: opts.workspaces,
     workspaceRoles: opts.workspaceRoles,
     agents: opts.agents,
     sessions: opts.sessions,
@@ -42,6 +50,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     registry,
     roles: opts.roles,
     roleVersions: opts.roleVersions,
+    runtimeProvider,
     agentQuestions: opts.agentQuestions,
     agentQuestionWaiter: opts.agentQuestionWaiter,
   };
@@ -55,6 +64,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     agents: opts.agents,
     sessions: opts.sessions,
     registry,
+    runtimeProvider,
     dispatches: opts.dispatches,
     attachSession: (input) => attachSessionToAgent(spawnPipelineDeps, input),
   });
@@ -62,6 +72,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
   registerHookRoutes(app, {
     store: opts.store,
     sessions: opts.sessions,
+    workspaces: opts.workspaces,
     agents: opts.agents,
     roles: opts.roles,
     sessionTokens: opts.sessionTokens,
@@ -80,6 +91,8 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     agentQuestions: opts.agentQuestions,
     agentQuestionWaiter: opts.agentQuestionWaiter,
     registry,
+    runtimeProvider,
+    resumeTurn: (input) => resumeSessionTurn(spawnPipelineDeps, input),
   });
   registerSpawnRoutes(app, {
     workspaces: opts.workspaces,
@@ -96,6 +109,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     registry,
     agentQuestions: opts.agentQuestions,
     agentQuestionWaiter: opts.agentQuestionWaiter,
+    runtimeProvider,
     scheduler,
   });
   registerWorkspaceRoutes(app, {
@@ -140,6 +154,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     hookUrl: opts.hookUrl,
     apiBase: opts.apiBase,
     cliEntry: opts.cliEntry,
+    runtimeProvider,
   });
   registerAgentRolesRoutes(app, {
     db: opts.db,

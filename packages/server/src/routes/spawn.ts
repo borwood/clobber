@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import type { RuntimeProvider } from "@clobber/runtime";
 import type { WorkspaceStore } from "../workspace-store.ts";
 import type { RoleStore } from "../role-store.ts";
 import type { RoleVersionStore } from "../role-version-store.ts";
@@ -35,6 +36,7 @@ export interface SpawnRouteDeps {
   readonly apiBase: string;
   readonly cliEntry: string;
   readonly registry: AgentRegistry;
+  readonly runtimeProvider: RuntimeProvider;
   readonly agentQuestions: AgentQuestionStore;
   readonly agentQuestionWaiter: AgentQuestionWaiter;
   readonly scheduler: Pick<TriggerScheduler, "reloadAgent">;

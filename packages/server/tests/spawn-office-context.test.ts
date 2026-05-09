@@ -9,6 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
+import { claudeRuntimeProvider } from "@clobber/runtime";
 import { createServer } from "../src/server.ts";
 import {
   attachSessionToAgent,
@@ -223,6 +224,7 @@ describe("spawn — office continuity at spawn (#55)", () => {
     });
 
     const spawnDeps: SpawnPipelineDeps = {
+      workspaces,
       workspaceRoles,
       agents,
       sessions,
@@ -234,6 +236,7 @@ describe("spawn — office continuity at spawn (#55)", () => {
       registry,
       roles,
       roleVersions,
+      runtimeProvider: claudeRuntimeProvider,
       agentQuestions,
       agentQuestionWaiter,
     };

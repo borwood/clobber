@@ -18,7 +18,7 @@ import { createTestClock, type TestClock } from "../src/clock.ts";
 import { editRole } from "../src/edit-role.ts";
 import { seedWorkspaceRoles } from "../src/seed-workspace-roles.ts";
 import { attachSessionToAgent, type SpawnPipelineDeps } from "../src/spawn-pipeline.ts";
-import { serializeUserMessage } from "@clobber/runtime";
+import { claudeRuntimeProvider, serializeUserMessage } from "@clobber/runtime";
 import type { AgentSpawner, SpawnedAgentInfo } from "../src/types.ts";
 import type { RoleVersion, Role } from "@clobber/shared";
 
@@ -98,6 +98,7 @@ function makeHarness(initial: Date): Harness {
   };
 
   const spawnDeps: SpawnPipelineDeps = {
+    workspaces,
     workspaceRoles,
     agents,
     sessions,
@@ -109,6 +110,7 @@ function makeHarness(initial: Date): Harness {
     registry,
     roles,
     roleVersions,
+    runtimeProvider: claudeRuntimeProvider,
     agentQuestions,
     agentQuestionWaiter,
   };
@@ -122,6 +124,7 @@ function makeHarness(initial: Date): Harness {
     agents,
     sessions,
     registry,
+    runtimeProvider: claudeRuntimeProvider,
     dispatches,
     attachSession: (input) => attachSessionToAgent(spawnDeps, input),
   });

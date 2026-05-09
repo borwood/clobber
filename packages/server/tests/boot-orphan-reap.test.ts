@@ -9,6 +9,7 @@ import { createSessionTokenStore } from "../src/session-token-store.ts";
 import { createAgentQuestionStore } from "../src/agent-question-store.ts";
 import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import { reapOrphanedSessions } from "../src/boot-reap.ts";
+import { codexRuntimeProvider } from "@clobber/runtime";
 
 interface Harness {
   db: ReturnType<typeof createDatabase>;
@@ -38,6 +39,8 @@ function buildHarness(): Harness {
 interface SeedOpts {
   readonly persistent: boolean;
   readonly preEnded?: boolean;
+  readonly runtimeProvider?: string;
+  readonly providerThreadId?: string;
 }
 
 function seed(h: Harness, opts: SeedOpts) {
@@ -53,6 +56,10 @@ function seed(h: Harness, opts: SeedOpts) {
     agent_id: agent.id,
     workspace_id: ws.id,
     role_id: role.id,
+    ...(opts.runtimeProvider === undefined ? {} : { runtime_provider: opts.runtimeProvider }),
+    ...(opts.providerThreadId === undefined
+      ? {}
+      : { provider_thread_id: opts.providerThreadId }),
     pid: 9000,
   });
   if (opts.preEnded === true) h.sessions.markEnded(sessionId);
@@ -117,6 +124,31 @@ describe("reapOrphanedSessions (boot-time)", () => {
     });
 
     expect(h.sessions.get(done.sessionId)!.ended_at).toBe(endedAt!);
+    h.db.close();
+  });
+
+  it("preserves active sessions for the selected turn-lifetime provider", async () => {
+    const h = buildHarness();
+    const codex = seed(h, {
+      persistent: true,
+      runtimeProvider: "codex",
+      providerThreadId: "thread-1",
+    });
+    const claude = seed(h, { persistent: true });
+
+    reapOrphanedSessions({
+      sessions: h.sessions,
+      agents: h.agents,
+      roles: h.roles,
+      sessionTokens: h.sessionTokens,
+      agentQuestions: h.agentQuestions,
+      agentQuestionWaiter: h.agentQuestionWaiter,
+      runtimeProvider: codexRuntimeProvider,
+    });
+
+    expect(h.sessions.get(codex.sessionId)!.ended_at).toBeUndefined();
+    expect(h.sessions.get(codex.sessionId)!.provider_thread_id).toBe("thread-1");
+    expect(typeof h.sessions.get(claude.sessionId)!.ended_at).toBe("number");
     h.db.close();
   });
 

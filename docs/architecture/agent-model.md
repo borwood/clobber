@@ -8,7 +8,7 @@
 |---|---|
 | **Role** | Template/type. Bakes in system-prompt fragment, allowed CLI commands, skill bundle, settings overlay, hook scripts. Has a `persistent: bool` flag. |
 | **Agent** | Instance of a role inside a workspace. If the role is persistent, the agent has a permanent **office** even when no session is currently embodying it. If non-persistent, the agent only exists for the lifetime of its session. |
-| **Session** | A `claude` process embodying an agent right now. State: `active \| paused \| ended`. Resumable by claude session id. |
+| **Session** | Clobber's record of an agent embodiment. It points at a runtime provider, a provider thread when known, and the current/last process PID. State: `active \| paused \| ended`. |
 | **Workspace** | Work source (a repo) + manager agent + agent ceiling. |
 | **Office** | Persistent agent's permanent box on the whiteboard. Persists through session pause/end/respawn. |
 
@@ -21,6 +21,66 @@ The system has exactly three communication directions between the clobber server
 | **Inbound** — claude → clobber | Hook scripts (SessionStart/Stop/SessionEnd) POST to `/hooks/*`; transcript stream tailed from disk. | partial |
 | **Embodiment** — clobber → claude | `claude -p --input-format stream-json` keeps the child alive; follow-up prompts written to its stdin. | yes (#8) |
 | **Agent-initiated** — agent → clobber | `clobber` CLI shells out from inside the session; auths via per-session token in env; hits server endpoints. | no — milestone `agent-runtime v1` |
+
+## Runtime provider boundary
+
+Claude Code is the first runtime provider, not the conceptual model. Clobber
+core should own agents, roles, workspaces, status, questions, audit history, and
+the whiteboard. Runtime providers own concrete protocol details:
+
+- spawn command shape
+- process command execution and stdout event format
+- role bundle materialization format
+- prompt and interrupt serialization
+- transcript path/discovery
+- lifecycle/tool event normalization
+- capability flags such as `processLifetime`, `livePromptInjection`,
+  `interrupt`, and `resume`
+
+This boundary exists even while Claude is the only production runtime. It keeps
+provider-specific knowledge local and makes the codebase legible to agents that
+only have partial context: look at the provider API to understand what the core
+expects; look at one provider implementation to understand one runtime's
+protocol.
+
+The model must distinguish:
+
+| Term | Meaning |
+|---|---|
+| **Agent** | Durable role instance inside a workspace. |
+| **Provider thread** | Runtime-resumable conversation identity, such as a Claude session id or a Codex recorded session/thread id. |
+| **Embodiment / run** | Concrete process PID and execution window. |
+
+The `sessions` table therefore records both Clobber's local session id and
+provider identity fields:
+
+- `sessions.runtime_provider` names the provider implementation. The server
+  defaults to `claude`; `CLOBBER_RUNTIME_PROVIDER=codex` selects the Codex
+  provider.
+- `sessions.provider_thread_id` stores the provider's resumable conversation
+  identity when it is available. For Claude this is the same value as the local
+  session id. Codex learns this id from `thread.started` stdout JSONL and
+  updates the column asynchronously, so the column is nullable.
+- `sessions.pid` remains process embodiment state. It is not a stable
+  conversation identity and should not be used as a resume key.
+
+Claude currently behaves like a **session-lifetime** process: a live child can
+accept follow-up prompts over stdin until it exits. Codex `exec`, based on local
+exploration of `codex-cli 0.129.0`, appears closer to a **turn-lifetime**
+process: `codex exec --json` exits after `turn.completed`, while persistence is
+handled by a resumable recorded session. Supporting both cleanly requires the
+provider boundary to avoid assuming one logical session always equals one
+long-lived process.
+
+For turn-lifetime runtimes, a clean process exit does not end the Clobber
+session. Follow-up prompts start a new provider process using
+`sessions.provider_thread_id`; missing or unrecoverable provider threads surface
+as explicit prompt errors instead of being mistaken for ordinary live-stdin
+session death.
+
+See [Codex Runtime Spike](./codex-runtime-spike.md) for the first captured
+`codex exec --json` event shapes and the recommended initial Codex capability
+set.
 
 ## Session lifecycle
 

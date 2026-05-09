@@ -1,14 +1,22 @@
+import type { RuntimeProvider } from "@clobber/runtime";
 import { endSession, type SessionLifecycleDeps } from "./session-lifecycle.ts";
 
 /**
- * On startup, every session row with `ended_at IS NULL` is an orphan: the
- * parent server process that owned the live `claude` child has died, so the
- * child is dead too (children of an exited parent are reaped by the OS).
- * Reap them here so the next boot starts with a coherent view of which
- * sessions / agents are alive.
+ * On startup, session-lifetime rows with `ended_at IS NULL` are orphans: the
+ * parent server process that owned the live child has died, so the child is
+ * dead too. Turn-lifetime providers can have active rows with no live process;
+ * those rows stay resumable through the provider thread id.
  */
-export function reapOrphanedSessions(deps: SessionLifecycleDeps): void {
+export function reapOrphanedSessions(
+  deps: SessionLifecycleDeps & { readonly runtimeProvider?: RuntimeProvider },
+): void {
   for (const session of deps.sessions.listActive()) {
+    if (
+      deps.runtimeProvider?.capabilities.processLifetime === "turn" &&
+      session.runtime_provider === deps.runtimeProvider.id
+    ) {
+      continue;
+    }
     endSession(session.id, deps);
   }
 }
