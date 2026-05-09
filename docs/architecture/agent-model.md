@@ -29,6 +29,7 @@ core should own agents, roles, workspaces, status, questions, audit history, and
 the whiteboard. Runtime providers own concrete protocol details:
 
 - spawn command shape
+- process command execution and stdout event format
 - role bundle materialization format
 - prompt and interrupt serialization
 - transcript path/discovery
@@ -53,12 +54,13 @@ The model must distinguish:
 The `sessions` table therefore records both Clobber's local session id and
 provider identity fields:
 
-- `sessions.runtime_provider` names the provider implementation, currently
-  `claude`.
+- `sessions.runtime_provider` names the provider implementation. The server
+  defaults to `claude`; `CLOBBER_RUNTIME_PROVIDER=codex` selects the Codex
+  provider.
 - `sessions.provider_thread_id` stores the provider's resumable conversation
   identity when it is available. For Claude this is the same value as the local
-  session id. A Codex provider may learn this id only after the first JSONL
-  events arrive, so the column is nullable.
+  session id. Codex learns this id from `thread.started` stdout JSONL and
+  updates the column asynchronously, so the column is nullable.
 - `sessions.pid` remains process embodiment state. It is not a stable
   conversation identity and should not be used as a resume key.
 

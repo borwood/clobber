@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import {
   claudeRuntimeProvider,
+  codexRuntimeProvider,
+  type RuntimeEvent,
   type RuntimeProvider,
   type RuntimeSpawnRequest,
 } from "@clobber/runtime";
@@ -159,6 +161,68 @@ async function spawn(h: Harness): Promise<{ session_id: string; pid: number }> {
 }
 
 describe("turn-lifetime runtime sessions (#103)", () => {
+  it("persists Codex provider thread ids from runtime stdout events and resumes with them", async () => {
+    const calls: RuntimeSpawnRequest[] = [];
+    let exitFirst!: (code: number | null) => void;
+    let exitSecond!: (code: number | null) => void;
+    const h = buildHarness(codexRuntimeProvider, (req) => {
+      calls.push(req);
+      const stdin = new PassThrough();
+      stdin.resume();
+      const exited = new Promise<number | null>((resolve) => {
+        if (calls.length === 1) exitFirst = resolve;
+        else exitSecond = resolve;
+      });
+      async function* runtimeEvents(): AsyncIterable<RuntimeEvent> {
+        yield {
+          kind: "provider-thread-started",
+          providerThreadId: "019e0b86-a368-7702-9bf3-f5dce89dc9e9",
+        };
+      }
+      return {
+        sessionId: req.sessionId,
+        pid: 6000 + calls.length,
+        exited,
+        stdin,
+        kill: () => {},
+        runtimeEvents: runtimeEvents(),
+      };
+    });
+    const first = await spawn(h);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    expect(h.sessions.get(first.session_id)!.runtime_provider).toBe("codex");
+    expect(h.sessions.get(first.session_id)!.provider_thread_id).toBe(
+      "019e0b86-a368-7702-9bf3-f5dce89dc9e9",
+    );
+    exitFirst(0);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    const res = await h.server.inject({
+      method: "POST",
+      url: `/sessions/${first.session_id}/prompt`,
+      payload: { prompt: "next turn" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toMatchObject({
+      resume: true,
+      providerThreadId: "019e0b86-a368-7702-9bf3-f5dce89dc9e9",
+      command: {
+        bin: "codex",
+        args: expect.arrayContaining([
+          "resume",
+          "019e0b86-a368-7702-9bf3-f5dce89dc9e9",
+        ]),
+        stdoutEventFormat: "codex-jsonl",
+      },
+    });
+    exitSecond(0);
+
+    await teardown(h);
+  });
+
   it("returns 409 while a turn process is still live", async () => {
     const h = buildHarness(turnProvider());
     const first = await spawn(h);

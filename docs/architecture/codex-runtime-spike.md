@@ -1,7 +1,7 @@
 # Codex Runtime Spike
 
-> Status: issue #100 spike. Captures observations from `codex-cli 0.129.0`
-> gathered on 2026-05-09. This is not a production provider spec yet.
+> Status: issue #100 spike, promoted into the initial provider in #102.
+> Captures observations from `codex-cli 0.129.0` gathered on 2026-05-09.
 
 ## Observed commands
 
@@ -86,15 +86,30 @@ Rationale:
   viable initial control path is killing the process and resuming with a
   corrective prompt later.
 
+## Initial provider behavior
+
+`codexRuntimeProvider` builds provider-owned command requests instead of
+teaching server core about Codex CLI details:
+
+- first turn: `codex exec --json --cd <workspace> <prompt>`
+- resume: `codex exec resume <provider_thread_id> --json <prompt>`
+- `permission_mode: "bypassPermissions"` maps to
+  `--dangerously-bypass-approvals-and-sandbox`
+- role `system_prompt` is prepended to the Codex prompt inside a
+  `<clobber-role-system-prompt>` block
+- stdout is consumed as `codex-jsonl`; `thread.started` updates
+  `sessions.provider_thread_id`
+
+The server selects this provider with `CLOBBER_RUNTIME_PROVIDER=codex`.
+
 ## Provider work still needed
 
-- Implement a real `codexRuntimeProvider` that builds `codex exec --json` and
-  `codex exec resume <provider_thread_id> --json` spawn commands.
-- Decide how Codex roles are materialized: config/profile, generated prompt
-  prefix, skills/plugins, or a combination.
-- Implement the production Codex provider on top of the turn-lifetime server
-  path from #103.
-- Update session state after `provider-thread-started` when
-  `provider_thread_id` was unknown at local spawn time.
+- Decide whether Codex roles should eventually use config/profile, generated
+  instructions, native skills, or a combination. The initial provider uses a
+  generated prompt prefix and the existing `clobber` PATH shim.
 - Expand fixtures with real command execution, approval, failure, and cancelled
   turn shapes before production support.
+- Surface asynchronous provider-thread-not-found exits from real Codex resume
+  attempts more directly in the prompt route. The #103 route handles
+  synchronous provider errors; Codex itself reports some resume failures after
+  the process starts. Tracked as #105.

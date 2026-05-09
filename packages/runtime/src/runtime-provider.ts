@@ -15,6 +15,14 @@ import {
 import { deriveTranscriptPath } from "./transcript-path.ts";
 
 export type RuntimeProcessLifetime = "session" | "turn";
+export type RuntimeStdoutEventFormat = "codex-jsonl";
+
+export interface RuntimeCommand {
+  readonly bin: string;
+  readonly args: readonly string[];
+  readonly stdin?: string;
+  readonly stdoutEventFormat?: RuntimeStdoutEventFormat;
+}
 
 export interface RuntimeProviderCapabilities {
   readonly processLifetime: RuntimeProcessLifetime;
@@ -60,6 +68,7 @@ export interface RuntimeSpawnRequest {
   readonly pluginDirs?: readonly string[];
   readonly appendSystemPrompt?: string;
   readonly displayName?: string;
+  readonly command?: RuntimeCommand;
 }
 
 /**
@@ -112,6 +121,91 @@ export const claudeRuntimeProvider: RuntimeProvider = {
   serializeInterrupt: serializeInterruptRequest,
   transcriptPath: deriveTranscriptPath,
 };
+
+export const codexRuntimeProvider: RuntimeProvider = {
+  id: "codex",
+  capabilities: {
+    processLifetime: "turn",
+    livePromptInjection: false,
+    interrupt: false,
+    resume: true,
+  },
+  prepareBundle(opts) {
+    return materializeBundle(opts);
+  },
+  buildSpawnRequest(opts) {
+    return buildCodexRequest(opts, {
+      args: ["exec", "--json", "--cd", opts.cwd],
+    });
+  },
+  buildResumeRequest(opts) {
+    return buildCodexRequest(opts, {
+      args: ["exec", "resume", opts.providerThreadId, "--json"],
+      providerThreadId: opts.providerThreadId,
+      resume: true,
+    });
+  },
+  initialProviderThreadId() {
+    return undefined;
+  },
+  serializeUserPrompt() {
+    throw new Error("Codex runtime does not support live prompt injection");
+  },
+  serializeInterrupt() {
+    throw new Error("Codex runtime does not support interrupts");
+  },
+  transcriptPath(cwd, sessionId) {
+    return `${cwd}/.clobber/codex-transcripts/${sessionId}.jsonl`;
+  },
+};
+
+function buildCodexRequest(
+  opts: RuntimeSpawnOptions,
+  commandOpts: {
+    readonly args: string[];
+    readonly providerThreadId?: string;
+    readonly resume?: boolean;
+  },
+): RuntimeSpawnRequest {
+  const prompt = buildCodexPrompt(opts.systemPrompt, opts.prompt);
+  const args = [...commandOpts.args];
+  if (opts.permissionMode === "bypassPermissions") {
+    args.push("--dangerously-bypass-approvals-and-sandbox");
+  }
+  args.push(prompt);
+  return {
+    hookUrl: opts.hookUrl,
+    prompt,
+    cwd: opts.cwd,
+    sessionId: opts.sessionId,
+    ...(commandOpts.providerThreadId === undefined
+      ? {}
+      : { providerThreadId: commandOpts.providerThreadId }),
+    ...(commandOpts.resume === undefined ? {} : { resume: commandOpts.resume }),
+    ...(opts.permissionMode === undefined
+      ? {}
+      : { permissionMode: opts.permissionMode }),
+    ...(opts.allowedTools === undefined ? {} : { allowedTools: opts.allowedTools }),
+    env: opts.env,
+    appendSystemPrompt: opts.systemPrompt,
+    ...(opts.displayName === undefined ? {} : { displayName: opts.displayName }),
+    command: {
+      bin: "codex",
+      args,
+      stdoutEventFormat: "codex-jsonl",
+    },
+  };
+}
+
+function buildCodexPrompt(systemPrompt: string, prompt: string): string {
+  return [
+    "<clobber-role-system-prompt>",
+    systemPrompt,
+    "</clobber-role-system-prompt>",
+    "",
+    prompt,
+  ].join("\n");
+}
 
 export function buildClaudeRuntimeArgs(opts: {
   readonly sessionId: string;

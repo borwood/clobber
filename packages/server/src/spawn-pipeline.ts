@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { delimiter } from "node:path";
-import type { RoleBundleData, RuntimeProvider } from "@clobber/runtime";
+import type { RoleBundleData, RuntimeEvent, RuntimeProvider } from "@clobber/runtime";
 import type { Agent, Role, Workspace } from "@clobber/shared";
 import { ensureOffice } from "./office-store.ts";
 import { composeOfficeContext } from "./office-context.ts";
@@ -201,6 +201,7 @@ export function attachSessionToAgent(
   });
   deps.sessionTokens.register(sessionId, token);
   deps.registry.register(sessionId, spawned.stdin, spawned.kill);
+  bindRuntimeEvents(deps, sessionId, spawned);
 
   spawned.exited.then((code) => {
     deps.registry.unregister(sessionId);
@@ -315,6 +316,7 @@ export function resumeSessionTurn(
   deps.sessionTokens.register(session.id, token);
   deps.sessions.updatePid(session.id, spawned.pid);
   deps.registry.register(session.id, spawned.stdin, spawned.kill);
+  bindRuntimeEvents(deps, session.id, spawned);
   spawned.exited.then((code) => {
     deps.registry.unregister(session.id);
     if (code !== 0 && code !== null) {
@@ -322,6 +324,27 @@ export function resumeSessionTurn(
     }
   });
   return { ok: true, session_id: session.id, pid: spawned.pid };
+}
+
+function bindRuntimeEvents(
+  deps: Pick<SpawnPipelineDeps, "sessions">,
+  sessionId: string,
+  spawned: SpawnedAgentInfo,
+): void {
+  if (spawned.runtimeEvents === undefined) return;
+  void consumeRuntimeEvents(deps, sessionId, spawned.runtimeEvents);
+}
+
+async function consumeRuntimeEvents(
+  deps: Pick<SpawnPipelineDeps, "sessions">,
+  sessionId: string,
+  events: AsyncIterable<RuntimeEvent>,
+): Promise<void> {
+  for await (const event of events) {
+    if (event.kind === "provider-thread-started") {
+      deps.sessions.updateProviderThreadId(sessionId, event.providerThreadId);
+    }
+  }
 }
 
 function isProviderThreadMissing(message: string): boolean {

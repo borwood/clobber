@@ -273,6 +273,28 @@ describe("session store", () => {
     deps.db.close();
   });
 
+  it("updateProviderThreadId stores the runtime thread id for active sessions only", () => {
+    const deps = open();
+    const { ws, role, agent } = seed(deps);
+    const created = deps.sessions.create({
+      id: "session-1",
+      agent_id: agent.id,
+      workspace_id: ws.id,
+      role_id: role.id,
+      runtime_provider: "codex",
+      pid: 100,
+    });
+    expect(created.provider_thread_id).toBeUndefined();
+
+    expect(deps.sessions.updateProviderThreadId("session-1", "thread-1")).toBe(true);
+    expect(deps.sessions.get("session-1")!.provider_thread_id).toBe("thread-1");
+
+    expect(deps.sessions.markEnded("session-1")).toBe(true);
+    expect(deps.sessions.updateProviderThreadId("session-1", "thread-2")).toBe(false);
+    expect(deps.sessions.get("session-1")!.provider_thread_id).toBe("thread-1");
+    deps.db.close();
+  });
+
   it("listForWorkspace returns sessions newest-first scoped to the workspace", () => {
     const deps = open();
     const { ws, role, agent } = seed(deps);

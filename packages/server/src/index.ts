@@ -1,6 +1,6 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnAgent } from "@clobber/runtime";
+import { claudeRuntimeProvider, codexRuntimeProvider, spawnAgent } from "@clobber/runtime";
 import { createServer, type AgentSpawner } from "./server.ts";
 import { createDatabase } from "./db.ts";
 import { resolveDatabasePath } from "./db-path.ts";
@@ -31,6 +31,9 @@ const DB_PATH = resolveDatabasePath({
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI_ENTRY = resolve(HERE, "../../cli/src/index.ts");
+const runtimeProvider = process.env["CLOBBER_RUNTIME_PROVIDER"] === "codex"
+  ? codexRuntimeProvider
+  : claudeRuntimeProvider;
 
 const spawner: AgentSpawner = (req) => {
   const agent = spawnAgent({
@@ -45,6 +48,7 @@ const spawner: AgentSpawner = (req) => {
       ? {}
       : { appendSystemPrompt: req.appendSystemPrompt }),
     ...(req.displayName === undefined ? {} : { displayName: req.displayName }),
+    ...(req.command === undefined ? {} : { command: req.command }),
     ...(req.env === undefined ? {} : { env: req.env }),
   });
   return {
@@ -55,6 +59,7 @@ const spawner: AgentSpawner = (req) => {
     kill: (signal) => {
       agent.child.kill(signal);
     },
+    ...(agent.runtimeEvents === undefined ? {} : { runtimeEvents: agent.runtimeEvents }),
   };
 };
 
@@ -80,6 +85,7 @@ reapOrphanedSessions({
   sessionTokens,
   agentQuestions,
   agentQuestionWaiter,
+  runtimeProvider,
 });
 const app = createServer({
   db,
@@ -97,6 +103,7 @@ const app = createServer({
   agentQuestions,
   agentQuestionWaiter,
   dispatches,
+  runtimeProvider,
   spawner,
   hookUrl: HOOK_URL,
   apiBase: API_BASE,

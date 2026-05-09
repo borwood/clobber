@@ -7,6 +7,7 @@ export interface SessionStore {
   countActive(workspaceId: string, roleId: string): number;
   markEnded(id: string): boolean;
   updatePid(id: string, pid: number): boolean;
+  updateProviderThreadId(id: string, providerThreadId: string): boolean;
   updateTranscriptPath(id: string, path: string): boolean;
   listForWorkspace(workspaceId: string): Session[];
   listActiveForWorkspace(workspaceId: string): Session[];
@@ -63,6 +64,9 @@ export function createSessionStore(db: Database): SessionStore {
   );
   const updatePidStmt = db.prepare(
     "UPDATE sessions SET pid = ? WHERE id = ? AND ended_at IS NULL",
+  );
+  const updateProviderThreadIdStmt = db.prepare(
+    "UPDATE sessions SET provider_thread_id = ? WHERE id = ? AND ended_at IS NULL",
   );
   const updateTranscriptStmt = db.prepare(
     "UPDATE sessions SET transcript_path = ? WHERE id = ?",
@@ -137,6 +141,11 @@ export function createSessionStore(db: Database): SessionStore {
 
     updatePid(id, pid) {
       const result = updatePidStmt.run(pid, id);
+      return result.changes > 0;
+    },
+
+    updateProviderThreadId(id, providerThreadId) {
+      const result = updateProviderThreadIdStmt.run(providerThreadId, id);
       return result.changes > 0;
     },
 
