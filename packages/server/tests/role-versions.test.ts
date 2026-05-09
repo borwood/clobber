@@ -44,6 +44,7 @@ describe("role_versions schema (#23)", () => {
       "system_prompt",
       "skills_json",
       "allowed_tools_json",
+      "allowed_cli_commands_json",
       "hooks_json",
       "created_at",
     ]) {

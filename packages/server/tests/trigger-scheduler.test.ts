@@ -350,6 +350,7 @@ describe("TriggerScheduler — cron firing", () => {
       system_prompt: cur.system_prompt,
       skills_json: cur.skills_json,
       allowed_tools_json: cur.allowed_tools_json,
+      allowed_cli_commands_json: cur.allowed_cli_commands_json,
       hooks_json: cur.hooks_json,
       triggers_json: JSON.stringify([{ kind: "cron", expr: "0 9 * * *" }]),
     });

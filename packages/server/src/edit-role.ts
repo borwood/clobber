@@ -58,6 +58,7 @@ export function editRole(
     system_prompt: newSystemPrompt,
     skills_json: newSkillsJson,
     allowed_tools_json: newAllowedToolsJson,
+    allowed_cli_commands_json: currentVersion.allowed_cli_commands_json,
     hooks_json: currentVersion.hooks_json,
     triggers_json: newTriggersJson,
   });

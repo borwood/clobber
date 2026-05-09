@@ -153,6 +153,8 @@ export function createServer(opts: ServerOptions): FastifyInstance {
   registerAgentAskRoutes(app, {
     sessionTokens: opts.sessionTokens,
     sessions: opts.sessions,
+    roles: opts.roles,
+    roleVersions: opts.roleVersions,
     agentQuestions: opts.agentQuestions,
     agentQuestionWaiter: opts.agentQuestionWaiter,
     ...(opts.askTimeoutMs === undefined ? {} : { askTimeoutMs: opts.askTimeoutMs }),

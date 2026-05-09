@@ -53,6 +53,7 @@ export function forkRole(
     system_prompt: sourceVersion.system_prompt,
     skills_json: sourceVersion.skills_json,
     allowed_tools_json: sourceVersion.allowed_tools_json,
+    allowed_cli_commands_json: sourceVersion.allowed_cli_commands_json,
     hooks_json: sourceVersion.hooks_json,
     triggers_json: sourceVersion.triggers_json,
   });

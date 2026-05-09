@@ -4,10 +4,8 @@ import { join } from "node:path";
 import { managerRole } from "../src/index.ts";
 
 describe("managerRole", () => {
-  it("declares the CLI commands the manager needs (including observability triple)", () => {
-    expect([...managerRole.manifest.allowedCliCommands].sort()).toEqual(
-      ["agents", "ask", "kill", "spawn", "status", "transcript", "whoami"].sort(),
-    );
+  it("declares wildcard CLI authz so new verbs auto-apply to the manager", () => {
+    expect([...managerRole.manifest.allowedCliCommands]).toEqual(["*"]);
   });
 
   it("ships a non-empty system prompt", () => {
@@ -31,9 +29,18 @@ describe("managerRole", () => {
     expect(json.name).toBe("manager");
   });
 
-  it("ships a SKILL.md per CLI command under skills/<name>/", () => {
+  it("ships SKILL.md for every CLI verb the manager actually drives", () => {
     const pluginRoot = join(managerRole.bundleRoot, managerRole.manifest.pluginTemplatePath);
-    for (const cmd of managerRole.manifest.allowedCliCommands) {
+    const verbsTrainedByBundle = [
+      "whoami",
+      "spawn",
+      "ask",
+      "status",
+      "agents",
+      "transcript",
+      "kill",
+    ];
+    for (const cmd of verbsTrainedByBundle) {
       expect(existsSync(join(pluginRoot, "skills", cmd, "SKILL.md"))).toBe(true);
     }
   });

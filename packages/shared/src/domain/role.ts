@@ -51,6 +51,7 @@ export const RoleVersionSchema = z.object({
   system_prompt: z.string().min(1),
   skills_json: z.string(),
   allowed_tools_json: z.string(),
+  allowed_cli_commands_json: z.string(),
   hooks_json: z.string(),
   triggers_json: z.string(),
   created_at: z.number().int().nonnegative(),

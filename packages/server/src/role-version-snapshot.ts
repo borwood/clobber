@@ -7,6 +7,7 @@ export interface RoleVersionSnapshot {
   readonly system_prompt: string;
   readonly skills_json: string;
   readonly allowed_tools_json: string;
+  readonly allowed_cli_commands_json: string;
   readonly hooks_json: string;
   readonly triggers_json: string;
 }
@@ -28,6 +29,9 @@ export function snapshotShippedBundle(inputs: SnapshotInputs): RoleVersionSnapsh
     system_prompt: loaded.systemPrompt,
     skills_json: JSON.stringify(skills),
     allowed_tools_json: JSON.stringify(allowedTools),
+    allowed_cli_commands_json: JSON.stringify([
+      ...loaded.manifest.allowedCliCommands,
+    ]),
     hooks_json,
     triggers_json: "[]",
   };

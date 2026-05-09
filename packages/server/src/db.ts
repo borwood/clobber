@@ -36,15 +36,16 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_roles_created   ON roles(created_at DESC);
 
   CREATE TABLE IF NOT EXISTS role_versions (
-    id                 TEXT    PRIMARY KEY,
-    role_id            TEXT    NOT NULL,
-    version            INTEGER NOT NULL,
-    system_prompt      TEXT    NOT NULL,
-    skills_json        TEXT    NOT NULL,
-    allowed_tools_json TEXT    NOT NULL,
-    hooks_json         TEXT    NOT NULL,
-    triggers_json      TEXT    NOT NULL DEFAULT '[]',
-    created_at         INTEGER NOT NULL,
+    id                        TEXT    PRIMARY KEY,
+    role_id                   TEXT    NOT NULL,
+    version                   INTEGER NOT NULL,
+    system_prompt             TEXT    NOT NULL,
+    skills_json               TEXT    NOT NULL,
+    allowed_tools_json        TEXT    NOT NULL,
+    allowed_cli_commands_json TEXT    NOT NULL DEFAULT '[]',
+    hooks_json                TEXT    NOT NULL,
+    triggers_json             TEXT    NOT NULL DEFAULT '[]',
+    created_at                INTEGER NOT NULL,
     UNIQUE (role_id, version),
     FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
   );
