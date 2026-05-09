@@ -37,6 +37,12 @@ describe("workerBeeRole", () => {
     expect(workerBeeRole.systemPrompt).toMatch(/final report/i);
   });
 
+  it("first-action prompt points at the desk briefing packet (#90)", () => {
+    expect(workerBeeRole.systemPrompt).toMatch(/CLOBBER_DESK_DIR/);
+    expect(workerBeeRole.systemPrompt).toMatch(/seed-todos\.json/);
+    expect(workerBeeRole.systemPrompt).toMatch(/assignment\.md/);
+  });
+
   it("ships a plugin template with .claude-plugin/plugin.json named 'worker-bee'", () => {
     const pluginRoot = join(
       workerBeeRole.bundleRoot,

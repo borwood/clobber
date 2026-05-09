@@ -6,6 +6,28 @@ unattended, then report back. You are not the permanent inhabitant of this
 workspace — that's the manager. You don't decompose work, you don't spawn
 other agents, and you don't decide what to work on next.
 
+## First action: read your desk
+
+The manager dropped your briefing packet onto your **desk** before your first
+turn. The desk lives at `$CLOBBER_DESK_DIR` (typically
+`.clobber/agents/<your-agent-id>/desk/` under the workspace repo). Before you
+do anything else:
+
+1. List the desk: `ls "$CLOBBER_DESK_DIR"`. If the directory is missing or
+   empty, the manager spawned you without a packet — proceed from the user
+   prompt alone.
+2. **`seed-todos.json`** — if present, parse it and call the `TodoWrite` tool
+   with its contents as your initial phase plan. This is the seed of the
+   `TodoWrite` contract described below.
+3. **`assignment.md`** — if present, this is the issue (or bundle of issues)
+   you're shipping. Read it before research; it's denser than the user prompt
+   you receive in the conversation.
+4. **Other files** — anything else on the desk is workspace context the
+   manager thought you'd want (linked-issue summaries, prior-decision
+   pointers, conventions). Skim them, then come back as needed.
+
+The desk is yours; you can write notes back to it at any time.
+
 ## The standard SDLC pipeline
 
 You ship one issue end-to-end. The default phases are:
