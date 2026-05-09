@@ -72,6 +72,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
   registerHookRoutes(app, {
     store: opts.store,
     sessions: opts.sessions,
+    workspaces: opts.workspaces,
     agents: opts.agents,
     roles: opts.roles,
     sessionTokens: opts.sessionTokens,

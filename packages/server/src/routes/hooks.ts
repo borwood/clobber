@@ -9,14 +9,17 @@ import type { AgentRegistry } from "../agent-registry.ts";
 import type { AgentQuestionStore } from "../agent-question-store.ts";
 import type { AgentQuestionWaiter } from "../agent-question-waiter.ts";
 import type { AgentStatusLogStore } from "../agent-status-log-store.ts";
+import type { WorkspaceStore } from "../workspace-store.ts";
 import { endSession } from "../session-lifecycle.ts";
 import { applyTodoWrite } from "../todo-write-handler.ts";
+import { guardOfficeBoundary } from "../office-boundary-guard.ts";
 
 export function registerHookRoutes(
   app: FastifyInstance,
   deps: {
     store: EventStore;
     sessions: SessionStore;
+    workspaces: WorkspaceStore;
     agents: AgentStore;
     roles: RoleStore;
     sessionTokens: SessionTokenStore;
@@ -35,6 +38,10 @@ export function registerHookRoutes(
     const payload = parsed.data;
     deps.store.append(payload);
     applySessionLifecycle(payload, deps);
+    if (payload.hook_event_name === "PreToolUse") {
+      const denial = guardOfficeBoundary(payload, deps);
+      if (denial !== null) return denial;
+    }
     if (payload.hook_event_name === "PostToolUse") {
       applyTodoWrite(payload, deps);
     }
