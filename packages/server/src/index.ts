@@ -60,6 +60,7 @@ const spawner: AgentSpawner = (req) => {
       agent.child.kill(signal);
     },
     ...(agent.runtimeEvents === undefined ? {} : { runtimeEvents: agent.runtimeEvents }),
+    ...(agent.startup === undefined ? {} : { startup: agent.startup }),
   };
 };
 

@@ -1,5 +1,10 @@
 import type { Database } from "bun:sqlite";
-import type { RuntimeEvent, RuntimeProvider, RuntimeSpawnRequest } from "@clobber/runtime";
+import type {
+  RuntimeEvent,
+  RuntimeProvider,
+  RuntimeSpawnRequest,
+  RuntimeStartupResult,
+} from "@clobber/runtime";
 import type { EventStore } from "./event-store.ts";
 import type { WorkspaceStore } from "./workspace-store.ts";
 import type { RoleStore } from "./role-store.ts";
@@ -25,6 +30,7 @@ export interface SpawnedAgentInfo {
   readonly stdin: NodeJS.WritableStream;
   readonly kill: (signal: NodeJS.Signals) => void;
   readonly runtimeEvents?: AsyncIterable<RuntimeEvent>;
+  readonly startup?: Promise<RuntimeStartupResult>;
 }
 
 export type AgentSpawner = (req: AgentSpawnRequest) => SpawnedAgentInfo;

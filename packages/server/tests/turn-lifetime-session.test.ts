@@ -339,6 +339,47 @@ describe("turn-lifetime runtime sessions (#103)", () => {
     await teardown(h);
   });
 
+  it("ends the session with 410 when runtime startup reports the provider thread is gone", async () => {
+    let counter = 0;
+    const h = buildHarness(turnProvider(), (req) => {
+      counter += 1;
+      const stdin = new PassThrough();
+      stdin.resume();
+      return {
+        sessionId: req.sessionId,
+        pid: 5100 + counter,
+        exited: Promise.resolve(req.resume === true ? 1 : 0),
+        stdin,
+        kill: () => {},
+        ...(req.resume === true
+          ? {
+            startup: Promise.resolve({
+              ok: false,
+              detail: "thread/resume failed: no rollout found for thread id thread-1",
+            }),
+          }
+          : {}),
+      };
+    });
+    const first = await spawn(h);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    const res = await h.server.inject({
+      method: "POST",
+      url: `/sessions/${first.session_id}/prompt`,
+      payload: { prompt: "next turn" },
+    });
+
+    expect(res.statusCode).toBe(410);
+    expect(res.json() as unknown).toEqual({
+      error: "runtime provider thread not found",
+      detail: "thread/resume failed: no rollout found for thread id thread-1",
+    });
+    expect(h.sessions.get(first.session_id)!.ended_at).toBeDefined();
+
+    await teardown(h);
+  });
+
   it("returns 502 when the runtime cannot start the resume process for an unknown reason", async () => {
     const h = buildHarness(turnProvider(), (req) => {
       if (req.resume === true) throw new Error("codex unavailable");
@@ -367,6 +408,48 @@ describe("turn-lifetime runtime sessions (#103)", () => {
       detail: "codex unavailable",
     });
     expect(h.sessions.get(first.session_id)!.ended_at).toBeUndefined();
+
+    await teardown(h);
+  });
+
+  it("returns 502 when runtime startup fails for an unknown reason", async () => {
+    let counter = 0;
+    const h = buildHarness(turnProvider(), (req) => {
+      counter += 1;
+      const stdin = new PassThrough();
+      stdin.resume();
+      return {
+        sessionId: req.sessionId,
+        pid: 5200 + counter,
+        exited: Promise.resolve(req.resume === true ? 1 : 0),
+        stdin,
+        kill: () => {},
+        ...(req.resume === true
+          ? {
+            startup: Promise.resolve({
+              ok: false,
+              detail: "codex profile unavailable",
+            }),
+          }
+          : {}),
+      };
+    });
+    const first = await spawn(h);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    const res = await h.server.inject({
+      method: "POST",
+      url: `/sessions/${first.session_id}/prompt`,
+      payload: { prompt: "next turn" },
+    });
+
+    expect(res.statusCode).toBe(502);
+    expect(res.json() as unknown).toEqual({
+      error: "runtime resume failed",
+      detail: "codex profile unavailable",
+    });
+    expect(h.sessions.get(first.session_id)!.ended_at).toBeUndefined();
+    expect(h.sessions.get(first.session_id)!.pid).toBe(5201);
 
     await teardown(h);
   });

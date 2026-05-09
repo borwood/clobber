@@ -40,7 +40,7 @@ export function registerSessionRoutes(
     resumeTurn: (input: {
       readonly sessionId: string;
       readonly prompt: string;
-    }) => ResumeTurnSuccess | ResumeTurnError;
+    }) => Promise<ResumeTurnSuccess | ResumeTurnError>;
     agentQuestions: AgentQuestionStore;
     agentQuestionWaiter: AgentQuestionWaiter;
   },
@@ -95,7 +95,7 @@ export function registerSessionRoutes(
       // sidebar settles on the next poll.
       if (live === null) {
         if (deps.runtimeProvider.capabilities.processLifetime === "turn") {
-          const resumed = deps.resumeTurn({
+          const resumed = await deps.resumeTurn({
             sessionId,
             prompt: parsed.data.prompt,
           });

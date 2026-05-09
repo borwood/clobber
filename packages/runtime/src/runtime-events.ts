@@ -58,3 +58,16 @@ export interface RuntimeTokenUsage {
   readonly outputTokens?: number;
   readonly reasoningOutputTokens?: number;
 }
+
+export type RuntimeStartupResult =
+  | RuntimeStartupReady
+  | RuntimeStartupFailed;
+
+export interface RuntimeStartupReady {
+  readonly ok: true;
+}
+
+export interface RuntimeStartupFailed {
+  readonly ok: false;
+  readonly detail: string;
+}

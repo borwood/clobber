@@ -9,7 +9,7 @@ import {
 import { serializeUserMessage } from "./stream-json.ts";
 import type { PermissionMode } from "@clobber/shared";
 import type { RuntimeCommand } from "./runtime-provider.ts";
-import type { RuntimeEvent } from "./runtime-events.ts";
+import type { RuntimeEvent, RuntimeStartupResult } from "./runtime-events.ts";
 import { normalizeCodexExecEvent } from "./codex-jsonl.ts";
 
 export interface SpawnAgentOptions {
@@ -36,6 +36,7 @@ export interface SpawnedAgent {
   readonly stdin: NodeJS.WritableStream;
   readonly exited: Promise<number | null>;
   readonly runtimeEvents?: AsyncIterable<RuntimeEvent>;
+  readonly startup?: Promise<RuntimeStartupResult>;
 }
 
 export function spawnAgent(opts: SpawnAgentOptions): SpawnedAgent {
@@ -67,12 +68,13 @@ export function spawnAgent(opts: SpawnAgentOptions): SpawnedAgent {
   }
 
   const exited = new Promise<number | null>((resolve) => {
-    child.on("exit", (code) => resolve(code));
+    child.on("close", (code) => resolve(code));
   });
 
-  const runtimeEvents = command.stdoutEventFormat === undefined || child.stdout === null
+  const stderr = collectStderr(child.stderr);
+  const runtimeStream = command.stdoutEventFormat === undefined || child.stdout === null
     ? undefined
-    : streamRuntimeEvents(child.stdout, command.stdoutEventFormat);
+    : streamRuntimeEvents(child.stdout, command.stdoutEventFormat, exited, stderr);
 
   return {
     sessionId,
@@ -80,7 +82,9 @@ export function spawnAgent(opts: SpawnAgentOptions): SpawnedAgent {
     child,
     stdin,
     exited,
-    ...(runtimeEvents === undefined ? {} : { runtimeEvents }),
+    ...(runtimeStream === undefined
+      ? {}
+      : { runtimeEvents: runtimeStream.events, startup: runtimeStream.startup }),
   };
 }
 
@@ -112,13 +116,27 @@ function resolveSettings(opts: SpawnAgentOptions): HookSettings | undefined {
 function streamRuntimeEvents(
   stdout: Readable,
   format: RuntimeCommand["stdoutEventFormat"],
-): AsyncIterable<RuntimeEvent> {
+  exited: Promise<number | null>,
+  stderr: () => string,
+): {
+  readonly events: AsyncIterable<RuntimeEvent>;
+  readonly startup: Promise<RuntimeStartupResult>;
+} {
   const queue: RuntimeEvent[] = [];
   const waiters: Array<(result: IteratorResult<RuntimeEvent>) => void> = [];
   let done = false;
   let buffer = "";
+  let startupResolved = false;
+  let resolveStartup!: (result: RuntimeStartupResult) => void;
+  const startup = new Promise<RuntimeStartupResult>((resolve) => {
+    resolveStartup = resolve;
+  });
 
   const push = (event: RuntimeEvent): void => {
+    if (!startupResolved && isStartupReady(event)) {
+      startupResolved = true;
+      resolveStartup({ ok: true });
+    }
     const waiter = waiters.shift();
     if (waiter === undefined) {
       queue.push(event);
@@ -160,21 +178,54 @@ function streamRuntimeEvents(
     finish();
   });
   stdout.on("error", finish);
+  exited.then((code) => {
+    if (!startupResolved && code !== 0) {
+      startupResolved = true;
+      const detail = stderr();
+      resolveStartup({
+        ok: false,
+        detail: detail.length === 0
+          ? "runtime process exited before startup"
+          : detail,
+      });
+    }
+    if (!startupResolved) {
+      startupResolved = true;
+      resolveStartup({ ok: true });
+    }
+  });
 
   return {
-    [Symbol.asyncIterator]() {
-      return {
-        next(): Promise<IteratorResult<RuntimeEvent>> {
-          const event = queue.shift();
-          if (event !== undefined) {
-            return Promise.resolve({ value: event, done: false });
-          }
-          if (done) {
-            return Promise.resolve({ value: undefined, done: true });
-          }
-          return new Promise((resolve) => waiters.push(resolve));
-        },
-      };
+    events: {
+      [Symbol.asyncIterator]() {
+        return {
+          next(): Promise<IteratorResult<RuntimeEvent>> {
+            const event = queue.shift();
+            if (event !== undefined) {
+              return Promise.resolve({ value: event, done: false });
+            }
+            if (done) {
+              return Promise.resolve({ value: undefined, done: true });
+            }
+            return new Promise((resolve) => waiters.push(resolve));
+          },
+        };
+      },
     },
+    startup,
   };
+}
+
+function isStartupReady(event: RuntimeEvent): boolean {
+  return event.kind === "provider-thread-started" || event.kind === "turn-started";
+}
+
+function collectStderr(stderr: Readable | null): () => string {
+  if (stderr === null) return () => "";
+  let buffer = "";
+  stderr.setEncoding("utf8");
+  stderr.on("data", (chunk: string) => {
+    buffer += chunk;
+  });
+  return () => buffer.trim();
 }

@@ -217,10 +217,10 @@ export function attachSessionToAgent(
   return { ok: true, agent_id: agent.id, session_id: sessionId, pid: spawned.pid };
 }
 
-export function resumeSessionTurn(
+export async function resumeSessionTurn(
   deps: SpawnPipelineDeps,
   input: { readonly sessionId: string; readonly prompt: string },
-): ResumeTurnSuccess | ResumeTurnError {
+): Promise<ResumeTurnSuccess | ResumeTurnError> {
   const session = deps.sessions.get(input.sessionId);
   if (session === null || session.ended_at !== undefined) {
     return { ok: false, status: 409, error: "runtime provider thread unavailable" };
@@ -313,6 +313,25 @@ export function resumeSessionTurn(
     };
   }
 
+  const startup = await waitForRuntimeStartup(spawned);
+  if (!startup.ok) {
+    if (isProviderThreadMissing(startup.detail)) {
+      endSession(session.id, deps);
+      return {
+        ok: false,
+        status: 410,
+        error: "runtime provider thread not found",
+        detail: startup.detail,
+      };
+    }
+    return {
+      ok: false,
+      status: 502,
+      error: "runtime resume failed",
+      detail: startup.detail,
+    };
+  }
+
   deps.sessionTokens.register(session.id, token);
   deps.sessions.updatePid(session.id, spawned.pid);
   deps.registry.register(session.id, spawned.stdin, spawned.kill);
@@ -324,6 +343,13 @@ export function resumeSessionTurn(
     }
   });
   return { ok: true, session_id: session.id, pid: spawned.pid };
+}
+
+async function waitForRuntimeStartup(
+  spawned: SpawnedAgentInfo,
+): Promise<{ readonly ok: true } | { readonly ok: false; readonly detail: string }> {
+  if (spawned.startup === undefined) return { ok: true };
+  return spawned.startup;
 }
 
 function bindRuntimeEvents(
@@ -353,6 +379,7 @@ function isProviderThreadMissing(message: string): boolean {
     normalized.includes("provider thread not found") ||
     normalized.includes("thread not found") ||
     normalized.includes("session not found") ||
+    normalized.includes("no rollout found") ||
     normalized.includes("no such session")
   );
 }

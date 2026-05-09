@@ -99,6 +99,9 @@ teaching server core about Codex CLI details:
   `<clobber-role-system-prompt>` block
 - stdout is consumed as `codex-jsonl`; `thread.started` updates
   `sessions.provider_thread_id`
+- turn-lifetime follow-up prompts wait for provider startup readiness before
+  `/sessions/:id/prompt` returns success; early missing-thread failures return
+  `410`, while unknown early startup failures return `502`
 
 The server selects this provider with `CLOBBER_RUNTIME_PROVIDER=codex`.
 
@@ -109,7 +112,3 @@ The server selects this provider with `CLOBBER_RUNTIME_PROVIDER=codex`.
   generated prompt prefix and the existing `clobber` PATH shim.
 - Expand fixtures with real command execution, approval, failure, and cancelled
   turn shapes before production support.
-- Surface asynchronous provider-thread-not-found exits from real Codex resume
-  attempts more directly in the prompt route. The #103 route handles
-  synchronous provider errors; Codex itself reports some resume failures after
-  the process starts. Tracked as #105.
