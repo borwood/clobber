@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
+import { codexRuntimeProvider, type RuntimeProvider } from "@clobber/runtime";
 import { createServer } from "../src/server.ts";
 import { createDatabase } from "../src/db.ts";
 import { createEventStore } from "../src/event-store.ts";
@@ -42,11 +43,11 @@ interface Harness {
   calls: AgentSpawnRequest[];
 }
 
-function buildHarness(): Harness {
+function buildHarness(opts: { readonly runtimeProvider?: RuntimeProvider } = {}): Harness {
   const db = createDatabase(":memory:");
   const workspaces = createWorkspaceStore(db);
   const roles = createRoleStore(db);
-const roleVersions = createRoleVersionStore(db);
+  const roleVersions = createRoleVersionStore(db);
   const workspaceRoles = createWorkspaceRoleStore(db);
   const agents = createAgentStore(db);
   const sessions = createSessionStore(db);
@@ -85,8 +86,10 @@ const roleVersions = createRoleVersionStore(db);
     hookUrl: "http://127.0.0.1:3300/hook",
     apiBase: "http://127.0.0.1:3300",
     cliEntry: "/abs/cli/index.ts",
-  
     dispatches: createTriggerDispatchStore(db),
+    ...(opts.runtimeProvider === undefined
+      ? {}
+      : { runtimeProvider: opts.runtimeProvider }),
   });
   return { server, db, workspaces, roles, workspaceRoles, sessions, sessionTokens, calls };
 }
@@ -150,6 +153,54 @@ describe("POST /spawn — manager bundle materialization", () => {
 
     expect(typeof call.appendSystemPrompt).toBe("string");
     expect(call.appendSystemPrompt!).toMatch(/Manager/);
+
+    await teardown(h);
+  });
+
+  it("codex provider passes role instructions as prompt prefix and keeps clobber CLI env", async () => {
+    const h = buildHarness({ runtimeProvider: codexRuntimeProvider });
+    const ws = h.workspaces.create({ name: "ws", repo_path: repoPath });
+    const role = h.roles.create({ name: "manager", persistent: true });
+    h.workspaceRoles.setCeiling(ws.id, role.id, 1);
+
+    const res = await h.server.inject({
+      method: "POST",
+      url: "/spawn",
+      payload: { workspace_id: ws.id, role_id: role.id, prompt: "go", label: "boot" },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { session_id: string; pid: number };
+
+    expect(h.calls).toHaveLength(1);
+    const call = h.calls[0]!;
+    expect(call.sessionId).toBe(body.session_id);
+    expect(call.pluginDirs).toBeUndefined();
+    expect(call.command).toMatchObject({
+      bin: "codex",
+      stdoutEventFormat: "codex-jsonl",
+    });
+    expect(call.command!.args).toEqual([
+      "exec",
+      "--json",
+      "--cd",
+      repoPath,
+      call.prompt,
+    ]);
+
+    expect(call.prompt).toContain("<clobber-role-system-prompt>");
+    expect(call.prompt).toMatch(/Manager/);
+    expect(call.prompt).toContain("[Previously in this office]");
+    expect(call.prompt.endsWith("go")).toBe(true);
+
+    expect(call.env!["CLOBBER_API_BASE"]).toBe("http://127.0.0.1:3300");
+    expect(call.env!["CLOBBER_SESSION_ID"]).toBe(body.session_id);
+    expect(call.env!["CLOBBER_WORKSPACE_ID"]).toBe(ws.id);
+    expect(call.env!["CLOBBER_ROLE"]).toBe("manager");
+    const passedToken = call.env!["CLOBBER_SESSION_TOKEN"];
+    expect(typeof passedToken).toBe("string");
+    expect(h.sessionTokens.lookup(passedToken!)?.session_id).toBe(body.session_id);
+    expect(call.env!["PATH"]!.startsWith(join(repoPath, ".clobber", "bin"))).toBe(true);
+    expect(existsSync(join(repoPath, ".clobber", "bin", "clobber"))).toBe(true);
 
     await teardown(h);
   });

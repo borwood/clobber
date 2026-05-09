@@ -104,6 +104,9 @@ teaching server core about Codex CLI details:
   `410`, while unknown early startup failures return `502`
 
 The server selects this provider with `CLOBBER_RUNTIME_PROVIDER=codex`.
+See [Codex Role Materialization](./codex-role-materialization.md) for the
+current recommendation on role instructions, CLI environment, and why
+Codex-native plugin/config materialization is deferred.
 
 ## Provider work still needed
 
