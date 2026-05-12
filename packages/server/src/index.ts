@@ -20,7 +20,7 @@ import { createAgentQuestionWaiter } from "./agent-question-waiter.ts";
 import { createTriggerDispatchStore } from "./trigger-dispatch-store.ts";
 import { reapOrphanedSessions } from "./boot-reap.ts";
 
-const PORT = 3300;
+const PORT = 3370;
 const API_BASE = `http://127.0.0.1:${PORT}`;
 const HOOK_URL = `${API_BASE}/hook`;
 const DB_PATH = resolveDatabasePath({

@@ -5,16 +5,16 @@ import tailwindcss from "@tailwindcss/vite";
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
-    port: 3400,
+    port: 3470,
     host: "127.0.0.1",
     proxy: {
-      "/hook": "http://127.0.0.1:3300",
-      "/events": "http://127.0.0.1:3300",
-      "/sessions": "http://127.0.0.1:3300",
-      "/spawn": "http://127.0.0.1:3300",
-      "/workspaces": "http://127.0.0.1:3300",
-      "/persistent-agents": "http://127.0.0.1:3300",
-      "/roles": "http://127.0.0.1:3300",
+      "/hook": "http://127.0.0.1:3370",
+      "/events": "http://127.0.0.1:3370",
+      "/sessions": "http://127.0.0.1:3370",
+      "/spawn": "http://127.0.0.1:3370",
+      "/workspaces": "http://127.0.0.1:3370",
+      "/persistent-agents": "http://127.0.0.1:3370",
+      "/roles": "http://127.0.0.1:3370",
     },
   },
 });
