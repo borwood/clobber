@@ -15,6 +15,7 @@ export default defineConfig({
       "/workspaces": "http://127.0.0.1:3370",
       "/persistent-agents": "http://127.0.0.1:3370",
       "/roles": "http://127.0.0.1:3370",
+      "/fs": "http://127.0.0.1:3370",
     },
   },
 });

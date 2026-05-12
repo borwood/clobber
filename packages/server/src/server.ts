@@ -5,6 +5,7 @@ import { registerEventRoutes } from "./routes/events.ts";
 import { registerSessionRoutes } from "./routes/sessions.ts";
 import { registerSpawnRoutes } from "./routes/spawn.ts";
 import { registerWorkspaceRoutes } from "./routes/workspaces.ts";
+import { registerFsRoutes } from "./routes/fs.ts";
 import { registerRoleRoutes } from "./routes/roles.ts";
 import { registerWorkspaceRoleRoutes } from "./routes/workspace-roles.ts";
 import { registerAgentRoutes } from "./routes/agent.ts";
@@ -116,6 +117,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     db: opts.db,
     workspaces: opts.workspaces,
   });
+  registerFsRoutes(app);
   registerPersistentAgentsRoutes(app, {
     workspaces: opts.workspaces,
     agents: opts.agents,

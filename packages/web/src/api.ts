@@ -5,6 +5,7 @@ import type {
   WorkspaceRoleAssignment,
   LatestAgentStatus,
   RoleVersionRef,
+  BrowseDirResponse,
 } from "@clobber/shared";
 
 export type {
@@ -157,5 +158,9 @@ export const api = {
     postJson<{ ok: true }>(
       `/sessions/${encodeURIComponent(sessionId)}/answer`,
       { question_id: questionId, answer },
+    ),
+  browseFs: (path?: string) =>
+    getJson<BrowseDirResponse>(
+      path === undefined ? "/fs/browse" : `/fs/browse?path=${encodeURIComponent(path)}`,
     ),
 };
