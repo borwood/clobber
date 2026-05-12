@@ -1,6 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import type { Database } from "bun:sqlite";
-import { CreateWorkspaceRequestSchema } from "@clobber/shared";
+import {
+  CreateWorkspaceRequestSchema,
+  UpdateWorkspaceConfigRequestSchema,
+} from "@clobber/shared";
 import type { WorkspaceStore } from "../workspace-store.ts";
 import { seedWorkspaceRoles } from "../seed-workspace-roles.ts";
 import { validateWorkspacePath } from "../validate-workspace-path.ts";
@@ -49,6 +52,23 @@ export function registerWorkspaceRoutes(
     }
     return found;
   });
+
+  app.patch<{ Params: IdParam }>(
+    "/workspaces/:id",
+    async (request, reply) => {
+      const parsed = UpdateWorkspaceConfigRequestSchema.safeParse(request.body);
+      if (!parsed.success) {
+        reply.code(400);
+        return { error: "invalid workspace config", issues: parsed.error.issues };
+      }
+      const updated = workspaces.updateConfig(request.params.id, parsed.data);
+      if (updated === null) {
+        reply.code(404);
+        return { error: "workspace not found" };
+      }
+      return updated;
+    },
+  );
 
   app.delete<{ Params: IdParam }>("/workspaces/:id", async (request, reply) => {
     const removed = workspaces.delete(request.params.id);

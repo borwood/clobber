@@ -60,13 +60,31 @@ describe("buildClaudeArgs", () => {
     expect(args).toContain("--verbose");
   });
 
-  it("isolates from user-level claude config via --setting-sources user", () => {
+  it("omits --setting-sources when settingSources is not provided (claude defaults apply)", () => {
     const args = buildClaudeArgs({
       sessionId: "abc",
       settings: baseSettings,
     });
+    expect(args).not.toContain("--setting-sources");
+  });
+
+  it("emits --setting-sources as a comma-joined list when settingSources is provided", () => {
+    const args = buildClaudeArgs({
+      sessionId: "abc",
+      settings: baseSettings,
+      settingSources: ["user", "project", "local"],
+    });
     expect(args).toContain("--setting-sources");
-    expect(args[args.indexOf("--setting-sources") + 1]).toBe("user");
+    expect(args[args.indexOf("--setting-sources") + 1]).toBe("user,project,local");
+  });
+
+  it("omits --setting-sources when settingSources is an empty array", () => {
+    const args = buildClaudeArgs({
+      sessionId: "abc",
+      settings: baseSettings,
+      settingSources: [],
+    });
+    expect(args).not.toContain("--setting-sources");
   });
 
   it("forwards permission-mode and allowedTools when supplied", () => {

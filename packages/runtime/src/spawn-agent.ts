@@ -27,6 +27,7 @@ export interface SpawnAgentOptions {
   readonly claudeBin?: string;
   readonly command?: RuntimeCommand;
   readonly env?: NodeJS.ProcessEnv;
+  readonly settingSources?: readonly string[];
 }
 
 export interface SpawnedAgent {
@@ -103,6 +104,9 @@ function buildClaudeCommand(sessionId: string, opts: SpawnAgentOptions): Runtime
         ? {}
         : { appendSystemPrompt: opts.appendSystemPrompt }),
       ...(opts.displayName === undefined ? {} : { displayName: opts.displayName }),
+      ...(opts.settingSources === undefined
+        ? {}
+        : { settingSources: opts.settingSources }),
     }),
   };
 }

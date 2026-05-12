@@ -6,6 +6,7 @@ import type {
   LatestAgentStatus,
   RoleVersionRef,
   BrowseDirResponse,
+  UpdateWorkspaceConfigRequest,
 } from "@clobber/shared";
 
 export type {
@@ -15,6 +16,7 @@ export type {
   LatestAgentStatus,
   AgentState,
   RoleVersionRef,
+  SettingSource,
 } from "@clobber/shared";
 
 export interface OpenQuestion {
@@ -118,6 +120,16 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
   return (await res.json()) as T;
 }
 
+async function patchJson<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`PATCH ${path} failed: ${await failureMessage(res)}`);
+  return (await res.json()) as T;
+}
+
 export const api = {
   listSessions: (workspaceId: string) =>
     getJson<SessionSummary[]>(
@@ -163,4 +175,6 @@ export const api = {
     getJson<BrowseDirResponse>(
       path === undefined ? "/fs/browse" : `/fs/browse?path=${encodeURIComponent(path)}`,
     ),
+  updateWorkspaceConfig: (id: string, body: UpdateWorkspaceConfigRequest) =>
+    patchJson<Workspace>(`/workspaces/${encodeURIComponent(id)}`, body),
 };

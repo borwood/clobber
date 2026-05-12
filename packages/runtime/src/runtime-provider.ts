@@ -49,6 +49,7 @@ export interface RuntimeSpawnOptions {
   readonly materialized: MaterializedBundle;
   readonly systemPrompt: string;
   readonly displayName?: string;
+  readonly settingSources?: readonly string[];
 }
 
 export interface RuntimeResumeOptions extends RuntimeSpawnOptions {
@@ -69,6 +70,7 @@ export interface RuntimeSpawnRequest {
   readonly appendSystemPrompt?: string;
   readonly displayName?: string;
   readonly command?: RuntimeCommand;
+  readonly settingSources?: readonly string[];
 }
 
 /**
@@ -112,6 +114,9 @@ export const claudeRuntimeProvider: RuntimeProvider = {
       pluginDirs: [opts.materialized.pluginDir],
       appendSystemPrompt: opts.systemPrompt,
       ...(opts.displayName === undefined ? {} : { displayName: opts.displayName }),
+      ...(opts.settingSources === undefined
+        ? {}
+        : { settingSources: opts.settingSources }),
     };
   },
   initialProviderThreadId(sessionId) {

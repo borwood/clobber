@@ -1,0 +1,113 @@
+import { describe, it, expect, beforeEach, afterEach } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import Fastify from "fastify";
+import { createDatabase } from "../src/db.ts";
+import { createWorkspaceStore } from "../src/workspace-store.ts";
+import { registerWorkspaceRoutes } from "../src/routes/workspaces.ts";
+import { DEFAULT_SETTING_SOURCES, type Workspace } from "@clobber/shared";
+
+let app: ReturnType<typeof Fastify>;
+let db: ReturnType<typeof createDatabase>;
+let repoPath: string;
+
+beforeEach(async () => {
+  repoPath = mkdtempSync(join(tmpdir(), "clobber-wsconfig-"));
+  mkdirSync(join(repoPath, ".git"));
+  db = createDatabase(":memory:");
+  app = Fastify({ logger: false });
+  registerWorkspaceRoutes(app, { db, workspaces: createWorkspaceStore(db) });
+  await app.ready();
+});
+
+afterEach(async () => {
+  await app.close();
+  db.close();
+  rmSync(repoPath, { recursive: true, force: true });
+});
+
+async function createWorkspace(payload: Record<string, unknown>): Promise<Workspace> {
+  const res = await app.inject({
+    method: "POST",
+    url: "/workspaces",
+    payload: { name: "ws", repo_path: repoPath, ...payload },
+  });
+  expect(res.statusCode).toBe(201);
+  return res.json() as Workspace;
+}
+
+describe("workspace setting_sources — defaults + creation", () => {
+  it("new workspaces default to user,project,local — vanilla claude behavior", async () => {
+    const ws = await createWorkspace({});
+    expect(ws.setting_sources).toEqual([...DEFAULT_SETTING_SOURCES]);
+  });
+
+  it("accepts a restricted setting_sources on creation", async () => {
+    const ws = await createWorkspace({ setting_sources: ["user"] });
+    expect(ws.setting_sources).toEqual(["user"]);
+  });
+
+  it("rejects unknown setting source values", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/workspaces",
+      payload: { name: "ws", repo_path: repoPath, setting_sources: ["bogus"] },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("rejects duplicate setting sources", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/workspaces",
+      payload: { name: "ws", repo_path: repoPath, setting_sources: ["user", "user"] },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe("PATCH /workspaces/:id — updating setting_sources", () => {
+  it("replaces the workspace's setting_sources and returns the updated row", async () => {
+    const ws = await createWorkspace({});
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/workspaces/${ws.id}`,
+      payload: { setting_sources: ["user"] },
+    });
+    expect(res.statusCode).toBe(200);
+    const updated = res.json() as Workspace;
+    expect(updated.setting_sources).toEqual(["user"]);
+  });
+
+  it("returns 404 for an unknown workspace id", async () => {
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/workspaces/00000000-0000-4000-8000-000000000000",
+      payload: { setting_sources: ["user"] },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("rejects unknown source values", async () => {
+    const ws = await createWorkspace({});
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/workspaces/${ws.id}`,
+      payload: { setting_sources: ["user", "fake"] },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("persists the update — subsequent GET reflects the new value", async () => {
+    const ws = await createWorkspace({});
+    await app.inject({
+      method: "PATCH",
+      url: `/workspaces/${ws.id}`,
+      payload: { setting_sources: ["user", "project"] },
+    });
+    const getRes = await app.inject({ method: "GET", url: `/workspaces/${ws.id}` });
+    const refreshed = getRes.json() as Workspace;
+    expect(refreshed.setting_sources).toEqual(["user", "project"]);
+  });
+});
