@@ -7,3 +7,4 @@ export * from "./final-report.ts";
 export * from "./agent-question.ts";
 export * from "./session.ts";
 export * from "./briefing.ts";
+export * from "./fs.ts";

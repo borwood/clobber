@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api, type Workspace } from "../api.ts";
+import { FolderPicker } from "./FolderPicker.tsx";
 
 interface Props {
   readonly workspaces: readonly Workspace[];
@@ -14,6 +15,7 @@ export function WorkspaceSwitcher({ workspaces, selectedId, onSelect, onCreated 
   const [repoPath, setRepoPath] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   async function submit() {
     if (name.trim().length === 0 || repoPath.trim().length === 0) return;
@@ -49,7 +51,7 @@ export function WorkspaceSwitcher({ workspaces, selectedId, onSelect, onCreated 
       </select>
 
       {creating ? (
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 relative">
           <input
             type="text"
             value={name}
@@ -66,6 +68,14 @@ export function WorkspaceSwitcher({ workspaces, selectedId, onSelect, onCreated 
           />
           <button
             type="button"
+            onClick={() => setPickerOpen((open) => !open)}
+            className="px-2 py-1 rounded text-xs text-zinc-300 hover:text-zinc-100 border border-zinc-800 hover:border-zinc-600"
+            title="Browse for a folder"
+          >
+            browse…
+          </button>
+          <button
+            type="button"
             onClick={() => void submit()}
             disabled={busy || name.trim().length === 0 || repoPath.trim().length === 0}
             className="px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 disabled:bg-zinc-800 disabled:text-zinc-500 text-xs"
@@ -76,12 +86,23 @@ export function WorkspaceSwitcher({ workspaces, selectedId, onSelect, onCreated 
             type="button"
             onClick={() => {
               setCreating(false);
+              setPickerOpen(false);
               setError(null);
             }}
             className="px-2 py-1 rounded text-xs text-zinc-400 hover:text-zinc-200"
           >
             cancel
           </button>
+          {pickerOpen && (
+            <FolderPicker
+              {...(repoPath.trim().length > 0 ? { initialPath: repoPath } : {})}
+              onSelect={(absolutePath) => {
+                setRepoPath(absolutePath);
+                setPickerOpen(false);
+              }}
+              onCancel={() => setPickerOpen(false)}
+            />
+          )}
         </div>
       ) : (
         <button
