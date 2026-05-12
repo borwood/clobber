@@ -1,6 +1,7 @@
 import { Database } from "bun:sqlite";
 import { migrateRoleVersions } from "./role-version-migration.ts";
 import { migrateSessionLabel } from "./session-label-migration.ts";
+import { migrateWorkspaceConfig } from "./workspace-config-migration.ts";
 import { migrateSessionRuntime } from "./session-runtime-migration.ts";
 
 const SCHEMA = `
@@ -14,10 +15,11 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id, id);
 
   CREATE TABLE IF NOT EXISTS workspaces (
-    id          TEXT    PRIMARY KEY,
-    name        TEXT    NOT NULL UNIQUE,
-    repo_path   TEXT    NOT NULL,
-    created_at  INTEGER NOT NULL
+    id              TEXT    PRIMARY KEY,
+    name            TEXT    NOT NULL UNIQUE,
+    repo_path       TEXT    NOT NULL,
+    setting_sources TEXT    NOT NULL DEFAULT '["user","project","local"]',
+    created_at      INTEGER NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_workspaces_created ON workspaces(created_at DESC);
 
@@ -179,6 +181,7 @@ export function createDatabase(path: string): Database {
   migrateRoleVersions(db);
   migrateSessionLabel(db);
   migrateSessionRuntime(db);
+  migrateWorkspaceConfig(db);
   return db;
 }
 

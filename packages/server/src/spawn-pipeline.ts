@@ -195,6 +195,7 @@ export function attachSessionToAgent(
     env,
     materialized,
     systemPrompt: effectiveBundle.systemPrompt,
+    settingSources: workspace.setting_sources,
     ...(agent.label === undefined ? {} : { displayName: agent.label }),
   });
   const spawned = deps.spawner(spawnReq);
@@ -303,6 +304,7 @@ export async function resumeSessionTurn(
     env,
     materialized,
     systemPrompt: effectiveBundle.systemPrompt,
+    settingSources: workspace.setting_sources,
     ...(agent.label === undefined ? {} : { displayName: agent.label }),
   });
 

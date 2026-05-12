@@ -62,6 +62,11 @@ export interface BuildClaudeArgsOptions {
   readonly allowedTools?: readonly string[];
   readonly appendSystemPrompt?: string;
   readonly displayName?: string;
+  // Which of claude's setting sources to load (user / project / local). The
+  // workspace owns this — see Workspace.setting_sources. When omitted, the
+  // caller is intentionally letting claude default to its own behavior, which
+  // includes all three.
+  readonly settingSources?: readonly string[];
 }
 
 export function buildClaudeArgs(opts: BuildClaudeArgsOptions): string[] {
@@ -77,7 +82,9 @@ export function buildClaudeArgs(opts: BuildClaudeArgsOptions): string[] {
     }
   }
 
-  args.push("--setting-sources", "user");
+  if (opts.settingSources !== undefined && opts.settingSources.length > 0) {
+    args.push("--setting-sources", opts.settingSources.join(","));
+  }
 
   if (opts.allowedTools && opts.allowedTools.length > 0) {
     args.push("--allowedTools", opts.allowedTools.join(","));

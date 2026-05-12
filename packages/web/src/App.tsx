@@ -13,6 +13,7 @@ import { SessionList } from "./components/SessionList.tsx";
 import { SessionHeader } from "./components/SessionHeader.tsx";
 import { TranscriptViewer } from "./components/TranscriptViewer.tsx";
 import { WorkspaceSwitcher } from "./components/WorkspaceSwitcher.tsx";
+import { WorkspaceConfigModal } from "./components/WorkspaceConfigModal.tsx";
 import { RolePicker } from "./components/RolePicker.tsx";
 import { PromptComposer } from "./components/PromptComposer.tsx";
 import { AskWidget } from "./components/AskWidget.tsx";
@@ -31,6 +32,7 @@ function readStoredView(): WorkspaceView {
 export function App() {
   const [workspaces, setWorkspaces] = useState<readonly Workspace[]>([]);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const [configOpen, setConfigOpen] = useState(false);
   const [assignments, setAssignments] = useState<readonly WorkspaceRoleAssignment[]>([]);
   const [roleId, setRoleId] = useState<string | null>(null);
 
@@ -188,6 +190,17 @@ export function App() {
             setWorkspaceId(ws.id);
           }}
         />
+        {workspaceId !== null && (
+          <button
+            type="button"
+            onClick={() => setConfigOpen(true)}
+            className="px-2 py-1 rounded text-zinc-400 hover:text-zinc-200 border border-zinc-800 hover:border-zinc-700"
+            title="Workspace settings"
+            aria-label="Workspace settings"
+          >
+            <span className="text-base leading-none">⚙</span>
+          </button>
+        )}
         <span className="text-zinc-500 text-sm">
           {sessions.length} session{sessions.length === 1 ? "" : "s"}
         </span>
@@ -293,6 +306,22 @@ export function App() {
           )}
         </aside>
       </main>
+      {configOpen && workspaceId !== null && (() => {
+        const ws = workspaces.find((w) => w.id === workspaceId);
+        if (ws === undefined) return null;
+        return (
+          <WorkspaceConfigModal
+            workspace={ws}
+            onClose={() => setConfigOpen(false)}
+            onSaved={(updated) => {
+              setWorkspaces((prev) =>
+                prev.map((w) => (w.id === updated.id ? updated : w)),
+              );
+              setConfigOpen(false);
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }

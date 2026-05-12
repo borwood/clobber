@@ -50,6 +50,9 @@ const spawner: AgentSpawner = (req) => {
     ...(req.displayName === undefined ? {} : { displayName: req.displayName }),
     ...(req.command === undefined ? {} : { command: req.command }),
     ...(req.env === undefined ? {} : { env: req.env }),
+    ...(req.settingSources === undefined
+      ? {}
+      : { settingSources: req.settingSources }),
   });
   return {
     sessionId: agent.sessionId,
