@@ -64,9 +64,25 @@ Clobber spawns `claude` sessions with generated `settings.json` whose hooks call
 
 🔒 Use ports **3000-3500** for development. **NEVER** kill processes on ports > 3500 (databases, system services, data loss risk).
 
+## Golden Rules
+
+Clobber is a long-lived engine that future AI agents will work on. These four rules sit above the Engineering Rules below — the engineering rules are the *how*, these are the *why* every change is shaped the way it is.
+
+1. **Re-use.** Before writing anything new, look for an existing component to compose or abstract. New components need a *genuine novel-requirements* justification — not "it was easier to write fresh." If an existing one is *almost right*, the work is to generalize it, not duplicate it. *Composition over creation.*
+2. **Modularity.** API/interface-forward. Layers of abstraction, generics, implementation-agnostic cores wired to swappable adapters. The bet is that future AI agents will need to replace pieces — from a component to a service to a whole engine layer — and design today should make those swaps cheap. *Interfaces over implementations.*
+3. **Flexibility.** Clobber is not opinionated about the user's workflow, their preferred SDLC, their roles, their permissions, their policies. It's an engine that ships *sensible defaults for the popular cases* and exposes the seams so any workspace can adapt. Never hard-bake one workflow as *the* workflow. *Engine, not opinion.*
+4. **Ritual.** TDD + typecheck on every change (see Engineering Rules 1 below). Before coding on a new issue, write a north-star narrative via `/clobber-pm narrative write` and confirm comprehension with the human before logging. Run the **blue-sky reframe** — *"what could this feature be if it were insanely useful, novel, enjoyable, dependable?"* — and surface only the genuinely interesting reframes, not every option. When you touch code that doesn't conform to the rules above, raise it: small fold-in fixes get a one-line gesture in the end-of-turn summary; heavier refactors get a "should this be a separate work item?" question.
+
+**Application discipline:**
+
+- **Re-use audit before every PR.** Before scaffolding a new component / service / route, scan the codebase for an existing one to generalize. If you find one, fold the extraction into the current work or file a separate issue if the extraction is heavier than the feature itself.
+- **Raise non-conforming code we touch.** Threshold is *refactor cost*, not violation severity. Trivial inline fixups: roll in silently but gesture to them in the end-of-turn summary. Heavier refactors: ask the human whether to fold in or file a separate work item.
+- **Blue-sky privately, surface selectively.** Run the reframe to yourself first. If at least one alternative is genuinely interesting — re-shapes the feature, opens up a primitive, eliminates a category of future work — surface it to the human before logging the narrative. Otherwise stay quiet.
+- **Codify everything via skills / runbooks / issues.** Disconnected sessions stay aligned only when the rules live in durable, agent-discoverable surfaces. If a pattern is worth doing twice, it's worth codifying once.
+
 ## Engineering Rules
 
-These mirror what works in adjacent projects. They are non-negotiable unless the user overrides per-task.
+These mirror what works in adjacent projects. They are the non-negotiable mechanics that implement the Golden Rules above.
 
 1. **TDD mandatory.** Failing test first, then implement. Integration tests over unit tests — write full-flow tests, not isolated function tests. No unit tests unless the user explicitly approves in a comment naming them.
 2. **Test timeouts are bugs.** Never increase a timeout to make a test pass. Find the underlying async issue.

@@ -199,7 +199,9 @@ gh issue view 70 --repo brennan-volter/clobber --json comments --jq '.comments[-
 
 Then scan the conversation context for what shifted in *this* session — new design calls, primitives that came into sharper relief, metaphors that stopped being decoration and started being load-bearing.
 
-**Step 2 — Compose the narrative.** Target 500–900 words of prose. The discipline:
+**Step 2 — Run the blue-sky reframe privately, before drafting.** Ask: *what could clobber be if it were absolutely insanely useful, novel, enjoyable, dependable?* Don't dump every option in the narrative. The reframe is a *discipline* — it loosens the framing so the prose can land somewhere the previous narrative couldn't have. If one of the reframes is genuinely interesting (re-shapes a primitive, opens up a new pillar, eliminates a category of future work), surface it to the human for a quick sanity-check before logging — *"I was about to log X, but the reframe suggested Y; want me to take that direction instead?"* Otherwise stay quiet and let the prose absorb the better framing.
+
+**Step 3 — Compose the narrative.** Target 500–900 words of prose. The discipline:
 
 - **Principles, not progress.** Don't list what shipped — that lives in #70's decisions log. Articulate *what clobber is* right now.
 - **Show the delta.** If the framing has shifted from the previous narrative, name the shift explicitly. *"Last week the office metaphor was decoration; today it's the security boundary."*
@@ -207,7 +209,7 @@ Then scan the conversation context for what shifted in *this* session — new de
 - **Prose, not bullets.** Sub-headers are fine. Bulleted lists almost always mean you're hiding from synthesis.
 - **One closing sentence** that compresses the whole thing — the line that should survive every refactor.
 
-**Step 3 — Append as a dated comment:**
+**Step 4 — Append as a dated comment:**
 
 ```bash
 gh issue comment 95 --repo brennan-volter/clobber --body "$(cat <<EOF
@@ -218,7 +220,7 @@ EOF
 )"
 ```
 
-**Step 4 — Show the user the entry URL** (returned by `gh issue comment`) so they can read it back.
+**Step 5 — Show the user the entry URL** (returned by `gh issue comment`) so they can read it back.
 
 If the narrative would be substantially the same as the previous entry — no shifts, no new framings — say so and **skip writing**. The log is for genuine evolution; identical entries are noise.
 
