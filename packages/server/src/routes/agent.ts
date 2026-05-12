@@ -14,7 +14,12 @@ import type { AgentQuestionStore } from "../agent-question-store.ts";
 import type { AgentQuestionWaiter } from "../agent-question-waiter.ts";
 import type { AgentRegistry } from "../agent-registry.ts";
 import type { AgentSpawner } from "../types.ts";
-import { AgentStatusUpdateSchema, FinalReportSchema, summarizeFinalReport } from "@clobber/shared";
+import {
+  AgentStatusUpdateSchema,
+  BriefingPacketSchema,
+  FinalReportSchema,
+  summarizeFinalReport,
+} from "@clobber/shared";
 import { executeSpawn } from "../spawn-pipeline.ts";
 import { terminateSession } from "../session-lifecycle.ts";
 import { readTranscript } from "../transcript-reader.ts";
@@ -51,6 +56,7 @@ const AgentSpawnBodySchema = z.object({
   role: z.string().min(1),
   prompt: z.string().min(1),
   label: z.string().optional(),
+  briefing: BriefingPacketSchema.optional(),
 });
 
 export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps): void {
@@ -157,6 +163,9 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
       role,
       prompt,
       label,
+      ...(parsed.data.briefing === undefined
+        ? {}
+        : { briefing: parsed.data.briefing }),
     });
     if (!result.ok) {
       const { ok: _ok, status, ...rest } = result;

@@ -65,7 +65,7 @@ describe("spawn parser — short aliases", () => {
 
   it("mixing short + long forms is fine", () => {
     const out = parseSpawnArgs(["worker", "-p", "x", "-l", "y"]);
-    expect(out).toEqual({ role: "worker", prompt: "x", label: "y" });
+    expect(out).toEqual({ role: "worker", prompt: "x", label: "y", briefingPairs: [] });
   });
 });
 

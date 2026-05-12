@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { delimiter } from "node:path";
 import type { RoleBundleData, RuntimeEvent, RuntimeProvider } from "@clobber/runtime";
-import type { Agent, Role, Workspace } from "@clobber/shared";
+import type { Agent, BriefingPacket, Role, Workspace } from "@clobber/shared";
 import { ensureOffice } from "./office-store.ts";
 import { composeOfficeContext } from "./office-context.ts";
 import { OFFICE_NOTES_SKILL } from "./office-notes-skill.ts";
+import { deskDirFor, writeBriefingPacket } from "./desk-store.ts";
 import type { WorkspaceRoleStore } from "./workspace-role-store.ts";
 import type { WorkspaceStore } from "./workspace-store.ts";
 import type { AgentStore } from "./agent-store.ts";
@@ -42,6 +43,7 @@ export interface SpawnPipelineInput {
   readonly role: Role;
   readonly prompt: string;
   readonly label: string;
+  readonly briefing?: BriefingPacket;
 }
 
 export interface SpawnPipelineSuccess {
@@ -96,7 +98,7 @@ export function executeSpawn(
   deps: SpawnPipelineDeps,
   input: SpawnPipelineInput,
 ): SpawnPipelineResult {
-  const { workspace, role, prompt, label } = input;
+  const { workspace, role, prompt, label, briefing } = input;
 
   const capacity = checkCapacity(deps, workspace, role);
   if (capacity !== null) return capacity;
@@ -106,7 +108,13 @@ export function executeSpawn(
     role_id: role.id,
     label,
   });
-  return attachSessionToAgent(deps, { workspace, role, agent, prompt });
+  return attachSessionToAgent(deps, {
+    workspace,
+    role,
+    agent,
+    prompt,
+    ...(briefing === undefined ? {} : { briefing }),
+  });
 }
 
 export interface AttachSessionInput {
@@ -114,13 +122,14 @@ export interface AttachSessionInput {
   readonly role: Role;
   readonly agent: Agent;
   readonly prompt: string;
+  readonly briefing?: BriefingPacket;
 }
 
 export function attachSessionToAgent(
   deps: SpawnPipelineDeps,
   input: AttachSessionInput,
 ): SpawnPipelineSuccess | SpawnPipelineNoBundleError {
-  const { workspace, role, agent, prompt } = input;
+  const { workspace, role, agent, prompt, briefing } = input;
 
   const versionId = role.current_version_id;
   const bundle = versionId === undefined ? null : deps.roleVersions.loadAsBundle(versionId);
@@ -139,6 +148,11 @@ export function attachSessionToAgent(
   const officeDir = role.persistent
     ? ensureOffice(workspace.repo_path, agent.id)
     : null;
+
+  const deskDir = deskDirFor(workspace.repo_path, agent.id);
+  if (briefing !== undefined && briefing.files.length > 0) {
+    writeBriefingPacket(deskDir, briefing.files);
+  }
 
   const effectiveBundle: RoleBundleData = officeDir === null
     ? bundle
@@ -164,6 +178,7 @@ export function attachSessionToAgent(
     CLOBBER_SESSION_ID: sessionId,
     CLOBBER_WORKSPACE_ID: workspace.id,
     CLOBBER_ROLE: role.name,
+    CLOBBER_DESK_DIR: deskDir,
     ...(officeDir === null ? {} : { CLOBBER_OFFICE_DIR: officeDir }),
   };
   const spawnReq = deps.runtimeProvider.buildSpawnRequest({

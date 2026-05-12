@@ -45,6 +45,16 @@ describe("managerRole", () => {
     }
   });
 
+  it("ships an assignment skill that drives /assignment dispatch (#90)", () => {
+    const pluginRoot = join(managerRole.bundleRoot, managerRole.manifest.pluginTemplatePath);
+    const skillPath = join(pluginRoot, "skills", "assignment", "SKILL.md");
+    expect(existsSync(skillPath)).toBe(true);
+    const body = readFileSync(skillPath, "utf8");
+    expect(body).toMatch(/seed-todos\.json/);
+    expect(body).toMatch(/--briefing-dir/);
+    expect(body).toMatch(/worker-bee/);
+  });
+
   it("ships hooks/hooks.json wrapped in { hooks } and with the __CLOBBER_HOOK_URL__ placeholder", () => {
     const pluginRoot = join(managerRole.bundleRoot, managerRole.manifest.pluginTemplatePath);
     const hooksPath = join(pluginRoot, "hooks", "hooks.json");
