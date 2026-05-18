@@ -1,15 +1,16 @@
 import { z } from "zod";
 import type { AskOption, PreToolUsePayload } from "@clobber/shared";
-import { askAndAwaitAnswer } from "./agent-question-blocking.ts";
+import {
+  askAndAwaitAnswer,
+  type AskResolution,
+} from "./agent-question-blocking.ts";
 import type { AgentQuestionStore } from "./agent-question-store.ts";
 import type { AgentQuestionWaiter } from "./agent-question-waiter.ts";
 
 export const ASK_USER_QUESTION_TOOL = "AskUserQuestion";
 
-export const ASK_BRIDGE_TIMEOUT_NOTICE =
-  "AskUserQuestion timed out; no human answer recorded";
-export const ASK_BRIDGE_CANCEL_NOTICE =
-  "AskUserQuestion cancelled (session ended or superseded)";
+export const ASK_BRIDGE_REASON_STAMP =
+  "AskUserQuestion routed through clobber ask widget — see additionalContext for the structured answer.";
 
 const AskUserQuestionOptionSchema = z.object({
   label: z.string().min(1),
@@ -64,66 +65,140 @@ export async function bridgeAskUserQuestion(
     return out;
   });
 
+  const multiSelect = first.multiSelect === true;
   const resolution = await askAndAwaitAnswer(
     {
       session_id: payload.session_id,
       question: first.question,
       ...(first.header === undefined ? {} : { header: first.header }),
       options,
-      multi_select: first.multiSelect === true,
+      multi_select: multiSelect,
     },
     deps.askTimeoutMs,
     deps,
   );
 
-  const reason = renderReason(parsed.data.questions.length, resolution);
-  const additionalContext = renderContext(first.question, resolution);
+  const droppedCount = parsed.data.questions.length - 1;
+  const additionalContext = renderContext(
+    {
+      question: first.question,
+      ...(first.header === undefined ? {} : { header: first.header }),
+    },
+    options,
+    multiSelect,
+    droppedCount,
+    resolution,
+  );
+
   return {
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "deny",
-      permissionDecisionReason: reason,
+      permissionDecisionReason: ASK_BRIDGE_REASON_STAMP,
       additionalContext,
     },
   };
 }
 
-type Resolution =
-  | { readonly status: "answered"; readonly answer: string }
-  | { readonly status: "cancelled" }
-  | { readonly status: "timed_out" };
-
-function renderReason(questionCount: number, resolution: Resolution): string {
-  if (resolution.status === "timed_out") return ASK_BRIDGE_TIMEOUT_NOTICE;
-  if (resolution.status === "cancelled") return ASK_BRIDGE_CANCEL_NOTICE;
-  const lossy =
-    questionCount > 1
-      ? " (note: extra AskUserQuestion questions beyond the first were dropped; resend as separate calls if needed.)"
-      : "";
-  return `User answered via clobber ask widget: ${resolution.answer}${lossy}`;
+interface Selection {
+  readonly label: string;
+  readonly option_index: number | null;
 }
 
-function renderContext(question: string, resolution: Resolution): string {
+interface AnsweredContext {
+  readonly status: "answered";
+  readonly question: string;
+  readonly header?: string;
+  readonly multi_select: boolean;
+  readonly selections: readonly Selection[];
+  readonly raw: string;
+  readonly dropped_question_count?: number;
+  readonly notes?: readonly string[];
+}
+
+interface UnresolvedContext {
+  readonly status: "timed_out" | "cancelled";
+  readonly question: string;
+  readonly header?: string;
+  readonly multi_select: boolean;
+  readonly dropped_question_count?: number;
+  readonly notes?: readonly string[];
+}
+
+function renderContext(
+  question: { readonly question: string; readonly header?: string },
+  options: readonly AskOption[],
+  multiSelect: boolean,
+  droppedCount: number,
+  resolution: AskResolution,
+): string {
+  const notes = collectNotes(droppedCount);
+
   if (resolution.status === "answered") {
-    return [
-      "The PreToolUse hook intercepted AskUserQuestion and routed it to the clobber",
-      "ask widget. The human's answer is recorded below — proceed as if",
-      "AskUserQuestion had returned this answer successfully:",
-      "",
-      `Question: ${question}`,
-      `Answer:   ${resolution.answer}`,
-    ].join("\n");
+    const ctx: AnsweredContext = {
+      status: "answered",
+      question: question.question,
+      ...(question.header === undefined ? {} : { header: question.header }),
+      multi_select: multiSelect,
+      selections: parseSelections(resolution.answer, options, multiSelect),
+      raw: resolution.answer,
+      ...(droppedCount > 0 ? { dropped_question_count: droppedCount } : {}),
+      ...(notes.length > 0 ? { notes } : {}),
+    };
+    return JSON.stringify(ctx);
   }
-  if (resolution.status === "timed_out") {
-    return [
-      "The PreToolUse hook intercepted AskUserQuestion and routed it to the clobber",
-      "ask widget, but no human answered before the timeout elapsed. Decide how to",
-      "proceed without the answer; ask again later via clobber ask if needed.",
-    ].join("\n");
-  }
+
+  const ctx: UnresolvedContext = {
+    status: resolution.status,
+    question: question.question,
+    ...(question.header === undefined ? {} : { header: question.header }),
+    multi_select: multiSelect,
+    ...(droppedCount > 0 ? { dropped_question_count: droppedCount } : {}),
+    ...(notes.length > 0 ? { notes } : {}),
+  };
+  return JSON.stringify(ctx);
+}
+
+function collectNotes(droppedCount: number): readonly string[] {
+  if (droppedCount === 0) return [];
   return [
-    "The PreToolUse hook intercepted AskUserQuestion and routed it to the clobber",
-    "ask widget, but the question was cancelled (the session ended or a newer",
-    "question superseded it). Do not retry automatically.",
-  ].join("\n");
+    `${droppedCount} extra AskUserQuestion question${droppedCount === 1 ? "" : "s"} beyond the first were dropped; resend as separate calls if needed.`,
+  ];
+}
+
+function parseSelections(
+  raw: string,
+  options: readonly AskOption[],
+  multiSelect: boolean,
+): readonly Selection[] {
+  const labels = parseAnswerLabels(raw, multiSelect);
+  return labels.map((label) => {
+    const idx = options.findIndex((opt) => opt.label === label);
+    return { label, option_index: idx === -1 ? null : idx };
+  });
+}
+
+function parseAnswerLabels(
+  raw: string,
+  multiSelect: boolean,
+): readonly string[] {
+  if (!multiSelect) return [raw];
+  const parsed = tryParseJsonArrayOfStrings(raw);
+  if (parsed !== null) return parsed;
+  return [raw];
+}
+
+function tryParseJsonArrayOfStrings(raw: string): readonly string[] | null {
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith("[")) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(parsed)) return null;
+  if (parsed.length === 0) return null;
+  if (!parsed.every((v) => typeof v === "string" && v.length > 0)) return null;
+  return parsed as readonly string[];
 }

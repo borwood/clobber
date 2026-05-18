@@ -81,7 +81,7 @@ export function AskWidget({ question, onAnswer }: Props) {
           <button
             type="button"
             disabled={submitting || selected.length === 0}
-            onClick={() => void submit(selected.join(","))}
+            onClick={() => void submit(JSON.stringify(selected))}
             className="px-2.5 py-1 text-xs rounded bg-amber-700 text-amber-50 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {submitting ? "Sending…" : `Send ${selected.length} selection${selected.length === 1 ? "" : "s"}`}

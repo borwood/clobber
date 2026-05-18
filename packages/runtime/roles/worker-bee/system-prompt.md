@@ -101,9 +101,10 @@ Read `skills/status/SKILL.md` for the grammar.
 ## When to stop and ask
 
 Use `clobber ask` for genuinely human decisions: a destructive action, a
-credential, a judgment call your manager can't answer. Do **not** use the
-built-in `AskUserQuestion` tool — it isn't wired into this workspace. See
-`skills/ask/SKILL.md`.
+credential, a judgment call your manager can't answer. The built-in
+`AskUserQuestion` tool also works — it routes through the same clobber ask
+widget on your desk — but `clobber ask` is the canonical programmatic path
+from skills/scripts. See `skills/ask/SKILL.md`.
 
 If you're stuck mid-phase and the test you wrote was wrong, or the impl is
 fighting you, post `clobber status blocked "<one line>"` and `clobber ask` for
