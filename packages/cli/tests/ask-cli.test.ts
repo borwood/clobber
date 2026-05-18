@@ -189,7 +189,7 @@ describe("clobber CLI — ask", () => {
       stderr: s.stderr,
     });
 
-    let openOptions: readonly string[] | undefined;
+    let openOptions: ReadonlyArray<{ label: string }> | undefined;
     for (let i = 0; i < 100; i++) {
       const open = harness.questions.getOpenForSession(harness.managerSessionId);
       if (open !== null) {
@@ -198,7 +198,7 @@ describe("clobber CLI — ask", () => {
       }
       await Bun.sleep(5);
     }
-    expect(openOptions).toEqual(["merge", "rebase"]);
+    expect(openOptions).toEqual([{ label: "merge" }, { label: "rebase" }]);
 
     await answerOpenQuestion("merge");
     const code = await askPromise;

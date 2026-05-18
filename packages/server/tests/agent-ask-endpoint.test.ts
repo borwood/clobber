@@ -438,13 +438,16 @@ describe("GET /sessions surfaces open_question", () => {
       open_question?: {
         id: string;
         question: string;
-        options?: string[];
+        options?: ReadonlyArray<{ label: string }>;
       };
     }>;
     const own = summaries.find((s) => s.session_id === boot.sessionId)!;
     expect(own.open_question).toBeDefined();
     expect(own.open_question!.question).toBe("merge?");
-    expect(own.open_question!.options).toEqual(["yes", "no"]);
+    expect(own.open_question!.options).toEqual([
+      { label: "yes" },
+      { label: "no" },
+    ]);
 
     // Cleanup
     await h.server.inject({

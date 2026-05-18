@@ -22,6 +22,12 @@ The system has exactly three communication directions between the clobber server
 | **Embodiment** — clobber → claude | `claude -p --input-format stream-json` keeps the child alive; follow-up prompts written to its stdin. | yes (#8) |
 | **Agent-initiated** — agent → clobber | `clobber` CLI shells out from inside the session; auths via per-session token in env; hits server endpoints. | no — milestone `agent-runtime v1` |
 
+### Agent↔user — canonical channel
+
+`AskUserQuestion` is the canonical agent-to-user channel. A `PreToolUse(AskUserQuestion)` hook (see `packages/server/src/ask-user-question-bridge.ts`) intercepts the native tool call, opens a clobber ask widget on the agent's office/desk, blocks until the human answers, and returns the answer via `hookSpecificOutput.permissionDecision: "deny"` + `permissionDecisionReason` + `additionalContext`. Net effect: any role with `AskUserQuestion` in its tool list gets the workspace-aware UX for free — no per-role prompt surgery toward `clobber ask`. `clobber ask` (`packages/cli/src/commands/ask.ts`) remains for explicit programmatic asks from scripts and skills.
+
+Caveat: PreToolUse can only `allow / deny / ask / defer`, so the agent's transcript shows AskUserQuestion as denied-with-reason, not as a successful tool call. The `additionalContext` block carries the answer in a clean shape. Multi-question `AskUserQuestion` calls flatten to the first question; the reason text explicitly notes the loss. A future follow-up could move to `permissionDecision: "defer"` + `claude -p --resume` to break out of the 30-min sync-blocking hook window.
+
 ## Runtime provider boundary
 
 Claude Code is the first runtime provider, not the conceptual model. Clobber

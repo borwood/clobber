@@ -13,22 +13,29 @@ import type { WorkspaceStore } from "../workspace-store.ts";
 import { endSession } from "../session-lifecycle.ts";
 import { applyTodoWrite } from "../todo-write-handler.ts";
 import { guardOfficeBoundary } from "../office-boundary-guard.ts";
+import { bridgeAskUserQuestion } from "../ask-user-question-bridge.ts";
+
+const DEFAULT_ASK_BRIDGE_TIMEOUT_MS = 30 * 60 * 1000;
+
+export interface RegisterHookRoutesDeps {
+  store: EventStore;
+  sessions: SessionStore;
+  workspaces: WorkspaceStore;
+  agents: AgentStore;
+  roles: RoleStore;
+  sessionTokens: SessionTokenStore;
+  registry: AgentRegistry;
+  agentQuestions: AgentQuestionStore;
+  agentQuestionWaiter: AgentQuestionWaiter;
+  agentStatusLog: AgentStatusLogStore;
+  askBridgeTimeoutMs?: number;
+}
 
 export function registerHookRoutes(
   app: FastifyInstance,
-  deps: {
-    store: EventStore;
-    sessions: SessionStore;
-    workspaces: WorkspaceStore;
-    agents: AgentStore;
-    roles: RoleStore;
-    sessionTokens: SessionTokenStore;
-    registry: AgentRegistry;
-    agentQuestions: AgentQuestionStore;
-    agentQuestionWaiter: AgentQuestionWaiter;
-    agentStatusLog: AgentStatusLogStore;
-  },
+  deps: RegisterHookRoutesDeps,
 ): void {
+  const askBridgeTimeoutMs = deps.askBridgeTimeoutMs ?? DEFAULT_ASK_BRIDGE_TIMEOUT_MS;
   app.post("/hook", async (request, reply) => {
     const parsed = HookPayloadSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -41,6 +48,12 @@ export function registerHookRoutes(
     if (payload.hook_event_name === "PreToolUse") {
       const denial = guardOfficeBoundary(payload, deps);
       if (denial !== null) return denial;
+      const bridged = await bridgeAskUserQuestion(payload, {
+        agentQuestions: deps.agentQuestions,
+        agentQuestionWaiter: deps.agentQuestionWaiter,
+        askTimeoutMs: askBridgeTimeoutMs,
+      });
+      if (bridged !== null) return bridged;
     }
     if (payload.hook_event_name === "PostToolUse") {
       applyTodoWrite(payload, deps);

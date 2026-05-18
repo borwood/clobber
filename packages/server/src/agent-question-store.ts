@@ -1,11 +1,18 @@
 import { randomUUID } from "node:crypto";
 import type { Database } from "bun:sqlite";
-import { AgentQuestionSchema, type AgentQuestion, type QuestionStatus } from "@clobber/shared";
+import {
+  AgentQuestionSchema,
+  type AgentQuestion,
+  type AskOption,
+  type QuestionStatus,
+} from "@clobber/shared";
 
 export interface CreateAgentQuestionRequest {
   readonly session_id: string;
   readonly question: string;
-  readonly options?: readonly string[];
+  readonly header?: string;
+  readonly options?: readonly AskOption[];
+  readonly multi_select?: boolean;
 }
 
 export interface AgentQuestionStore {
@@ -21,7 +28,9 @@ interface Row {
   id: string;
   session_id: string;
   question: string;
+  header: string | null;
   options_json: string | null;
+  multi_select: number;
   status: string;
   answer: string | null;
   asked_at: number;
@@ -35,9 +44,11 @@ function rowToQuestion(row: Row): AgentQuestion {
     question: row.question,
     status: row.status as QuestionStatus,
     asked_at: row.asked_at,
+    multi_select: row.multi_select === 1,
   };
+  if (row.header !== null) input["header"] = row.header;
   if (row.options_json !== null) {
-    input["options"] = JSON.parse(row.options_json) as readonly string[];
+    input["options"] = JSON.parse(row.options_json) as readonly AskOption[];
   }
   if (row.answer !== null) input["answer"] = row.answer;
   if (row.answered_at !== null) input["answered_at"] = row.answered_at;
@@ -47,8 +58,8 @@ function rowToQuestion(row: Row): AgentQuestion {
 export function createAgentQuestionStore(db: Database): AgentQuestionStore {
   const insertStmt = db.prepare(`
     INSERT INTO agent_questions
-      (id, session_id, question, options_json, status, answer, asked_at, answered_at)
-    VALUES (?, ?, ?, ?, 'pending', NULL, ?, NULL)
+      (id, session_id, question, header, options_json, multi_select, status, answer, asked_at, answered_at)
+    VALUES (?, ?, ?, ?, ?, ?, 'pending', NULL, ?, NULL)
   `);
   const getStmt = db.prepare("SELECT * FROM agent_questions WHERE id = ?");
   const getOpenForSessionStmt = db.prepare(`
@@ -82,12 +93,24 @@ export function createAgentQuestionStore(db: Database): AgentQuestionStore {
       const asked_at = Date.now();
       const optionsJson =
         req.options === undefined ? null : JSON.stringify(req.options);
-      insertStmt.run(id, req.session_id, req.question, optionsJson, asked_at);
+      const multiSelectInt = req.multi_select === true ? 1 : 0;
+      const header = req.header ?? null;
+      insertStmt.run(
+        id,
+        req.session_id,
+        req.question,
+        header,
+        optionsJson,
+        multiSelectInt,
+        asked_at,
+      );
       return rowToQuestion({
         id,
         session_id: req.session_id,
         question: req.question,
+        header,
         options_json: optionsJson,
+        multi_select: multiSelectInt,
         status: "pending",
         answer: null,
         asked_at,

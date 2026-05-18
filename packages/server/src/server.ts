@@ -81,6 +81,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     agentQuestionWaiter: opts.agentQuestionWaiter,
     registry,
     agentStatusLog: opts.agentStatusLog,
+    ...(opts.askTimeoutMs === undefined ? {} : { askBridgeTimeoutMs: opts.askTimeoutMs }),
   });
   registerEventRoutes(app, { store: opts.store });
   registerSessionRoutes(app, {
