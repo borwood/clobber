@@ -9,7 +9,7 @@ import type {
   AgentQuestionWaiter,
 } from "../agent-question-waiter.ts";
 import { QuestionTimeoutError } from "../agent-question-waiter.ts";
-import { authorizeCommand, resolveCallerSession } from "./_agent-auth.ts";
+import { withAgentAuth } from "./_with-agent-auth.ts";
 
 const DEFAULT_ASK_TIMEOUT_MS = 30 * 60 * 1000;
 
@@ -29,50 +29,42 @@ export function registerAgentAskRoutes(
 ): void {
   const timeoutMs = deps.askTimeoutMs ?? DEFAULT_ASK_TIMEOUT_MS;
 
-  app.post("/agent/ask", async (request, reply) => {
-    const auth = resolveCallerSession(request, deps);
-    if (!auth.ok) {
-      reply.code(auth.status);
-      return { error: auth.error };
-    }
-    const authz = authorizeCommand(auth.session, "ask", deps);
-    if (!authz.ok) {
-      reply.code(authz.status);
-      return { error: authz.error };
-    }
-
-    const parsed = AgentAskRequestSchema.safeParse(request.body);
-    if (!parsed.success) {
-      reply.code(400);
-      return { error: "invalid ask request", issues: parsed.error.issues };
-    }
-
-    const supersededIds = deps.agentQuestions.cancelAllForSession(auth.session.id);
-    for (const id of supersededIds) {
-      const row = deps.agentQuestions.get(id);
-      if (row !== null) deps.agentQuestionWaiter.notify(row);
-    }
-
-    const created = deps.agentQuestions.create({
-      session_id: auth.session.id,
-      question: parsed.data.question,
-      ...(parsed.data.options === undefined ? {} : { options: parsed.data.options }),
-    });
-
-    try {
-      const resolved = await deps.agentQuestionWaiter.wait(created.id, timeoutMs);
-      if (resolved.status === "answered") {
-        return { resolution: "answered", answer: resolved.answer };
+  app.post(
+    "/agent/ask",
+    withAgentAuth("ask", deps, async (request, reply, { session }) => {
+      const parsed = AgentAskRequestSchema.safeParse(request.body);
+      if (!parsed.success) {
+        reply.code(400);
+        return { error: "invalid ask request", issues: parsed.error.issues };
       }
-      return { resolution: resolved.status };
-    } catch (err) {
-      if (err instanceof QuestionTimeoutError) {
-        deps.agentQuestions.timeout(created.id);
-        return { resolution: "timed_out" };
+
+      const supersededIds = deps.agentQuestions.cancelAllForSession(session.id);
+      for (const id of supersededIds) {
+        const row = deps.agentQuestions.get(id);
+        if (row !== null) deps.agentQuestionWaiter.notify(row);
       }
-      throw err;
-    }
-  });
+
+      const created = deps.agentQuestions.create({
+        session_id: session.id,
+        question: parsed.data.question,
+        ...(parsed.data.options === undefined ? {} : { options: parsed.data.options }),
+      });
+
+      try {
+        const resolved = await deps.agentQuestionWaiter.wait(created.id, timeoutMs);
+        if (resolved.status === "answered") {
+          return { resolution: "answered", answer: resolved.answer };
+        }
+        return { resolution: resolved.status };
+      } catch (err) {
+        if (err instanceof QuestionTimeoutError) {
+          deps.agentQuestions.timeout(created.id);
+          return { resolution: "timed_out" };
+        }
+        throw err;
+      }
+    }),
+  );
 
   app.post<{ Params: { id: string } }>(
     "/sessions/:id/answer",
