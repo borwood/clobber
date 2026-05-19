@@ -5,23 +5,30 @@ import {
   type OfficeCard,
   type SessionSummary,
   type TranscriptLine,
+  type Whiteboard,
   type Workspace,
   type WorkspaceRoleAssignment,
 } from "./api.ts";
 import { SpawnPanel } from "./components/SpawnPanel.tsx";
 import { SessionList } from "./components/SessionList.tsx";
-import { SessionHeader } from "./components/SessionHeader.tsx";
-import { TranscriptViewer } from "./components/TranscriptViewer.tsx";
 import { WorkspaceSwitcher } from "./components/WorkspaceSwitcher.tsx";
 import { WorkspaceConfigModal } from "./components/WorkspaceConfigModal.tsx";
 import { RolePicker } from "./components/RolePicker.tsx";
-import { PromptComposer } from "./components/PromptComposer.tsx";
-import { AskWidget } from "./components/AskWidget.tsx";
 import { WhiteboardView } from "./components/WhiteboardView.tsx";
 import { ViewSwitcher, type WorkspaceView } from "./components/ViewSwitcher.tsx";
+import { MailboxContent } from "./components/MailboxContent.tsx";
+import { usePolledResource } from "./hooks/usePolledResource.ts";
 
 const POLL_MS = 1000;
 const VIEW_STORAGE_KEY = "clobber:workspace-view";
+
+const EMPTY_WORKSPACES: readonly Workspace[] = [];
+const EMPTY_ASSIGNMENTS: readonly WorkspaceRoleAssignment[] = [];
+const EMPTY_SESSIONS: readonly SessionSummary[] = [];
+const EMPTY_OFFICES: readonly OfficeCard[] = [];
+const EMPTY_DESKS: readonly DeskCard[] = [];
+const EMPTY_TRANSCRIPT: readonly TranscriptLine[] = [];
+const EMPTY_WHITEBOARD: Whiteboard = { offices: EMPTY_OFFICES, desks: EMPTY_DESKS };
 
 function readStoredView(): WorkspaceView {
   if (typeof localStorage === "undefined") return "mailbox";
@@ -30,152 +37,110 @@ function readStoredView(): WorkspaceView {
 }
 
 export function App() {
-  const [workspaces, setWorkspaces] = useState<readonly Workspace[]>([]);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
-  const [assignments, setAssignments] = useState<readonly WorkspaceRoleAssignment[]>([]);
   const [roleId, setRoleId] = useState<string | null>(null);
-
-  const [sessions, setSessions] = useState<readonly SessionSummary[]>([]);
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
-  const [transcript, setTranscript] = useState<readonly TranscriptLine[]>([]);
   const [showSystem, setShowSystem] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
   const [view, setView] = useState<WorkspaceView>(() => readStoredView());
-  const [offices, setOffices] = useState<readonly OfficeCard[]>([]);
-  const [desks, setDesks] = useState<readonly DeskCard[]>([]);
-  const [now, setNow] = useState(() => Date.now());
   const [wakingAgents, setWakingAgents] = useState<ReadonlySet<string>>(() => new Set());
+
+  const workspacesPoll = usePolledResource(
+    () => api.listWorkspaces(),
+    [],
+    POLL_MS,
+  );
+  const workspaces = workspacesPoll.data ?? EMPTY_WORKSPACES;
+
+  const rolesPoll = usePolledResource(
+    () =>
+      workspaceId === null
+        ? Promise.resolve(EMPTY_ASSIGNMENTS)
+        : api.listWorkspaceRoles(workspaceId),
+    [workspaceId],
+    POLL_MS,
+  );
+  const assignments = rolesPoll.data ?? EMPTY_ASSIGNMENTS;
+
+  const sessionsPoll = usePolledResource(
+    () =>
+      workspaceId === null
+        ? Promise.resolve(EMPTY_SESSIONS)
+        : api.listSessions(workspaceId),
+    [workspaceId],
+    POLL_MS,
+  );
+  const sessions = sessionsPoll.data ?? EMPTY_SESSIONS;
+
+  const whiteboardPoll = usePolledResource<Whiteboard>(
+    () =>
+      workspaceId === null || view !== "whiteboard"
+        ? Promise.resolve(EMPTY_WHITEBOARD)
+        : api.getWhiteboard(workspaceId),
+    [workspaceId, view],
+    POLL_MS,
+  );
+  const offices = whiteboardPoll.data?.offices ?? EMPTY_OFFICES;
+  const desks = whiteboardPoll.data?.desks ?? EMPTY_DESKS;
+
+  const nowPoll = usePolledResource(
+    () => Promise.resolve(Date.now()),
+    [view],
+    POLL_MS,
+  );
+  const now = nowPoll.data ?? Date.now();
+
+  const transcriptPoll = usePolledResource(
+    () =>
+      selectedSession === null
+        ? Promise.resolve(EMPTY_TRANSCRIPT)
+        : api.getTranscript(selectedSession),
+    [selectedSession],
+    POLL_MS,
+  );
+  const transcript = transcriptPoll.data ?? EMPTY_TRANSCRIPT;
+
+  useEffect(() => {
+    const firstErr = [
+      workspacesPoll.error,
+      rolesPoll.error,
+      sessionsPoll.error,
+      whiteboardPoll.error,
+      transcriptPoll.error,
+    ].find((e) => e !== undefined);
+    if (firstErr !== undefined) setError(firstErr.message);
+  }, [
+    workspacesPoll.error,
+    rolesPoll.error,
+    sessionsPoll.error,
+    whiteboardPoll.error,
+    transcriptPoll.error,
+  ]);
+
+  useEffect(() => {
+    setWorkspaceId((current) => {
+      if (current !== null && workspaces.some((w) => w.id === current)) return current;
+      return workspaces[0]?.id ?? null;
+    });
+  }, [workspaces]);
+
+  useEffect(() => {
+    setRoleId((current) => {
+      const spawnable = assignments.filter((a) => a.max_concurrent > 0);
+      if (current !== null && spawnable.some((a) => a.role.id === current)) return current;
+      return spawnable[0]?.role.id ?? null;
+    });
+  }, [assignments]);
+
+  useEffect(() => {
+    setSelectedSession(null);
+  }, [workspaceId]);
 
   function persistView(next: WorkspaceView): void {
     setView(next);
     if (typeof localStorage !== "undefined") localStorage.setItem(VIEW_STORAGE_KEY, next);
   }
-
-  useEffect(() => {
-    let cancelled = false;
-    async function tick() {
-      try {
-        const next = await api.listWorkspaces();
-        if (cancelled) return;
-        setWorkspaces(next);
-        setWorkspaceId((current) => {
-          if (current !== null && next.some((w) => w.id === current)) return current;
-          return next[0]?.id ?? null;
-        });
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
-      }
-    }
-    void tick();
-    const id = setInterval(() => void tick(), POLL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (workspaceId === null) {
-      setAssignments([]);
-      setRoleId(null);
-      return;
-    }
-    let cancelled = false;
-    async function tick() {
-      try {
-        const next = await api.listWorkspaceRoles(workspaceId!);
-        if (cancelled) return;
-        setAssignments(next);
-        setRoleId((current) => {
-          const spawnable = next.filter((a) => a.max_concurrent > 0);
-          if (current !== null && spawnable.some((a) => a.role.id === current)) return current;
-          return spawnable[0]?.role.id ?? null;
-        });
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
-      }
-    }
-    void tick();
-    const id = setInterval(() => void tick(), POLL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [workspaceId]);
-
-  useEffect(() => {
-    setSessions([]);
-    setSelectedSession(null);
-    if (workspaceId === null) return;
-    let cancelled = false;
-    async function tick() {
-      try {
-        const next = await api.listSessions(workspaceId!);
-        if (!cancelled) setSessions(next);
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
-      }
-    }
-    void tick();
-    const id = setInterval(() => void tick(), POLL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [workspaceId]);
-
-  useEffect(() => {
-    setOffices([]);
-    setDesks([]);
-    if (workspaceId === null || view !== "whiteboard") return;
-    let cancelled = false;
-    async function tick() {
-      try {
-        const next = await api.getWhiteboard(workspaceId!);
-        if (cancelled) return;
-        setOffices(next.offices);
-        setDesks(next.desks);
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
-      }
-    }
-    void tick();
-    const id = setInterval(() => void tick(), POLL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [workspaceId, view]);
-
-  useEffect(() => {
-    if (view !== "whiteboard") return;
-    const id = setInterval(() => setNow(Date.now()), POLL_MS);
-    return () => clearInterval(id);
-  }, [view]);
-
-  useEffect(() => {
-    if (selectedSession === null) {
-      setTranscript([]);
-      return;
-    }
-    let cancelled = false;
-    async function tick() {
-      try {
-        const next = await api.getTranscript(selectedSession!);
-        if (!cancelled) setTranscript(next);
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
-      }
-    }
-    void tick();
-    const id = setInterval(() => void tick(), POLL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [selectedSession]);
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
@@ -185,10 +150,7 @@ export function App() {
           workspaces={workspaces}
           selectedId={workspaceId}
           onSelect={setWorkspaceId}
-          onCreated={(ws) => {
-            setWorkspaces((prev) => [ws, ...prev]);
-            setWorkspaceId(ws.id);
-          }}
+          onCreated={(ws) => setWorkspaceId(ws.id)}
         />
         {workspaceId !== null && (
           <button
@@ -221,9 +183,6 @@ export function App() {
             onEnd={async (id) => {
               try {
                 await api.endSession(id);
-                if (workspaceId !== null) {
-                  setSessions(await api.listSessions(workspaceId));
-                }
               } catch (e) {
                 setError(e instanceof Error ? e.message : String(e));
               }
@@ -243,18 +202,11 @@ export function App() {
                 setSelectedSession(sessionId);
               }}
               onWake={async (agentId) => {
-                setWakingAgents((prev) => {
-                  const next = new Set(prev);
-                  next.add(agentId);
-                  return next;
-                });
+                setWakingAgents((prev) => new Set(prev).add(agentId));
                 try {
                   const result = await api.wakePersistentAgent(agentId);
                   persistView("mailbox");
                   setSelectedSession(result.session_id);
-                  if (workspaceId !== null) {
-                    setSessions(await api.listSessions(workspaceId));
-                  }
                 } catch (e) {
                   setError(e instanceof Error ? e.message : String(e));
                 } finally {
@@ -273,9 +225,6 @@ export function App() {
               transcript={transcript}
               showSystem={showSystem}
               setShowSystem={setShowSystem}
-              workspaceId={workspaceId}
-              setSessions={setSessions}
-              setTranscript={setTranscript}
             />
           )}
         </section>
@@ -313,124 +262,10 @@ export function App() {
           <WorkspaceConfigModal
             workspace={ws}
             onClose={() => setConfigOpen(false)}
-            onSaved={(updated) => {
-              setWorkspaces((prev) =>
-                prev.map((w) => (w.id === updated.id ? updated : w)),
-              );
-              setConfigOpen(false);
-            }}
+            onSaved={() => setConfigOpen(false)}
           />
         );
       })()}
     </div>
-  );
-}
-
-interface MailboxContentProps {
-  readonly sessions: readonly SessionSummary[];
-  readonly selectedSession: string | null;
-  readonly transcript: readonly TranscriptLine[];
-  readonly showSystem: boolean;
-  readonly setShowSystem: (b: boolean) => void;
-  readonly workspaceId: string | null;
-  readonly setSessions: (s: readonly SessionSummary[]) => void;
-  readonly setTranscript: (t: readonly TranscriptLine[]) => void;
-}
-
-function MailboxContent(props: MailboxContentProps) {
-  const {
-    sessions,
-    selectedSession,
-    transcript,
-    showSystem,
-    setShowSystem,
-    workspaceId,
-    setSessions,
-    setTranscript,
-  } = props;
-  return (
-    <>
-      {(() => {
-        const selected =
-          selectedSession === null
-            ? undefined
-            : sessions.find((s) => s.session_id === selectedSession);
-        if (selected === undefined) {
-              return (
-                <div className="flex items-center px-6 py-3 shrink-0">
-                  <h2 className="text-sm uppercase tracking-wider text-zinc-500">
-                    select a session
-                  </h2>
-                  <label className="ml-auto flex items-center gap-2 text-xs text-zinc-500 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={showSystem}
-                      onChange={(e) => setShowSystem(e.target.checked)}
-                      className="accent-emerald-600"
-                    />
-                    show details
-                  </label>
-                </div>
-              );
-            }
-            return (
-              <div className="flex items-stretch shrink-0">
-                <div className="flex-1 min-w-0">
-                  <SessionHeader session={selected} />
-                </div>
-                <label className="flex items-center gap-2 px-6 text-xs text-zinc-500 cursor-pointer select-none border-l border-zinc-800">
-                  <input
-                    type="checkbox"
-                    checked={showSystem}
-                    onChange={(e) => setShowSystem(e.target.checked)}
-                    className="accent-emerald-600"
-                  />
-                  show details
-                </label>
-              </div>
-            );
-          })()}
-          <TranscriptViewer
-            key={selectedSession ?? "none"}
-            lines={transcript}
-            showSystem={showSystem}
-          />
-          {selectedSession !== null && (() => {
-            const sel = sessions.find((s) => s.session_id === selectedSession);
-            const open = sel?.open_question;
-            return (
-              <>
-                {open !== undefined && (
-                  <AskWidget
-                    question={open}
-                    onAnswer={async (answer) => {
-                      await api.answerQuestion(selectedSession, open.id, answer);
-                      if (workspaceId !== null) {
-                        setSessions(await api.listSessions(workspaceId));
-                      }
-                    }}
-                  />
-                )}
-                <PromptComposer
-                  key={selectedSession}
-                  sessionId={selectedSession}
-                  disabled={sel?.ended_at !== undefined}
-                  busy={sel?.busy === true}
-                  onSend={async (prompt) => {
-                    await api.sendPrompt(selectedSession, prompt);
-                    setTranscript(await api.getTranscript(selectedSession));
-                  }}
-                  onInterrupt={async () => {
-                    await api.interruptSession(selectedSession);
-                    setTranscript(await api.getTranscript(selectedSession));
-                    if (workspaceId !== null) {
-                      setSessions(await api.listSessions(workspaceId));
-                    }
-                  }}
-                />
-              </>
-            );
-          })()}
-    </>
   );
 }
