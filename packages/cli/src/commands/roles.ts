@@ -1,49 +1,14 @@
+import {
+  RoleDetailResponseSchema,
+  RolesListResponseSchema,
+  type RoleDetailResponse,
+  type RoleListEntry,
+  type RoleTrigger,
+} from "@clobber/shared";
 import type { Command, CommandContext } from "../commands.ts";
 import { request } from "../http.ts";
 import { CliUsageError } from "../usage-error.ts";
 import { runEdit } from "./roles-edit.ts";
-
-interface RoleListEntry {
-  readonly id: string;
-  readonly name: string;
-  readonly persistent: boolean;
-  readonly description?: string;
-  readonly allowed_tools?: readonly string[];
-  readonly current_version_id: string;
-  readonly version: number;
-  readonly created_at: number;
-}
-
-interface RolesListResponse {
-  readonly roles: readonly RoleListEntry[];
-}
-
-interface RoleSkill {
-  readonly name: string;
-  readonly body: string;
-}
-
-interface RoleDetailResponse {
-  readonly id: string;
-  readonly name: string;
-  readonly persistent: boolean;
-  readonly description?: string;
-  readonly current_version: {
-    readonly id: string;
-    readonly version: number;
-    readonly system_prompt: string;
-    readonly skills: readonly RoleSkill[];
-    readonly allowed_tools: readonly string[];
-    readonly hooks: unknown;
-    readonly triggers: ReadonlyArray<Record<string, unknown>>;
-    readonly created_at: number;
-  };
-  readonly version_history: ReadonlyArray<{
-    readonly id: string;
-    readonly version: number;
-    readonly created_at: number;
-  }>;
-}
 
 const SUBCOMMANDS = ["list", "show", "fork", "edit", "ceiling"] as const;
 type Subcommand = (typeof SUBCOMMANDS)[number];
@@ -93,10 +58,11 @@ function renderListTable(roles: readonly RoleListEntry[]): string {
 }
 
 async function runList(ctx: CommandContext, json: boolean): Promise<number> {
-  const result = await request<RolesListResponse>(ctx.env, {
+  const raw = await request<unknown>(ctx.env, {
     method: "GET",
     path: "/agent/roles",
   });
+  const result = RolesListResponseSchema.parse(raw);
   if (json) {
     ctx.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return 0;
@@ -105,18 +71,13 @@ async function runList(ctx: CommandContext, json: boolean): Promise<number> {
   return 0;
 }
 
-function formatTrigger(t: Record<string, unknown>): string {
-  const kind = t["kind"];
-  if (kind === "cron") return `cron — \`${String(t["expr"])}\``;
-  if (kind === "file-watch") return `file-watch — \`${String(t["glob"])}\``;
-  if (kind === "webhook") return `webhook — \`${String(t["path"])}\``;
-  if (kind === "issue-assigned") {
-    const repo = t["repo"];
-    return repo === undefined
-      ? "issue-assigned"
-      : `issue-assigned — repo \`${String(repo)}\``;
-  }
-  return JSON.stringify(t);
+function formatTrigger(t: RoleTrigger): string {
+  if (t.kind === "cron") return `cron — \`${t.expr}\``;
+  if (t.kind === "file-watch") return `file-watch — \`${t.glob}\``;
+  if (t.kind === "webhook") return `webhook — \`${t.path}\``;
+  return t.repo === undefined
+    ? "issue-assigned"
+    : `issue-assigned — repo \`${t.repo}\``;
 }
 
 function renderShowMarkdown(role: RoleDetailResponse): string {
@@ -278,10 +239,11 @@ async function runShow(
       `roles show: unexpected arguments: ${extra.join(" ")}`,
     );
   }
-  const result = await request<RoleDetailResponse>(ctx.env, {
+  const raw = await request<unknown>(ctx.env, {
     method: "GET",
     path: `/agent/roles/${encodeURIComponent(target)}`,
   });
+  const result = RoleDetailResponseSchema.parse(raw);
   if (json) {
     ctx.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return 0;

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { PassThrough } from "node:stream";
+import { RoleListEntrySchema, RoleDetailResponseSchema } from "@clobber/shared";
 import { makeRepoFixture, type RepoFixture } from "./repo-fixture.ts";
 import { createServer } from "../src/server.ts";
 import { createDatabase } from "../src/db.ts";
@@ -202,6 +203,10 @@ describe("GET /agent/roles", () => {
     expect(typeof byName.get("manager")!.current_version_id).toBe("string");
     expect(byName.get("manager")!.allowed_tools).toContain("Bash");
 
+    for (const entry of body.roles) {
+      RoleListEntrySchema.parse(entry);
+    }
+
     await teardown(h);
   });
 
@@ -280,6 +285,8 @@ describe("GET /agent/roles/:idOrName", () => {
     expect(body.version_history).toHaveLength(1);
     expect(body.version_history[0]!.version).toBe(1);
     expect(body.version_history[0]!.id).toBe(body.current_version.id);
+
+    RoleDetailResponseSchema.parse(body);
 
     await teardown(h);
   });

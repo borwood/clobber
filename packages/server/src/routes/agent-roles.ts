@@ -1,7 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import type { Database } from "bun:sqlite";
 import { z } from "zod";
-import { RoleTriggerSchema, type Role } from "@clobber/shared";
+import {
+  RoleSkillSchema,
+  RoleTriggerSchema,
+  type Role,
+  type RoleDetailResponse,
+  type RoleListEntry,
+} from "@clobber/shared";
 import type { SessionTokenStore } from "../session-token-store.ts";
 import type { SessionStore } from "../session-store.ts";
 import type { RoleStore } from "../role-store.ts";
@@ -22,11 +28,6 @@ const ForkBodySchema = z.object({
 
 const CeilingBodySchema = z.object({
   max_concurrent: z.number().int().nonnegative(),
-});
-
-const RoleSkillSchema = z.object({
-  name: z.string().min(1),
-  body: z.string().min(1),
 });
 
 const EditBodySchema = z
@@ -51,17 +52,6 @@ export interface AgentRolesRouteDeps {
   readonly scheduler: Pick<TriggerScheduler, "reloadRole">;
 }
 
-interface RoleListEntry {
-  readonly id: string;
-  readonly name: string;
-  readonly persistent: boolean;
-  readonly description?: string;
-  readonly allowed_tools?: readonly string[];
-  readonly current_version_id: string;
-  readonly version: number;
-  readonly created_at: number;
-}
-
 function buildListEntry(
   role: Role,
   deps: AgentRolesRouteDeps,
@@ -69,41 +59,19 @@ function buildListEntry(
   if (role.current_version_id === undefined) return null;
   const version = deps.roleVersions.get(role.current_version_id);
   if (version === null) return null;
-  const entry: Record<string, unknown> = {
+  const entry: RoleListEntry = {
     id: role.id,
     name: role.name,
     persistent: role.persistent,
     current_version_id: role.current_version_id,
     version: version.version,
     created_at: role.created_at,
+    ...(role.description === undefined ? {} : { description: role.description }),
+    ...(role.allowed_tools === undefined
+      ? {}
+      : { allowed_tools: [...role.allowed_tools] }),
   };
-  if (role.description !== undefined) entry["description"] = role.description;
-  if (role.allowed_tools !== undefined) {
-    entry["allowed_tools"] = role.allowed_tools;
-  }
-  return entry as unknown as RoleListEntry;
-}
-
-interface RoleDetailResponse {
-  readonly id: string;
-  readonly name: string;
-  readonly persistent: boolean;
-  readonly description?: string;
-  readonly current_version: {
-    readonly id: string;
-    readonly version: number;
-    readonly system_prompt: string;
-    readonly skills: unknown;
-    readonly allowed_tools: unknown;
-    readonly hooks: unknown;
-    readonly triggers: unknown;
-    readonly created_at: number;
-  };
-  readonly version_history: ReadonlyArray<{
-    readonly id: string;
-    readonly version: number;
-    readonly created_at: number;
-  }>;
+  return entry;
 }
 
 function buildDetail(
@@ -113,7 +81,7 @@ function buildDetail(
   if (role.current_version_id === undefined) return null;
   const version = deps.roleVersions.get(role.current_version_id);
   if (version === null) return null;
-  const detail: Record<string, unknown> = {
+  const detail: RoleDetailResponse = {
     id: role.id,
     name: role.name,
     persistent: role.persistent,
@@ -128,9 +96,9 @@ function buildDetail(
       created_at: version.created_at,
     },
     version_history: deps.roleVersions.listForRole(role.id),
+    ...(role.description === undefined ? {} : { description: role.description }),
   };
-  if (role.description !== undefined) detail["description"] = role.description;
-  return detail as unknown as RoleDetailResponse;
+  return detail;
 }
 
 export function registerAgentRolesRoutes(

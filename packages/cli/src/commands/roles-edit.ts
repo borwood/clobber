@@ -1,20 +1,11 @@
 import { readFileSync } from "node:fs";
+import {
+  RoleDetailResponseSchema,
+  type RoleSkill,
+} from "@clobber/shared";
 import type { CommandContext } from "../commands.ts";
 import { request } from "../http.ts";
 import { CliUsageError } from "../usage-error.ts";
-
-interface RoleSkill {
-  readonly name: string;
-  readonly body: string;
-}
-
-interface RoleDetailResponse {
-  readonly id: string;
-  readonly name: string;
-  readonly current_version: {
-    readonly skills: readonly RoleSkill[];
-  };
-}
 
 interface EditResponse {
   readonly role_id: string;
@@ -267,10 +258,11 @@ async function buildPatch(
   }
 
   if (flags.addSkills.length > 0 || flags.removeSkills.length > 0) {
-    const detail = await request<RoleDetailResponse>(ctx.env, {
+    const detailRaw = await request<unknown>(ctx.env, {
       method: "GET",
       path: `/agent/roles/${encodeURIComponent(flags.target)}`,
     });
+    const detail = RoleDetailResponseSchema.parse(detailRaw);
     const current: RoleSkill[] = [...detail.current_version.skills];
     const removeSet = new Set(flags.removeSkills);
     const filtered = current.filter((s) => !removeSet.has(s.name));
