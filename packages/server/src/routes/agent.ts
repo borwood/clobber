@@ -29,7 +29,7 @@ import {
   parseTranscriptQuery,
   type TranscriptQuery,
 } from "../transcript-formatter.ts";
-import { authorizeCommand, resolveCallerSession } from "./_agent-auth.ts";
+import { withAgentAuth } from "./_with-agent-auth.ts";
 import { normalizeSpawnLabel } from "./_spawn-label.ts";
 
 export interface AgentRouteDeps {
@@ -60,258 +60,208 @@ const AgentSpawnBodySchema = z.object({
 });
 
 export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps): void {
-  app.get("/agent/me", async (request, reply) => {
-    const auth = resolveCallerSession(request, deps);
-    if (!auth.ok) {
-      reply.code(auth.status);
-      return { error: auth.error };
-    }
-    const authz = authorizeCommand(auth.session, "whoami", deps);
-    if (!authz.ok) {
-      reply.code(authz.status);
-      return { error: authz.error };
-    }
-    const role = deps.roles.get(auth.session.role_id);
-    if (role === null) {
-      reply.code(500);
-      return { error: "role missing for session" };
-    }
-    return {
-      session_id: auth.session.id,
-      workspace_id: auth.session.workspace_id,
-      role: { id: role.id, name: role.name },
-      started_at: auth.session.started_at,
-    };
-  });
-
-  app.get("/agent/agents", async (request, reply) => {
-    const auth = resolveCallerSession(request, deps);
-    if (!auth.ok) {
-      reply.code(auth.status);
-      return { error: auth.error };
-    }
-    const authz = authorizeCommand(auth.session, "agents", deps);
-    if (!authz.ok) {
-      reply.code(authz.status);
-      return { error: authz.error };
-    }
-    const sessions = deps.sessions.listActiveForWorkspace(auth.session.workspace_id);
-    const agents = sessions.map((session) => {
+  app.get(
+    "/agent/me",
+    withAgentAuth("whoami", deps, async (_request, reply, { session }) => {
       const role = deps.roles.get(session.role_id);
-      if (role === null) throw new Error(`role missing for session ${session.id}`);
-      const agentRow = session.agent_id === undefined
-        ? null
-        : deps.agents.get(session.agent_id);
-      const live = deps.registry.get(session.id);
-      const state: "busy" | "idle" = live === null || live.busy ? "busy" : "idle";
-      const entry: Record<string, unknown> = {
-        session_id: session.id,
-        agent_id: session.agent_id,
-        role: { id: role.id, name: role.name },
-        pid: session.pid,
-        state,
-        started_at: session.started_at,
-        is_caller: session.id === auth.session.id,
-      };
-      if (agentRow !== null && agentRow.label !== undefined) {
-        entry["label"] = agentRow.label;
+      if (role === null) {
+        reply.code(500);
+        return { error: "role missing for session" };
       }
-      return entry;
-    });
-    return { agents };
-  });
+      return {
+        session_id: session.id,
+        workspace_id: session.workspace_id,
+        role: { id: role.id, name: role.name },
+        started_at: session.started_at,
+      };
+    }),
+  );
 
-  app.post("/agent/spawn", async (request, reply) => {
-    const auth = resolveCallerSession(request, deps);
-    if (!auth.ok) {
-      reply.code(auth.status);
-      return { error: auth.error };
-    }
-    const authz = authorizeCommand(auth.session, "spawn", deps);
-    if (!authz.ok) {
-      reply.code(authz.status);
-      return { error: authz.error };
-    }
+  app.get(
+    "/agent/agents",
+    withAgentAuth("agents", deps, async (_request, _reply, { session }) => {
+      const sessions = deps.sessions.listActiveForWorkspace(session.workspace_id);
+      const agents = sessions.map((s) => {
+        const role = deps.roles.get(s.role_id);
+        if (role === null) throw new Error(`role missing for session ${s.id}`);
+        const agentRow = s.agent_id === undefined ? null : deps.agents.get(s.agent_id);
+        const live = deps.registry.get(s.id);
+        const state: "busy" | "idle" = live === null || live.busy ? "busy" : "idle";
+        const entry: Record<string, unknown> = {
+          session_id: s.id,
+          agent_id: s.agent_id,
+          role: { id: role.id, name: role.name },
+          pid: s.pid,
+          state,
+          started_at: s.started_at,
+          is_caller: s.id === session.id,
+        };
+        if (agentRow !== null && agentRow.label !== undefined) {
+          entry["label"] = agentRow.label;
+        }
+        return entry;
+      });
+      return { agents };
+    }),
+  );
 
-    const parsed = AgentSpawnBodySchema.safeParse(request.body);
-    if (!parsed.success) {
-      reply.code(400);
-      return { error: "invalid spawn request", issues: parsed.error.issues };
-    }
-    const { role: roleName, prompt } = parsed.data;
-    const label = normalizeSpawnLabel(parsed.data.label);
-    if (label === null) {
-      reply.code(400);
-      return { error: "label is required" };
-    }
+  app.post(
+    "/agent/spawn",
+    withAgentAuth("spawn", deps, async (request, reply, { session }) => {
+      const parsed = AgentSpawnBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        reply.code(400);
+        return { error: "invalid spawn request", issues: parsed.error.issues };
+      }
+      const { role: roleName, prompt } = parsed.data;
+      const label = normalizeSpawnLabel(parsed.data.label);
+      if (label === null) {
+        reply.code(400);
+        return { error: "label is required" };
+      }
 
-    const workspace = deps.workspaces.get(auth.session.workspace_id);
-    if (workspace === null) {
-      reply.code(500);
-      return { error: "workspace missing for session" };
-    }
-    const role =
-      deps.roles.findInWorkspace(workspace.id, roleName) ??
-      deps.roles.findByName(roleName);
-    if (role === null) {
-      reply.code(404);
-      return { error: `role not found: ${roleName}` };
-    }
+      const workspace = deps.workspaces.get(session.workspace_id);
+      if (workspace === null) {
+        reply.code(500);
+        return { error: "workspace missing for session" };
+      }
+      const role =
+        deps.roles.findInWorkspace(workspace.id, roleName) ??
+        deps.roles.findByName(roleName);
+      if (role === null) {
+        reply.code(404);
+        return { error: `role not found: ${roleName}` };
+      }
 
-    const result = executeSpawn(deps, {
-      workspace,
-      role,
-      prompt,
-      label,
-      ...(parsed.data.briefing === undefined
-        ? {}
-        : { briefing: parsed.data.briefing }),
-    });
-    if (!result.ok) {
-      const { ok: _ok, status, ...rest } = result;
-      reply.code(status);
-      return rest;
-    }
-    return {
-      agent_id: result.agent_id,
-      session_id: result.session_id,
-      pid: result.pid,
-    };
-  });
+      const result = executeSpawn(deps, {
+        workspace,
+        role,
+        prompt,
+        label,
+        ...(parsed.data.briefing === undefined
+          ? {}
+          : { briefing: parsed.data.briefing }),
+      });
+      if (!result.ok) {
+        const { ok: _ok, status, ...rest } = result;
+        reply.code(status);
+        return rest;
+      }
+      return {
+        agent_id: result.agent_id,
+        session_id: result.session_id,
+        pid: result.pid,
+      };
+    }),
+  );
 
   app.get<{ Params: { id: string }; Querystring: TranscriptQuery }>(
     "/agent/sessions/:id/transcript",
-    async (request, reply) => {
-      const auth = resolveCallerSession(request, deps);
-      if (!auth.ok) {
-        reply.code(auth.status);
-        return { error: auth.error };
-      }
-      const authz = authorizeCommand(auth.session, "transcript", deps);
-      if (!authz.ok) {
-        reply.code(authz.status);
-        return { error: authz.error };
-      }
-      const target = deps.sessions.get(request.params.id);
-      if (target === null || target.workspace_id !== auth.session.workspace_id) {
-        reply.code(404);
-        return { error: "session not found" };
-      }
-      const parsed = parseTranscriptQuery(request.query);
-      if (!parsed.ok) {
-        reply.code(400);
-        return { error: parsed.error };
-      }
-      const lines = target.transcript_path === undefined
-        ? []
-        : await readTranscript(target.transcript_path);
-      const sel = parsed.selection;
-      if (
-        (sel.kind === "entry" || sel.kind === "from" || sel.kind === "to") &&
-        !isValidEntryId(sel.id, lines.length)
-      ) {
-        reply.code(404);
-        return { error: `entry id out of range: ${sel.id}` };
-      }
-      return formatTranscript(lines, sel, parsed.detail);
-    },
+    withAgentAuth<{ Params: { id: string }; Querystring: TranscriptQuery }>(
+      "transcript",
+      deps,
+      async (request, reply, { session }) => {
+        const target = deps.sessions.get(request.params.id);
+        if (target === null || target.workspace_id !== session.workspace_id) {
+          reply.code(404);
+          return { error: "session not found" };
+        }
+        const parsed = parseTranscriptQuery(request.query);
+        if (!parsed.ok) {
+          reply.code(400);
+          return { error: parsed.error };
+        }
+        const lines = target.transcript_path === undefined
+          ? []
+          : await readTranscript(target.transcript_path);
+        const sel = parsed.selection;
+        if (
+          (sel.kind === "entry" || sel.kind === "from" || sel.kind === "to") &&
+          !isValidEntryId(sel.id, lines.length)
+        ) {
+          reply.code(404);
+          return { error: `entry id out of range: ${sel.id}` };
+        }
+        return formatTranscript(lines, sel, parsed.detail);
+      },
+    ),
   );
 
-  app.post("/agent/status", async (request, reply) => {
-    const auth = resolveCallerSession(request, deps);
-    if (!auth.ok) {
-      reply.code(auth.status);
-      return { error: auth.error };
-    }
-    const authz = authorizeCommand(auth.session, "status", deps);
-    if (!authz.ok) {
-      reply.code(authz.status);
-      return { error: authz.error };
-    }
-    const parsed = AgentStatusUpdateSchema.safeParse(request.body);
-    if (!parsed.success) {
-      reply.code(400);
-      return { error: "invalid status update", issues: parsed.error.issues };
-    }
-    deps.agentStatuses.upsert({
-      session_id: auth.session.id,
-      state: parsed.data.state,
-      summary: parsed.data.summary,
-      ...(parsed.data.details === undefined ? {} : { details: parsed.data.details }),
-    });
-    // Active sessions always carry agent_id; the FK only nulls it on agent
-    // delete, which terminates the session's process before the agent can
-    // post status. Type narrowing for an invariant the runtime guarantees.
-    const agentId = auth.session.agent_id!;
-    deps.agentStatusLog.append({
-      agent_id: agentId,
-      session_id: auth.session.id,
-      kind: "status",
-      state: parsed.data.state,
-      summary: parsed.data.summary,
-      ...(parsed.data.details === undefined ? {} : { details: parsed.data.details }),
-    });
-    return { ok: true };
-  });
+  app.post(
+    "/agent/status",
+    withAgentAuth("status", deps, async (request, reply, { session }) => {
+      const parsed = AgentStatusUpdateSchema.safeParse(request.body);
+      if (!parsed.success) {
+        reply.code(400);
+        return { error: "invalid status update", issues: parsed.error.issues };
+      }
+      deps.agentStatuses.upsert({
+        session_id: session.id,
+        state: parsed.data.state,
+        summary: parsed.data.summary,
+        ...(parsed.data.details === undefined ? {} : { details: parsed.data.details }),
+      });
+      // Active sessions always carry agent_id; the FK only nulls it on agent
+      // delete, which terminates the session's process before the agent can
+      // post status. Type narrowing for an invariant the runtime guarantees.
+      const agentId = session.agent_id!;
+      deps.agentStatusLog.append({
+        agent_id: agentId,
+        session_id: session.id,
+        kind: "status",
+        state: parsed.data.state,
+        summary: parsed.data.summary,
+        ...(parsed.data.details === undefined ? {} : { details: parsed.data.details }),
+      });
+      return { ok: true };
+    }),
+  );
 
-  app.post("/agent/report", async (request, reply) => {
-    const auth = resolveCallerSession(request, deps);
-    if (!auth.ok) {
-      reply.code(auth.status);
-      return { error: auth.error };
-    }
-    const authz = authorizeCommand(auth.session, "report", deps);
-    if (!authz.ok) {
-      reply.code(authz.status);
-      return { error: authz.error };
-    }
-    const parsed = FinalReportSchema.safeParse(request.body);
-    if (!parsed.success) {
-      reply.code(400);
-      return { error: "invalid final report", issues: parsed.error.issues };
-    }
-    const agentId = auth.session.agent_id!;
-    const existing = deps.agentStatusLog
-      .listForAgent(agentId, { kind: "final-report" })
-      .filter((row) => row.session_id === auth.session.id);
-    if (existing.length > 0) {
-      reply.code(409);
-      return { error: "final report already submitted for this session" };
-    }
-    deps.agentStatusLog.append({
-      agent_id: agentId,
-      session_id: auth.session.id,
-      kind: "final-report",
-      state: "final",
-      summary: summarizeFinalReport(parsed.data),
-      details: parsed.data,
-    });
-    return { ok: true };
-  });
+  app.post(
+    "/agent/report",
+    withAgentAuth("report", deps, async (request, reply, { session }) => {
+      const parsed = FinalReportSchema.safeParse(request.body);
+      if (!parsed.success) {
+        reply.code(400);
+        return { error: "invalid final report", issues: parsed.error.issues };
+      }
+      const agentId = session.agent_id!;
+      const existing = deps.agentStatusLog
+        .listForAgent(agentId, { kind: "final-report" })
+        .filter((row) => row.session_id === session.id);
+      if (existing.length > 0) {
+        reply.code(409);
+        return { error: "final report already submitted for this session" };
+      }
+      deps.agentStatusLog.append({
+        agent_id: agentId,
+        session_id: session.id,
+        kind: "final-report",
+        state: "final",
+        summary: summarizeFinalReport(parsed.data),
+        details: parsed.data,
+      });
+      return { ok: true };
+    }),
+  );
 
   app.post<{ Params: { id: string } }>(
     "/agent/sessions/:id/kill",
-    async (request, reply) => {
-      const auth = resolveCallerSession(request, deps);
-      if (!auth.ok) {
-        reply.code(auth.status);
-        return { error: auth.error };
-      }
-      const authz = authorizeCommand(auth.session, "kill", deps);
-      if (!authz.ok) {
-        reply.code(authz.status);
-        return { error: authz.error };
-      }
-      const target = deps.sessions.get(request.params.id);
-      if (target === null || target.workspace_id !== auth.session.workspace_id) {
-        reply.code(404);
-        return { error: "session not found" };
-      }
-      if (target.ended_at !== undefined) {
+    withAgentAuth<{ Params: { id: string } }>(
+      "kill",
+      deps,
+      async (request, reply, { session }) => {
+        const target = deps.sessions.get(request.params.id);
+        if (target === null || target.workspace_id !== session.workspace_id) {
+          reply.code(404);
+          return { error: "session not found" };
+        }
+        if (target.ended_at !== undefined) {
+          return { ok: true };
+        }
+        terminateSession(target.id, deps);
         return { ok: true };
-      }
-      terminateSession(target.id, deps);
-      return { ok: true };
-    },
+      },
+    ),
   );
 }
