@@ -93,3 +93,49 @@ export const WorkspaceRoleAssignmentSchema = z.object({
   current_version: RoleVersionRefSchema.optional(),
 });
 export type WorkspaceRoleAssignment = z.infer<typeof WorkspaceRoleAssignmentSchema>;
+
+export const RoleListEntrySchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1),
+  persistent: z.boolean(),
+  description: z.string().min(1).optional(),
+  allowed_tools: z.array(z.string().min(1)).optional(),
+  current_version_id: z.string().uuid(),
+  version: z.number().int().positive(),
+  created_at: z.number().int().nonnegative(),
+});
+export type RoleListEntry = z.infer<typeof RoleListEntrySchema>;
+
+export const RolesListResponseSchema = z.object({
+  roles: z.array(RoleListEntrySchema),
+});
+export type RolesListResponse = z.infer<typeof RolesListResponseSchema>;
+
+export const RoleDetailVersionSchema = z.object({
+  id: z.string().uuid(),
+  version: z.number().int().positive(),
+  system_prompt: z.string().min(1),
+  skills: z.array(RoleSkillSchema),
+  allowed_tools: z.array(z.string().min(1)),
+  hooks: z.unknown(),
+  triggers: z.array(RoleTriggerSchema),
+  created_at: z.number().int().nonnegative(),
+});
+export type RoleDetailVersion = z.infer<typeof RoleDetailVersionSchema>;
+
+export const RoleVersionHistoryEntrySchema = z.object({
+  id: z.string().uuid(),
+  version: z.number().int().positive(),
+  created_at: z.number().int().nonnegative(),
+});
+export type RoleVersionHistoryEntry = z.infer<typeof RoleVersionHistoryEntrySchema>;
+
+export const RoleDetailResponseSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1),
+  persistent: z.boolean(),
+  description: z.string().min(1).optional(),
+  current_version: RoleDetailVersionSchema,
+  version_history: z.array(RoleVersionHistoryEntrySchema),
+});
+export type RoleDetailResponse = z.infer<typeof RoleDetailResponseSchema>;
