@@ -164,6 +164,36 @@ describe("POST /persistent-agents/:id/wake", () => {
     await teardown(h);
   });
 
+  it("uses the workspace's wake_prompt for the prompt body", async () => {
+    const h = buildHarness();
+    const ws = h.workspaces.create({
+      name: "ws",
+      repo_path: repoPath,
+      wake_prompt: "custom workspace wake prompt — return to the floor",
+    });
+    seedWorkspaceRoles(h.db, ws.id);
+    const role = h.db
+      .prepare("SELECT id FROM roles WHERE name = ? AND workspace_id = ?")
+      .get("manager", ws.id) as { id: string };
+    h.workspaceRoles.setCeiling(ws.id, role.id, 5);
+    const agent = h.agents.create({
+      workspace_id: ws.id,
+      role_id: role.id,
+      label: "boss",
+    });
+
+    const res = await h.server.inject({
+      method: "POST",
+      url: `/persistent-agents/${agent.id}/wake`,
+      payload: {},
+    });
+    expect(res.statusCode).toBe(200);
+    expect(h.calls).toHaveLength(1);
+    expect(h.calls[0]!.prompt).toContain("custom workspace wake prompt");
+
+    await teardown(h);
+  });
+
   it("creates a new session for an idle persistent agent and prepends office context", async () => {
     const h = buildHarness();
     const ws = h.workspaces.create({ name: "ws", repo_path: repoPath });

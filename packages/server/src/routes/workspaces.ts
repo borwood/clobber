@@ -61,7 +61,17 @@ export function registerWorkspaceRoutes(
         reply.code(400);
         return { error: "invalid workspace config", issues: parsed.error.issues };
       }
-      const updated = workspaces.updateConfig(request.params.id, parsed.data);
+      const updated = workspaces.updateConfig(request.params.id, {
+        ...(parsed.data.setting_sources === undefined
+          ? {}
+          : { setting_sources: parsed.data.setting_sources }),
+        ...(parsed.data.wake_prompt === undefined
+          ? {}
+          : { wake_prompt: parsed.data.wake_prompt }),
+        ...(parsed.data.role_edit_policy === undefined
+          ? {}
+          : { role_edit_policy: parsed.data.role_edit_policy }),
+      });
       if (updated === null) {
         reply.code(404);
         return { error: "workspace not found" };

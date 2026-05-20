@@ -13,6 +13,7 @@ import { registerAgentRolesRoutes } from "./routes/agent-roles.ts";
 import { registerAgentAskRoutes } from "./routes/agent-ask.ts";
 import { registerPersistentAgentsRoutes } from "./routes/persistent-agents.ts";
 import { registerWhiteboardRoutes } from "./routes/whiteboard.ts";
+import { registerWebhookTriggersRoutes } from "./routes/webhook-triggers.ts";
 import { createAgentRegistry } from "./agent-registry.ts";
 import { createTriggerScheduler } from "./trigger-scheduler.ts";
 import {
@@ -118,6 +119,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     db: opts.db,
     workspaces: opts.workspaces,
   });
+  registerWebhookTriggersRoutes(app, { scheduler });
   registerFsRoutes(app);
   registerPersistentAgentsRoutes(app, {
     workspaces: opts.workspaces,
@@ -166,6 +168,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     roles: opts.roles,
     roleVersions: opts.roleVersions,
     workspaceRoles: opts.workspaceRoles,
+    workspaces: opts.workspaces,
     scheduler,
   });
   registerAgentAskRoutes(app, {

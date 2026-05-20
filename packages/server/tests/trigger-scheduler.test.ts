@@ -160,6 +160,12 @@ function setManagerCron(h: Harness, expr: string): void {
   editRole(h.db, role, cur, { triggers: [{ kind: "cron", expr }] });
 }
 
+function setManagerWebhook(h: Harness, path: string): void {
+  const role = h.roles.get(h.managerRoleId) as Role;
+  const cur = getCurrentVersion(h, h.managerRoleId);
+  editRole(h.db, role, cur, { triggers: [{ kind: "webhook", path }] });
+}
+
 describe("TriggerScheduler — cron firing", () => {
   it("fires a cron trigger at the expected time and spawns a fresh session for an idle persistent agent", () => {
     // Start at 2026-05-05T08:59:00Z, cron at 9:00am UTC daily
@@ -376,20 +382,160 @@ describe("TriggerScheduler — cron firing", () => {
     h.db.close();
   });
 
-  it("ignores non-cron trigger kinds in v1 (file-watch, webhook, issue-assigned)", () => {
+  it("records unsupported-kind dispatch rows for trigger kinds without an implementation", () => {
+    // file-watch + issue-assigned aren't implemented as live event sources — they
+    // should land in the audit log as unsupported-kind so the modularity gap is
+    // visible instead of silent. (Webhook IS implemented via fireWebhook; covered
+    // by the dedicated webhook tests below.)
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
     const role = h.roles.get(h.managerRoleId) as Role;
     const cur = getCurrentVersion(h, h.managerRoleId);
     editRole(h.db, role, cur, {
       triggers: [
-        { kind: "webhook", path: "/hooks/x" },
         { kind: "file-watch", glob: "**/*.ts" },
+        { kind: "issue-assigned" },
       ],
     });
 
     h.scheduler.start();
     h.clock.advance(48 * 60 * 60 * 1000);
     expect(h.spawnCalls.length).toBe(0);
+
+    const audit = h.dispatches.listForAgent(h.managerAgentId);
+    expect(audit.length).toBe(2);
+    const kinds = audit.map((a) => a.trigger_kind).sort();
+    expect(kinds).toEqual(["file-watch", "issue-assigned"]);
+    for (const row of audit) {
+      expect(row.dispatch_outcome).toBe("unsupported-kind");
+      expect(row.error).toBe(
+        `trigger kind "${row.trigger_kind}" has no live event source — declared but never fires`,
+      );
+    }
+
+    h.scheduler.stop();
+    h.db.close();
+  });
+});
+
+describe("TriggerScheduler — webhook firing", () => {
+  it("fires a webhook trigger when fireWebhook is called for a matching path and spawns a fresh session", () => {
+    const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
+    const role = h.roles.get(h.managerRoleId) as Role;
+    const cur = getCurrentVersion(h, h.managerRoleId);
+    editRole(h.db, role, cur, {
+      triggers: [{ kind: "webhook", path: "/hooks/x" }],
+    });
+
+    h.scheduler.start();
+    const result = h.scheduler.fireWebhook("/hooks/x", { sample: 1 });
+    expect(result.dispatched).toBe(1);
+
+    expect(h.spawnCalls.length).toBe(1);
+    expect(h.spawnCalls[0]!.prompt).toContain("/hooks/x");
+
+    const audit = h.dispatches.listForAgent(h.managerAgentId);
+    expect(audit.length).toBe(1);
+    expect(audit[0]!.dispatch_outcome).toBe("spawned");
+    expect(audit[0]!.trigger_kind).toBe("webhook");
+
+    h.scheduler.stop();
+    h.db.close();
+  });
+
+  it("returns dispatched=0 and writes nothing when no agent has a webhook trigger at that path", () => {
+    const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
+    const role = h.roles.get(h.managerRoleId) as Role;
+    const cur = getCurrentVersion(h, h.managerRoleId);
+    editRole(h.db, role, cur, {
+      triggers: [{ kind: "webhook", path: "/hooks/x" }],
+    });
+
+    h.scheduler.start();
+    const result = h.scheduler.fireWebhook("/hooks/y", null);
+    expect(result.dispatched).toBe(0);
+    expect(h.spawnCalls.length).toBe(0);
+
+    h.scheduler.stop();
+    h.db.close();
+  });
+
+  it("injects into a live, idle persistent agent on webhook fire (mirrors cron behaviour)", () => {
+    const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
+    const role = h.roles.get(h.managerRoleId) as Role;
+    const cur = getCurrentVersion(h, h.managerRoleId);
+    editRole(h.db, role, cur, {
+      triggers: [{ kind: "webhook", path: "/hooks/x" }],
+    });
+
+    const liveStdin = new PassThrough();
+    const writes: Buffer[] = [];
+    liveStdin.on("data", (c: Buffer) => writes.push(c));
+    const sessionId = "session-live-webhook-0001";
+    h.sessions.create({
+      id: sessionId,
+      agent_id: h.managerAgentId,
+      workspace_id: h.workspaceId,
+      role_id: h.managerRoleId,
+      pid: 5151,
+    });
+    h.registry.register(sessionId, liveStdin, () => {});
+    h.registry.setBusy(sessionId, false);
+
+    h.scheduler.start();
+    const result = h.scheduler.fireWebhook("/hooks/x", null);
+    expect(result.dispatched).toBe(1);
+    expect(h.spawnCalls.length).toBe(0);
+
+    const text = Buffer.concat(writes).toString("utf8");
+    expect(text).toContain("/hooks/x");
+    expect(text).toBe(serializeUserMessage("a webhook fired: /hooks/x"));
+
+    const audit = h.dispatches.listForAgent(h.managerAgentId);
+    expect(audit.length).toBe(1);
+    expect(audit[0]!.dispatch_outcome).toBe("injected");
+    expect(audit[0]!.session_id).toBe(sessionId);
+
+    h.scheduler.stop();
+    h.db.close();
+  });
+
+  it("fires every matching agent when two persistent agents register the same webhook path", () => {
+    const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
+    const role = h.roles.get(h.managerRoleId) as Role;
+    const cur = getCurrentVersion(h, h.managerRoleId);
+    editRole(h.db, role, cur, {
+      triggers: [{ kind: "webhook", path: "/hooks/x" }],
+    });
+    const secondAgent = h.agents.create({
+      workspace_id: h.workspaceId,
+      role_id: h.managerRoleId,
+      label: "manager-2",
+    });
+
+    h.scheduler.start();
+    const result = h.scheduler.fireWebhook("/hooks/x", null);
+    expect(result.dispatched).toBe(2);
+
+    const audits = h.dispatches.listForWorkspace(h.workspaceId);
+    expect(audits.length).toBe(2);
+    const agentIds = audits.map((a) => a.agent_id).sort();
+    expect(agentIds).toEqual([h.managerAgentId, secondAgent.id].sort());
+
+    h.scheduler.stop();
+    h.db.close();
+  });
+
+  it("reloadRole picks up newly-added webhook triggers without restart", () => {
+    const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
+    h.scheduler.start();
+
+    // No triggers yet
+    expect(h.scheduler.fireWebhook("/hooks/x", null).dispatched).toBe(0);
+
+    setManagerWebhook(h, "/hooks/x");
+    h.scheduler.reloadRole(h.managerRoleId);
+
+    expect(h.scheduler.fireWebhook("/hooks/x", null).dispatched).toBe(1);
 
     h.scheduler.stop();
     h.db.close();

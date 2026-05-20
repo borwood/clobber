@@ -16,11 +16,13 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id, id);
 
   CREATE TABLE IF NOT EXISTS workspaces (
-    id              TEXT    PRIMARY KEY,
-    name            TEXT    NOT NULL UNIQUE,
-    repo_path       TEXT    NOT NULL,
-    setting_sources TEXT    NOT NULL DEFAULT '["user","project","local"]',
-    created_at      INTEGER NOT NULL
+    id                TEXT    PRIMARY KEY,
+    name              TEXT    NOT NULL UNIQUE,
+    repo_path         TEXT    NOT NULL,
+    setting_sources   TEXT    NOT NULL DEFAULT '["user","project","local"]',
+    wake_prompt       TEXT    NOT NULL DEFAULT 'You have been woken without a specific task. Review your office notes, then summarise where you left off and what (if anything) needs your attention next.',
+    role_edit_policy  TEXT    NOT NULL DEFAULT '{"forbidden_keys":["hooks","permission_mode"]}',
+    created_at        INTEGER NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_workspaces_created ON workspaces(created_at DESC);
 

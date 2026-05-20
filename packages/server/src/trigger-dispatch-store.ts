@@ -5,7 +5,8 @@ export type DispatchOutcome =
   | "injected"
   | "skipped-busy"
   | "skipped-at-capacity"
-  | "errored";
+  | "errored"
+  | "unsupported-kind";
 
 export interface AppendDispatchInput {
   readonly workspace_id: string;
