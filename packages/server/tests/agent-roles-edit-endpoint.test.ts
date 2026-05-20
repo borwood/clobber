@@ -162,6 +162,98 @@ function readCurrentVersion(h: Harness, roleId: string): VersionRow {
   return row;
 }
 
+describe("PATCH /agent/roles/:idOrName — workspace role_edit_policy", () => {
+  it("default workspace blocks hooks and permission_mode with 400", async () => {
+    const h = buildHarness();
+    const boot = await bootInWorkspace(h, repo.path);
+
+    const hooksRes = await h.server.inject({
+      method: "PATCH",
+      url: `/agent/roles/${boot.workerRoleId}`,
+      headers: { authorization: `Bearer ${boot.managerToken}` },
+      payload: { hooks: { PreToolUse: [] } },
+    });
+    expect(hooksRes.statusCode).toBe(400);
+    expect((hooksRes.json() as { error: string }).error).toMatch(
+      /hooks is not editable/,
+    );
+
+    const pmRes = await h.server.inject({
+      method: "PATCH",
+      url: `/agent/roles/${boot.workerRoleId}`,
+      headers: { authorization: `Bearer ${boot.managerToken}` },
+      payload: { permission_mode: "yolo" },
+    });
+    expect(pmRes.statusCode).toBe(400);
+    expect((pmRes.json() as { error: string }).error).toMatch(
+      /permission_mode is not editable/,
+    );
+
+    await teardown(h);
+  });
+
+  it("workspace with custom forbidden_keys=[description] blocks description edits but not hooks", async () => {
+    const h = buildHarness();
+    const boot = await bootInWorkspace(h, repo.path);
+
+    const patchWs = await h.server.inject({
+      method: "PATCH",
+      url: `/workspaces/${boot.workspaceId}`,
+      payload: { role_edit_policy: { forbidden_keys: ["description"] } },
+    });
+    expect(patchWs.statusCode).toBe(200);
+
+    const descRes = await h.server.inject({
+      method: "PATCH",
+      url: `/agent/roles/${boot.workerRoleId}`,
+      headers: { authorization: `Bearer ${boot.managerToken}` },
+      payload: { description: "new desc" },
+    });
+    expect(descRes.statusCode).toBe(400);
+    expect((descRes.json() as { error: string }).error).toMatch(
+      /description is not editable/,
+    );
+
+    // hooks no longer hits the pre-check (the policy is now description-only),
+    // but EditBodySchema is .strict() so it still rejects unknown keys — just
+    // with a different shape (zod issues, not the "not editable" message).
+    const hooksRes = await h.server.inject({
+      method: "PATCH",
+      url: `/agent/roles/${boot.workerRoleId}`,
+      headers: { authorization: `Bearer ${boot.managerToken}` },
+      payload: { hooks: { PreToolUse: [] } },
+    });
+    expect(hooksRes.statusCode).toBe(400);
+    expect((hooksRes.json() as { error: string }).error).not.toMatch(
+      /not editable/,
+    );
+
+    await teardown(h);
+  });
+
+  it("workspace with empty forbidden_keys=[] lets system_prompt edit succeed (default behavior unaffected)", async () => {
+    const h = buildHarness();
+    const boot = await bootInWorkspace(h, repo.path);
+
+    const patchWs = await h.server.inject({
+      method: "PATCH",
+      url: `/workspaces/${boot.workspaceId}`,
+      payload: { role_edit_policy: { forbidden_keys: [] } },
+    });
+    expect(patchWs.statusCode).toBe(200);
+
+    const editRes = await h.server.inject({
+      method: "PATCH",
+      url: `/agent/roles/${boot.workerRoleId}`,
+      headers: { authorization: `Bearer ${boot.managerToken}` },
+      payload: { system_prompt: "with the policy open, normal edits still work" },
+    });
+    expect(editRes.statusCode).toBe(200);
+
+    await teardown(h);
+  });
+});
+
 describe("PATCH /agent/roles/:idOrName", () => {
   it("returns 401 without an Authorization header", async () => {
     const h = buildHarness();

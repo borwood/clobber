@@ -15,11 +15,17 @@ import type { RoleVersionStore } from "./role-version-store.ts";
 import type { AgentStore } from "./agent-store.ts";
 import type { SessionStore } from "./session-store.ts";
 import type { AgentRegistry } from "./agent-registry.ts";
-import type { TriggerDispatchStore, DispatchOutcome } from "./trigger-dispatch-store.ts";
+import type { TriggerDispatchStore } from "./trigger-dispatch-store.ts";
 import type {
   SpawnPipelineSuccess,
   SpawnPipelineNoBundleError,
 } from "./spawn-pipeline.ts";
+import {
+  dispatchTrigger,
+  recordUnsupportedTrigger,
+  type AgentBinding,
+  type DispatchDeps,
+} from "./trigger-dispatch.ts";
 
 export type AttachOutcome = SpawnPipelineSuccess | SpawnPipelineNoBundleError;
 export type AttachSessionFn = (input: {
@@ -41,7 +47,11 @@ export interface TriggerSchedulerDeps {
   readonly runtimeProvider: RuntimeProvider;
   readonly dispatches: TriggerDispatchStore;
   readonly attachSession: AttachSessionFn;
-  readonly synthesizePrompt?: (trigger: RoleTrigger) => string;
+  readonly synthesizePrompt?: (trigger: RoleTrigger, payload: unknown) => string;
+}
+
+export interface FireWebhookResult {
+  readonly dispatched: number;
 }
 
 export interface TriggerScheduler {
@@ -49,20 +59,34 @@ export interface TriggerScheduler {
   stop(): void;
   reloadRole(roleId: string): void;
   reloadAgent(agentId: string): void;
+  fireWebhook(path: string, payload: unknown): FireWebhookResult;
 }
 
-interface ScheduledCron {
-  readonly agentId: string;
-  readonly roleId: string;
-  readonly workspaceId: string;
+interface ScheduledCron extends AgentBinding {
   readonly trigger: { kind: "cron"; expr: string };
   handle: TimeoutHandle | null;
 }
 
-function defaultSynthesize(trigger: RoleTrigger): string {
+interface ScheduledWebhook extends AgentBinding {
+  readonly trigger: { kind: "webhook"; path: string };
+}
+
+const UNSUPPORTED_KINDS: ReadonlySet<RoleTrigger["kind"]> = new Set([
+  "file-watch",
+  "issue-assigned",
+]);
+
+const PAYLOAD_MAX_CHARS = 2000;
+
+function defaultSynthesize(trigger: RoleTrigger, payload: unknown): string {
   if (trigger.kind === "cron") return `a cron fired: ${trigger.expr}`;
   if (trigger.kind === "file-watch") return `a file-watch fired: ${trigger.glob}`;
-  if (trigger.kind === "webhook") return `a webhook fired: ${trigger.path}`;
+  if (trigger.kind === "webhook") {
+    const head = `a webhook fired: ${trigger.path}`;
+    if (payload === undefined) return head;
+    const body = JSON.stringify(payload, null, 2).slice(0, PAYLOAD_MAX_CHARS);
+    return `${head}\n\n${body}`;
+  }
   return trigger.repo === undefined
     ? "an issue was assigned"
     : `an issue was assigned in ${trigger.repo}`;
@@ -75,7 +99,21 @@ export function createTriggerScheduler(
     deps.synthesizePrompt === undefined
       ? defaultSynthesize
       : deps.synthesizePrompt;
-  const byAgent = new Map<string, Set<ScheduledCron>>();
+  const dispatchDeps: DispatchDeps = {
+    clock: deps.clock,
+    agents: deps.agents,
+    roles: deps.roles,
+    workspaces: deps.workspaces,
+    sessions: deps.sessions,
+    registry: deps.registry,
+    runtimeProvider: deps.runtimeProvider,
+    dispatches: deps.dispatches,
+    attachSession: deps.attachSession,
+    synthesize,
+  };
+  const cronsByAgent = new Map<string, Set<ScheduledCron>>();
+  const webhooksByAgent = new Map<string, Set<ScheduledWebhook>>();
+  const webhooksByPath = new Map<string, Set<ScheduledWebhook>>();
   let started = false;
 
   function loadTriggersForAgent(
@@ -99,7 +137,7 @@ export function createTriggerScheduler(
   }
 
   function isStillTracked(entry: ScheduledCron): boolean {
-    const set = byAgent.get(entry.agentId);
+    const set = cronsByAgent.get(entry.agentId);
     return set !== undefined && set.has(entry);
   }
 
@@ -118,112 +156,70 @@ export function createTriggerScheduler(
     const delay = Math.max(0, nextAt.getTime() - now.getTime());
     entry.handle = deps.clock.setTimeout(() => {
       entry.handle = null;
-      fire(entry);
+      dispatchTrigger(dispatchDeps, entry, entry.trigger, undefined);
       if (started && isStillTracked(entry)) scheduleNext(entry);
     }, delay);
   }
 
-  function fire(entry: ScheduledCron): void {
-    const firedAt = deps.clock.now().getTime();
-    const agent = deps.agents.get(entry.agentId);
-    if (agent === null) return;
-    const role = deps.roles.get(entry.roleId);
-    const workspace = deps.workspaces.get(entry.workspaceId);
-    if (role === null || workspace === null) return;
-    const prompt = synthesize(entry.trigger);
-
-    const activeForAgent = deps.sessions
-      .listActiveForWorkspace(entry.workspaceId)
-      .filter((s) => s.agent_id === entry.agentId);
-
-    if (activeForAgent.length === 0) {
-      const result = deps.attachSession({ workspace, role, agent, prompt });
-      const outcome: DispatchOutcome = result.ok ? "spawned" : "errored";
-      const sessionId = result.ok ? result.session_id : undefined;
-      const error = result.ok ? undefined : result.error;
-      deps.dispatches.append({
-        workspace_id: entry.workspaceId,
-        role_id: entry.roleId,
-        agent_id: entry.agentId,
-        trigger_kind: entry.trigger.kind,
-        trigger_payload: entry.trigger,
-        fired_at: firedAt,
-        dispatch_outcome: outcome,
-        ...(sessionId === undefined ? {} : { session_id: sessionId }),
-        ...(error === undefined ? {} : { error }),
-      });
-      return;
-    }
-
-    const live = deps.registry.get(activeForAgent[0]!.id);
-    if (live === null || live.busy) {
-      deps.dispatches.append({
-        workspace_id: entry.workspaceId,
-        role_id: entry.roleId,
-        agent_id: entry.agentId,
-        trigger_kind: entry.trigger.kind,
-        trigger_payload: entry.trigger,
-        fired_at: firedAt,
-        dispatch_outcome: "skipped-busy",
-      });
-      return;
-    }
-
-    if (!deps.runtimeProvider.capabilities.livePromptInjection) {
-      deps.dispatches.append({
-        workspace_id: entry.workspaceId,
-        role_id: entry.roleId,
-        agent_id: entry.agentId,
-        trigger_kind: entry.trigger.kind,
-        trigger_payload: entry.trigger,
-        fired_at: firedAt,
-        dispatch_outcome: "errored",
-        error: "runtime does not support live prompt injection",
-      });
-      return;
-    }
-
-    live.stdin.write(deps.runtimeProvider.serializeUserPrompt(prompt));
-    deps.registry.setBusy(live.sessionId, true);
-    deps.dispatches.append({
-      workspace_id: entry.workspaceId,
-      role_id: entry.roleId,
-      agent_id: entry.agentId,
-      trigger_kind: entry.trigger.kind,
-      trigger_payload: entry.trigger,
-      fired_at: firedAt,
-      dispatch_outcome: "injected",
-      session_id: live.sessionId,
-    });
-  }
-
   function clearAgent(agentId: string): void {
-    const set = byAgent.get(agentId);
-    if (set === undefined) return;
-    for (const entry of set) {
-      if (entry.handle !== null) deps.clock.clearTimeout(entry.handle);
+    const crons = cronsByAgent.get(agentId);
+    if (crons !== undefined) {
+      for (const entry of crons) {
+        if (entry.handle !== null) deps.clock.clearTimeout(entry.handle);
+      }
+      cronsByAgent.delete(agentId);
     }
-    byAgent.delete(agentId);
+    const webhooks = webhooksByAgent.get(agentId);
+    if (webhooks !== undefined) {
+      for (const entry of webhooks) {
+        const set = webhooksByPath.get(entry.trigger.path);
+        if (set !== undefined) {
+          set.delete(entry);
+          if (set.size === 0) webhooksByPath.delete(entry.trigger.path);
+        }
+      }
+      webhooksByAgent.delete(agentId);
+    }
   }
 
   function registerAgent(agentId: string): void {
     const loaded = loadTriggersForAgent(agentId);
     if (loaded === null) return;
-    const set = new Set<ScheduledCron>();
+    const binding: AgentBinding = {
+      agentId: loaded.agent.id,
+      roleId: loaded.agent.role_id,
+      workspaceId: loaded.agent.workspace_id,
+    };
+    const crons = new Set<ScheduledCron>();
+    const webhooks = new Set<ScheduledWebhook>();
     for (const trigger of loaded.triggers) {
-      if (trigger.kind !== "cron") continue;
-      const entry: ScheduledCron = {
-        agentId: loaded.agent.id,
-        roleId: loaded.agent.role_id,
-        workspaceId: loaded.agent.workspace_id,
-        trigger,
-        handle: null,
-      };
-      set.add(entry);
+      if (trigger.kind === "cron") {
+        crons.add({ ...binding, trigger, handle: null });
+        continue;
+      }
+      if (trigger.kind === "webhook") {
+        webhooks.add({ ...binding, trigger });
+        continue;
+      }
+      if (UNSUPPORTED_KINDS.has(trigger.kind)) {
+        recordUnsupportedTrigger(dispatchDeps, binding, trigger);
+      }
     }
-    if (set.size === 0) return;
-    byAgent.set(agentId, set);
-    for (const entry of set) scheduleNext(entry);
+    if (crons.size > 0) {
+      cronsByAgent.set(agentId, crons);
+      for (const entry of crons) scheduleNext(entry);
+    }
+    if (webhooks.size > 0) {
+      webhooksByAgent.set(agentId, webhooks);
+      for (const entry of webhooks) {
+        let set = webhooksByPath.get(entry.trigger.path);
+        if (set === undefined) {
+          set = new Set<ScheduledWebhook>();
+          webhooksByPath.set(entry.trigger.path, set);
+        }
+        set.add(entry);
+      }
+    }
   }
 
   function start(): void {
@@ -242,12 +238,14 @@ export function createTriggerScheduler(
 
   function stop(): void {
     started = false;
-    for (const set of byAgent.values()) {
+    for (const set of cronsByAgent.values()) {
       for (const entry of set) {
         if (entry.handle !== null) deps.clock.clearTimeout(entry.handle);
       }
     }
-    byAgent.clear();
+    cronsByAgent.clear();
+    webhooksByAgent.clear();
+    webhooksByPath.clear();
   }
 
   function reloadAgent(agentId: string): void {
@@ -262,5 +260,17 @@ export function createTriggerScheduler(
     for (const r of rows) reloadAgent(r.id);
   }
 
-  return { start, stop, reloadRole, reloadAgent };
+  function fireWebhook(path: string, payload: unknown): FireWebhookResult {
+    const set = webhooksByPath.get(path);
+    if (set === undefined) return { dispatched: 0 };
+    let dispatched = 0;
+    for (const entry of set) {
+      if (dispatchTrigger(dispatchDeps, entry, entry.trigger, payload)) {
+        dispatched += 1;
+      }
+    }
+    return { dispatched };
+  }
+
+  return { start, stop, reloadRole, reloadAgent, fireWebhook };
 }

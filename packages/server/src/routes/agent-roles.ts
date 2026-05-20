@@ -12,6 +12,7 @@ import type { SessionStore } from "../session-store.ts";
 import type { RoleStore } from "../role-store.ts";
 import type { RoleVersionStore } from "../role-version-store.ts";
 import type { WorkspaceRoleStore } from "../workspace-role-store.ts";
+import type { WorkspaceStore } from "../workspace-store.ts";
 import type { TriggerScheduler } from "../trigger-scheduler.ts";
 import { forkRole } from "../fork-role.ts";
 import { editRole, type RoleEditPatch } from "../edit-role.ts";
@@ -40,8 +41,6 @@ const EditBodySchema = z
   })
   .strict();
 
-const FORBIDDEN_EDIT_KEYS = ["hooks", "permission_mode"] as const;
-
 export interface AgentRolesRouteDeps {
   readonly db: Database;
   readonly sessionTokens: SessionTokenStore;
@@ -49,6 +48,7 @@ export interface AgentRolesRouteDeps {
   readonly roles: RoleStore;
   readonly roleVersions: RoleVersionStore;
   readonly workspaceRoles: WorkspaceRoleStore;
+  readonly workspaces: WorkspaceStore;
   readonly scheduler: Pick<TriggerScheduler, "reloadRole">;
 }
 
@@ -139,7 +139,12 @@ export function registerAgentRolesRoutes(
           reply.code(400);
           return { error: "edit body must be a JSON object" };
         }
-        for (const key of FORBIDDEN_EDIT_KEYS) {
+        const workspace = deps.workspaces.get(session.workspace_id);
+        if (workspace === null) {
+          reply.code(404);
+          return { error: "workspace not found" };
+        }
+        for (const key of workspace.role_edit_policy.forbidden_keys) {
           if (key in rawBody) {
             reply.code(400);
             return { error: `${key} is not editable via PATCH /agent/roles/:id` };

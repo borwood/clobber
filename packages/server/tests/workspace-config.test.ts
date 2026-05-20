@@ -6,7 +6,12 @@ import Fastify from "fastify";
 import { createDatabase } from "../src/db.ts";
 import { createWorkspaceStore } from "../src/workspace-store.ts";
 import { registerWorkspaceRoutes } from "../src/routes/workspaces.ts";
-import { DEFAULT_SETTING_SOURCES, type Workspace } from "@clobber/shared";
+import {
+  DEFAULT_SETTING_SOURCES,
+  DEFAULT_WAKE_PROMPT,
+  DEFAULT_ROLE_EDIT_FORBIDDEN_KEYS,
+  type Workspace,
+} from "@clobber/shared";
 
 let app: ReturnType<typeof Fastify>;
 let db: ReturnType<typeof createDatabase>;
@@ -62,6 +67,87 @@ describe("workspace setting_sources — defaults + creation", () => {
       method: "POST",
       url: "/workspaces",
       payload: { name: "ws", repo_path: repoPath, setting_sources: ["user", "user"] },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe("workspace wake_prompt — defaults + creation", () => {
+  it("new workspaces default to the canonical wake prompt", async () => {
+    const ws = await createWorkspace({});
+    expect(ws.wake_prompt).toBe(DEFAULT_WAKE_PROMPT);
+  });
+
+  it("accepts a custom wake_prompt on creation", async () => {
+    const ws = await createWorkspace({ wake_prompt: "wake up, neo" });
+    expect(ws.wake_prompt).toBe("wake up, neo");
+  });
+
+  it("rejects empty wake_prompt", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/workspaces",
+      payload: { name: "ws", repo_path: repoPath, wake_prompt: "" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe("workspace role_edit_policy — defaults + creation", () => {
+  it("new workspaces default to forbidden_keys=[hooks, permission_mode]", async () => {
+    const ws = await createWorkspace({});
+    expect(ws.role_edit_policy).toEqual({
+      forbidden_keys: [...DEFAULT_ROLE_EDIT_FORBIDDEN_KEYS],
+    });
+  });
+
+  it("accepts a custom role_edit_policy on creation", async () => {
+    const ws = await createWorkspace({
+      role_edit_policy: { forbidden_keys: ["permission_mode"] },
+    });
+    expect(ws.role_edit_policy).toEqual({ forbidden_keys: ["permission_mode"] });
+  });
+
+  it("accepts an empty forbidden_keys list (opens up all edits)", async () => {
+    const ws = await createWorkspace({
+      role_edit_policy: { forbidden_keys: [] },
+    });
+    expect(ws.role_edit_policy).toEqual({ forbidden_keys: [] });
+  });
+});
+
+describe("PATCH /workspaces/:id — updating wake_prompt and role_edit_policy", () => {
+  it("PATCH wake_prompt updates the workspace", async () => {
+    const ws = await createWorkspace({});
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/workspaces/${ws.id}`,
+      payload: { wake_prompt: "new wake prompt" },
+    });
+    expect(res.statusCode).toBe(200);
+    const updated = res.json() as Workspace;
+    expect(updated.wake_prompt).toBe("new wake prompt");
+    expect(updated.setting_sources).toEqual([...DEFAULT_SETTING_SOURCES]);
+  });
+
+  it("PATCH role_edit_policy updates the workspace", async () => {
+    const ws = await createWorkspace({});
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/workspaces/${ws.id}`,
+      payload: { role_edit_policy: { forbidden_keys: ["hooks"] } },
+    });
+    expect(res.statusCode).toBe(200);
+    const updated = res.json() as Workspace;
+    expect(updated.role_edit_policy).toEqual({ forbidden_keys: ["hooks"] });
+  });
+
+  it("PATCH with no fields returns 400", async () => {
+    const ws = await createWorkspace({});
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/workspaces/${ws.id}`,
+      payload: {},
     });
     expect(res.statusCode).toBe(400);
   });

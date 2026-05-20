@@ -17,9 +17,6 @@ export interface PersistentAgentsRouteDeps {
   readonly spawnPipelineDeps: SpawnPipelineDeps;
 }
 
-const DEFAULT_WAKE_PROMPT =
-  "You have been woken without a specific task. Review your office notes, then summarise where you left off and what (if anything) needs your attention next.";
-
 export function registerPersistentAgentsRoutes(
   app: FastifyInstance,
   deps: PersistentAgentsRouteDeps,
@@ -63,7 +60,7 @@ export function registerPersistentAgentsRoutes(
         workspace,
         role,
         agent,
-        prompt: DEFAULT_WAKE_PROMPT,
+        prompt: workspace.wake_prompt,
       });
       if (!result.ok) {
         const { ok: _ok, status, ...rest } = result;

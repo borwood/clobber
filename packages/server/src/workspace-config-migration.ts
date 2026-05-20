@@ -1,16 +1,27 @@
 import type { Database } from "bun:sqlite";
 
-// Adds workspaces.setting_sources to pre-existing databases. New databases
-// get the column via the CREATE TABLE statement in db.ts; this is purely
-// for older databases that pre-date the column. Backfills the column with
-// the same default the schema declares, so existing workspaces get the
-// full claude default (user,project,local).
+// Adds workspace config columns to pre-existing databases. New databases
+// get the columns via the CREATE TABLE statement in db.ts; this is purely
+// for older databases that pre-date the columns. Backfills each column
+// with the same default the schema declares.
 export function migrateWorkspaceConfig(db: Database): void {
   ensureColumn(
     db,
     "workspaces",
     "setting_sources",
     `TEXT NOT NULL DEFAULT '["user","project","local"]'`,
+  );
+  ensureColumn(
+    db,
+    "workspaces",
+    "wake_prompt",
+    `TEXT NOT NULL DEFAULT 'You have been woken without a specific task. Review your office notes, then summarise where you left off and what (if anything) needs your attention next.'`,
+  );
+  ensureColumn(
+    db,
+    "workspaces",
+    "role_edit_policy",
+    `TEXT NOT NULL DEFAULT '{"forbidden_keys":["hooks","permission_mode"]}'`,
   );
 }
 

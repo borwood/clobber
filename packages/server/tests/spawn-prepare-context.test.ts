@@ -214,7 +214,7 @@ describe("prepareSpawnContext (#125) is the shared spawn/attach/resume seam", ()
   it("ephemeral role: attach skips office context but still passes the shared env shape", async () => {
     const h = buildHarness(claudeRuntimeProvider);
     const ws = h.workspaces.create({ name: "ws", repo_path: h.repoPath });
-    const role = h.roles.create({ name: "worker-bee", persistent: false });
+    const role = h.roles.create({ name: "worker", persistent: false });
     h.workspaceRoles.setCeiling(ws.id, role.id, 1);
 
     const res = await h.server.inject({
@@ -228,7 +228,7 @@ describe("prepareSpawnContext (#125) is the shared spawn/attach/resume seam", ()
     const env = h.records[0]!.req.env;
     expect(env!["CLOBBER_OFFICE_DIR"]).toBeUndefined();
     expect(env!["CLOBBER_DESK_DIR"]).toBeDefined();
-    expect(env!["CLOBBER_ROLE"]).toBe("worker-bee");
+    expect(env!["CLOBBER_ROLE"]).toBe("worker");
     expect(h.records[0]!.req.prompt).toBe("do work");
 
     await teardown(h);
