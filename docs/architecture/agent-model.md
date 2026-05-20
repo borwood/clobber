@@ -22,6 +22,35 @@ The system has exactly three communication directions between the clobber server
 | **Embodiment** — clobber → claude | `claude -p --input-format stream-json` keeps the child alive; follow-up prompts written to its stdin. | yes (#8) |
 | **Agent-initiated** — agent → clobber | `clobber` CLI shells out from inside the session; auths via per-session token in env; hits server endpoints. | no — milestone `agent-runtime v1` |
 
+### Agent↔user — canonical channel
+
+`AskUserQuestion` is the canonical agent-to-user channel. A `PreToolUse(AskUserQuestion)` hook (see `packages/server/src/ask-user-question-bridge.ts`) intercepts the native tool call, opens a clobber ask widget on the agent's office/desk, blocks until the human answers, and returns:
+
+- `permissionDecision: "deny"` (PreToolUse's only viable shape — see caveat below)
+- `permissionDecisionReason`: a single one-line stamp pointing the agent at `additionalContext`
+- `additionalContext`: a **structured JSON string** carrying the actual answer
+
+The JSON shape is:
+
+```json
+{
+  "status": "answered" | "timed_out" | "cancelled",
+  "question": "<verbatim question text>",
+  "header": "<optional header>",
+  "multi_select": true | false,
+  "selections": [{ "label": "<answer label>", "option_index": 0 | null }],
+  "raw": "<original answer string from the widget>",
+  "dropped_question_count": <int>,
+  "notes": ["..."]
+}
+```
+
+`selections` is always present for `status: "answered"`. Single-select returns a one-element array. Multi-select returns the chosen labels in order; the widget submits them as `JSON.stringify(labels)` so commas inside labels are unambiguous. `option_index` is the zero-based index when the answer matches one of the options; `null` when the human typed a free-text override that doesn't match a label.
+
+Net effect: any role with `AskUserQuestion` in its tool list gets the workspace-aware UX for free — no per-role prompt surgery toward `clobber ask`. `clobber ask` (`packages/cli/src/commands/ask.ts`) remains for explicit programmatic asks from scripts and skills.
+
+Caveat: PreToolUse can only `allow / deny / ask / defer`, so the agent's transcript shows AskUserQuestion as denied-with-reason, not as a successful tool call. Future work could move the bridge to `PostToolUseFailure` + `updatedToolOutput` so the agent reads a normal-looking successful `tool_result` block instead. Multi-question `AskUserQuestion` calls today flatten to the first question; `dropped_question_count` and `notes` make the loss explicit. The native `permissionDecision: "defer"` decision is available in `claude -p` mode but is pause-and-resume, not skip-with-result — separate follow-up.
+
 ## Runtime provider boundary
 
 Claude Code is the first runtime provider, not the conceptual model. Clobber

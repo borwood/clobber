@@ -55,18 +55,30 @@ describe("agent question store", () => {
     deps.db.close();
   });
 
-  it("create accepts options and round-trips them as an array of strings", () => {
+  it("create accepts rich AskOption[] and round-trips them with header + multi_select", () => {
     const deps = open();
     const { sessionId } = seedSession(deps);
 
     const created = deps.questions.create({
       session_id: sessionId,
       question: "merge?",
-      options: ["yes", "no", "later"],
+      header: "Merge",
+      options: [
+        { label: "yes" },
+        { label: "no", description: "leave the branch open" },
+        { label: "later", preview: "remind me at v2 cut" },
+      ],
+      multi_select: true,
     });
 
-    expect(created.options).toEqual(["yes", "no", "later"]);
-    expect(deps.questions.get(created.id)!.options).toEqual(["yes", "no", "later"]);
+    expect(created.header).toBe("Merge");
+    expect(created.multi_select).toBe(true);
+    expect(created.options).toEqual([
+      { label: "yes" },
+      { label: "no", description: "leave the branch open" },
+      { label: "later", preview: "remind me at v2 cut" },
+    ]);
+    expect(deps.questions.get(created.id)).toEqual(created);
     deps.db.close();
   });
 

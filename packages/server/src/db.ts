@@ -3,6 +3,7 @@ import { migrateRoleVersions } from "./role-version-migration.ts";
 import { migrateSessionLabel } from "./session-label-migration.ts";
 import { migrateWorkspaceConfig } from "./workspace-config-migration.ts";
 import { migrateSessionRuntime } from "./session-runtime-migration.ts";
+import { migrateAgentQuestionShape } from "./agent-question-shape-migration.ts";
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS events (
@@ -182,6 +183,7 @@ export function createDatabase(path: string): Database {
   migrateSessionLabel(db);
   migrateSessionRuntime(db);
   migrateWorkspaceConfig(db);
+  migrateAgentQuestionShape(db);
   return db;
 }
 

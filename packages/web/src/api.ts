@@ -7,6 +7,7 @@ import type {
   RoleVersionRef,
   BrowseDirResponse,
   UpdateWorkspaceConfigRequest,
+  AskOption,
 } from "@clobber/shared";
 
 export type {
@@ -17,12 +18,15 @@ export type {
   AgentState,
   RoleVersionRef,
   SettingSource,
+  AskOption,
 } from "@clobber/shared";
 
 export interface OpenQuestion {
   readonly id: string;
   readonly question: string;
-  readonly options?: readonly string[];
+  readonly header?: string;
+  readonly options?: readonly AskOption[];
+  readonly multi_select: boolean;
   readonly asked_at: number;
 }
 

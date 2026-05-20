@@ -104,6 +104,7 @@ Past the bootstrap commits, no work directly on `main`. Use `git worktree add` f
 - Sessions are spawned with `--session-id <clobber-uuid>` so we control the ID and can resume/audit.
 - Hook scripts POST to Clobber's local HTTP API. `CLOBBER_URL` and `CLOBBER_AGENT_ID` (and `CLOBBER_SESSION_ID`) are passed via env on spawn.
 - `clobber ask "<question>"` blocks until the UI replies; the reply is printed to stdout for the agent to read.
+- An agent's native `AskUserQuestion` tool call is intercepted via `PreToolUse` and routed through the same ask-widget pipeline (`packages/server/src/ask-user-question-bridge.ts`). Every role with `AskUserQuestion` in its tool list gets workspace-aware UX without per-role prompt surgery; `clobber ask` remains the explicit programmatic path.
 - `clobber status "<message>"` and `clobber note "<text>"` are fire-and-forget.
 - Roles inherit. `WorkerBee` is the generic worker base; `Manager` extends with always-on cron triggers and a persistent office.
 

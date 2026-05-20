@@ -8,6 +8,7 @@ function fakeQuestion(overrides: Partial<AgentQuestion> = {}): AgentQuestion {
     session_id: "s1",
     question: "go?",
     status: "pending",
+    multi_select: false,
     asked_at: 1,
     ...overrides,
   };

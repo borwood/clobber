@@ -1,14 +1,16 @@
 import type { FastifyInstance } from "fastify";
-import { AgentAskRequestSchema, AgentAnswerRequestSchema } from "@clobber/shared";
+import {
+  AgentAskRequestSchema,
+  AgentAnswerRequestSchema,
+  normalizeAskOptions,
+} from "@clobber/shared";
 import type { SessionTokenStore } from "../session-token-store.ts";
 import type { SessionStore } from "../session-store.ts";
 import type { RoleStore } from "../role-store.ts";
 import type { RoleVersionStore } from "../role-version-store.ts";
 import type { AgentQuestionStore } from "../agent-question-store.ts";
-import type {
-  AgentQuestionWaiter,
-} from "../agent-question-waiter.ts";
-import { QuestionTimeoutError } from "../agent-question-waiter.ts";
+import type { AgentQuestionWaiter } from "../agent-question-waiter.ts";
+import { askAndAwaitAnswer } from "../agent-question-blocking.ts";
 import { withAgentAuth } from "./_with-agent-auth.ts";
 
 const DEFAULT_ASK_TIMEOUT_MS = 30 * 60 * 1000;
@@ -38,31 +40,25 @@ export function registerAgentAskRoutes(
         return { error: "invalid ask request", issues: parsed.error.issues };
       }
 
-      const supersededIds = deps.agentQuestions.cancelAllForSession(session.id);
-      for (const id of supersededIds) {
-        const row = deps.agentQuestions.get(id);
-        if (row !== null) deps.agentQuestionWaiter.notify(row);
-      }
+      const options = normalizeAskOptions(parsed.data.options);
+      const resolution = await askAndAwaitAnswer(
+        {
+          session_id: session.id,
+          question: parsed.data.question,
+          ...(parsed.data.header === undefined ? {} : { header: parsed.data.header }),
+          ...(options === undefined ? {} : { options }),
+          ...(parsed.data.multi_select === undefined
+            ? {}
+            : { multi_select: parsed.data.multi_select }),
+        },
+        timeoutMs,
+        deps,
+      );
 
-      const created = deps.agentQuestions.create({
-        session_id: session.id,
-        question: parsed.data.question,
-        ...(parsed.data.options === undefined ? {} : { options: parsed.data.options }),
-      });
-
-      try {
-        const resolved = await deps.agentQuestionWaiter.wait(created.id, timeoutMs);
-        if (resolved.status === "answered") {
-          return { resolution: "answered", answer: resolved.answer };
-        }
-        return { resolution: resolved.status };
-      } catch (err) {
-        if (err instanceof QuestionTimeoutError) {
-          deps.agentQuestions.timeout(created.id);
-          return { resolution: "timed_out" };
-        }
-        throw err;
+      if (resolution.status === "answered") {
+        return { resolution: "answered", answer: resolution.answer };
       }
+      return { resolution: resolution.status };
     }),
   );
 
