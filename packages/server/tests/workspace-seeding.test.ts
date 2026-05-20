@@ -110,7 +110,7 @@ describe("workspace seed — POST /workspaces (#24)", () => {
     const all = h.roles.list();
     const inWs = all.filter((r) => r.workspace_id === ws.id);
     const names = inWs.map((r) => r.name).sort();
-    expect(names).toEqual(["manager", "worker", "worker-bee"]);
+    expect(names).toEqual(["manager", "worker"]);
 
     for (const r of inWs) {
       expect(r.workspace_id).toBe(ws.id);
@@ -164,17 +164,16 @@ describe("workspace seed — POST /workspaces (#24)", () => {
     await teardown(h);
   });
 
-  it("inserts default ceilings (manager=1, worker=3, worker-bee=3) on workspace create", async () => {
+  it("inserts default ceilings (manager=1, worker=3) on workspace create", async () => {
     const h = buildHarness();
     const ws = await createWorkspaceViaApi(h, "alpha");
 
     const assignments = await listAssignments(h, ws.id);
-    expect(assignments).toHaveLength(3);
+    expect(assignments).toHaveLength(2);
 
     const byName = new Map(assignments.map((a) => [a.role.name, a]));
     expect(byName.get("manager")!.max_concurrent).toBe(1);
     expect(byName.get("worker")!.max_concurrent).toBe(3);
-    expect(byName.get("worker-bee")!.max_concurrent).toBe(3);
 
     await teardown(h);
   });
@@ -187,8 +186,8 @@ describe("workspace seed — POST /workspaces (#24)", () => {
     const aRoles = h.roles.list().filter((r) => r.workspace_id === a.id);
     const bRoles = h.roles.list().filter((r) => r.workspace_id === b.id);
 
-    expect(aRoles).toHaveLength(3);
-    expect(bRoles).toHaveLength(3);
+    expect(aRoles).toHaveLength(2);
+    expect(bRoles).toHaveLength(2);
 
     const aManager = aRoles.find((r) => r.name === "manager")!;
     const bManager = bRoles.find((r) => r.name === "manager")!;
@@ -211,6 +210,30 @@ describe("workspace seed — POST /workspaces (#24)", () => {
       expect(versionRow.version).toBe(1);
       expect(versionRow.system_prompt.length).toBeGreaterThan(0);
     }
+
+    await teardown(h);
+  });
+
+  it("seeded worker's v1 snapshot embeds the default 5-phase SDLC in its system_prompt (#124)", async () => {
+    const h = buildHarness();
+    const ws = await createWorkspaceViaApi(h, "alpha");
+
+    const worker = h.roles
+      .list()
+      .find((r) => r.name === "worker" && r.workspace_id === ws.id)!;
+    const row = h.db
+      .prepare("SELECT system_prompt FROM role_versions WHERE id = ?")
+      .get(worker.current_version_id!) as { system_prompt: string };
+    for (const phase of [
+      "research",
+      "failing-test",
+      "implement",
+      "open-pr",
+      "watch-ci",
+    ]) {
+      expect(row.system_prompt).toContain(phase);
+    }
+    expect(row.system_prompt).not.toContain("{{SDLC_PHASES}}");
 
     await teardown(h);
   });
@@ -243,7 +266,6 @@ describe("workspace seed — boot-time backfill (#24)", () => {
       expect(roleRows.map((r) => r.name).sort()).toEqual([
         "manager",
         "worker",
-        "worker-bee",
       ]);
 
       const ceilings = db2
@@ -260,7 +282,6 @@ describe("workspace seed — boot-time backfill (#24)", () => {
       const byName = new Map(ceilings.map((c) => [c.name, c.max_concurrent]));
       expect(byName.get("manager")).toBe(1);
       expect(byName.get("worker")).toBe(3);
-      expect(byName.get("worker-bee")).toBe(3);
 
       db2.close();
     } finally {
@@ -290,7 +311,7 @@ describe("workspace seed — boot-time backfill (#24)", () => {
           .prepare("SELECT COUNT(*) AS n FROM roles WHERE workspace_id = ?")
           .get("22222222-2222-4222-8222-222222222222") as { n: number }
       ).n;
-      expect(firstCount).toBe(3);
+      expect(firstCount).toBe(2);
       db2.close();
 
       const db3 = createDatabase(path);
@@ -299,7 +320,7 @@ describe("workspace seed — boot-time backfill (#24)", () => {
           .prepare("SELECT COUNT(*) AS n FROM roles WHERE workspace_id = ?")
           .get("22222222-2222-4222-8222-222222222222") as { n: number }
       ).n;
-      expect(secondCount).toBe(3);
+      expect(secondCount).toBe(2);
       db3.close();
     } finally {
       rmSync(path, { force: true });

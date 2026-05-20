@@ -1,16 +1,16 @@
 ---
 name: assignment
-description: Spawn a WorkerBee for one or more GitHub issues with a structured briefing packet on its desk.
+description: Spawn a worker for one or more GitHub issues with a structured briefing packet on its desk.
 ---
 
 # assignment
 
 `/assignment <issue#> [<issue#>...] [<additional-notes>]` is your lever for
-turning *"this issue is ready"* into *"a WorkerBee is now embodied at a desk,
+turning *"this issue is ready"* into *"a worker is now embodied at a desk,
 working on it."* Read this skill before invoking — getting the briefing right
 is what makes the worker actually finish unattended.
 
-The assignment is a single WorkerBee per call, even when you bundle multiple
+The assignment is a single worker per call, even when you bundle multiple
 issues. Bundle issues only when they're tightly coupled (same module, same
 PR's blast radius). Otherwise, run `/assignment` once per issue.
 
@@ -30,10 +30,11 @@ PR's blast radius). Otherwise, run `/assignment` once per issue.
 
 2. **Decompose into a phase plan.**
 
-   For a code repo the WorkerBee bundle's default phases are:
-   `research → failing-test → implement → open-pr → watch-ci`. Use them
-   unless the issue body explicitly redefines the workflow. Compose the plan
-   as a JSON array shaped for `TodoWrite`:
+   For a code repo the worker role's default `sdlc` profile ships these
+   phases: `research → failing-test → implement → open-pr → watch-ci`. Use
+   them unless the issue body explicitly redefines the workflow, or the
+   worker's role has been forked with a different `sdlc` profile. Compose
+   the plan as a JSON array shaped for `TodoWrite`:
 
    ```json
    [
@@ -72,7 +73,7 @@ PR's blast radius). Otherwise, run `/assignment` once per issue.
 4. **Spawn the worker.**
 
    ```
-   clobber spawn worker-bee \
+   clobber spawn worker \
      --prompt "ship issue #<n> end-to-end; full brief on your desk" \
      --label "<verb-noun>" \
      --briefing-dir /tmp/briefing-<label>
@@ -81,7 +82,7 @@ PR's blast radius). Otherwise, run `/assignment` once per issue.
    The label follows `manager:spawn` conventions (`fix-flaky-test`,
    `audit-auth`, `issue-82`). The briefing-dir contents land at
    `.clobber/agents/<the-worker's-agent-id>/desk/` before the worker takes
-   its first turn; the WorkerBee system prompt instructs it to read every
+   its first turn; the worker system prompt instructs it to read every
    file there as its first action.
 
 5. **Status emit.** After the spawn returns, post one `clobber note`

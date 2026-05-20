@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { RoleManifestSchema, type RoleManifest } from "@clobber/shared";
+import { renderSystemPromptTemplate } from "../sdlc-profiles.ts";
 
 export class RoleManifestError extends Error {
   override readonly name = "RoleManifestError";
@@ -41,10 +42,18 @@ export function defineRole(opts: DefineRoleOptions): LoadedRole {
       `system prompt missing in role bundle "${manifest.name}": ${manifest.systemPromptPath}`,
     );
   }
-  const systemPrompt = readFileSync(systemPromptAbs, "utf8");
-  if (systemPrompt.trim().length === 0) {
+  const rawSystemPrompt = readFileSync(systemPromptAbs, "utf8");
+  if (rawSystemPrompt.trim().length === 0) {
     throw new RoleManifestError(
       `system prompt is empty for role "${manifest.name}": ${manifest.systemPromptPath}`,
+    );
+  }
+  let systemPrompt: string;
+  try {
+    systemPrompt = renderSystemPromptTemplate(rawSystemPrompt, manifest.sdlc);
+  } catch (err) {
+    throw new RoleManifestError(
+      `system prompt render failed for role "${manifest.name}": ${(err as Error).message}`,
     );
   }
 

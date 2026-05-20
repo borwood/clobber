@@ -1,5 +1,5 @@
 {
   "name": "worker",
-  "description": "Short-lived focused worker. Receives a single task from the manager, completes it, reports back, exits.",
+  "description": "Autonomous SDLC worker. Walks one issue from research → PR → CI watch unattended.",
   "version": "0.0.1"
 }

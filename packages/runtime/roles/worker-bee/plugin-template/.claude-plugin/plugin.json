@@ -1,5 +1,0 @@
-{
-  "name": "worker-bee",
-  "description": "Autonomous SDLC worker. Walks one issue from research → PR → CI watch unattended.",
-  "version": "0.0.1"
-}

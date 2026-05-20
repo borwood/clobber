@@ -55,7 +55,7 @@ beforeAll(async () => {
   const ws = workspaces.create({ name: "ws", repo_path: repoPath });
   const managerRole = roles.create({ name: "manager", persistent: true });
   workspaceRoles.setCeiling(ws.id, managerRole.id, 5);
-  const wbRole = roles.create({ name: "worker-bee", persistent: false });
+  const wbRole = roles.create({ name: "worker", persistent: false });
   workspaceRoles.setCeiling(ws.id, wbRole.id, 3);
 
   const spawner: AgentSpawner = (req): SpawnedAgentInfo => ({
@@ -132,7 +132,7 @@ describe("clobber CLI — spawn --briefing-dir / --briefing", () => {
     const code = await run({
       argv: [
         "spawn",
-        "worker-bee",
+        "worker",
         "--prompt",
         "ship #82",
         "--label",
@@ -162,7 +162,7 @@ describe("clobber CLI — spawn --briefing-dir / --briefing", () => {
       const code = await run({
         argv: [
           "spawn",
-          "worker-bee",
+          "worker",
           "--prompt",
           "p",
           "--label",
@@ -186,7 +186,7 @@ describe("clobber CLI — spawn --briefing-dir / --briefing", () => {
   it("does not create the desk directory when no briefing flags are passed", async () => {
     const s = captureStreams();
     const code = await run({
-      argv: ["spawn", "worker-bee", "--prompt", "p", "--label", "no-brief"],
+      argv: ["spawn", "worker", "--prompt", "p", "--label", "no-brief"],
       env: { CLOBBER_API_BASE: baseUrl, CLOBBER_SESSION_TOKEN: token },
       stdout: s.stdout,
       stderr: s.stderr,
@@ -202,7 +202,7 @@ describe("clobber CLI — spawn --briefing-dir / --briefing", () => {
     const code = await run({
       argv: [
         "spawn",
-        "worker-bee",
+        "worker",
         "--prompt",
         "p",
         "--label",

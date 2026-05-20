@@ -107,9 +107,9 @@ afterEach(async () => {
 async function bootManager(): Promise<{ token: string; workspaceId: string }> {
   const ws = h.workspaces.create({ name: "ws", repo_path: h.repoPath });
   const managerRole = h.roles.create({ name: "manager", persistent: true });
-  const workerBeeRole = h.roles.create({ name: "worker-bee", persistent: false });
+  const workerRole = h.roles.create({ name: "worker", persistent: false });
   h.workspaceRoles.setCeiling(ws.id, managerRole.id, 1);
-  h.workspaceRoles.setCeiling(ws.id, workerBeeRole.id, 3);
+  h.workspaceRoles.setCeiling(ws.id, workerRole.id, 3);
 
   const res = await h.server.inject({
     method: "POST",
@@ -133,7 +133,7 @@ describe("POST /agent/spawn — briefing packet", () => {
       url: "/agent/spawn",
       headers: { authorization: `Bearer ${token}` },
       payload: {
-        role: "worker-bee",
+        role: "worker",
         prompt: "ship #82",
         label: "issue-82",
         briefing: {
@@ -170,7 +170,7 @@ describe("POST /agent/spawn — briefing packet", () => {
       url: "/agent/spawn",
       headers: { authorization: `Bearer ${token}` },
       payload: {
-        role: "worker-bee",
+        role: "worker",
         prompt: "p",
         label: "nested",
         briefing: {
@@ -195,7 +195,7 @@ describe("POST /agent/spawn — briefing packet", () => {
       url: "/agent/spawn",
       headers: { authorization: `Bearer ${token}` },
       payload: {
-        role: "worker-bee",
+        role: "worker",
         prompt: "p",
         label: "nope",
         briefing: { files: [{ name: "../etc/passwd", content: "x" }] },
@@ -211,7 +211,7 @@ describe("POST /agent/spawn — briefing packet", () => {
       url: "/agent/spawn",
       headers: { authorization: `Bearer ${token}` },
       payload: {
-        role: "worker-bee",
+        role: "worker",
         prompt: "p",
         label: "nope",
         briefing: { files: [{ name: "/etc/passwd", content: "x" }] },
@@ -227,7 +227,7 @@ describe("POST /agent/spawn — briefing packet", () => {
       url: "/agent/spawn",
       headers: { authorization: `Bearer ${token}` },
       payload: {
-        role: "worker-bee",
+        role: "worker",
         prompt: "p",
         label: "dup",
         briefing: {
@@ -247,7 +247,7 @@ describe("POST /agent/spawn — briefing packet", () => {
       method: "POST",
       url: "/agent/spawn",
       headers: { authorization: `Bearer ${token}` },
-      payload: { role: "worker-bee", prompt: "p", label: "no-brief" },
+      payload: { role: "worker", prompt: "p", label: "no-brief" },
     });
     expect(res.statusCode).toBe(200);
     const body = res.json() as { agent_id: string };

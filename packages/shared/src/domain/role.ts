@@ -1,6 +1,38 @@
 import { z } from "zod";
 import { PermissionModeSchema } from "../hooks/payloads.ts";
 
+export const SdlcPhaseSchema = z.object({
+  id: z
+    .string()
+    .min(1)
+    .regex(/^[a-z][a-z0-9-]*$/, {
+      message: "must be lowercase kebab-case (a–z, 0–9, hyphen, leading letter)",
+    }),
+  label: z.string().min(1),
+  description: z.string().min(1),
+});
+export type SdlcPhase = z.infer<typeof SdlcPhaseSchema>;
+
+export const SdlcProfileSchema = z
+  .object({
+    phases: z.array(SdlcPhaseSchema).min(1).readonly(),
+    defaultStartingPhase: z.string().min(1),
+    reportCliCommand: z.string().min(1).optional(),
+  })
+  .refine(
+    (p) =>
+      new Set(p.phases.map((ph) => ph.id)).size === p.phases.length,
+    { message: "phase ids must be unique", path: ["phases"] },
+  )
+  .refine(
+    (p) => p.phases.some((ph) => ph.id === p.defaultStartingPhase),
+    {
+      message: "defaultStartingPhase must reference an id present in phases",
+      path: ["defaultStartingPhase"],
+    },
+  );
+export type SdlcProfile = z.infer<typeof SdlcProfileSchema>;
+
 export const RoleSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1),

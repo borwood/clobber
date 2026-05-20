@@ -6,7 +6,7 @@ A control room for multi-Claude orchestration. Spawn, watch, and intervene in ma
 
 ## Vocabulary
 
-- **Role** — template/type definition (`WorkerBee`, `Manager`, …). Bakes in runbooks, skills, triggers, standing orders.
+- **Role** — template/type definition (`Worker`, `Manager`, …). Bakes in runbooks, skills, triggers, standing orders, and (for autonomous roles) an `sdlc` profile.
 - **Agent** — instance of a role inside a workspace. **Persistent** agents exist with or without a live session; **ephemeral** agents exist only while embodied.
 - **Session** — a `claude` process embodying an agent right now. Identified by claude's actual session ID; resumable.
 - **Workspace** — work-source (a repo) + manager agent + agent ceiling.

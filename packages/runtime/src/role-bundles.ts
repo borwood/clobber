@@ -1,9 +1,8 @@
 import type { LoadedRole } from "./role-manifest/index.ts";
 import { managerRole } from "../roles/manager/manifest.ts";
 import { workerRole } from "../roles/worker/manifest.ts";
-import { workerBeeRole } from "../roles/worker-bee/manifest.ts";
 
-const SHIPPED: readonly LoadedRole[] = [managerRole, workerRole, workerBeeRole];
+const SHIPPED: readonly LoadedRole[] = [managerRole, workerRole];
 
 const REGISTRY: ReadonlyMap<string, LoadedRole> = new Map(
   SHIPPED.map((role) => [role.manifest.name, role] as const),
