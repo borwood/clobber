@@ -1,17 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { delimiter } from "node:path";
-import type { RoleBundleData, RuntimeEvent, RuntimeProvider } from "@clobber/runtime";
+import type { RuntimeProvider } from "@clobber/runtime";
 import type { Agent, BriefingPacket, Role, Workspace } from "@clobber/shared";
-import { ensureOffice } from "./office-store.ts";
-import { composeOfficeContext } from "./office-context.ts";
-import { OFFICE_NOTES_SKILL } from "./office-notes-skill.ts";
-import { deskDirFor, writeBriefingPacket } from "./desk-store.ts";
 import type { WorkspaceRoleStore } from "./workspace-role-store.ts";
 import type { WorkspaceStore } from "./workspace-store.ts";
 import type { AgentStore } from "./agent-store.ts";
 import type { SessionStore } from "./session-store.ts";
 import type { SessionTokenStore } from "./session-token-store.ts";
-import { generateTokenValue } from "./session-token-store.ts";
 import type { AgentSpawner, SpawnedAgentInfo } from "./types.ts";
 import type { AgentRegistry } from "./agent-registry.ts";
 import type { RoleStore } from "./role-store.ts";
@@ -19,6 +13,9 @@ import type { RoleVersionStore } from "./role-version-store.ts";
 import type { AgentQuestionStore } from "./agent-question-store.ts";
 import type { AgentQuestionWaiter } from "./agent-question-waiter.ts";
 import { endSession } from "./session-lifecycle.ts";
+import { prepareSpawnContext, type SpawnContext } from "./spawn-context.ts";
+import { bindRuntimeEvents } from "./runtime-event-binder.ts";
+import { isProviderThreadMissing, waitForRuntimeStartup } from "./runtime-startup.ts";
 
 export interface SpawnPipelineDeps {
   readonly workspaces: WorkspaceStore;
@@ -130,74 +127,23 @@ export function attachSessionToAgent(
   input: AttachSessionInput,
 ): SpawnPipelineSuccess | SpawnPipelineNoBundleError {
   const { workspace, role, agent, prompt, briefing } = input;
-
-  const versionId = role.current_version_id;
-  const bundle = versionId === undefined ? null : deps.roleVersions.loadAsBundle(versionId);
-  if (bundle === null) {
-    return {
-      ok: false,
-      status: 422,
-      error: "role has no current version",
-      role: role.name,
-    };
-  }
-
   const sessionId = randomUUID();
-  const token = generateTokenValue();
+  const versionId = role.current_version_id;
 
-  const officeDir = role.persistent
-    ? ensureOffice(workspace.repo_path, agent.id)
-    : null;
-
-  const deskDir = deskDirFor(workspace.repo_path, agent.id);
-  if (briefing !== undefined && briefing.files.length > 0) {
-    writeBriefingPacket(deskDir, briefing.files);
-  }
-
-  const effectiveBundle: RoleBundleData = officeDir === null
-    ? bundle
-    : injectOfficeNotesSkill(bundle);
-  const effectivePrompt = officeDir === null
-    ? prompt
-    : `${composeOfficeContext(officeDir)}\n\n${prompt}`;
-
-  const materialized = deps.runtimeProvider.prepareBundle({
-    bundle: effectiveBundle,
-    repoPath: workspace.repo_path,
-    hookUrl: deps.hookUrl,
-    cliEntry: deps.cliEntry,
-  });
-
-  const baseEnv = process.env;
-  const existingPath = baseEnv["PATH"] ?? "";
-  const env: NodeJS.ProcessEnv = {
-    ...baseEnv,
-    PATH: `${materialized.binDir}${delimiter}${existingPath}`,
-    CLOBBER_API_BASE: deps.apiBase,
-    CLOBBER_SESSION_TOKEN: token,
-    CLOBBER_SESSION_ID: sessionId,
-    CLOBBER_WORKSPACE_ID: workspace.id,
-    CLOBBER_ROLE: role.name,
-    CLOBBER_DESK_DIR: deskDir,
-    ...(officeDir === null ? {} : { CLOBBER_OFFICE_DIR: officeDir }),
-  };
-  const spawnReq = deps.runtimeProvider.buildSpawnRequest({
-    hookUrl: deps.hookUrl,
-    prompt: effectivePrompt,
-    cwd: workspace.repo_path,
+  const prepared = prepareSpawnContext(deps, {
+    mode: "attach",
+    workspace,
+    role,
+    agent,
     sessionId,
-    ...(role.permission_mode === undefined
-      ? {}
-      : { permissionMode: role.permission_mode }),
-    ...(role.allowed_tools === undefined
-      ? {}
-      : { allowedTools: role.allowed_tools }),
-    env,
-    materialized,
-    systemPrompt: effectiveBundle.systemPrompt,
-    settingSources: workspace.setting_sources,
-    ...(agent.label === undefined ? {} : { displayName: agent.label }),
+    versionId,
+    prompt,
+    ...(briefing === undefined ? {} : { briefing }),
   });
+  if (!prepared.ok) return prepared;
+  const ctx = prepared.context;
+
+  const spawnReq = deps.runtimeProvider.buildSpawnRequest(ctx.spawnOptions);
   const spawned = deps.spawner(spawnReq);
   const providerThreadId = deps.runtimeProvider.initialProviderThreadId(sessionId);
 
@@ -215,20 +161,7 @@ export function attachSessionToAgent(
     pid: spawned.pid,
     transcript_path: deps.runtimeProvider.transcriptPath(workspace.repo_path, sessionId),
   });
-  deps.sessionTokens.register(sessionId, token);
-  deps.registry.register(sessionId, spawned.stdin, spawned.kill);
-  bindRuntimeEvents(deps, sessionId, spawned);
-
-  spawned.exited.then((code) => {
-    deps.registry.unregister(sessionId);
-    if (deps.runtimeProvider.capabilities.processLifetime === "session") {
-      endSession(sessionId, deps);
-      return;
-    }
-    if (code !== 0 && code !== null) {
-      endSession(sessionId, deps);
-    }
-  });
+  bindLiveSession(deps, sessionId, ctx, spawned);
 
   return { ok: true, agent_id: agent.id, session_id: sessionId, pid: spawned.pid };
 }
@@ -254,58 +187,22 @@ export async function resumeSessionTurn(
   if (role === null) return { ok: false, status: 422, error: "role not found" };
   const agent = session.agent_id === undefined ? null : deps.agents.get(session.agent_id);
   if (agent === null) return { ok: false, status: 422, error: "agent not found" };
-  const versionId = session.role_version_id ?? role.current_version_id;
-  const bundle = versionId === undefined ? null : deps.roleVersions.loadAsBundle(versionId);
-  if (bundle === null) {
-    return { ok: false, status: 422, error: "role has no current version" };
-  }
 
-  const token = generateTokenValue();
-  const officeDir = role.persistent
-    ? ensureOffice(workspace.repo_path, agent.id)
-    : null;
-  const effectiveBundle: RoleBundleData = officeDir === null
-    ? bundle
-    : injectOfficeNotesSkill(bundle);
-  const effectivePrompt = officeDir === null
-    ? input.prompt
-    : `${composeOfficeContext(officeDir)}\n\n${input.prompt}`;
-  const materialized = deps.runtimeProvider.prepareBundle({
-    bundle: effectiveBundle,
-    repoPath: workspace.repo_path,
-    hookUrl: deps.hookUrl,
-    cliEntry: deps.cliEntry,
+  const prepared = prepareSpawnContext(deps, {
+    mode: "resume",
+    workspace,
+    role,
+    agent,
+    sessionId: session.id,
+    versionId: session.role_version_id ?? role.current_version_id,
+    prompt: input.prompt,
   });
-  const baseEnv = process.env;
-  const existingPath = baseEnv["PATH"] ?? "";
-  const env: NodeJS.ProcessEnv = {
-    ...baseEnv,
-    PATH: `${materialized.binDir}${delimiter}${existingPath}`,
-    CLOBBER_API_BASE: deps.apiBase,
-    CLOBBER_SESSION_TOKEN: token,
-    CLOBBER_SESSION_ID: session.id,
-    CLOBBER_WORKSPACE_ID: workspace.id,
-    CLOBBER_ROLE: role.name,
-    ...(officeDir === null ? {} : { CLOBBER_OFFICE_DIR: officeDir }),
-  };
+  if (!prepared.ok) return prepared;
+  const ctx = prepared.context;
 
   const spawnReq = deps.runtimeProvider.buildResumeRequest({
-    hookUrl: deps.hookUrl,
-    prompt: effectivePrompt,
-    cwd: workspace.repo_path,
-    sessionId: session.id,
+    ...ctx.spawnOptions,
     providerThreadId,
-    ...(role.permission_mode === undefined
-      ? {}
-      : { permissionMode: role.permission_mode }),
-    ...(role.allowed_tools === undefined
-      ? {}
-      : { allowedTools: role.allowed_tools }),
-    env,
-    materialized,
-    systemPrompt: effectiveBundle.systemPrompt,
-    settingSources: workspace.setting_sources,
-    ...(agent.label === undefined ? {} : { displayName: agent.label }),
   });
 
   let spawned: SpawnedAgentInfo;
@@ -315,19 +212,9 @@ export async function resumeSessionTurn(
     const detail = err instanceof Error ? err.message : String(err);
     if (isProviderThreadMissing(detail)) {
       endSession(session.id, deps);
-      return {
-        ok: false,
-        status: 410,
-        error: "runtime provider thread not found",
-        detail,
-      };
+      return { ok: false, status: 410, error: "runtime provider thread not found", detail };
     }
-    return {
-      ok: false,
-      status: 502,
-      error: "runtime resume failed",
-      detail,
-    };
+    return { ok: false, status: 502, error: "runtime resume failed", detail };
   }
 
   const startup = await waitForRuntimeStartup(spawned);
@@ -341,70 +228,34 @@ export async function resumeSessionTurn(
         detail: startup.detail,
       };
     }
-    return {
-      ok: false,
-      status: 502,
-      error: "runtime resume failed",
-      detail: startup.detail,
-    };
+    return { ok: false, status: 502, error: "runtime resume failed", detail: startup.detail };
   }
 
-  deps.sessionTokens.register(session.id, token);
   deps.sessions.updatePid(session.id, spawned.pid);
-  deps.registry.register(session.id, spawned.stdin, spawned.kill);
-  bindRuntimeEvents(deps, session.id, spawned);
-  spawned.exited.then((code) => {
-    deps.registry.unregister(session.id);
-    if (code !== 0 && code !== null) {
-      endSession(session.id, deps);
-    }
-  });
+  bindLiveSession(deps, session.id, ctx, spawned);
   return { ok: true, session_id: session.id, pid: spawned.pid };
 }
 
-async function waitForRuntimeStartup(
-  spawned: SpawnedAgentInfo,
-): Promise<{ readonly ok: true } | { readonly ok: false; readonly detail: string }> {
-  if (spawned.startup === undefined) return { ok: true };
-  return spawned.startup;
-}
-
-function bindRuntimeEvents(
-  deps: Pick<SpawnPipelineDeps, "sessions">,
+function bindLiveSession(
+  deps: SpawnPipelineDeps,
   sessionId: string,
+  ctx: SpawnContext,
   spawned: SpawnedAgentInfo,
 ): void {
-  if (spawned.runtimeEvents === undefined) return;
-  void consumeRuntimeEvents(deps, sessionId, spawned.runtimeEvents);
-}
-
-async function consumeRuntimeEvents(
-  deps: Pick<SpawnPipelineDeps, "sessions">,
-  sessionId: string,
-  events: AsyncIterable<RuntimeEvent>,
-): Promise<void> {
-  for await (const event of events) {
-    if (event.kind === "provider-thread-started") {
-      deps.sessions.updateProviderThreadId(sessionId, event.providerThreadId);
+  deps.sessionTokens.register(sessionId, ctx.token);
+  deps.registry.register(sessionId, spawned.stdin, spawned.kill);
+  bindRuntimeEvents(deps, sessionId, spawned);
+  const endOnCleanExit = deps.runtimeProvider.capabilities.processLifetime === "session";
+  spawned.exited.then((code) => {
+    deps.registry.unregister(sessionId);
+    if (endOnCleanExit) {
+      endSession(sessionId, deps);
+      return;
     }
-  }
-}
-
-function isProviderThreadMissing(message: string): boolean {
-  const normalized = message.toLowerCase();
-  return (
-    normalized.includes("provider thread not found") ||
-    normalized.includes("thread not found") ||
-    normalized.includes("session not found") ||
-    normalized.includes("no rollout found") ||
-    normalized.includes("no such session")
-  );
-}
-
-function injectOfficeNotesSkill(bundle: RoleBundleData): RoleBundleData {
-  const already = bundle.skills.some((s) => s.name === OFFICE_NOTES_SKILL.name);
-  if (already) return bundle;
-  return { ...bundle, skills: [...bundle.skills, OFFICE_NOTES_SKILL] };
+    if (code !== 0 && code !== null) {
+      endSession(sessionId, deps);
+    }
+  });
 }
 
 function checkCapacity(
