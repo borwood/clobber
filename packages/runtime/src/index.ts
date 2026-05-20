@@ -7,7 +7,7 @@ export * from "./runtime-events.ts";
 export * from "./codex-jsonl.ts";
 export * from "./role-manifest/index.ts";
 export * from "./materialize-bundle.ts";
+export * from "./sdlc-profiles.ts";
 export { loadRoleBundle, enumerateShippedRoles } from "./role-bundles.ts";
 export { managerRole } from "../roles/manager/manifest.ts";
 export { workerRole } from "../roles/worker/manifest.ts";
-export { workerBeeRole } from "../roles/worker-bee/manifest.ts";

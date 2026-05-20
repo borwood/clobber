@@ -51,7 +51,7 @@ beforeAll(async () => {
   const tokens = createSessionTokenStore(db);
 
   const ws = workspaces.create({ name: "ws", repo_path: repoPath });
-  const workerRole = roles.create({ name: "worker-bee", persistent: false });
+  const workerRole = roles.create({ name: "worker", persistent: false });
   workspaceRoles.setCeiling(ws.id, workerRole.id, 5);
 
   const spawner: AgentSpawner = (req): SpawnedAgentInfo => {
@@ -194,7 +194,7 @@ describe("clobber CLI — report — fresh session", () => {
     const tokens = createSessionTokenStore(db);
 
     const ws = workspaces.create({ name: "ws", repo_path: repoPath });
-    const workerRole = roles.create({ name: "worker-bee", persistent: false });
+    const workerRole = roles.create({ name: "worker", persistent: false });
     workspaceRoles.setCeiling(ws.id, workerRole.id, 5);
 
     const spawner: AgentSpawner = (req): SpawnedAgentInfo => {

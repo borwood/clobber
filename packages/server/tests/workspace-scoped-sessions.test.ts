@@ -262,7 +262,7 @@ describe("GET /sessions — workspace-scoped summaries", () => {
   it("includes role_name on each summary", async () => {
     const h = buildHarness();
     const ws = h.workspaces.create({ name: "ws", repo_path: "/r" });
-    const role = h.roles.create({ name: "worker-bee", persistent: false });
+    const role = h.roles.create({ name: "worker", persistent: false });
     const agent = h.agents.create({ workspace_id: ws.id, role_id: role.id });
     const sessionId = randomUUID();
     h.sessions.create({
@@ -279,7 +279,7 @@ describe("GET /sessions — workspace-scoped summaries", () => {
     })).json() as SessionSummary[];
 
     expect(res).toHaveLength(1);
-    expect(res[0]!.role_name).toBe("worker-bee");
+    expect(res[0]!.role_name).toBe("worker");
 
     await teardown(h);
   });

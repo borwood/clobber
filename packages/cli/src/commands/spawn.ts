@@ -144,15 +144,13 @@ Flags:
                                  repeated. Combinable with --briefing-dir.
 
 Briefing files land at .clobber/agents/<agent-id>/desk/, which the worker
-sees via $CLOBBER_DESK_DIR. The WorkerBee role's first action is to read
-that directory; in particular, a seed-todos.json file there becomes the
-worker's TodoWrite phase plan.
+sees via $CLOBBER_DESK_DIR. The worker role's first action is to read that
+directory; in particular, a seed-todos.json file there becomes the worker's
+TodoWrite phase plan.
 
 Example:
-  clobber spawn worker --prompt "investigate flaky test in agents.test.ts" \\
-                       --label fix-flaky-test
-  clobber spawn worker-bee --prompt "ship #82" --label issue-82 \\
-                           --briefing-dir /tmp/issue-82-packet
+  clobber spawn worker --prompt "ship #82" --label issue-82 \\
+                       --briefing-dir /tmp/issue-82-packet
 
 Skill: see manager:spawn for when to spawn vs. continue an existing session,
 and manager:assignment for building a briefing packet from a GitHub issue.`;

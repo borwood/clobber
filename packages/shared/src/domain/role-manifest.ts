@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { PermissionModeSchema } from "../hooks/payloads.ts";
+import { SdlcProfileSchema } from "./role.ts";
 
 const RelativeBundlePath = z
   .string()
@@ -22,6 +23,7 @@ export const RoleManifestSchema = z
     defaultCeiling: z.number().int().nonnegative(),
     permissionMode: PermissionModeSchema.optional(),
     allowedTools: z.array(z.string().min(1)).readonly().optional(),
+    sdlc: SdlcProfileSchema.optional(),
   })
   .refine(
     (m) =>

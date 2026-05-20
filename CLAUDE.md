@@ -35,7 +35,7 @@ Clobber spawns `claude` sessions with generated `settings.json` whose hooks call
 
 ## Vocabulary (use these consistently in code and prose)
 
-- **Role** — template/type definition. Bakes in runbooks, skills, triggers, standing orders. Versioned in code (e.g. `packages/runtime/src/roles/worker-bee.ts`).
+- **Role** — template/type definition. Bakes in runbooks, skills, triggers, standing orders, and (for autonomous roles) an `sdlc` profile. Versioned in code (e.g. `packages/runtime/roles/worker/manifest.ts`).
 - **Agent** — instance of a role inside a workspace. Has its own state, memory, desk, possibly an office on the whiteboard. May or may not currently have a session.
 - **Session** — a `claude` process embodying an agent right now. Identified by claude's actual session ID (set explicitly via `claude --session-id <uuid>` at spawn). Resumable.
 - **Workspace** — work-source (a repo) + a manager agent + an agent ceiling.
@@ -106,7 +106,7 @@ Past the bootstrap commits, no work directly on `main`. Use `git worktree add` f
 - `clobber ask "<question>"` blocks until the UI replies; the reply is printed to stdout for the agent to read.
 - An agent's native `AskUserQuestion` tool call is intercepted via `PreToolUse` and routed through the same ask-widget pipeline (`packages/server/src/ask-user-question-bridge.ts`). Every role with `AskUserQuestion` in its tool list gets workspace-aware UX without per-role prompt surgery; `clobber ask` remains the explicit programmatic path.
 - `clobber status "<message>"` and `clobber note "<text>"` are fire-and-forget.
-- Roles inherit. `WorkerBee` is the generic worker base; `Manager` extends with always-on cron triggers and a persistent office.
+- Roles are composed via `defineRole(manifest)`. The shipped `worker` role declares an `sdlc` profile (default: research → failing-test → implement → open-pr → watch-ci) that the system-prompt template renders dynamically; forks can override the profile to express a different workflow. `manager` is persistent with always-on triggers; `worker` is ephemeral and autonomous.
 
 ## Triggers
 

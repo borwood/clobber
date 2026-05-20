@@ -33,7 +33,7 @@ interface Harness {
   readonly db: ReturnType<typeof createDatabase>;
   readonly workspaceId: string;
   readonly manager: RoleSession;
-  readonly workerBee: RoleSession;
+  readonly worker: RoleSession;
   readonly repoPath: string;
 }
 
@@ -58,8 +58,8 @@ function buildHarness(): Harness {
   seedWorkspaceRoles(db, ws.id);
   const managerRole = roles.findInWorkspace(ws.id, "manager");
   if (managerRole === null) throw new Error("manager role not seeded");
-  const workerBeeRole = roles.findInWorkspace(ws.id, "worker-bee");
-  if (workerBeeRole === null) throw new Error("worker-bee role not seeded");
+  const workerRole = roles.findInWorkspace(ws.id, "worker");
+  if (workerRole === null) throw new Error("worker role not seeded");
 
   function provisionSession(roleId: string): RoleSession {
     const agent = agents.create({ workspace_id: ws.id, role_id: roleId });
@@ -76,7 +76,7 @@ function buildHarness(): Harness {
   }
 
   const manager = provisionSession(managerRole.id);
-  const workerBee = provisionSession(workerBeeRole.id);
+  const worker = provisionSession(workerRole.id);
 
   const stub: SpawnedAgentInfo = {
     sessionId: "stub",
@@ -107,7 +107,7 @@ function buildHarness(): Harness {
     dispatches: createTriggerDispatchStore(db),
   });
 
-  return { server, db, workspaceId: ws.id, manager, workerBee, repoPath };
+  return { server, db, workspaceId: ws.id, manager, worker, repoPath };
 }
 
 async function teardown(h: Harness): Promise<void> {
@@ -120,7 +120,7 @@ function bearer(token: string): { authorization: string } {
   return { authorization: `Bearer ${token}` };
 }
 
-describe("agent CLI authz — manager wildcard vs WorkerBee allow-list", () => {
+describe("agent CLI authz — manager wildcard vs worker allow-list", () => {
   it("manager (allowedCliCommands: ['*']) can hit every /agent/* endpoint", async () => {
     const h = buildHarness();
     try {
@@ -135,7 +135,7 @@ describe("agent CLI authz — manager wildcard vs WorkerBee allow-list", () => {
         method: "POST",
         url: "/agent/spawn",
         headers: bearer(h.manager.token),
-        payload: { role: "worker-bee", prompt: "go", label: "from-mgr" },
+        payload: { role: "worker", prompt: "go", label: "from-mgr" },
       });
       expect(spawnRes.statusCode).toBe(200);
 
@@ -150,20 +150,20 @@ describe("agent CLI authz — manager wildcard vs WorkerBee allow-list", () => {
     }
   });
 
-  it("WorkerBee can call its allowed verbs (whoami, status, ask, report) but is denied dangerous ones (spawn, kill, agents, transcript, roles.*)", async () => {
+  it("worker can call its allowed verbs (whoami, status, ask, report) but is denied dangerous ones (spawn, kill, agents, transcript, roles.*)", async () => {
     const h = buildHarness();
     try {
       const allowedMe = await h.server.inject({
         method: "GET",
         url: "/agent/me",
-        headers: bearer(h.workerBee.token),
+        headers: bearer(h.worker.token),
       });
       expect(allowedMe.statusCode).toBe(200);
 
       const allowedStatus = await h.server.inject({
         method: "POST",
         url: "/agent/status",
-        headers: bearer(h.workerBee.token),
+        headers: bearer(h.worker.token),
         payload: { state: "working", summary: "running tests" },
       });
       expect(allowedStatus.statusCode).toBe(200);
@@ -171,32 +171,32 @@ describe("agent CLI authz — manager wildcard vs WorkerBee allow-list", () => {
       const deniedSpawn = await h.server.inject({
         method: "POST",
         url: "/agent/spawn",
-        headers: bearer(h.workerBee.token),
-        payload: { role: "worker-bee", prompt: "go", label: "naughty" },
+        headers: bearer(h.worker.token),
+        payload: { role: "worker", prompt: "go", label: "naughty" },
       });
       expect(deniedSpawn.statusCode).toBe(403);
       const spawnBody = deniedSpawn.json() as { error: string };
       expect(spawnBody.error).toMatch(/spawn/);
-      expect(spawnBody.error).toMatch(/worker-bee/);
+      expect(spawnBody.error).toMatch(/worker/);
 
       const deniedAgents = await h.server.inject({
         method: "GET",
         url: "/agent/agents",
-        headers: bearer(h.workerBee.token),
+        headers: bearer(h.worker.token),
       });
       expect(deniedAgents.statusCode).toBe(403);
 
       const deniedRolesList = await h.server.inject({
         method: "GET",
         url: "/agent/roles",
-        headers: bearer(h.workerBee.token),
+        headers: bearer(h.worker.token),
       });
       expect(deniedRolesList.statusCode).toBe(403);
 
       const deniedRolesFork = await h.server.inject({
         method: "POST",
         url: "/agent/roles/manager/fork",
-        headers: bearer(h.workerBee.token),
+        headers: bearer(h.worker.token),
         payload: { new_name: "evil-twin" },
       });
       expect(deniedRolesFork.statusCode).toBe(403);
@@ -211,12 +211,12 @@ describe("agent CLI authz — manager wildcard vs WorkerBee allow-list", () => {
       const denied = await h.server.inject({
         method: "POST",
         url: "/agent/sessions/00000000-0000-4000-8000-000000000000/kill",
-        headers: bearer(h.workerBee.token),
+        headers: bearer(h.worker.token),
       });
       expect(denied.statusCode).toBe(403);
       const body = denied.json() as { error: string };
       expect(body.error).toMatch(/'kill'/);
-      expect(body.error).toMatch(/'worker-bee'/);
+      expect(body.error).toMatch(/'worker'/);
     } finally {
       await teardown(h);
     }
@@ -229,7 +229,7 @@ describe("agent CLI authz — manager wildcard vs WorkerBee allow-list", () => {
         method: "POST",
         url: "/agent/spawn",
         headers: { authorization: "Bearer not-a-real-token" },
-        payload: { role: "worker-bee", prompt: "go", label: "x" },
+        payload: { role: "worker", prompt: "go", label: "x" },
       });
       expect(res.statusCode).toBe(401);
     } finally {
@@ -245,7 +245,7 @@ describe("agent CLI authz — manager wildcard vs WorkerBee allow-list", () => {
         url: "/hook",
         payload: {
           hook_event_name: "SessionStart",
-          session_id: h.workerBee.sessionId,
+          session_id: h.worker.sessionId,
           source: "startup",
         },
       });
@@ -261,9 +261,9 @@ describe("agent CLI authz — manager wildcard vs WorkerBee allow-list", () => {
     try {
       const fork = await h.server.inject({
         method: "POST",
-        url: "/agent/roles/worker-bee/fork",
+        url: "/agent/roles/worker/fork",
         headers: bearer(h.manager.token),
-        payload: { new_name: "worker-bee-fork" },
+        payload: { new_name: "worker-fork" },
       });
       expect(fork.statusCode).toBe(201);
       const { role_id, version_id } = fork.json() as {

@@ -245,7 +245,7 @@ describe("POST /agent/roles/:id/fork", () => {
     expect(listRes.statusCode).toBe(200);
     const list = listRes.json() as { roles: Array<{ name: string }> };
     const names = list.roles.map((r) => r.name).sort();
-    expect(names).toEqual(["auditor", "manager", "worker", "worker-bee"]);
+    expect(names).toEqual(["auditor", "manager", "worker"]);
 
     await teardown(h);
   });

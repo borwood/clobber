@@ -193,7 +193,7 @@ describe("clobber CLI — roles list", () => {
     };
     expect(Array.isArray(parsed.roles)).toBe(true);
     const names = parsed.roles.map((r) => r.name).sort();
-    expect(names).toEqual(["manager", "worker", "worker-bee"]);
+    expect(names).toEqual(["manager", "worker"]);
     const manager = parsed.roles.find((r) => r.name === "manager");
     expect(manager!.persistent).toBe(true);
     expect(manager!.version).toBe(1);

@@ -52,7 +52,7 @@ describe("managerRole", () => {
     const body = readFileSync(skillPath, "utf8");
     expect(body).toMatch(/seed-todos\.json/);
     expect(body).toMatch(/--briefing-dir/);
-    expect(body).toMatch(/worker-bee/);
+    expect(body).toMatch(/clobber spawn worker\b/);
   });
 
   it("ships hooks/hooks.json wrapped in { hooks } and with the __CLOBBER_HOOK_URL__ placeholder", () => {

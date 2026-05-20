@@ -104,7 +104,7 @@ afterEach(() => {
 
 async function bootAgent(h: Harness): Promise<BootedAgent> {
   const ws = h.workspaces.create({ name: "ws", repo_path: repoPath });
-  const role = h.roles.create({ name: "worker-bee", persistent: false });
+  const role = h.roles.create({ name: "worker", persistent: false });
   h.workspaceRoles.setCeiling(ws.id, role.id, 5);
   const res = await h.server.inject({
     method: "POST",

@@ -17,7 +17,7 @@ import { withAgentAuth } from "../src/routes/_with-agent-auth.ts";
 interface Harness {
   app: ReturnType<typeof Fastify>;
   managerToken: string;
-  workerBeeToken: string;
+  workerToken: string;
   endedToken: string;
   repoPath: string;
   db: ReturnType<typeof createDatabase>;
@@ -39,8 +39,8 @@ function buildHarness(): Harness {
   seedWorkspaceRoles(db, ws.id);
   const managerRole = roles.findInWorkspace(ws.id, "manager");
   if (managerRole === null) throw new Error("manager role not seeded");
-  const workerBeeRole = roles.findInWorkspace(ws.id, "worker-bee");
-  if (workerBeeRole === null) throw new Error("worker-bee role not seeded");
+  const workerRole = roles.findInWorkspace(ws.id, "worker");
+  if (workerRole === null) throw new Error("worker role not seeded");
 
   function mintFor(roleId: string, ended: boolean = false): string {
     const agent = agents.create({ workspace_id: ws.id, role_id: roleId });
@@ -57,7 +57,7 @@ function buildHarness(): Harness {
   }
 
   const managerToken = mintFor(managerRole.id);
-  const workerBeeToken = mintFor(workerBeeRole.id);
+  const workerToken = mintFor(workerRole.id);
   const endedToken = mintFor(managerRole.id, true);
 
   const capturedSessionIds: string[] = [];
@@ -80,7 +80,7 @@ function buildHarness(): Harness {
     }),
   );
 
-  return { app, managerToken, workerBeeToken, endedToken, repoPath, db, capturedSessionIds };
+  return { app, managerToken, workerToken, endedToken, repoPath, db, capturedSessionIds };
 }
 
 async function teardown(h: Harness): Promise<void> {
@@ -159,12 +159,12 @@ describe("withAgentAuth wrapper — auth-failure paths", () => {
       const res = await h.app.inject({
         method: "POST",
         url: "/test/spawn-route",
-        headers: bearer(h.workerBeeToken),
+        headers: bearer(h.workerToken),
       });
       expect(res.statusCode).toBe(403);
       const body = res.json() as { error: string };
       expect(body.error).toMatch(/'spawn'/);
-      expect(body.error).toMatch(/'worker-bee'/);
+      expect(body.error).toMatch(/'worker'/);
       expect(h.capturedSessionIds).toHaveLength(0);
     } finally {
       await teardown(h);
