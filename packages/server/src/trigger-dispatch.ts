@@ -28,7 +28,7 @@ export interface DispatchDeps {
   readonly runtimeProvider: RuntimeProvider;
   readonly dispatches: TriggerDispatchStore;
   readonly attachSession: AttachSessionFn;
-  readonly synthesize: (trigger: RoleTrigger) => string;
+  readonly synthesize: (trigger: RoleTrigger, payload: unknown) => string;
 }
 
 // Centralized fire-to-session flow shared by every trigger kind. Spawns a
@@ -40,6 +40,7 @@ export function dispatchTrigger(
   deps: DispatchDeps,
   binding: AgentBinding,
   trigger: RoleTrigger,
+  payload: unknown,
 ): boolean {
   const firedAt = deps.clock.now().getTime();
   const agent = deps.agents.get(binding.agentId);
@@ -47,7 +48,7 @@ export function dispatchTrigger(
   const role = deps.roles.get(binding.roleId);
   const workspace = deps.workspaces.get(binding.workspaceId);
   if (role === null || workspace === null) return false;
-  const prompt = deps.synthesize(trigger);
+  const prompt = deps.synthesize(trigger, payload);
 
   const activeForAgent = deps.sessions
     .listActiveForWorkspace(binding.workspaceId)

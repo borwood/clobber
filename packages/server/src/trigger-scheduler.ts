@@ -47,7 +47,7 @@ export interface TriggerSchedulerDeps {
   readonly runtimeProvider: RuntimeProvider;
   readonly dispatches: TriggerDispatchStore;
   readonly attachSession: AttachSessionFn;
-  readonly synthesizePrompt?: (trigger: RoleTrigger) => string;
+  readonly synthesizePrompt?: (trigger: RoleTrigger, payload: unknown) => string;
 }
 
 export interface FireWebhookResult {
@@ -76,10 +76,17 @@ const UNSUPPORTED_KINDS: ReadonlySet<RoleTrigger["kind"]> = new Set([
   "issue-assigned",
 ]);
 
-function defaultSynthesize(trigger: RoleTrigger): string {
+const PAYLOAD_MAX_CHARS = 2000;
+
+function defaultSynthesize(trigger: RoleTrigger, payload: unknown): string {
   if (trigger.kind === "cron") return `a cron fired: ${trigger.expr}`;
   if (trigger.kind === "file-watch") return `a file-watch fired: ${trigger.glob}`;
-  if (trigger.kind === "webhook") return `a webhook fired: ${trigger.path}`;
+  if (trigger.kind === "webhook") {
+    const head = `a webhook fired: ${trigger.path}`;
+    if (payload === undefined) return head;
+    const body = JSON.stringify(payload, null, 2).slice(0, PAYLOAD_MAX_CHARS);
+    return `${head}\n\n${body}`;
+  }
   return trigger.repo === undefined
     ? "an issue was assigned"
     : `an issue was assigned in ${trigger.repo}`;
@@ -149,7 +156,7 @@ export function createTriggerScheduler(
     const delay = Math.max(0, nextAt.getTime() - now.getTime());
     entry.handle = deps.clock.setTimeout(() => {
       entry.handle = null;
-      dispatchTrigger(dispatchDeps, entry, entry.trigger);
+      dispatchTrigger(dispatchDeps, entry, entry.trigger, undefined);
       if (started && isStillTracked(entry)) scheduleNext(entry);
     }, delay);
   }
@@ -253,12 +260,14 @@ export function createTriggerScheduler(
     for (const r of rows) reloadAgent(r.id);
   }
 
-  function fireWebhook(path: string, _payload: unknown): FireWebhookResult {
+  function fireWebhook(path: string, payload: unknown): FireWebhookResult {
     const set = webhooksByPath.get(path);
     if (set === undefined) return { dispatched: 0 };
     let dispatched = 0;
     for (const entry of set) {
-      if (dispatchTrigger(dispatchDeps, entry, entry.trigger)) dispatched += 1;
+      if (dispatchTrigger(dispatchDeps, entry, entry.trigger, payload)) {
+        dispatched += 1;
+      }
     }
     return { dispatched };
   }

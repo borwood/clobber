@@ -451,7 +451,7 @@ describe("TriggerScheduler — webhook firing", () => {
     });
 
     h.scheduler.start();
-    const result = h.scheduler.fireWebhook("/hooks/y", null);
+    const result = h.scheduler.fireWebhook("/hooks/y", undefined);
     expect(result.dispatched).toBe(0);
     expect(h.spawnCalls.length).toBe(0);
 
@@ -482,7 +482,7 @@ describe("TriggerScheduler — webhook firing", () => {
     h.registry.setBusy(sessionId, false);
 
     h.scheduler.start();
-    const result = h.scheduler.fireWebhook("/hooks/x", null);
+    const result = h.scheduler.fireWebhook("/hooks/x", undefined);
     expect(result.dispatched).toBe(1);
     expect(h.spawnCalls.length).toBe(0);
 
@@ -513,7 +513,7 @@ describe("TriggerScheduler — webhook firing", () => {
     });
 
     h.scheduler.start();
-    const result = h.scheduler.fireWebhook("/hooks/x", null);
+    const result = h.scheduler.fireWebhook("/hooks/x", undefined);
     expect(result.dispatched).toBe(2);
 
     const audits = h.dispatches.listForWorkspace(h.workspaceId);
@@ -530,12 +530,85 @@ describe("TriggerScheduler — webhook firing", () => {
     h.scheduler.start();
 
     // No triggers yet
-    expect(h.scheduler.fireWebhook("/hooks/x", null).dispatched).toBe(0);
+    expect(h.scheduler.fireWebhook("/hooks/x", undefined).dispatched).toBe(0);
 
     setManagerWebhook(h, "/hooks/x");
     h.scheduler.reloadRole(h.managerRoleId);
 
-    expect(h.scheduler.fireWebhook("/hooks/x", null).dispatched).toBe(1);
+    expect(h.scheduler.fireWebhook("/hooks/x", undefined).dispatched).toBe(1);
+
+    h.scheduler.stop();
+    h.db.close();
+  });
+
+  it("threads the webhook payload into the synthesized prompt on the spawn path", () => {
+    // Canonical use case: GitHub posts a PR-opened payload — the agent needs
+    // to know *which* PR. The trigger's path alone is not enough.
+    const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
+    const role = h.roles.get(h.managerRoleId) as Role;
+    const cur = getCurrentVersion(h, h.managerRoleId);
+    editRole(h.db, role, cur, {
+      triggers: [{ kind: "webhook", path: "/hooks/gh-pr" }],
+    });
+
+    h.scheduler.start();
+    const payload = {
+      action: "opened",
+      pull_request: { number: 143, title: "fix: payload passthrough" },
+    };
+    const result = h.scheduler.fireWebhook("/hooks/gh-pr", payload);
+    expect(result.dispatched).toBe(1);
+
+    expect(h.spawnCalls.length).toBe(1);
+    const prompt = h.spawnCalls[0]!.prompt;
+    expect(prompt).toContain("/hooks/gh-pr");
+    expect(prompt).toContain("\"action\": \"opened\"");
+    expect(prompt).toContain("fix: payload passthrough");
+    expect(prompt).toContain("143");
+
+    h.scheduler.stop();
+    h.db.close();
+  });
+
+  it("threads the webhook payload into the synthesized prompt on the inject path", () => {
+    const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
+    const role = h.roles.get(h.managerRoleId) as Role;
+    const cur = getCurrentVersion(h, h.managerRoleId);
+    editRole(h.db, role, cur, {
+      triggers: [{ kind: "webhook", path: "/hooks/gh-pr" }],
+    });
+
+    const liveStdin = new PassThrough();
+    const writes: Buffer[] = [];
+    liveStdin.on("data", (c: Buffer) => writes.push(c));
+    const sessionId = "session-live-payload-0001";
+    h.sessions.create({
+      id: sessionId,
+      agent_id: h.managerAgentId,
+      workspace_id: h.workspaceId,
+      role_id: h.managerRoleId,
+      pid: 5252,
+    });
+    h.registry.register(sessionId, liveStdin, () => {});
+    h.registry.setBusy(sessionId, false);
+
+    h.scheduler.start();
+    const payload = {
+      action: "opened",
+      pull_request: { number: 143, title: "fix: payload passthrough" },
+    };
+    const result = h.scheduler.fireWebhook("/hooks/gh-pr", payload);
+    expect(result.dispatched).toBe(1);
+
+    const text = Buffer.concat(writes).toString("utf8");
+    const envelope = JSON.parse(text) as {
+      message: { content: string };
+    };
+    const content = envelope.message.content;
+    expect(content).toContain("/hooks/gh-pr");
+    expect(content).toContain("\"action\": \"opened\"");
+    expect(content).toContain("fix: payload passthrough");
+    expect(content).toContain("143");
 
     h.scheduler.stop();
     h.db.close();
