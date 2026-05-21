@@ -60,8 +60,7 @@ describe("SdlcProfile primitive", () => {
     expect(variant.systemPrompt).not.toContain("watch-ci");
   });
 
-  it("registry exposes a single 'worker' bundle — 'worker-bee' is no longer separate", () => {
+  it("registry resolves the worker bundle by name", () => {
     expect(loadRoleBundle("worker")).toBe(workerRole);
-    expect(loadRoleBundle("worker-bee")).toBeNull();
   });
 });

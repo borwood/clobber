@@ -131,7 +131,7 @@ set.
 | Office on whiteboard | yes (permanent) | only while session is active |
 | Survives session end | yes (waits for next embodiment) | no (destroyed) |
 | Created by | manager via `agent install` (or initial workspace setup) | manager via `agent invoke` / `clobber spawn` |
-| Examples | a Slack-attentive assistant, a code reviewer that wakes on PR open | a one-shot worker bee given a focused task |
+| Examples | a Slack-attentive assistant, a code reviewer that wakes on PR open | a one-shot worker given a focused task |
 
 The manager-as-customization-shell consequence: persistent agents are how a workspace grows over time. The user adds capability by asking the manager to create them.
 

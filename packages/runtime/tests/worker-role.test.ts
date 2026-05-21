@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { workerRole, defaultSdlcProfile } from "../src/index.ts";
 
-describe("workerRole (collapsed worker + worker-bee)", () => {
+describe("workerRole", () => {
   it("is ephemeral and runs in bypassPermissions for autonomy", () => {
     expect(workerRole.manifest.persistent).toBe(false);
     expect(workerRole.manifest.permissionMode).toBe("bypassPermissions");
