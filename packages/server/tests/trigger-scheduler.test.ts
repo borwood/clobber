@@ -417,6 +417,136 @@ describe("TriggerScheduler — cron firing", () => {
   });
 });
 
+describe("TriggerScheduler — per-workspace trigger overrides", () => {
+  it("does not register or fire a cron trigger whose id is in the workspace override map", () => {
+    const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
+    setManagerCron(h, "0 9 * * *");
+    h.workspaces.updateConfig(h.workspaceId, {
+      trigger_overrides: {
+        [h.managerRoleId]: { disabled_trigger_ids: ["cron:0 9 * * *"] },
+      },
+    });
+
+    h.scheduler.start();
+    h.clock.advance(60_000); // cross 09:00
+    expect(h.spawnCalls.length).toBe(0);
+
+    const audit = h.dispatches.listForAgent(h.managerAgentId);
+    expect(audit.length).toBe(1);
+    expect(audit[0]!.dispatch_outcome).toBe("disabled-by-workspace");
+    expect(audit[0]!.trigger_kind).toBe("cron");
+
+    h.scheduler.stop();
+    h.db.close();
+  });
+
+  it("does not fire a webhook trigger whose id is in the workspace override map", () => {
+    const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
+    setManagerWebhook(h, "/hooks/x");
+    h.workspaces.updateConfig(h.workspaceId, {
+      trigger_overrides: {
+        [h.managerRoleId]: { disabled_trigger_ids: ["webhook:/hooks/x"] },
+      },
+    });
+
+    h.scheduler.start();
+    const result = h.scheduler.fireWebhook("/hooks/x", { sample: 1 });
+    expect(result.dispatched).toBe(0);
+    expect(h.spawnCalls.length).toBe(0);
+
+    const audit = h.dispatches.listForAgent(h.managerAgentId);
+    expect(audit.length).toBe(1);
+    expect(audit[0]!.dispatch_outcome).toBe("disabled-by-workspace");
+    expect(audit[0]!.trigger_kind).toBe("webhook");
+
+    h.scheduler.stop();
+    h.db.close();
+  });
+
+  it("non-overridden triggers on the same role continue to fire normally", () => {
+    // Disable the 9am cron; leave a 10am cron alone — the 10am should still fire.
+    const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
+    const role = h.roles.get(h.managerRoleId) as Role;
+    const cur = getCurrentVersion(h, h.managerRoleId);
+    editRole(h.db, role, cur, {
+      triggers: [
+        { kind: "cron", expr: "0 9 * * *" },
+        { kind: "cron", expr: "0 10 * * *" },
+      ],
+    });
+    h.workspaces.updateConfig(h.workspaceId, {
+      trigger_overrides: {
+        [h.managerRoleId]: { disabled_trigger_ids: ["cron:0 9 * * *"] },
+      },
+    });
+
+    h.scheduler.start();
+    // Cross 09:00 — disabled, should not fire
+    h.clock.advance(60_000);
+    expect(h.spawnCalls.length).toBe(0);
+    // Cross 10:00 — should fire
+    h.clock.advance(60 * 60 * 1000);
+    expect(h.spawnCalls.length).toBe(1);
+    expect(h.spawnCalls[0]!.prompt).toContain("0 10 * * *");
+
+    h.scheduler.stop();
+    h.db.close();
+  });
+
+  it("scheduler.reloadAgent picks up an override added after registration", () => {
+    // Start with the cron firing normally; then add an override and reload.
+    const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
+    setManagerCron(h, "0 9 * * *");
+    h.scheduler.start();
+
+    // First fire at 09:00 — no override yet
+    h.clock.advance(60_000);
+    expect(h.spawnCalls.length).toBe(1);
+
+    // Disable the trigger and reload
+    h.workspaces.updateConfig(h.workspaceId, {
+      trigger_overrides: {
+        [h.managerRoleId]: { disabled_trigger_ids: ["cron:0 9 * * *"] },
+      },
+    });
+    h.scheduler.reloadAgent(h.managerAgentId);
+
+    // Mark first session idle so an injection would otherwise happen
+    h.registry.setBusy(h.spawnCalls[0]!.sessionId, false);
+    // Cross next 09:00 — disabled, should not produce a second spawn or injection
+    h.clock.advance(24 * 60 * 60 * 1000);
+    expect(h.spawnCalls.length).toBe(1);
+
+    const audit = h.dispatches.listForAgent(h.managerAgentId);
+    // Initial fire (spawned) plus the disabled-by-workspace row from reload.
+    // Audit is ordered by fired_at DESC, so the reload row comes first.
+    expect(audit.length).toBe(2);
+    expect(audit[0]!.dispatch_outcome).toBe("disabled-by-workspace");
+    expect(audit[1]!.dispatch_outcome).toBe("spawned");
+
+    h.scheduler.stop();
+    h.db.close();
+  });
+
+  it("override map for a different role does not affect this role's triggers", () => {
+    const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
+    setManagerCron(h, "0 9 * * *");
+    // Disable a trigger on the (unrelated) worker role
+    h.workspaces.updateConfig(h.workspaceId, {
+      trigger_overrides: {
+        [h.workerRoleId]: { disabled_trigger_ids: ["cron:0 9 * * *"] },
+      },
+    });
+
+    h.scheduler.start();
+    h.clock.advance(60_000);
+    expect(h.spawnCalls.length).toBe(1);
+
+    h.scheduler.stop();
+    h.db.close();
+  });
+});
+
 describe("TriggerScheduler — webhook firing", () => {
   it("fires a webhook trigger when fireWebhook is called for a matching path and spawns a fresh session", () => {
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));

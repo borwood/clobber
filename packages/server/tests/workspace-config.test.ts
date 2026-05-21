@@ -10,6 +10,7 @@ import {
   DEFAULT_SETTING_SOURCES,
   DEFAULT_WAKE_PROMPT,
   DEFAULT_ROLE_EDIT_FORBIDDEN_KEYS,
+  DEFAULT_TRIGGER_OVERRIDES,
   type Workspace,
 } from "@clobber/shared";
 
@@ -195,5 +196,105 @@ describe("PATCH /workspaces/:id — updating setting_sources", () => {
     const getRes = await app.inject({ method: "GET", url: `/workspaces/${ws.id}` });
     const refreshed = getRes.json() as Workspace;
     expect(refreshed.setting_sources).toEqual(["user", "project"]);
+  });
+});
+
+describe("workspace trigger_overrides — defaults + creation", () => {
+  it("new workspaces default to an empty trigger_overrides map (no triggers disabled)", async () => {
+    const ws = await createWorkspace({});
+    expect(ws.trigger_overrides).toEqual({ ...DEFAULT_TRIGGER_OVERRIDES });
+  });
+
+  it("accepts a custom trigger_overrides on creation", async () => {
+    const roleId = "11111111-2222-4333-8444-555555555555";
+    const ws = await createWorkspace({
+      trigger_overrides: { [roleId]: { disabled_trigger_ids: ["cron:0 9 * * *"] } },
+    });
+    expect(ws.trigger_overrides).toEqual({
+      [roleId]: { disabled_trigger_ids: ["cron:0 9 * * *"] },
+    });
+  });
+
+  it("rejects duplicate disabled_trigger_ids", async () => {
+    const roleId = "11111111-2222-4333-8444-555555555555";
+    const res = await app.inject({
+      method: "POST",
+      url: "/workspaces",
+      payload: {
+        name: "ws",
+        repo_path: repoPath,
+        trigger_overrides: {
+          [roleId]: { disabled_trigger_ids: ["cron:0 9 * * *", "cron:0 9 * * *"] },
+        },
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("rejects a non-uuid role-instance key in the override map", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/workspaces",
+      payload: {
+        name: "ws",
+        repo_path: repoPath,
+        trigger_overrides: {
+          "not-a-uuid": { disabled_trigger_ids: ["cron:0 9 * * *"] },
+        },
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe("PATCH /workspaces/:id — updating trigger_overrides", () => {
+  it("PATCH trigger_overrides round-trips: enable → disable → re-enable", async () => {
+    const ws = await createWorkspace({});
+    const roleId = "11111111-2222-4333-8444-555555555555";
+
+    // Disable
+    const disableRes = await app.inject({
+      method: "PATCH",
+      url: `/workspaces/${ws.id}`,
+      payload: {
+        trigger_overrides: { [roleId]: { disabled_trigger_ids: ["cron:0 9 * * *"] } },
+      },
+    });
+    expect(disableRes.statusCode).toBe(200);
+    expect((disableRes.json() as Workspace).trigger_overrides).toEqual({
+      [roleId]: { disabled_trigger_ids: ["cron:0 9 * * *"] },
+    });
+
+    // Re-enable (clear the override map)
+    const enableRes = await app.inject({
+      method: "PATCH",
+      url: `/workspaces/${ws.id}`,
+      payload: { trigger_overrides: {} },
+    });
+    expect(enableRes.statusCode).toBe(200);
+    expect((enableRes.json() as Workspace).trigger_overrides).toEqual({});
+
+    // GET reflects the cleared map
+    const getRes = await app.inject({ method: "GET", url: `/workspaces/${ws.id}` });
+    expect((getRes.json() as Workspace).trigger_overrides).toEqual({});
+  });
+
+  it("PATCH trigger_overrides leaves other fields untouched", async () => {
+    const ws = await createWorkspace({});
+    const roleId = "11111111-2222-4333-8444-555555555555";
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/workspaces/${ws.id}`,
+      payload: {
+        trigger_overrides: { [roleId]: { disabled_trigger_ids: ["webhook:/h/x"] } },
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const updated = res.json() as Workspace;
+    expect(updated.wake_prompt).toBe(DEFAULT_WAKE_PROMPT);
+    expect(updated.role_edit_policy).toEqual({
+      forbidden_keys: [...DEFAULT_ROLE_EDIT_FORBIDDEN_KEYS],
+    });
+    expect(updated.setting_sources).toEqual([...DEFAULT_SETTING_SOURCES]);
   });
 });
