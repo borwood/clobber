@@ -19,6 +19,7 @@ import { createAgentStatusLogStore } from "../src/agent-status-log-store.ts";
 import { createAgentQuestionStore } from "../src/agent-question-store.ts";
 import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
+import { createFinalReportConsumerStateStore } from "../src/final-report-consumer.ts";
 import type {
   AgentSpawner,
   AgentSpawnRequest,
@@ -87,6 +88,7 @@ const roleVersions = createRoleVersionStore(db);
     cliEntry: "/dummy/cli.ts",
   
     dispatches: createTriggerDispatchStore(db),
+    finalReportConsumerState: createFinalReportConsumerStateStore(db),
   });
   return { server, db, workspaces, roles, workspaceRoles, sessions, tokens, calls };
 }

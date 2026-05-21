@@ -16,6 +16,7 @@ import { registerWhiteboardRoutes } from "./routes/whiteboard.ts";
 import { registerWebhookTriggersRoutes } from "./routes/webhook-triggers.ts";
 import { createAgentRegistry } from "./agent-registry.ts";
 import { createTriggerScheduler } from "./trigger-scheduler.ts";
+import { createFinalReportConsumer } from "./final-report-consumer.ts";
 import {
   attachSessionToAgent,
   resumeSessionTurn,
@@ -182,9 +183,19 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     ...(opts.askTimeoutMs === undefined ? {} : { askTimeoutMs: opts.askTimeoutMs }),
   });
 
+  const finalReportConsumer = createFinalReportConsumer({
+    db: opts.db,
+    workspaces: opts.workspaces,
+    agentStatusLog: opts.agentStatusLog,
+    stateStore: opts.finalReportConsumerState,
+    clock,
+  });
+
   scheduler.start();
+  finalReportConsumer.start();
   app.addHook("onClose", async () => {
     scheduler.stop();
+    finalReportConsumer.stop();
   });
 
   return app;

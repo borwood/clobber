@@ -18,6 +18,7 @@ import { createAgentStatusLogStore } from "./agent-status-log-store.ts";
 import { createAgentQuestionStore } from "./agent-question-store.ts";
 import { createAgentQuestionWaiter } from "./agent-question-waiter.ts";
 import { createTriggerDispatchStore } from "./trigger-dispatch-store.ts";
+import { createFinalReportConsumerStateStore } from "./final-report-consumer.ts";
 import { reapOrphanedSessions } from "./boot-reap.ts";
 
 const PORT = 3370;
@@ -82,6 +83,7 @@ const agentStatusLog = createAgentStatusLogStore(db);
 const agentQuestions = createAgentQuestionStore(db);
 const agentQuestionWaiter = createAgentQuestionWaiter();
 const dispatches = createTriggerDispatchStore(db);
+const finalReportConsumerState = createFinalReportConsumerStateStore(db);
 reapOrphanedSessions({
   sessions,
   agents,
@@ -107,6 +109,7 @@ const app = createServer({
   agentQuestions,
   agentQuestionWaiter,
   dispatches,
+  finalReportConsumerState,
   runtimeProvider,
   spawner,
   hookUrl: HOOK_URL,

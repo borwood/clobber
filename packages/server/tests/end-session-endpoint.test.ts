@@ -21,6 +21,7 @@ import { createAgentQuestionStore } from "../src/agent-question-store.ts";
 import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import type { AgentSpawner, SpawnedAgentInfo } from "../src/types.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
+import { createFinalReportConsumerStateStore } from "../src/final-report-consumer.ts";
 
 interface KillRecord {
   readonly sessionId: string;
@@ -88,6 +89,7 @@ function buildHarness(opts: { persistent: boolean }): Harness {
     cliEntry: "/dummy/cli.ts",
   
     dispatches: createTriggerDispatchStore(db),
+    finalReportConsumerState: createFinalReportConsumerStateStore(db),
   });
   return { server, db, workspaces, roles, workspaceRoles, agents, sessions, killCalls, repoPath };
 }

@@ -19,6 +19,7 @@ import type { AgentStatusLogStore } from "./agent-status-log-store.ts";
 import type { AgentQuestionStore } from "./agent-question-store.ts";
 import type { AgentQuestionWaiter } from "./agent-question-waiter.ts";
 import type { TriggerDispatchStore } from "./trigger-dispatch-store.ts";
+import type { FinalReportConsumerStateStore } from "./final-report-consumer.ts";
 import type { Clock } from "./clock.ts";
 
 export type AgentSpawnRequest = RuntimeSpawnRequest;
@@ -57,5 +58,6 @@ export interface ServerOptions {
   readonly apiBase: string;
   readonly cliEntry: string;
   readonly dispatches: TriggerDispatchStore;
+  readonly finalReportConsumerState: FinalReportConsumerStateStore;
   readonly clock?: Clock;
 }

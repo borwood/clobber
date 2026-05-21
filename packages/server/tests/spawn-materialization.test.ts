@@ -21,6 +21,7 @@ import { createAgentQuestionStore } from "../src/agent-question-store.ts";
 import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import type { AgentSpawner, AgentSpawnRequest } from "../src/types.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
+import { createFinalReportConsumerStateStore } from "../src/final-report-consumer.ts";
 
 let repoPath: string;
 
@@ -87,6 +88,7 @@ function buildHarness(opts: { readonly runtimeProvider?: RuntimeProvider } = {})
     apiBase: "http://127.0.0.1:3300",
     cliEntry: "/abs/cli/index.ts",
     dispatches: createTriggerDispatchStore(db),
+    finalReportConsumerState: createFinalReportConsumerStateStore(db),
     ...(opts.runtimeProvider === undefined
       ? {}
       : { runtimeProvider: opts.runtimeProvider }),

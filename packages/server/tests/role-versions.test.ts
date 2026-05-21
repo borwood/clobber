@@ -20,6 +20,7 @@ import { createAgentQuestionStore } from "../src/agent-question-store.ts";
 import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import type { AgentSpawnRequest, AgentSpawner } from "../src/types.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
+import { createFinalReportConsumerStateStore } from "../src/final-report-consumer.ts";
 
 function tableColumns(db: ReturnType<typeof createDatabase>, table: string): readonly string[] {
   const rows = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
@@ -242,6 +243,7 @@ describe("executeSpawn pins sessions.role_version_id (#23)", () => {
         cliEntry: "/abs/cli/index.ts",
       
     dispatches: createTriggerDispatchStore(db),
+    finalReportConsumerState: createFinalReportConsumerStateStore(db),
   });
       try {
         const ws = workspaces.create({ name: "ws", repo_path: repoPath });

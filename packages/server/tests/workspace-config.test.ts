@@ -12,6 +12,7 @@ import {
   DEFAULT_WAKE_PROMPT,
   DEFAULT_ROLE_EDIT_FORBIDDEN_KEYS,
   DEFAULT_TRIGGER_OVERRIDES,
+  DEFAULT_FINAL_REPORT_CALLBACK,
   type Workspace,
 } from "@clobber/shared";
 
@@ -338,5 +339,139 @@ describe("PATCH /workspaces/:id — updating trigger_overrides", () => {
       forbidden_keys: [...DEFAULT_ROLE_EDIT_FORBIDDEN_KEYS],
     });
     expect(updated.setting_sources).toEqual([...DEFAULT_SETTING_SOURCES]);
+  });
+});
+
+describe("workspace final_report_callback — defaults + creation", () => {
+  it("new workspaces default to noop", async () => {
+    const ws = await createWorkspace({});
+    expect(ws.final_report_callback).toEqual({ ...DEFAULT_FINAL_REPORT_CALLBACK });
+  });
+
+  it("accepts an exec callback on creation", async () => {
+    const ws = await createWorkspace({
+      final_report_callback: {
+        kind: "exec",
+        command: "gh",
+        args: ["issue", "create", "--repo", "owner/repo"],
+      },
+    });
+    expect(ws.final_report_callback).toEqual({
+      kind: "exec",
+      command: "gh",
+      args: ["issue", "create", "--repo", "owner/repo"],
+    });
+  });
+
+  it("accepts an http callback on creation", async () => {
+    const ws = await createWorkspace({
+      final_report_callback: {
+        kind: "http",
+        url: "https://hooks.example.test/intake",
+        headers: { "x-token": "abc" },
+      },
+    });
+    expect(ws.final_report_callback).toEqual({
+      kind: "http",
+      url: "https://hooks.example.test/intake",
+      headers: { "x-token": "abc" },
+    });
+  });
+
+  it("rejects an unknown callback kind", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/workspaces",
+      payload: {
+        name: "ws",
+        repo_path: repoPath,
+        final_report_callback: { kind: "telepathy" },
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("rejects an exec callback with empty command", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/workspaces",
+      payload: {
+        name: "ws",
+        repo_path: repoPath,
+        final_report_callback: { kind: "exec", command: "" },
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("rejects an http callback with an invalid URL", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/workspaces",
+      payload: {
+        name: "ws",
+        repo_path: repoPath,
+        final_report_callback: { kind: "http", url: "not-a-url" },
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe("PATCH /workspaces/:id — updating final_report_callback", () => {
+  it("PATCH final_report_callback round-trips: noop → exec → noop", async () => {
+    const ws = await createWorkspace({});
+    const setExec = await app.inject({
+      method: "PATCH",
+      url: `/workspaces/${ws.id}`,
+      payload: {
+        final_report_callback: { kind: "exec", command: "true" },
+      },
+    });
+    expect(setExec.statusCode).toBe(200);
+    expect((setExec.json() as Workspace).final_report_callback).toEqual({
+      kind: "exec",
+      command: "true",
+    });
+    const back = await app.inject({
+      method: "PATCH",
+      url: `/workspaces/${ws.id}`,
+      payload: { final_report_callback: { kind: "noop" } },
+    });
+    expect(back.statusCode).toBe(200);
+    expect((back.json() as Workspace).final_report_callback).toEqual({ kind: "noop" });
+  });
+
+  it("PATCH final_report_callback alone does not reload the trigger scheduler", async () => {
+    const ws = await createWorkspace({});
+    reloadedRoles.length = 0;
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/workspaces/${ws.id}`,
+      payload: {
+        final_report_callback: { kind: "http", url: "https://x.test/h" },
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(reloadedRoles).toEqual([]);
+  });
+
+  it("PATCH final_report_callback leaves other config fields untouched", async () => {
+    const ws = await createWorkspace({});
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/workspaces/${ws.id}`,
+      payload: {
+        final_report_callback: { kind: "exec", command: "echo" },
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const updated = res.json() as Workspace;
+    expect(updated.setting_sources).toEqual([...DEFAULT_SETTING_SOURCES]);
+    expect(updated.wake_prompt).toBe(DEFAULT_WAKE_PROMPT);
+    expect(updated.role_edit_policy).toEqual({
+      forbidden_keys: [...DEFAULT_ROLE_EDIT_FORBIDDEN_KEYS],
+    });
+    expect(updated.trigger_overrides).toEqual({ ...DEFAULT_TRIGGER_OVERRIDES });
   });
 });

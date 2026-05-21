@@ -20,6 +20,7 @@ import { createAgentQuestionStore } from "../src/agent-question-store.ts";
 import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import type { AgentSpawner, AgentSpawnRequest } from "../src/types.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
+import { createFinalReportConsumerStateStore } from "../src/final-report-consumer.ts";
 
 let repoPath: string;
 
@@ -86,6 +87,7 @@ function buildHarness(): Harness {
     cliEntry: "/abs/cli/index.ts",
   
     dispatches: createTriggerDispatchStore(db),
+    finalReportConsumerState: createFinalReportConsumerStateStore(db),
   });
   return { server, db, workspaces, roles, workspaceRoles, agents, sessions, calls };
 }

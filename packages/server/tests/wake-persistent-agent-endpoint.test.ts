@@ -19,6 +19,7 @@ import { createAgentStatusLogStore } from "../src/agent-status-log-store.ts";
 import { createAgentQuestionStore } from "../src/agent-question-store.ts";
 import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
+import { createFinalReportConsumerStateStore } from "../src/final-report-consumer.ts";
 import { seedWorkspaceRoles } from "../src/seed-workspace-roles.ts";
 import type { AgentSpawner, AgentSpawnRequest } from "../src/types.ts";
 
@@ -88,6 +89,7 @@ function buildHarness(): Harness {
     apiBase: "http://127.0.0.1:3300",
     cliEntry: "/abs/cli/index.ts",
     dispatches: createTriggerDispatchStore(db),
+    finalReportConsumerState: createFinalReportConsumerStateStore(db),
   });
   return { server, db, workspaces, roles, workspaceRoles, agents, sessions, calls };
 }

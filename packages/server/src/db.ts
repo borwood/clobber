@@ -16,14 +16,15 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id, id);
 
   CREATE TABLE IF NOT EXISTS workspaces (
-    id                 TEXT    PRIMARY KEY,
-    name               TEXT    NOT NULL UNIQUE,
-    repo_path          TEXT    NOT NULL,
-    setting_sources    TEXT    NOT NULL DEFAULT '["user","project","local"]',
-    wake_prompt        TEXT    NOT NULL DEFAULT 'You have been woken without a specific task. Review your office notes, then summarise where you left off and what (if anything) needs your attention next.',
-    role_edit_policy   TEXT    NOT NULL DEFAULT '{"forbidden_keys":["hooks","permission_mode"]}',
-    trigger_overrides  TEXT    NOT NULL DEFAULT '{}',
-    created_at         INTEGER NOT NULL
+    id                    TEXT    PRIMARY KEY,
+    name                  TEXT    NOT NULL UNIQUE,
+    repo_path             TEXT    NOT NULL,
+    setting_sources       TEXT    NOT NULL DEFAULT '["user","project","local"]',
+    wake_prompt           TEXT    NOT NULL DEFAULT 'You have been woken without a specific task. Review your office notes, then summarise where you left off and what (if anything) needs your attention next.',
+    role_edit_policy      TEXT    NOT NULL DEFAULT '{"forbidden_keys":["hooks","permission_mode"]}',
+    trigger_overrides     TEXT    NOT NULL DEFAULT '{}',
+    final_report_callback TEXT    NOT NULL DEFAULT '{"kind":"noop"}',
+    created_at            INTEGER NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_workspaces_created ON workspaces(created_at DESC);
 
@@ -175,6 +176,12 @@ const SCHEMA = `
     ON trigger_dispatches(agent_id, fired_at DESC);
   CREATE INDEX IF NOT EXISTS idx_trigger_dispatches_workspace
     ON trigger_dispatches(workspace_id, fired_at DESC);
+
+  CREATE TABLE IF NOT EXISTS final_report_consumer_state (
+    workspace_id     TEXT    PRIMARY KEY,
+    last_consumed_id INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+  );
 `;
 
 export function createDatabase(path: string): Database {

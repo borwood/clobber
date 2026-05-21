@@ -76,6 +76,9 @@ export function registerWorkspaceRoutes(
         ...(parsed.data.trigger_overrides === undefined
           ? {}
           : { trigger_overrides: parsed.data.trigger_overrides }),
+        ...(parsed.data.final_report_callback === undefined
+          ? {}
+          : { final_report_callback: parsed.data.final_report_callback }),
       });
       if (updated === null) {
         reply.code(404);
