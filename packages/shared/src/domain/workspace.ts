@@ -34,6 +34,28 @@ export const RoleEditPolicySchema = z.object({
 });
 export type RoleEditPolicy = z.infer<typeof RoleEditPolicySchema>;
 
+// Per-role-instance trigger disable list. The id of a trigger comes from
+// triggerId() in role.ts — a stable canonical form derived from the
+// trigger's shape (e.g. `cron:0 9 * * *`). Empty list = nothing disabled;
+// an absent entry for a role = nothing disabled. Forward-compatible: a
+// future per-trigger param override (changing a cron schedule, filtering
+// a webhook payload) would extend this object with additional fields.
+export const TriggerOverrideSchema = z.object({
+  disabled_trigger_ids: z.array(z.string().min(1)).refine(
+    (s) => new Set(s).size === s.length,
+    { message: "disabled_trigger_ids must not contain duplicates" },
+  ),
+});
+export type TriggerOverride = z.infer<typeof TriggerOverrideSchema>;
+
+export const TriggerOverridesSchema = z.record(
+  z.string().uuid(),
+  TriggerOverrideSchema,
+);
+export type TriggerOverrides = z.infer<typeof TriggerOverridesSchema>;
+
+export const DEFAULT_TRIGGER_OVERRIDES: TriggerOverrides = {};
+
 export const WorkspaceSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1),
@@ -41,6 +63,7 @@ export const WorkspaceSchema = z.object({
   setting_sources: SettingSourcesSchema,
   wake_prompt: z.string().min(1),
   role_edit_policy: RoleEditPolicySchema,
+  trigger_overrides: TriggerOverridesSchema,
   created_at: z.number().int().nonnegative(),
 });
 export type Workspace = z.infer<typeof WorkspaceSchema>;
@@ -51,6 +74,7 @@ export const CreateWorkspaceRequestSchema = z.object({
   setting_sources: SettingSourcesSchema.optional(),
   wake_prompt: z.string().min(1).optional(),
   role_edit_policy: RoleEditPolicySchema.optional(),
+  trigger_overrides: TriggerOverridesSchema.optional(),
 });
 export type CreateWorkspaceRequest = z.infer<typeof CreateWorkspaceRequestSchema>;
 
@@ -59,15 +83,17 @@ export const UpdateWorkspaceConfigRequestSchema = z
     setting_sources: SettingSourcesSchema.optional(),
     wake_prompt: z.string().min(1).optional(),
     role_edit_policy: RoleEditPolicySchema.optional(),
+    trigger_overrides: TriggerOverridesSchema.optional(),
   })
   .refine(
     (v) =>
       v.setting_sources !== undefined ||
       v.wake_prompt !== undefined ||
-      v.role_edit_policy !== undefined,
+      v.role_edit_policy !== undefined ||
+      v.trigger_overrides !== undefined,
     {
       message:
-        "must include at least one of setting_sources, wake_prompt, role_edit_policy",
+        "must include at least one of setting_sources, wake_prompt, role_edit_policy, trigger_overrides",
     },
   );
 export type UpdateWorkspaceConfigRequest = z.infer<

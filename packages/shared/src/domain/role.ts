@@ -76,6 +76,25 @@ export const RoleTriggerSchema = z.discriminatedUnion("kind", [
 ]);
 export type RoleTrigger = z.infer<typeof RoleTriggerSchema>;
 
+// Triggers have no native id — they are identified by their canonical
+// shape. The id is what workspace config refers to when disabling a
+// specific trigger on a specific role-instance. Forward-compatible:
+// adding a new kind means extending this switch with a new prefix.
+export function triggerId(trigger: RoleTrigger): string {
+  switch (trigger.kind) {
+    case "cron":
+      return `cron:${trigger.expr}`;
+    case "webhook":
+      return `webhook:${trigger.path}`;
+    case "file-watch":
+      return `file-watch:${trigger.glob}`;
+    case "issue-assigned":
+      return trigger.repo === undefined
+        ? "issue-assigned"
+        : `issue-assigned:${trigger.repo}`;
+  }
+}
+
 export const RoleVersionSchema = z.object({
   id: z.string().uuid(),
   role_id: z.string().uuid(),

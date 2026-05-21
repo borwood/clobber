@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { RoleTriggerSchema } from "../src/domain/role.ts";
+import { RoleTriggerSchema, triggerId } from "../src/domain/role.ts";
 
 describe("RoleTriggerSchema", () => {
   it("accepts a cron trigger with a valid expression", () => {
@@ -69,5 +69,31 @@ describe("RoleTriggerSchema", () => {
   it("rejects a missing kind", () => {
     const result = RoleTriggerSchema.safeParse({ expr: "0 9 * * *" });
     expect(result.success).toBe(false);
+  });
+});
+
+describe("triggerId — canonical id per trigger shape", () => {
+  it("derives a stable id for a cron trigger", () => {
+    expect(triggerId({ kind: "cron", expr: "0 9 * * *" })).toBe("cron:0 9 * * *");
+  });
+
+  it("derives a stable id for a webhook trigger", () => {
+    expect(triggerId({ kind: "webhook", path: "/hooks/x" })).toBe("webhook:/hooks/x");
+  });
+
+  it("derives a stable id for a file-watch trigger", () => {
+    expect(triggerId({ kind: "file-watch", glob: "src/**/*.ts" })).toBe(
+      "file-watch:src/**/*.ts",
+    );
+  });
+
+  it("derives a stable id for an issue-assigned trigger without a repo filter", () => {
+    expect(triggerId({ kind: "issue-assigned" })).toBe("issue-assigned");
+  });
+
+  it("derives a stable id for an issue-assigned trigger with a repo filter", () => {
+    expect(triggerId({ kind: "issue-assigned", repo: "owner/name" })).toBe(
+      "issue-assigned:owner/name",
+    );
   });
 });

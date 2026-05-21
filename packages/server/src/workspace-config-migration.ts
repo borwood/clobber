@@ -23,6 +23,12 @@ export function migrateWorkspaceConfig(db: Database): void {
     "role_edit_policy",
     `TEXT NOT NULL DEFAULT '{"forbidden_keys":["hooks","permission_mode"]}'`,
   );
+  ensureColumn(
+    db,
+    "workspaces",
+    "trigger_overrides",
+    `TEXT NOT NULL DEFAULT '{}'`,
+  );
 }
 
 function ensureColumn(

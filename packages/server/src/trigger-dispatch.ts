@@ -132,3 +132,25 @@ export function recordUnsupportedTrigger(
     error: `trigger kind "${trigger.kind}" has no live event source — declared but never fires`,
   });
 }
+
+// Mirrors recordUnsupportedTrigger so an explicit per-workspace disable stays
+// visible in the dispatch log. The modularity-gap principle from PR #143
+// applies: nothing silently dropped — declared-but-disabled triggers leave a
+// breadcrumb.
+export function recordDisabledTrigger(
+  deps: Pick<DispatchDeps, "dispatches" | "clock">,
+  binding: AgentBinding,
+  trigger: RoleTrigger,
+  triggerIdValue: string,
+): void {
+  deps.dispatches.append({
+    workspace_id: binding.workspaceId,
+    role_id: binding.roleId,
+    agent_id: binding.agentId,
+    trigger_kind: trigger.kind,
+    trigger_payload: trigger,
+    fired_at: deps.clock.now().getTime(),
+    dispatch_outcome: "disabled-by-workspace",
+    error: `trigger "${triggerIdValue}" is disabled by workspace config`,
+  });
+}
