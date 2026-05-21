@@ -4,10 +4,12 @@ import {
   DEFAULT_SETTING_SOURCES,
   DEFAULT_WAKE_PROMPT,
   DEFAULT_ROLE_EDIT_FORBIDDEN_KEYS,
+  DEFAULT_TRIGGER_OVERRIDES,
   WorkspaceSchema,
   type CreateWorkspaceRequest,
   type RoleEditPolicy,
   type SettingSource,
+  type TriggerOverrides,
   type Workspace,
 } from "@clobber/shared";
 
@@ -15,6 +17,7 @@ export interface WorkspaceConfigPatch {
   readonly setting_sources?: readonly SettingSource[];
   readonly wake_prompt?: string;
   readonly role_edit_policy?: RoleEditPolicy;
+  readonly trigger_overrides?: TriggerOverrides;
 }
 
 export interface WorkspaceStore {
@@ -33,6 +36,7 @@ interface Row {
   setting_sources: string;
   wake_prompt: string;
   role_edit_policy: string;
+  trigger_overrides: string;
   created_at: number;
 }
 
@@ -44,6 +48,7 @@ function rowToWorkspace(row: Row): Workspace {
     setting_sources: JSON.parse(row.setting_sources),
     wake_prompt: row.wake_prompt,
     role_edit_policy: JSON.parse(row.role_edit_policy),
+    trigger_overrides: JSON.parse(row.trigger_overrides),
     created_at: row.created_at,
   });
 }
@@ -51,8 +56,8 @@ function rowToWorkspace(row: Row): Workspace {
 export function createWorkspaceStore(db: Database): WorkspaceStore {
   const insertStmt = db.prepare(
     `INSERT INTO workspaces
-       (id, name, repo_path, setting_sources, wake_prompt, role_edit_policy, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       (id, name, repo_path, setting_sources, wake_prompt, role_edit_policy, trigger_overrides, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const getStmt = db.prepare("SELECT * FROM workspaces WHERE id = ?");
   const findByNameStmt = db.prepare("SELECT * FROM workspaces WHERE name = ?");
@@ -70,6 +75,8 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
       const policy: RoleEditPolicy = req.role_edit_policy ?? {
         forbidden_keys: [...DEFAULT_ROLE_EDIT_FORBIDDEN_KEYS],
       };
+      const overrides: TriggerOverrides =
+        req.trigger_overrides ?? { ...DEFAULT_TRIGGER_OVERRIDES };
       insertStmt.run(
         id,
         req.name,
@@ -77,6 +84,7 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
         JSON.stringify(sources),
         wakePrompt,
         JSON.stringify(policy),
+        JSON.stringify(overrides),
         created_at,
       );
       return {
@@ -86,6 +94,7 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
         setting_sources: [...sources],
         wake_prompt: wakePrompt,
         role_edit_policy: { forbidden_keys: [...policy.forbidden_keys] },
+        trigger_overrides: overrides,
         created_at,
       };
     },
@@ -119,6 +128,10 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
       if (config.role_edit_policy !== undefined) {
         fragments.push("role_edit_policy = ?");
         values.push(JSON.stringify(config.role_edit_policy));
+      }
+      if (config.trigger_overrides !== undefined) {
+        fragments.push("trigger_overrides = ?");
+        values.push(JSON.stringify(config.trigger_overrides));
       }
       if (fragments.length === 0) {
         const row = getStmt.get(id) as Row | null;

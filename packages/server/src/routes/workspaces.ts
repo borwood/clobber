@@ -5,6 +5,7 @@ import {
   UpdateWorkspaceConfigRequestSchema,
 } from "@clobber/shared";
 import type { WorkspaceStore } from "../workspace-store.ts";
+import type { TriggerScheduler } from "../trigger-scheduler.ts";
 import { seedWorkspaceRoles } from "../seed-workspace-roles.ts";
 import { validateWorkspacePath } from "../validate-workspace-path.ts";
 
@@ -17,9 +18,10 @@ export function registerWorkspaceRoutes(
   deps: {
     db: Database;
     workspaces: WorkspaceStore;
+    scheduler: Pick<TriggerScheduler, "reloadRole">;
   },
 ): void {
-  const { db, workspaces } = deps;
+  const { db, workspaces, scheduler } = deps;
 
   app.post("/workspaces", async (request, reply) => {
     const parsed = CreateWorkspaceRequestSchema.safeParse(request.body);
@@ -71,10 +73,18 @@ export function registerWorkspaceRoutes(
         ...(parsed.data.role_edit_policy === undefined
           ? {}
           : { role_edit_policy: parsed.data.role_edit_policy }),
+        ...(parsed.data.trigger_overrides === undefined
+          ? {}
+          : { trigger_overrides: parsed.data.trigger_overrides }),
       });
       if (updated === null) {
         reply.code(404);
         return { error: "workspace not found" };
+      }
+      if (parsed.data.trigger_overrides !== undefined) {
+        for (const roleId of Object.keys(parsed.data.trigger_overrides)) {
+          scheduler.reloadRole(roleId);
+        }
       }
       return updated;
     },

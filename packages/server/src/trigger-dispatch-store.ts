@@ -6,7 +6,8 @@ export type DispatchOutcome =
   | "skipped-busy"
   | "skipped-at-capacity"
   | "errored"
-  | "unsupported-kind";
+  | "unsupported-kind"
+  | "disabled-by-workspace";
 
 export interface AppendDispatchInput {
   readonly workspace_id: string;

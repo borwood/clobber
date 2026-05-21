@@ -3,6 +3,7 @@ import parser from "cron-parser";
 import type { RuntimeProvider } from "@clobber/runtime";
 import {
   RoleTriggerSchema,
+  triggerId,
   type Agent,
   type Role,
   type RoleTrigger,
@@ -22,6 +23,7 @@ import type {
 } from "./spawn-pipeline.ts";
 import {
   dispatchTrigger,
+  recordDisabledTrigger,
   recordUnsupportedTrigger,
   type AgentBinding,
   type DispatchDeps,
@@ -190,9 +192,19 @@ export function createTriggerScheduler(
       roleId: loaded.agent.role_id,
       workspaceId: loaded.agent.workspace_id,
     };
+    const workspace = deps.workspaces.get(loaded.agent.workspace_id);
+    if (workspace === null) return;
+    const override = workspace.trigger_overrides[loaded.agent.role_id];
+    const disabledIds =
+      override === undefined ? new Set<string>() : new Set(override.disabled_trigger_ids);
     const crons = new Set<ScheduledCron>();
     const webhooks = new Set<ScheduledWebhook>();
     for (const trigger of loaded.triggers) {
+      const id = triggerId(trigger);
+      if (disabledIds.has(id)) {
+        recordDisabledTrigger(dispatchDeps, binding, trigger, id);
+        continue;
+      }
       if (trigger.kind === "cron") {
         crons.add({ ...binding, trigger, handle: null });
         continue;

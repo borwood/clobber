@@ -6,6 +6,7 @@ import Fastify from "fastify";
 import { createDatabase } from "../src/db.ts";
 import { createWorkspaceStore } from "../src/workspace-store.ts";
 import { registerWorkspaceRoutes } from "../src/routes/workspaces.ts";
+import type { TriggerScheduler } from "../src/trigger-scheduler.ts";
 import {
   DEFAULT_SETTING_SOURCES,
   DEFAULT_WAKE_PROMPT,
@@ -17,13 +18,24 @@ import {
 let app: ReturnType<typeof Fastify>;
 let db: ReturnType<typeof createDatabase>;
 let repoPath: string;
+let reloadedRoles: string[];
 
 beforeEach(async () => {
   repoPath = mkdtempSync(join(tmpdir(), "clobber-wsconfig-"));
   mkdirSync(join(repoPath, ".git"));
   db = createDatabase(":memory:");
   app = Fastify({ logger: false });
-  registerWorkspaceRoutes(app, { db, workspaces: createWorkspaceStore(db) });
+  reloadedRoles = [];
+  const scheduler: Pick<TriggerScheduler, "reloadRole"> = {
+    reloadRole: (roleId) => {
+      reloadedRoles.push(roleId);
+    },
+  };
+  registerWorkspaceRoutes(app, {
+    db,
+    workspaces: createWorkspaceStore(db),
+    scheduler,
+  });
   await app.ready();
 });
 
@@ -277,6 +289,36 @@ describe("PATCH /workspaces/:id — updating trigger_overrides", () => {
     // GET reflects the cleared map
     const getRes = await app.inject({ method: "GET", url: `/workspaces/${ws.id}` });
     expect((getRes.json() as Workspace).trigger_overrides).toEqual({});
+  });
+
+  it("PATCH trigger_overrides reloads the scheduler for each role in the override map", async () => {
+    const ws = await createWorkspace({});
+    const roleA = "11111111-2222-4333-8444-555555555555";
+    const roleB = "66666666-7777-4888-8999-aaaaaaaaaaaa";
+    reloadedRoles.length = 0;
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/workspaces/${ws.id}`,
+      payload: {
+        trigger_overrides: {
+          [roleA]: { disabled_trigger_ids: ["cron:0 9 * * *"] },
+          [roleB]: { disabled_trigger_ids: ["webhook:/h/x"] },
+        },
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(reloadedRoles.sort()).toEqual([roleA, roleB].sort());
+  });
+
+  it("PATCH wake_prompt alone does not reload the scheduler", async () => {
+    const ws = await createWorkspace({});
+    reloadedRoles.length = 0;
+    await app.inject({
+      method: "PATCH",
+      url: `/workspaces/${ws.id}`,
+      payload: { wake_prompt: "new prompt" },
+    });
+    expect(reloadedRoles).toEqual([]);
   });
 
   it("PATCH trigger_overrides leaves other fields untouched", async () => {

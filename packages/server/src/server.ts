@@ -118,6 +118,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
   registerWorkspaceRoutes(app, {
     db: opts.db,
     workspaces: opts.workspaces,
+    scheduler,
   });
   registerWebhookTriggersRoutes(app, { scheduler });
   registerFsRoutes(app);
