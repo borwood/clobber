@@ -39,6 +39,7 @@ describe("managerRole", () => {
       "agents",
       "transcript",
       "kill",
+      "self-skills",
     ];
     for (const cmd of verbsTrainedByBundle) {
       expect(existsSync(join(pluginRoot, "skills", cmd, "SKILL.md"))).toBe(true);

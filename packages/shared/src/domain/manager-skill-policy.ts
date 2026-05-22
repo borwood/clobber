@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { RoleSkillSchema } from "./role.ts";
 
 // Per-workspace policy governing whether a persistent agent (the manager)
 // may grant skills to its own role. The engine ships zero opinion: by
@@ -21,3 +22,25 @@ export const DEFAULT_MANAGER_SKILL_POLICY: ManagerSkillPolicy = {
   allow_self_grant: false,
   allowed_skills: [],
 };
+
+// Response shape of GET /agent/self-skills. The catalog is filesystem-
+// scanned at request time; the granted list is the calling role's
+// current skills; the policy is the workspace's manager_skill_policy.
+export const SelfSkillsListResponseSchema = z.object({
+  policy: ManagerSkillPolicySchema,
+  granted: z.array(RoleSkillSchema),
+  catalog: z.array(RoleSkillSchema),
+});
+export type SelfSkillsListResponse = z.infer<typeof SelfSkillsListResponseSchema>;
+
+// Response shape of POST /agent/self-skills and DELETE
+// /agent/self-skills/:name. Both bump the role to a new version and
+// return the post-mutation granted list.
+export const SelfSkillsMutationResponseSchema = z.object({
+  role_id: z.string().uuid(),
+  version: z.number().int().positive(),
+  granted: z.array(RoleSkillSchema),
+});
+export type SelfSkillsMutationResponse = z.infer<
+  typeof SelfSkillsMutationResponseSchema
+>;

@@ -25,8 +25,8 @@ PR's blast radius). Otherwise, run `/assignment` once per issue.
    Read the body. Look for `## Why`, `## Proposal`, `## Acceptance`,
    `## Open questions`, `## Out of scope` — clobber-style issue conventions.
    If `## Open questions` has unresolved entries that would gate the
-   implementation, **stop and `/clobber-pm note` (or just `clobber ask`) the
-   user instead of spawning** — the worker can't answer design questions.
+   implementation, **stop and `clobber ask` the user instead of spawning**
+   — the worker can't answer design questions.
 
 2. **Decompose into a phase plan.**
 
