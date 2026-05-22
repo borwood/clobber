@@ -20,6 +20,7 @@ import { createAgentQuestionStore } from "@clobber/server/agent-question-store.t
 import { createAgentQuestionWaiter } from "@clobber/server/agent-question-waiter.ts";
 import type { AgentSpawner, SpawnedAgentInfo } from "@clobber/server/types.ts";
 import { createTriggerDispatchStore } from "@clobber/server/trigger-dispatch-store.ts";
+import { createFinalReportConsumerStateStore } from "@clobber/server/final-report-consumer.ts";
 import { run, runWithExit } from "../src/main.ts";
 
 interface Harness {
@@ -85,6 +86,7 @@ beforeAll(async () => {
     apiBase: "http://test.invalid",
     cliEntry: "/dummy/cli.ts",
     dispatches: createTriggerDispatchStore(db),
+    finalReportConsumerState: createFinalReportConsumerStateStore(db),
   });
   await app.listen({ port: 0, host: "127.0.0.1" });
   const addr = app.server.address();
@@ -228,6 +230,7 @@ describe("clobber CLI — report — fresh session", () => {
       apiBase: "http://test.invalid",
       cliEntry: "/dummy/cli.ts",
       dispatches: createTriggerDispatchStore(db),
+      finalReportConsumerState: createFinalReportConsumerStateStore(db),
     });
     await app.listen({ port: 0, host: "127.0.0.1" });
     const addr = app.server.address();

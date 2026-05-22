@@ -29,6 +29,12 @@ export function migrateWorkspaceConfig(db: Database): void {
     "trigger_overrides",
     `TEXT NOT NULL DEFAULT '{}'`,
   );
+  ensureColumn(
+    db,
+    "workspaces",
+    "final_report_callback",
+    `TEXT NOT NULL DEFAULT '{"kind":"noop"}'`,
+  );
 }
 
 function ensureColumn(

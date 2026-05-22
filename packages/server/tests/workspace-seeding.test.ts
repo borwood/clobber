@@ -15,6 +15,7 @@ import { createAgentStatusLogStore } from "../src/agent-status-log-store.ts";
 import { createAgentQuestionStore } from "../src/agent-question-store.ts";
 import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
+import { createFinalReportConsumerStateStore } from "../src/final-report-consumer.ts";
 import { makeRepoFixture } from "./repo-fixture.ts";
 import { stubSpawnedAgent } from "./_spawner-stub.ts";
 import type { Workspace, WorkspaceRoleAssignment } from "@clobber/shared";
@@ -61,6 +62,7 @@ function buildHarness(dbPath = ":memory:"): Harness {
     cliEntry: "/dummy/cli.ts",
   
     dispatches: createTriggerDispatchStore(db),
+    finalReportConsumerState: createFinalReportConsumerStateStore(db),
   });
   return { server, db, workspaces, roles, workspaceRoles, cleanups: [] };
 }

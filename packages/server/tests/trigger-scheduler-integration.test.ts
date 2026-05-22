@@ -17,6 +17,7 @@ import { createAgentStatusLogStore } from "../src/agent-status-log-store.ts";
 import { createAgentQuestionStore } from "../src/agent-question-store.ts";
 import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
+import { createFinalReportConsumerStateStore } from "../src/final-report-consumer.ts";
 import { createTestClock, type TestClock } from "../src/clock.ts";
 import type { AgentSpawner, SpawnedAgentInfo } from "../src/types.ts";
 
@@ -46,6 +47,7 @@ function buildHarness(initial: Date): Harness {
   const sessions = createSessionStore(db);
   const tokens = createSessionTokenStore(db);
   const dispatches = createTriggerDispatchStore(db);
+  const finalReportConsumerState = createFinalReportConsumerStateStore(db);
   const clock = createTestClock(initial);
 
   const spawns: SpawnLog[] = [];
@@ -92,6 +94,7 @@ function buildHarness(initial: Date): Harness {
     apiBase: "http://test.invalid",
     cliEntry: "/dummy/cli.ts",
     dispatches,
+    finalReportConsumerState,
     clock,
   });
 

@@ -6,6 +6,7 @@ export type AgentStatusLogKind =
   | "todo-snapshot"
   | "note"
   | "final-report"
+  | "callback-error"
   | "session-boundary";
 
 export interface AppendStatusLogRequest {

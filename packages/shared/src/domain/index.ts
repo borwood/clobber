@@ -4,6 +4,7 @@ export * from "./role-manifest.ts";
 export * from "./agent.ts";
 export * from "./agent-status.ts";
 export * from "./final-report.ts";
+export * from "./final-report-callback.ts";
 export * from "./agent-question.ts";
 export * from "./session.ts";
 export * from "./briefing.ts";

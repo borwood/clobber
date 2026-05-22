@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { FinalReportCallbackSchema } from "./final-report-callback.ts";
 
 export const SettingSourceSchema = z.enum(["user", "project", "local"]);
 export type SettingSource = z.infer<typeof SettingSourceSchema>;
@@ -64,6 +65,7 @@ export const WorkspaceSchema = z.object({
   wake_prompt: z.string().min(1),
   role_edit_policy: RoleEditPolicySchema,
   trigger_overrides: TriggerOverridesSchema,
+  final_report_callback: FinalReportCallbackSchema,
   created_at: z.number().int().nonnegative(),
 });
 export type Workspace = z.infer<typeof WorkspaceSchema>;
@@ -75,6 +77,7 @@ export const CreateWorkspaceRequestSchema = z.object({
   wake_prompt: z.string().min(1).optional(),
   role_edit_policy: RoleEditPolicySchema.optional(),
   trigger_overrides: TriggerOverridesSchema.optional(),
+  final_report_callback: FinalReportCallbackSchema.optional(),
 });
 export type CreateWorkspaceRequest = z.infer<typeof CreateWorkspaceRequestSchema>;
 
@@ -84,16 +87,18 @@ export const UpdateWorkspaceConfigRequestSchema = z
     wake_prompt: z.string().min(1).optional(),
     role_edit_policy: RoleEditPolicySchema.optional(),
     trigger_overrides: TriggerOverridesSchema.optional(),
+    final_report_callback: FinalReportCallbackSchema.optional(),
   })
   .refine(
     (v) =>
       v.setting_sources !== undefined ||
       v.wake_prompt !== undefined ||
       v.role_edit_policy !== undefined ||
-      v.trigger_overrides !== undefined,
+      v.trigger_overrides !== undefined ||
+      v.final_report_callback !== undefined,
     {
       message:
-        "must include at least one of setting_sources, wake_prompt, role_edit_policy, trigger_overrides",
+        "must include at least one of setting_sources, wake_prompt, role_edit_policy, trigger_overrides, final_report_callback",
     },
   );
 export type UpdateWorkspaceConfigRequest = z.infer<

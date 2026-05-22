@@ -18,6 +18,7 @@ import { createAgentQuestionStore } from "../src/agent-question-store.ts";
 import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import type { AgentSpawner, SpawnedAgentInfo } from "../src/types.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
+import { createFinalReportConsumerStateStore } from "../src/final-report-consumer.ts";
 
 interface Harness {
   server: ReturnType<typeof createServer>;
@@ -67,6 +68,7 @@ function buildHarness(): Harness {
     cliEntry: "/dummy/cli.ts",
   
     dispatches: createTriggerDispatchStore(db),
+    finalReportConsumerState: createFinalReportConsumerStateStore(db),
   });
   return { server, db, tokens };
 }

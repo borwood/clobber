@@ -5,8 +5,10 @@ import {
   DEFAULT_WAKE_PROMPT,
   DEFAULT_ROLE_EDIT_FORBIDDEN_KEYS,
   DEFAULT_TRIGGER_OVERRIDES,
+  DEFAULT_FINAL_REPORT_CALLBACK,
   WorkspaceSchema,
   type CreateWorkspaceRequest,
+  type FinalReportCallback,
   type RoleEditPolicy,
   type SettingSource,
   type TriggerOverrides,
@@ -18,6 +20,7 @@ export interface WorkspaceConfigPatch {
   readonly wake_prompt?: string;
   readonly role_edit_policy?: RoleEditPolicy;
   readonly trigger_overrides?: TriggerOverrides;
+  readonly final_report_callback?: FinalReportCallback;
 }
 
 export interface WorkspaceStore {
@@ -37,6 +40,7 @@ interface Row {
   wake_prompt: string;
   role_edit_policy: string;
   trigger_overrides: string;
+  final_report_callback: string;
   created_at: number;
 }
 
@@ -49,6 +53,7 @@ function rowToWorkspace(row: Row): Workspace {
     wake_prompt: row.wake_prompt,
     role_edit_policy: JSON.parse(row.role_edit_policy),
     trigger_overrides: JSON.parse(row.trigger_overrides),
+    final_report_callback: JSON.parse(row.final_report_callback),
     created_at: row.created_at,
   });
 }
@@ -56,8 +61,8 @@ function rowToWorkspace(row: Row): Workspace {
 export function createWorkspaceStore(db: Database): WorkspaceStore {
   const insertStmt = db.prepare(
     `INSERT INTO workspaces
-       (id, name, repo_path, setting_sources, wake_prompt, role_edit_policy, trigger_overrides, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, name, repo_path, setting_sources, wake_prompt, role_edit_policy, trigger_overrides, final_report_callback, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const getStmt = db.prepare("SELECT * FROM workspaces WHERE id = ?");
   const findByNameStmt = db.prepare("SELECT * FROM workspaces WHERE name = ?");
@@ -77,6 +82,8 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
       };
       const overrides: TriggerOverrides =
         req.trigger_overrides ?? { ...DEFAULT_TRIGGER_OVERRIDES };
+      const callback: FinalReportCallback =
+        req.final_report_callback ?? { ...DEFAULT_FINAL_REPORT_CALLBACK };
       insertStmt.run(
         id,
         req.name,
@@ -85,6 +92,7 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
         wakePrompt,
         JSON.stringify(policy),
         JSON.stringify(overrides),
+        JSON.stringify(callback),
         created_at,
       );
       return {
@@ -95,6 +103,7 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
         wake_prompt: wakePrompt,
         role_edit_policy: { forbidden_keys: [...policy.forbidden_keys] },
         trigger_overrides: overrides,
+        final_report_callback: callback,
         created_at,
       };
     },
@@ -132,6 +141,10 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
       if (config.trigger_overrides !== undefined) {
         fragments.push("trigger_overrides = ?");
         values.push(JSON.stringify(config.trigger_overrides));
+      }
+      if (config.final_report_callback !== undefined) {
+        fragments.push("final_report_callback = ?");
+        values.push(JSON.stringify(config.final_report_callback));
       }
       if (fragments.length === 0) {
         const row = getStmt.get(id) as Row | null;
