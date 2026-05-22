@@ -7,6 +7,7 @@ export type AgentStatusLogKind =
   | "note"
   | "final-report"
   | "callback-error"
+  | "skill-self-grant"
   | "session-boundary";
 
 export interface AppendStatusLogRequest {

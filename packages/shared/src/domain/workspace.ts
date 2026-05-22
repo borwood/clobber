@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { FinalReportCallbackSchema } from "./final-report-callback.ts";
+import { ManagerSkillPolicySchema } from "./manager-skill-policy.ts";
 
 export const SettingSourceSchema = z.enum(["user", "project", "local"]);
 export type SettingSource = z.infer<typeof SettingSourceSchema>;
@@ -66,6 +67,7 @@ export const WorkspaceSchema = z.object({
   role_edit_policy: RoleEditPolicySchema,
   trigger_overrides: TriggerOverridesSchema,
   final_report_callback: FinalReportCallbackSchema,
+  manager_skill_policy: ManagerSkillPolicySchema,
   created_at: z.number().int().nonnegative(),
 });
 export type Workspace = z.infer<typeof WorkspaceSchema>;
@@ -78,6 +80,7 @@ export const CreateWorkspaceRequestSchema = z.object({
   role_edit_policy: RoleEditPolicySchema.optional(),
   trigger_overrides: TriggerOverridesSchema.optional(),
   final_report_callback: FinalReportCallbackSchema.optional(),
+  manager_skill_policy: ManagerSkillPolicySchema.optional(),
 });
 export type CreateWorkspaceRequest = z.infer<typeof CreateWorkspaceRequestSchema>;
 
@@ -88,6 +91,7 @@ export const UpdateWorkspaceConfigRequestSchema = z
     role_edit_policy: RoleEditPolicySchema.optional(),
     trigger_overrides: TriggerOverridesSchema.optional(),
     final_report_callback: FinalReportCallbackSchema.optional(),
+    manager_skill_policy: ManagerSkillPolicySchema.optional(),
   })
   .refine(
     (v) =>
@@ -95,10 +99,11 @@ export const UpdateWorkspaceConfigRequestSchema = z
       v.wake_prompt !== undefined ||
       v.role_edit_policy !== undefined ||
       v.trigger_overrides !== undefined ||
-      v.final_report_callback !== undefined,
+      v.final_report_callback !== undefined ||
+      v.manager_skill_policy !== undefined,
     {
       message:
-        "must include at least one of setting_sources, wake_prompt, role_edit_policy, trigger_overrides, final_report_callback",
+        "must include at least one of setting_sources, wake_prompt, role_edit_policy, trigger_overrides, final_report_callback, manager_skill_policy",
     },
   );
 export type UpdateWorkspaceConfigRequest = z.infer<

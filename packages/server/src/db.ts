@@ -24,6 +24,7 @@ const SCHEMA = `
     role_edit_policy      TEXT    NOT NULL DEFAULT '{"forbidden_keys":["hooks","permission_mode"]}',
     trigger_overrides     TEXT    NOT NULL DEFAULT '{}',
     final_report_callback TEXT    NOT NULL DEFAULT '{"kind":"noop"}',
+    manager_skill_policy  TEXT    NOT NULL DEFAULT '{"allow_self_grant":false,"allowed_skills":[]}',
     created_at            INTEGER NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_workspaces_created ON workspaces(created_at DESC);

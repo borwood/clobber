@@ -8,6 +8,7 @@ import { statusCommand } from "./commands/status.ts";
 import { reportCommand } from "./commands/report.ts";
 import { askCommand } from "./commands/ask.ts";
 import { rolesCommand } from "./commands/roles.ts";
+import { selfSkillsCommand } from "./commands/self-skills.ts";
 import { readEnv, CliEnvError } from "./env.ts";
 import { CliHttpError } from "./http.ts";
 import { CliUsageError } from "./usage-error.ts";
@@ -32,6 +33,7 @@ function buildRegistry(): CommandRegistry {
   registry.register(reportCommand);
   registry.register(askCommand);
   registry.register(rolesCommand);
+  registry.register(selfSkillsCommand);
   return registry;
 }
 
