@@ -13,6 +13,7 @@ import {
   DEFAULT_ROLE_EDIT_FORBIDDEN_KEYS,
   DEFAULT_TRIGGER_OVERRIDES,
   DEFAULT_FINAL_REPORT_CALLBACK,
+  DEFAULT_MANAGER_SKILL_POLICY,
   type Workspace,
 } from "@clobber/shared";
 
@@ -473,5 +474,115 @@ describe("PATCH /workspaces/:id — updating final_report_callback", () => {
       forbidden_keys: [...DEFAULT_ROLE_EDIT_FORBIDDEN_KEYS],
     });
     expect(updated.trigger_overrides).toEqual({ ...DEFAULT_TRIGGER_OVERRIDES });
+  });
+});
+
+describe("workspace manager_skill_policy — defaults + creation", () => {
+  it("new workspaces default to allow_self_grant=false, empty allowed_skills", async () => {
+    const ws = await createWorkspace({});
+    expect(ws.manager_skill_policy).toEqual({
+      allow_self_grant: DEFAULT_MANAGER_SKILL_POLICY.allow_self_grant,
+      allowed_skills: [...DEFAULT_MANAGER_SKILL_POLICY.allowed_skills],
+    });
+  });
+
+  it("accepts a custom manager_skill_policy on creation", async () => {
+    const ws = await createWorkspace({
+      manager_skill_policy: {
+        allow_self_grant: true,
+        allowed_skills: ["clobber-pm", "audit-tickets"],
+      },
+    });
+    expect(ws.manager_skill_policy).toEqual({
+      allow_self_grant: true,
+      allowed_skills: ["clobber-pm", "audit-tickets"],
+    });
+  });
+
+  it("rejects duplicate allowed_skills", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/workspaces",
+      payload: {
+        name: "ws",
+        repo_path: repoPath,
+        manager_skill_policy: {
+          allow_self_grant: true,
+          allowed_skills: ["a", "a"],
+        },
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe("PATCH /workspaces/:id — updating manager_skill_policy", () => {
+  it("PATCH manager_skill_policy round-trips: closed → open → closed", async () => {
+    const ws = await createWorkspace({});
+    const open = await app.inject({
+      method: "PATCH",
+      url: `/workspaces/${ws.id}`,
+      payload: {
+        manager_skill_policy: {
+          allow_self_grant: true,
+          allowed_skills: ["clobber-pm"],
+        },
+      },
+    });
+    expect(open.statusCode).toBe(200);
+    expect((open.json() as Workspace).manager_skill_policy).toEqual({
+      allow_self_grant: true,
+      allowed_skills: ["clobber-pm"],
+    });
+
+    const close = await app.inject({
+      method: "PATCH",
+      url: `/workspaces/${ws.id}`,
+      payload: {
+        manager_skill_policy: { allow_self_grant: false, allowed_skills: [] },
+      },
+    });
+    expect(close.statusCode).toBe(200);
+    expect((close.json() as Workspace).manager_skill_policy).toEqual({
+      allow_self_grant: false,
+      allowed_skills: [],
+    });
+  });
+
+  it("PATCH manager_skill_policy alone does not reload the trigger scheduler", async () => {
+    const ws = await createWorkspace({});
+    reloadedRoles.length = 0;
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/workspaces/${ws.id}`,
+      payload: {
+        manager_skill_policy: {
+          allow_self_grant: true,
+          allowed_skills: ["clobber-pm"],
+        },
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(reloadedRoles).toEqual([]);
+  });
+
+  it("PATCH manager_skill_policy leaves other config fields untouched", async () => {
+    const ws = await createWorkspace({});
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/workspaces/${ws.id}`,
+      payload: {
+        manager_skill_policy: { allow_self_grant: true, allowed_skills: ["x"] },
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const updated = res.json() as Workspace;
+    expect(updated.setting_sources).toEqual([...DEFAULT_SETTING_SOURCES]);
+    expect(updated.wake_prompt).toBe(DEFAULT_WAKE_PROMPT);
+    expect(updated.role_edit_policy).toEqual({
+      forbidden_keys: [...DEFAULT_ROLE_EDIT_FORBIDDEN_KEYS],
+    });
+    expect(updated.trigger_overrides).toEqual({ ...DEFAULT_TRIGGER_OVERRIDES });
+    expect(updated.final_report_callback).toEqual({ ...DEFAULT_FINAL_REPORT_CALLBACK });
   });
 });

@@ -79,6 +79,9 @@ export function registerWorkspaceRoutes(
         ...(parsed.data.final_report_callback === undefined
           ? {}
           : { final_report_callback: parsed.data.final_report_callback }),
+        ...(parsed.data.manager_skill_policy === undefined
+          ? {}
+          : { manager_skill_policy: parsed.data.manager_skill_policy }),
       });
       if (updated === null) {
         reply.code(404);
