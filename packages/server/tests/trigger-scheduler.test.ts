@@ -166,6 +166,18 @@ function setManagerWebhook(h: Harness, path: string): void {
   editRole(h.db, role, cur, { triggers: [{ kind: "webhook", path }] });
 }
 
+function setManagerWorkspaceOpen(h: Harness, debounceMs?: number): void {
+  const role = h.roles.get(h.managerRoleId) as Role;
+  const cur = getCurrentVersion(h, h.managerRoleId);
+  editRole(h.db, role, cur, {
+    triggers: [
+      debounceMs === undefined
+        ? { kind: "workspace-open" }
+        : { kind: "workspace-open", debounce_ms: debounceMs },
+    ],
+  });
+}
+
 describe("TriggerScheduler — cron firing", () => {
   it("fires a cron trigger at the expected time and spawns a fresh session for an idle persistent agent", () => {
     // Start at 2026-05-05T08:59:00Z, cron at 9:00am UTC daily
@@ -385,8 +397,8 @@ describe("TriggerScheduler — cron firing", () => {
   it("records unsupported-kind dispatch rows for trigger kinds without an implementation", () => {
     // file-watch + issue-assigned aren't implemented as live event sources — they
     // should land in the audit log as unsupported-kind so the modularity gap is
-    // visible instead of silent. (Webhook IS implemented via fireWebhook; covered
-    // by the dedicated webhook tests below.)
+    // visible instead of silent. (Webhook + workspace-open ARE implemented via
+    // fireWebhook / fireWorkspaceOpen; covered by the dedicated tests below.)
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
     const role = h.roles.get(h.managerRoleId) as Role;
     const cur = getCurrentVersion(h, h.managerRoleId);
@@ -739,6 +751,270 @@ describe("TriggerScheduler — webhook firing", () => {
     expect(content).toContain("\"action\": \"opened\"");
     expect(content).toContain("fix: payload passthrough");
     expect(content).toContain("143");
+
+    h.scheduler.stop();
+    h.db.close();
+  });
+});
+
+describe("TriggerScheduler — workspace-open firing", () => {
+  it("fires a workspace-open trigger and spawns a fresh session for an idle persistent agent", () => {
+    const h = makeHarness(new Date("2026-05-05T09:00:00.000Z"));
+    setManagerWorkspaceOpen(h);
+    h.scheduler.start();
+
+    const result = h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined);
+    expect(result.dispatched).toBe(1);
+    expect(h.spawnCalls.length).toBe(1);
+    expect(h.spawnCalls[0]!.prompt).toContain("workspace");
+
+    const audit = h.dispatches.listForAgent(h.managerAgentId);
+    expect(audit.length).toBe(1);
+    expect(audit[0]!.dispatch_outcome).toBe("spawned");
+    expect(audit[0]!.trigger_kind).toBe("workspace-open");
+
+    h.scheduler.stop();
+    h.db.close();
+  });
+
+  it("returns dispatched=0 and writes nothing when no agent has a workspace-open trigger in that workspace", () => {
+    const h = makeHarness(new Date("2026-05-05T09:00:00.000Z"));
+    h.scheduler.start();
+
+    const result = h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined);
+    expect(result.dispatched).toBe(0);
+    expect(h.spawnCalls.length).toBe(0);
+
+    h.scheduler.stop();
+    h.db.close();
+  });
+
+  it("injects into a live, idle persistent agent on workspace-open fire", () => {
+    const h = makeHarness(new Date("2026-05-05T09:00:00.000Z"));
+    setManagerWorkspaceOpen(h);
+
+    const liveStdin = new PassThrough();
+    const writes: Buffer[] = [];
+    liveStdin.on("data", (c: Buffer) => writes.push(c));
+    const sessionId = "session-live-wsopen-0001";
+    h.sessions.create({
+      id: sessionId,
+      agent_id: h.managerAgentId,
+      workspace_id: h.workspaceId,
+      role_id: h.managerRoleId,
+      pid: 6161,
+    });
+    h.registry.register(sessionId, liveStdin, () => {});
+    h.registry.setBusy(sessionId, false);
+
+    h.scheduler.start();
+    const result = h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined);
+    expect(result.dispatched).toBe(1);
+    expect(h.spawnCalls.length).toBe(0);
+
+    const audit = h.dispatches.listForAgent(h.managerAgentId);
+    expect(audit.length).toBe(1);
+    expect(audit[0]!.dispatch_outcome).toBe("injected");
+    expect(audit[0]!.session_id).toBe(sessionId);
+    expect(writes.length).toBeGreaterThan(0);
+
+    h.scheduler.stop();
+    h.db.close();
+  });
+
+  it("debounces repeat fires within the default 10s window per trigger-instance", () => {
+    const h = makeHarness(new Date("2026-05-05T09:00:00.000Z"));
+    setManagerWorkspaceOpen(h);
+    h.scheduler.start();
+
+    expect(h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined).dispatched).toBe(1);
+    expect(h.spawnCalls.length).toBe(1);
+
+    // Mark first session idle so further fires would inject if not debounced
+    h.registry.setBusy(h.spawnCalls[0]!.sessionId, false);
+
+    // Fire again 5s later — debounced
+    h.clock.advance(5_000);
+    expect(h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined).dispatched).toBe(0);
+
+    // Advance past 10s total — fires again
+    h.clock.advance(6_000);
+    expect(h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined).dispatched).toBe(1);
+
+    const audit = h.dispatches.listForAgent(h.managerAgentId);
+    expect(audit.length).toBe(2);
+    expect(audit[1]!.dispatch_outcome).toBe("spawned");
+    expect(audit[0]!.dispatch_outcome).toBe("injected");
+
+    h.scheduler.stop();
+    h.db.close();
+  });
+
+  it("honours a custom debounce_ms from the trigger config", () => {
+    const h = makeHarness(new Date("2026-05-05T09:00:00.000Z"));
+    setManagerWorkspaceOpen(h, 100);
+    h.scheduler.start();
+
+    expect(h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined).dispatched).toBe(1);
+    h.registry.setBusy(h.spawnCalls[0]!.sessionId, false);
+
+    h.clock.advance(50);
+    expect(h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined).dispatched).toBe(0);
+
+    h.clock.advance(60);
+    expect(h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined).dispatched).toBe(1);
+
+    h.scheduler.stop();
+    h.db.close();
+  });
+
+  it("fires every persistent agent with a workspace-open trigger in the workspace", () => {
+    const h = makeHarness(new Date("2026-05-05T09:00:00.000Z"));
+    setManagerWorkspaceOpen(h);
+    const secondAgent = h.agents.create({
+      workspace_id: h.workspaceId,
+      role_id: h.managerRoleId,
+      label: "manager-2",
+    });
+
+    h.scheduler.start();
+    const result = h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined);
+    expect(result.dispatched).toBe(2);
+
+    const audits = h.dispatches.listForWorkspace(h.workspaceId);
+    expect(audits.length).toBe(2);
+    const agentIds = audits.map((a) => a.agent_id).sort();
+    expect(agentIds).toEqual([h.managerAgentId, secondAgent.id].sort());
+
+    h.scheduler.stop();
+    h.db.close();
+  });
+
+  it("debounce is per-trigger-instance — each agent maintains its own lastFiredAt", () => {
+    // Two agents on the same workspace-open trigger. After both fire once,
+    // both are debounced together. Advance past the window — both fire again.
+    // The point of the test: lastFiredAt is independent per scheduled entry,
+    // not coupled across agents in the workspace.
+    const h = makeHarness(new Date("2026-05-05T09:00:00.000Z"));
+    setManagerWorkspaceOpen(h);
+    h.agents.create({
+      workspace_id: h.workspaceId,
+      role_id: h.managerRoleId,
+      label: "manager-2",
+    });
+    h.scheduler.start();
+
+    expect(h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined).dispatched).toBe(2);
+    for (const call of h.spawnCalls) h.registry.setBusy(call.sessionId, false);
+
+    h.clock.advance(5_000);
+    expect(h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined).dispatched).toBe(0);
+
+    h.clock.advance(6_000);
+    expect(h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined).dispatched).toBe(2);
+
+    h.scheduler.stop();
+    h.db.close();
+  });
+
+  it("threads the workspace-open payload into the synthesized prompt", () => {
+    const h = makeHarness(new Date("2026-05-05T09:00:00.000Z"));
+    setManagerWorkspaceOpen(h);
+    h.scheduler.start();
+
+    const payload = { workspace_id: h.workspaceId, opened_at: 1736000000000 };
+    const result = h.scheduler.fireWorkspaceOpen(h.workspaceId, payload);
+    expect(result.dispatched).toBe(1);
+    expect(h.spawnCalls.length).toBe(1);
+    const prompt = h.spawnCalls[0]!.prompt;
+    expect(prompt).toContain(h.workspaceId);
+    expect(prompt).toContain("1736000000000");
+
+    h.scheduler.stop();
+    h.db.close();
+  });
+
+  it("workspace-open in workspace A does not fire when workspace B is opened", () => {
+    const h = makeHarness(new Date("2026-05-05T09:00:00.000Z"));
+    setManagerWorkspaceOpen(h);
+    const ws2 = h.workspaces.create({
+      name: "ws-other",
+      repo_path: h.workspaces.get(h.workspaceId)!.repo_path,
+    });
+
+    h.scheduler.start();
+    const result = h.scheduler.fireWorkspaceOpen(ws2.id, undefined);
+    expect(result.dispatched).toBe(0);
+    expect(h.spawnCalls.length).toBe(0);
+
+    h.scheduler.stop();
+    h.db.close();
+  });
+
+  it("does not fire workspace-open triggers configured on ephemeral roles", () => {
+    const h = makeHarness(new Date("2026-05-05T09:00:00.000Z"));
+    const workerRole = h.roles.get(h.workerRoleId) as Role;
+    const cur = h.roleVersions.get(workerRole.current_version_id!)!;
+    const v2 = h.roleVersions.create({
+      role_id: workerRole.id,
+      version: 2,
+      system_prompt: cur.system_prompt,
+      skills_json: cur.skills_json,
+      allowed_tools_json: cur.allowed_tools_json,
+      allowed_cli_commands_json: cur.allowed_cli_commands_json,
+      hooks_json: cur.hooks_json,
+      triggers_json: JSON.stringify([{ kind: "workspace-open" }]),
+    });
+    h.db
+      .prepare("UPDATE roles SET current_version_id = ? WHERE id = ?")
+      .run(v2.id, workerRole.id);
+    h.agents.create({
+      workspace_id: h.workspaceId,
+      role_id: h.workerRoleId,
+      label: "worker-1",
+    });
+
+    h.scheduler.start();
+    const result = h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined);
+    expect(result.dispatched).toBe(0);
+    expect(h.spawnCalls.length).toBe(0);
+
+    h.scheduler.stop();
+    h.db.close();
+  });
+
+  it("records disabled-by-workspace for a workspace-open trigger disabled via overrides", () => {
+    const h = makeHarness(new Date("2026-05-05T09:00:00.000Z"));
+    setManagerWorkspaceOpen(h);
+    h.workspaces.updateConfig(h.workspaceId, {
+      trigger_overrides: {
+        [h.managerRoleId]: { disabled_trigger_ids: ["workspace-open"] },
+      },
+    });
+
+    h.scheduler.start();
+    const result = h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined);
+    expect(result.dispatched).toBe(0);
+    expect(h.spawnCalls.length).toBe(0);
+
+    const audit = h.dispatches.listForAgent(h.managerAgentId);
+    expect(audit.length).toBe(1);
+    expect(audit[0]!.dispatch_outcome).toBe("disabled-by-workspace");
+    expect(audit[0]!.trigger_kind).toBe("workspace-open");
+
+    h.scheduler.stop();
+    h.db.close();
+  });
+
+  it("reloadAgent picks up a newly-added workspace-open trigger without restart", () => {
+    const h = makeHarness(new Date("2026-05-05T09:00:00.000Z"));
+    h.scheduler.start();
+    expect(h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined).dispatched).toBe(0);
+
+    setManagerWorkspaceOpen(h);
+    h.scheduler.reloadAgent(h.managerAgentId);
+
+    expect(h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined).dispatched).toBe(1);
 
     h.scheduler.stop();
     h.db.close();
