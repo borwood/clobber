@@ -61,6 +61,35 @@ describe("RoleTriggerSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("accepts a workspace-open trigger with no extra fields", () => {
+    const result = RoleTriggerSchema.safeParse({ kind: "workspace-open" });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a workspace-open trigger with a custom debounce_ms", () => {
+    const result = RoleTriggerSchema.safeParse({
+      kind: "workspace-open",
+      debounce_ms: 30_000,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a workspace-open trigger with a negative debounce_ms", () => {
+    const result = RoleTriggerSchema.safeParse({
+      kind: "workspace-open",
+      debounce_ms: -1,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a workspace-open trigger with a non-integer debounce_ms", () => {
+    const result = RoleTriggerSchema.safeParse({
+      kind: "workspace-open",
+      debounce_ms: 1.5,
+    });
+    expect(result.success).toBe(false);
+  });
+
   it("rejects an unknown trigger kind", () => {
     const result = RoleTriggerSchema.safeParse({ kind: "smoke-signal", channel: "1" });
     expect(result.success).toBe(false);
@@ -94,6 +123,16 @@ describe("triggerId — canonical id per trigger shape", () => {
   it("derives a stable id for an issue-assigned trigger with a repo filter", () => {
     expect(triggerId({ kind: "issue-assigned", repo: "owner/name" })).toBe(
       "issue-assigned:owner/name",
+    );
+  });
+
+  it("derives a stable id for a workspace-open trigger", () => {
+    expect(triggerId({ kind: "workspace-open" })).toBe("workspace-open");
+  });
+
+  it("derives the same id for workspace-open regardless of debounce_ms", () => {
+    expect(triggerId({ kind: "workspace-open", debounce_ms: 30_000 })).toBe(
+      "workspace-open",
     );
   });
 });

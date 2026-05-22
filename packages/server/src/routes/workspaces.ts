@@ -18,7 +18,7 @@ export function registerWorkspaceRoutes(
   deps: {
     db: Database;
     workspaces: WorkspaceStore;
-    scheduler: Pick<TriggerScheduler, "reloadRole">;
+    scheduler: Pick<TriggerScheduler, "reloadRole" | "fireWorkspaceOpen">;
   },
 ): void {
   const { db, workspaces, scheduler } = deps;
@@ -90,6 +90,20 @@ export function registerWorkspaceRoutes(
         }
       }
       return updated;
+    },
+  );
+
+  app.post<{ Params: IdParam }>(
+    "/workspaces/:id/open",
+    async (request, reply) => {
+      const workspace = workspaces.get(request.params.id);
+      if (workspace === null) {
+        reply.code(404);
+        return { error: "workspace not found" };
+      }
+      const payload = { workspace_id: workspace.id, opened_at: Date.now() };
+      const result = scheduler.fireWorkspaceOpen(workspace.id, payload);
+      return { dispatched: result.dispatched };
     },
   );
 

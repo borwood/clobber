@@ -181,4 +181,9 @@ export const api = {
     ),
   updateWorkspaceConfig: (id: string, body: UpdateWorkspaceConfigRequest) =>
     patchJson<Workspace>(`/workspaces/${encodeURIComponent(id)}`, body),
+  notifyWorkspaceOpen: (id: string) =>
+    postJson<{ dispatched: number }>(
+      `/workspaces/${encodeURIComponent(id)}/open`,
+      {},
+    ),
 };

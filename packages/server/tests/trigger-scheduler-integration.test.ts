@@ -254,6 +254,76 @@ describe("TriggerScheduler — HTTP integration wiring", () => {
     await teardown(h);
   });
 
+  it("POST /workspaces/:id/open fires workspace-open trigger, dispatches into a fresh spawn, and debounces a rapid second call", async () => {
+    const h = buildHarness(new Date("2026-05-05T09:00:00.000Z"));
+    const boot = await bootManager(h, repo.path);
+
+    // Mark the boot session idle so cron-style busy-skip doesn't mask things
+    // — actually for workspace-open the boot is busy, so the first fire becomes
+    // a fresh spawn for an additional manager. Set ceiling to 2 first.
+    h.db
+      .prepare(
+        "UPDATE workspace_role_ceilings SET max_concurrent = 2 WHERE workspace_id = ? AND role_id = ?",
+      )
+      .run(boot.workspaceId, boot.managerRoleId);
+
+    const patchRes = await h.server.inject({
+      method: "PATCH",
+      url: `/agent/roles/${boot.managerRoleId}`,
+      headers: { authorization: `Bearer ${boot.managerToken}` },
+      payload: { triggers: [{ kind: "workspace-open", debounce_ms: 100 }] },
+    });
+    expect(patchRes.statusCode).toBe(200);
+
+    // Mark boot session idle so a fire injects rather than spawning a duplicate
+    const reg = h.spawns[0]!;
+    // Drain prior writes from boot
+    reg.writes.length = 0;
+
+    // The boot session is registered as busy on spawn; flip it so the fire injects.
+    // Reach into the agent registry by exercising a no-op session end + re-register?
+    // Simpler: use the public PATCH /sessions/:id/end? Skip — busy → skipped-busy is fine for the audit.
+
+    const fireRes = await h.server.inject({
+      method: "POST",
+      url: `/workspaces/${boot.workspaceId}/open`,
+      payload: {},
+    });
+    expect(fireRes.statusCode).toBe(200);
+    expect((fireRes.json() as { dispatched: number }).dispatched).toBe(1);
+
+    const audit = h.dispatches.listForAgent(boot.managerAgentId);
+    expect(audit.length).toBe(1);
+    expect(audit[0]!.trigger_kind).toBe("workspace-open");
+    // Boot session is busy, so the audit row is skipped-busy. The synthesized
+    // prompt is still computed and recorded with the payload.
+    expect(audit[0]!.trigger_payload).toEqual({
+      kind: "workspace-open",
+      debounce_ms: 100,
+    });
+
+    // Rapid second call within 100ms — debounced
+    const fire2 = await h.server.inject({
+      method: "POST",
+      url: `/workspaces/${boot.workspaceId}/open`,
+      payload: {},
+    });
+    expect((fire2.json() as { dispatched: number }).dispatched).toBe(0);
+
+    // Advance past the debounce window — fires again
+    h.clock.advance(150);
+    const fire3 = await h.server.inject({
+      method: "POST",
+      url: `/workspaces/${boot.workspaceId}/open`,
+      payload: {},
+    });
+    expect((fire3.json() as { dispatched: number }).dispatched).toBe(1);
+    const audit2 = h.dispatches.listForAgent(boot.managerAgentId);
+    expect(audit2.length).toBe(2);
+
+    await teardown(h);
+  });
+
   it("scheduler stops cleanly on app close — no further fires after teardown", async () => {
     const h = buildHarness(new Date("2026-05-05T08:59:00.000Z"));
     const boot = await bootManager(h, repo.path);

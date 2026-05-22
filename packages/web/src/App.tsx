@@ -137,6 +137,11 @@ export function App() {
     setSelectedSession(null);
   }, [workspaceId]);
 
+  useEffect(() => {
+    if (workspaceId === null) return;
+    void api.notifyWorkspaceOpen(workspaceId);
+  }, [workspaceId]);
+
   function persistView(next: WorkspaceView): void {
     setView(next);
     if (typeof localStorage !== "undefined") localStorage.setItem(VIEW_STORAGE_KEY, next);

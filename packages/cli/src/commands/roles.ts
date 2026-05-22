@@ -75,6 +75,11 @@ function formatTrigger(t: RoleTrigger): string {
   if (t.kind === "cron") return `cron — \`${t.expr}\``;
   if (t.kind === "file-watch") return `file-watch — \`${t.glob}\``;
   if (t.kind === "webhook") return `webhook — \`${t.path}\``;
+  if (t.kind === "workspace-open") {
+    return t.debounce_ms === undefined
+      ? "workspace-open"
+      : `workspace-open — debounce \`${t.debounce_ms}ms\``;
+  }
   return t.repo === undefined
     ? "issue-assigned"
     : `issue-assigned — repo \`${t.repo}\``;
