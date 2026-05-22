@@ -68,11 +68,16 @@ export const IssueAssignedTriggerSchema = z.object({
   kind: z.literal("issue-assigned"),
   repo: z.string().min(1).optional(),
 });
+export const WorkspaceOpenTriggerSchema = z.object({
+  kind: z.literal("workspace-open"),
+  debounce_ms: z.number().int().nonnegative().optional(),
+});
 export const RoleTriggerSchema = z.discriminatedUnion("kind", [
   CronTriggerSchema,
   FileWatchTriggerSchema,
   WebhookTriggerSchema,
   IssueAssignedTriggerSchema,
+  WorkspaceOpenTriggerSchema,
 ]);
 export type RoleTrigger = z.infer<typeof RoleTriggerSchema>;
 
@@ -92,6 +97,8 @@ export function triggerId(trigger: RoleTrigger): string {
       return trigger.repo === undefined
         ? "issue-assigned"
         : `issue-assigned:${trigger.repo}`;
+    case "workspace-open":
+      return "workspace-open";
   }
 }
 
