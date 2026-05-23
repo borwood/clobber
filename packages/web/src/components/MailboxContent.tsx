@@ -60,6 +60,7 @@ export function MailboxContent(props: MailboxContentProps) {
         key={selectedSession ?? "none"}
         lines={transcript}
         showSystem={showSystem}
+        busy={selected?.busy === true}
       />
       {selectedSession !== null && selected !== undefined && (
         <>
