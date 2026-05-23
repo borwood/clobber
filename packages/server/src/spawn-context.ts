@@ -4,7 +4,7 @@ import type {
   RoleBundleData,
   RuntimeSpawnOptions,
 } from "@clobber/runtime";
-import type { Agent, BootContext, BriefingPacket, Role, Workspace } from "@clobber/shared";
+import type { Agent, BootContext, BriefingPacket, EffortLevel, Role, Workspace } from "@clobber/shared";
 import { ensureOffice } from "./office-store.ts";
 import { composeOfficeContext } from "./office-context.ts";
 import { runBootContextProvider } from "./boot-context-provider.ts";
@@ -24,6 +24,10 @@ export interface PrepareSpawnContextInput {
   readonly versionId: string | undefined;
   readonly prompt: string;
   readonly briefing?: BriefingPacket;
+  // Per-spawn override of the role's default effort. When supplied, beats
+  // role.effort. When omitted, role.effort applies (or claude's default if
+  // neither is set).
+  readonly effortOverride?: EffortLevel;
 }
 
 export interface SpawnContext {
@@ -49,7 +53,17 @@ export async function prepareSpawnContext(
   deps: SpawnPipelineDeps,
   input: PrepareSpawnContextInput,
 ): Promise<PrepareSpawnContextResult> {
-  const { mode, workspace, role, agent, sessionId, versionId, prompt, briefing } = input;
+  const {
+    mode,
+    workspace,
+    role,
+    agent,
+    sessionId,
+    versionId,
+    prompt,
+    briefing,
+    effortOverride,
+  } = input;
 
   const bundle = versionId === undefined ? null : deps.roleVersions.loadAsBundle(versionId);
   if (bundle === null) {
@@ -121,6 +135,7 @@ export async function prepareSpawnContext(
     ...(officeDir === null ? {} : { CLOBBER_OFFICE_DIR: officeDir }),
   };
 
+  const effectiveEffort = effortOverride ?? role.effort;
   const spawnOptions: RuntimeSpawnOptions = {
     hookUrl: deps.hookUrl,
     prompt: effectivePrompt,
@@ -128,6 +143,7 @@ export async function prepareSpawnContext(
     sessionId,
     ...(role.permission_mode === undefined ? {} : { permissionMode: role.permission_mode }),
     ...(role.allowed_tools === undefined ? {} : { allowedTools: role.allowed_tools }),
+    ...(effectiveEffort === undefined ? {} : { effort: effectiveEffort }),
     env,
     materialized,
     systemPrompt: effectiveBundle.systemPrompt,

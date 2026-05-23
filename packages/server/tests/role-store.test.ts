@@ -19,6 +19,7 @@ const fullySpecified: CreateRoleRequest = {
   description: "coordinates other agents",
   permission_mode: "acceptEdits",
   allowed_tools: ["Bash", "Read", "Write"],
+  effort: "xhigh",
   persistent: true,
 };
 
@@ -50,11 +51,19 @@ describe("role store", () => {
     expect(created.description).toBe("coordinates other agents");
     expect(created.permission_mode).toBe("acceptEdits");
     expect(created.allowed_tools).toEqual(["Bash", "Read", "Write"]);
+    expect(created.effort).toBe("xhigh");
     expect(created.persistent).toBe(true);
 
     const fetched = store.get(created.id)!;
     expect(fetched).toEqual(created);
 
+    db.close();
+  });
+
+  it("leaves effort undefined when not supplied on create", () => {
+    const { db, store } = open();
+    const created = store.create(minimal);
+    expect(created.effort).toBeUndefined();
     db.close();
   });
 

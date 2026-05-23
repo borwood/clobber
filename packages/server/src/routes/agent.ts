@@ -17,6 +17,7 @@ import type { AgentSpawner } from "../types.ts";
 import {
   AgentStatusUpdateSchema,
   BriefingPacketSchema,
+  EffortLevelSchema,
   FinalReportSchema,
   summarizeFinalReport,
 } from "@clobber/shared";
@@ -57,6 +58,7 @@ const AgentSpawnBodySchema = z.object({
   prompt: z.string().min(1),
   label: z.string().optional(),
   briefing: BriefingPacketSchema.optional(),
+  effort: EffortLevelSchema.optional(),
 });
 
 export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps): void {
@@ -141,6 +143,9 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
         ...(parsed.data.briefing === undefined
           ? {}
           : { briefing: parsed.data.briefing }),
+        ...(parsed.data.effort === undefined
+          ? {}
+          : { effortOverride: parsed.data.effort }),
       });
       if (!result.ok) {
         const { ok: _ok, status, ...rest } = result;

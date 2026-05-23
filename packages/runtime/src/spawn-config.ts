@@ -1,4 +1,4 @@
-import type { HookEventName, PermissionMode } from "@clobber/shared";
+import type { EffortLevel, HookEventName, PermissionMode } from "@clobber/shared";
 
 export const ALL_HOOK_EVENTS = [
   "SessionStart",
@@ -62,6 +62,7 @@ export interface BuildClaudeArgsOptions {
   readonly allowedTools?: readonly string[];
   readonly appendSystemPrompt?: string;
   readonly displayName?: string;
+  readonly effort?: EffortLevel;
   // Which of claude's setting sources to load (user / project / local). The
   // workspace owns this — see Workspace.setting_sources. When omitted, the
   // caller is intentionally letting claude default to its own behavior, which
@@ -97,6 +98,9 @@ export function buildClaudeArgs(opts: BuildClaudeArgsOptions): string[] {
   }
   if (opts.displayName !== undefined && opts.displayName.length > 0) {
     args.push("--name", opts.displayName);
+  }
+  if (opts.effort !== undefined) {
+    args.push("--effort", opts.effort);
   }
 
   args.push(

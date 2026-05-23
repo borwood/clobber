@@ -9,6 +9,10 @@ describe("workerRole", () => {
     expect(workerRole.manifest.permissionMode).toBe("bypassPermissions");
   });
 
+  it("defaults to high effort — execution still needs depth, but less than the manager's planning", () => {
+    expect(workerRole.manifest.effort).toBe("high");
+  });
+
   it("ships the autonomous CLI allowlist (whoami, ask, status, report)", () => {
     expect([...workerRole.manifest.allowedCliCommands].sort()).toEqual(
       ["ask", "report", "status", "whoami"],

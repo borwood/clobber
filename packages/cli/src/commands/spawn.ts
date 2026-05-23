@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
-import type { BriefingFile } from "@clobber/shared";
+import { EffortLevelSchema, type BriefingFile, type EffortLevel } from "@clobber/shared";
 import type { Command } from "../commands.ts";
 import { request } from "../http.ts";
 import { CliUsageError } from "../usage-error.ts";
@@ -17,6 +17,7 @@ interface ParsedArgs {
   readonly label: string;
   readonly briefingDir?: string;
   readonly briefingPairs: readonly { readonly name: string; readonly path: string }[];
+  readonly effort?: EffortLevel;
 }
 
 function takeValue(
@@ -46,6 +47,7 @@ export function parseSpawnArgs(args: readonly string[]): ParsedArgs {
   let prompt: string | undefined;
   let label: string | undefined;
   let briefingDir: string | undefined;
+  let effort: EffortLevel | undefined;
   const briefingPairs: { name: string; path: string }[] = [];
 
   for (let i = 0; i < args.length; i++) {
@@ -61,6 +63,16 @@ export function parseSpawnArgs(args: readonly string[]): ParsedArgs {
       i++;
     } else if (tok === "--briefing") {
       briefingPairs.push(parseBriefingPair(takeValue(args, i, "--briefing")));
+      i++;
+    } else if (tok === "--effort") {
+      const raw = takeValue(args, i, "--effort");
+      const parsed = EffortLevelSchema.safeParse(raw);
+      if (!parsed.success) {
+        throw new CliUsageError(
+          `--effort must be one of low|medium|high|xhigh|max, got: ${raw}`,
+        );
+      }
+      effort = parsed.data;
       i++;
     } else if (tok.startsWith("--") || (tok.startsWith("-") && tok.length > 1)) {
       throw new CliUsageError(`unknown flag: ${tok}`);
@@ -91,6 +103,7 @@ export function parseSpawnArgs(args: readonly string[]): ParsedArgs {
     label,
     ...(briefingDir === undefined ? {} : { briefingDir }),
     briefingPairs,
+    ...(effort === undefined ? {} : { effort }),
   };
 }
 
@@ -125,7 +138,7 @@ function walkDir(root: string, dir: string, out: BriefingFile[]): void {
   }
 }
 
-const SPAWN_USAGE = `usage: clobber spawn <role> --prompt <text> --label <slug> [--briefing-dir <path>] [--briefing <name:path>...]
+const SPAWN_USAGE = `usage: clobber spawn <role> --prompt <text> --label <slug> [--briefing-dir <path>] [--briefing <name:path>...] [--effort <level>]
 
 Spawn a worker agent into the current workspace. The role must already
 exist in this workspace (see \`clobber roles list\`). Prints the new
@@ -142,6 +155,9 @@ Flags:
       --briefing <name:path>     Drop a single file at <name> on the worker's
                                  desk, with content read from <path>. May be
                                  repeated. Combinable with --briefing-dir.
+      --effort <level>           Reasoning depth: low|medium|high|xhigh|max.
+                                 Overrides the role's default for this spawn.
+                                 Omit to use the role default.
 
 Briefing files land at .clobber/agents/<agent-id>/desk/, which the worker
 sees via $CLOBBER_DESK_DIR. The worker role's first action is to read that
@@ -169,6 +185,9 @@ export const spawnCommand: Command = {
     };
     if (files.length > 0) {
       body["briefing"] = { files };
+    }
+    if (parsed.effort !== undefined) {
+      body["effort"] = parsed.effort;
     }
     const result = await request<SpawnResponse>(ctx.env, {
       method: "POST",

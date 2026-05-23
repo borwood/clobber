@@ -4,6 +4,7 @@ import { migrateSessionLabel } from "./session-label-migration.ts";
 import { migrateWorkspaceConfig } from "./workspace-config-migration.ts";
 import { migrateSessionRuntime } from "./session-runtime-migration.ts";
 import { migrateAgentQuestionShape } from "./agent-question-shape-migration.ts";
+import { migrateRoleEffort } from "./role-effort-migration.ts";
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS events (
@@ -36,6 +37,7 @@ const SCHEMA = `
     description        TEXT,
     permission_mode    TEXT,
     allowed_tools      TEXT,
+    effort             TEXT,
     persistent         INTEGER NOT NULL,
     workspace_id       TEXT,
     current_version_id TEXT,
@@ -196,6 +198,7 @@ export function createDatabase(path: string): Database {
   migrateSessionRuntime(db);
   migrateWorkspaceConfig(db);
   migrateAgentQuestionShape(db);
+  migrateRoleEffort(db);
   return db;
 }
 

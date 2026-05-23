@@ -3,26 +3,28 @@ import type { TranscriptLine } from "../api.ts";
 import {
   classifyLine,
   shouldShowAssistantLabel,
-  shouldHideThinkingPulse,
   previewToolInput,
   type AssistantLine,
   type UserLine,
   type ContentBlock,
 } from "../transcript-types.ts";
+import { deriveWorkingState } from "../working-state.ts";
 import { Markdown } from "./Markdown.tsx";
-import { ThinkingChip } from "./ThinkingChip.tsx";
+import { WorkingIndicator } from "./WorkingIndicator.tsx";
 
 interface Props {
   readonly lines: readonly TranscriptLine[];
   readonly showSystem: boolean;
+  readonly busy: boolean;
 }
 
 const PIN_THRESHOLD_PX = 100;
 
-export function TranscriptViewer({ lines, showSystem }: Props) {
+export function TranscriptViewer({ lines, showSystem, busy }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [pinned, setPinned] = useState(true);
   const classified = useMemo(() => lines.map(classifyLine), [lines]);
+  const workingState = useMemo(() => deriveWorkingState(lines), [lines]);
 
   useLayoutEffect(() => {
     if (!pinned) return;
@@ -46,7 +48,8 @@ export function TranscriptViewer({ lines, showSystem }: Props) {
   }
 
   return (
-    <div className="flex-1 relative overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="relative flex-1 overflow-hidden">
       <div
         ref={scrollRef}
         onScroll={onScroll}
@@ -75,8 +78,9 @@ export function TranscriptViewer({ lines, showSystem }: Props) {
                 );
               }
               if (c.kind === "thinking-pulse") {
-                if (shouldHideThinkingPulse(classified, idx)) return null;
-                return <ThinkingChip key={idx} startMs={c.timestamp} />;
+                // The live "thinking" tail is now surfaced by the turn-level
+                // WorkingIndicator footer; the pulse line itself renders nothing.
+                return null;
               }
               if (c.kind === "notification") {
                 return (
@@ -111,6 +115,8 @@ export function TranscriptViewer({ lines, showSystem }: Props) {
           ↓ jump to latest
         </button>
       )}
+      </div>
+      {busy && <WorkingIndicator state={workingState} />}
     </div>
   );
 }

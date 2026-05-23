@@ -74,4 +74,16 @@ describe("RoleManifestSchema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("accepts each effort level claude --effort understands", () => {
+    for (const level of ["low", "medium", "high", "xhigh", "max"] as const) {
+      const result = RoleManifestSchema.safeParse({ ...baseManifest, effort: level });
+      expect(result.success).toBe(true);
+    }
+  });
+
+  it("rejects an effort level outside the claude --effort enum", () => {
+    const result = RoleManifestSchema.safeParse({ ...baseManifest, effort: "extreme" });
+    expect(result.success).toBe(false);
+  });
 });

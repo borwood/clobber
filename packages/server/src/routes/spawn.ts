@@ -13,6 +13,7 @@ import type { AgentRegistry } from "../agent-registry.ts";
 import type { AgentQuestionStore } from "../agent-question-store.ts";
 import type { AgentQuestionWaiter } from "../agent-question-waiter.ts";
 import type { TriggerScheduler } from "../trigger-scheduler.ts";
+import { EffortLevelSchema } from "@clobber/shared";
 import { executeSpawn } from "../spawn-pipeline.ts";
 import { normalizeSpawnLabel } from "./_spawn-label.ts";
 
@@ -21,6 +22,7 @@ const SpawnBodySchema = z.object({
   role_id: z.string().uuid(),
   prompt: z.string().min(1),
   label: z.string().optional(),
+  effort: EffortLevelSchema.optional(),
 });
 
 export interface SpawnRouteDeps {
@@ -49,7 +51,7 @@ export function registerSpawnRoutes(app: FastifyInstance, deps: SpawnRouteDeps):
       reply.code(400);
       return { error: "invalid spawn request", issues: parsed.error.issues };
     }
-    const { workspace_id, role_id, prompt } = parsed.data;
+    const { workspace_id, role_id, prompt, effort } = parsed.data;
     const label = normalizeSpawnLabel(parsed.data.label);
     if (label === null) {
       reply.code(400);
@@ -72,6 +74,7 @@ export function registerSpawnRoutes(app: FastifyInstance, deps: SpawnRouteDeps):
       role,
       prompt,
       label,
+      ...(effort === undefined ? {} : { effortOverride: effort }),
     });
     if (!result.ok) {
       const { ok: _ok, status, ...rest } = result;
