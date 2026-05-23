@@ -1,7 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import {
   classifyLine,
-  shouldHideThinkingPulse,
   shouldShowAssistantLabel,
   type Classified,
 } from "../src/transcript-types.ts";
@@ -70,41 +69,6 @@ describe("classifyLine: thinking-pulse", () => {
     expect(c.kind).toBe("thinking-pulse");
     if (c.kind !== "thinking-pulse") return;
     expect(c.timestamp).toBeNull();
-  });
-});
-
-describe("shouldHideThinkingPulse", () => {
-  it("hides the pulse once a subsequent assistant text line arrives (turn streamed in)", () => {
-    const c = classify(userLine, thinkingOnlyAssistant(), assistantWithText("the response"));
-    expect(shouldHideThinkingPulse(c, 1)).toBe(true);
-  });
-
-  it("keeps the pulse visible while it is the last line (still in flight)", () => {
-    const c = classify(userLine, thinkingOnlyAssistant());
-    expect(shouldHideThinkingPulse(c, 1)).toBe(false);
-  });
-
-  it("keeps the pulse visible across consecutive thinking-pulse lines (multi-thinking phase)", () => {
-    const c = classify(userLine, thinkingOnlyAssistant(), thinkingOnlyAssistant());
-    expect(shouldHideThinkingPulse(c, 1)).toBe(false);
-    expect(shouldHideThinkingPulse(c, 2)).toBe(false);
-  });
-
-  it("hides earlier pulses once a real response lands later in the run", () => {
-    const c = classify(
-      userLine,
-      thinkingOnlyAssistant(),
-      thinkingOnlyAssistant(),
-      assistantWithText("hi"),
-    );
-    expect(shouldHideThinkingPulse(c, 1)).toBe(true);
-    expect(shouldHideThinkingPulse(c, 2)).toBe(true);
-  });
-
-  it("returns false on lines that aren't thinking-pulse (sanity)", () => {
-    const c = classify(userLine, assistantWithText("hi"));
-    expect(shouldHideThinkingPulse(c, 0)).toBe(false);
-    expect(shouldHideThinkingPulse(c, 1)).toBe(false);
   });
 });
 

@@ -115,26 +115,6 @@ export function shouldShowAssistantLabel(
   return true;
 }
 
-// A thinking-pulse line is "live" only when nothing else has been written
-// since it. Once any other content (assistant text, tool_use, tool_result,
-// user, notification, system) lands afterwards, the pulse is over and the
-// chip should disappear — matching the native claude CLI's transient
-// thinking widget. Other thinking-pulse and filtered lines are transparent
-// and don't dismiss the chip.
-export function shouldHideThinkingPulse(
-  classified: readonly Classified[],
-  idx: number,
-): boolean {
-  if (classified[idx]?.kind !== "thinking-pulse") return false;
-  for (let i = idx + 1; i < classified.length; i++) {
-    const next = classified[i];
-    if (next === undefined) return false;
-    if (next.kind === "filtered" || next.kind === "thinking-pulse") continue;
-    return true;
-  }
-  return false;
-}
-
 export function classifyLine(line: TranscriptLine): Classified {
   const type = line["type"];
   const typeLabel = typeof type === "string" ? type : "unknown";
@@ -328,7 +308,7 @@ function isContentBlock(value: unknown): value is ContentBlock {
   return typeof (value as Record<string, unknown>)["type"] === "string";
 }
 
-function parseTimestamp(value: unknown): number | null {
+export function parseTimestamp(value: unknown): number | null {
   if (typeof value !== "string") return null;
   const ms = Date.parse(value);
   return Number.isFinite(ms) ? ms : null;
