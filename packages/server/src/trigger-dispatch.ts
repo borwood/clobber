@@ -58,9 +58,10 @@ export async function dispatchTrigger(
     // attachSession can now throw — a configured boot-context provider that
     // fails (Engineering Rule 3) propagates out of spawn-context. On a fire-
     // and-forget trigger path there's no caller to surface a 500 to, so we
-    // record the failure as an errored dispatch (the same audit outcome a
-    // non-ok result produces) rather than crashing the cron timer. This
-    // records the failure loudly — it does not swallow it. — brennan
+    // translate the throw into an errored dispatch (the same audit outcome a
+    // non-ok result produces) rather than crashing the cron timer. This is
+    // not a Rule-3 swallow: the failure is recorded loudly in the dispatch
+    // log with its message, not discarded. Trigger-path semantics per #166.
     const attached = await attachOutcome(deps, { workspace, role, agent, prompt });
     deps.dispatches.append({
       workspace_id: binding.workspaceId,
