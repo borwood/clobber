@@ -8,6 +8,10 @@ describe("managerRole", () => {
     expect([...managerRole.manifest.allowedCliCommands]).toEqual(["*"]);
   });
 
+  it("defaults to xhigh effort — manager carries the deep-thinking load upstream of workers", () => {
+    expect(managerRole.manifest.effort).toBe("xhigh");
+  });
+
   it("ships a non-empty system prompt", () => {
     const text = readFileSync(
       join(managerRole.bundleRoot, managerRole.manifest.systemPromptPath),

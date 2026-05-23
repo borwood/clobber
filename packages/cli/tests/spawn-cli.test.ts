@@ -273,6 +273,57 @@ describe("clobber CLI — spawn", () => {
     expect(s.err()).toMatch(/--label/);
   });
 
+  it("forwards --effort to the spawner so a manager can override per-assignment", async () => {
+    const s = captureStreams();
+    const before = harness.spawnerCalls.length;
+    const code = await run({
+      argv: [
+        "spawn",
+        "manager",
+        "--prompt",
+        "deep dive on this hairy migration",
+        "--label",
+        "migration-research",
+        "--effort",
+        "max",
+      ],
+      env: {
+        CLOBBER_API_BASE: harness.baseUrl,
+        CLOBBER_SESSION_TOKEN: harness.managerToken,
+      },
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(0);
+    expect(harness.spawnerCalls.length).toBe(before + 1);
+    const call = harness.spawnerCalls[harness.spawnerCalls.length - 1]!;
+    expect(call.effort).toBe("max");
+  });
+
+  it("rejects --effort values outside the claude --effort enum", async () => {
+    const s = captureStreams();
+    const code = await run({
+      argv: [
+        "spawn",
+        "manager",
+        "--prompt",
+        "x",
+        "--label",
+        "bad-effort",
+        "--effort",
+        "ludicrous",
+      ],
+      env: {
+        CLOBBER_API_BASE: harness.baseUrl,
+        CLOBBER_SESSION_TOKEN: harness.managerToken,
+      },
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(2);
+    expect(s.err()).toMatch(/--effort/);
+  });
+
   it("surfaces the API error body when the role is unknown", async () => {
     const s = captureStreams();
     const code = await runWithExit({

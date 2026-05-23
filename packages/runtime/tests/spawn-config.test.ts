@@ -170,4 +170,15 @@ describe("buildClaudeArgs", () => {
     const args = buildClaudeArgs({ sessionId: "abc", displayName: "" });
     expect(args).not.toContain("--name");
   });
+
+  it("emits --effort <level> when effort is supplied", () => {
+    const args = buildClaudeArgs({ sessionId: "abc", effort: "high" });
+    expect(args).toContain("--effort");
+    expect(args[args.indexOf("--effort") + 1]).toBe("high");
+  });
+
+  it("omits --effort when effort is not supplied", () => {
+    const args = buildClaudeArgs({ sessionId: "abc" });
+    expect(args).not.toContain("--effort");
+  });
 });

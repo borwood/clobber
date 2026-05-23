@@ -1,4 +1,4 @@
-import type { PermissionMode } from "@clobber/shared";
+import type { EffortLevel, PermissionMode } from "@clobber/shared";
 import {
   buildClaudeArgs,
   type HookSettings,
@@ -45,6 +45,7 @@ export interface RuntimeSpawnOptions {
   readonly sessionId: string;
   readonly permissionMode?: PermissionMode;
   readonly allowedTools?: readonly string[];
+  readonly effort?: EffortLevel;
   readonly env: NodeJS.ProcessEnv;
   readonly materialized: MaterializedBundle;
   readonly systemPrompt: string;
@@ -65,6 +66,7 @@ export interface RuntimeSpawnRequest {
   readonly resume?: boolean;
   readonly permissionMode?: PermissionMode;
   readonly allowedTools?: readonly string[];
+  readonly effort?: EffortLevel;
   readonly env: NodeJS.ProcessEnv;
   readonly pluginDirs?: readonly string[];
   readonly appendSystemPrompt?: string;
@@ -110,6 +112,7 @@ export const claudeRuntimeProvider: RuntimeProvider = {
         ? {}
         : { permissionMode: opts.permissionMode }),
       ...(opts.allowedTools === undefined ? {} : { allowedTools: opts.allowedTools }),
+      ...(opts.effort === undefined ? {} : { effort: opts.effort }),
       env: opts.env,
       pluginDirs: [opts.materialized.pluginDir],
       appendSystemPrompt: opts.systemPrompt,
@@ -218,6 +221,7 @@ export function buildClaudeRuntimeArgs(opts: {
   readonly pluginDirs?: readonly string[];
   readonly permissionMode?: PermissionMode;
   readonly allowedTools?: readonly string[];
+  readonly effort?: EffortLevel;
   readonly appendSystemPrompt?: string;
   readonly displayName?: string;
 }): string[] {

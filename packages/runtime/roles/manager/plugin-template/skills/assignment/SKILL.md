@@ -85,6 +85,21 @@ PR's blast radius). Otherwise, run `/assignment` once per issue.
    its first turn; the worker system prompt instructs it to read every
    file there as its first action.
 
+   **Tuning effort.** The worker role defaults to `--effort high`. The
+   thesis is that *you* (the manager) carry the deep thinking — a tight
+   brief + sound decomposition should leave the worker mostly executing.
+   Override per-spawn with `--effort <low|medium|high|xhigh|max>` only
+   when the assignment genuinely needs more (or less) reasoning depth:
+
+   - `--effort max` when the brief is unavoidably underspecified or the
+     work has a thorny invariant the worker must reason about live.
+   - `--effort low` when the work is pure mechanical churn (rename, regex
+     sweep, formatter pass).
+   - Omit the flag otherwise and trust the role default.
+
+   If you find yourself reaching for `max` often, the lever to pull is
+   usually a better brief, not a deeper worker.
+
 5. **Status emit.** After the spawn returns, post one `clobber note`
    summarizing what you dispatched and to which session — the audit trail
    for the workspace board.

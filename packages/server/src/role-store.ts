@@ -22,6 +22,7 @@ interface Row {
   description: string | null;
   permission_mode: string | null;
   allowed_tools: string | null;
+  effort: string | null;
   persistent: number;
   workspace_id: string | null;
   current_version_id: string | null;
@@ -38,6 +39,7 @@ function rowToRole(row: Row): Role {
   if (row.description !== null) parsed["description"] = row.description;
   if (row.permission_mode !== null) parsed["permission_mode"] = row.permission_mode;
   if (row.allowed_tools !== null) parsed["allowed_tools"] = JSON.parse(row.allowed_tools);
+  if (row.effort !== null) parsed["effort"] = row.effort;
   if (row.workspace_id !== null) parsed["workspace_id"] = row.workspace_id;
   if (row.current_version_id !== null) parsed["current_version_id"] = row.current_version_id;
   return RoleSchema.parse(parsed);
@@ -47,7 +49,7 @@ export function createRoleStore(db: Database): RoleStore {
   const versions = createRoleVersionStore(db);
 
   const insertStmt = db.prepare(
-    "INSERT INTO roles (id, name, description, permission_mode, allowed_tools, persistent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO roles (id, name, description, permission_mode, allowed_tools, effort, persistent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
   );
   const setVersionStmt = db.prepare(
     "UPDATE roles SET current_version_id = ? WHERE id = ?",
@@ -78,12 +80,14 @@ export function createRoleStore(db: Database): RoleStore {
       const permission_mode = req.permission_mode === undefined ? null : req.permission_mode;
       const allowed_tools =
         req.allowed_tools === undefined ? null : JSON.stringify(req.allowed_tools);
+      const effort = req.effort === undefined ? null : req.effort;
       insertStmt.run(
         id,
         req.name,
         description,
         permission_mode,
         allowed_tools,
+        effort,
         req.persistent ? 1 : 0,
         created_at,
       );

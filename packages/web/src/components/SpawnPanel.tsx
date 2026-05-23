@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api, type SpawnResponse } from "../api.ts";
+import { api, type EffortLevel, type SpawnResponse } from "../api.ts";
 
 interface Props {
   readonly workspaceId: string;
@@ -7,9 +7,21 @@ interface Props {
   readonly onSpawned: (s: SpawnResponse) => void;
 }
 
+type EffortChoice = EffortLevel | "default";
+
+const EFFORT_CHOICES: readonly EffortChoice[] = [
+  "default",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+];
+
 export function SpawnPanel({ workspaceId, roleId, onSpawned }: Props) {
   const [prompt, setPrompt] = useState("");
   const [label, setLabel] = useState("");
+  const [effort, setEffort] = useState<EffortChoice>("default");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,10 +38,12 @@ export function SpawnPanel({ workspaceId, roleId, onSpawned }: Props) {
         role_id: roleId,
         prompt,
         label: trimmedLabel,
+        ...(effort === "default" ? {} : { effort }),
       });
       onSpawned(res);
       setPrompt("");
       setLabel("");
+      setEffort("default");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -72,6 +86,26 @@ export function SpawnPanel({ workspaceId, roleId, onSpawned }: Props) {
           }
           disabled={roleId === null}
         />
+      </label>
+
+      <label className="block">
+        <span className="block text-xs text-zinc-400 mb-1">
+          effort{" "}
+          <span className="text-zinc-600">
+            (default = role's reasoning depth)
+          </span>
+        </span>
+        <select
+          value={effort}
+          onChange={(e) => setEffort(e.target.value as EffortChoice)}
+          className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded text-sm focus:outline-none focus:border-zinc-600"
+        >
+          {EFFORT_CHOICES.map((choice) => (
+            <option key={choice} value={choice}>
+              {choice}
+            </option>
+          ))}
+        </select>
       </label>
 
       <button

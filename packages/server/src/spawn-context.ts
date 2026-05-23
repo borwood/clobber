@@ -4,7 +4,7 @@ import type {
   RoleBundleData,
   RuntimeSpawnOptions,
 } from "@clobber/runtime";
-import type { Agent, BriefingPacket, Role, Workspace } from "@clobber/shared";
+import type { Agent, BriefingPacket, EffortLevel, Role, Workspace } from "@clobber/shared";
 import { ensureOffice } from "./office-store.ts";
 import { composeOfficeContext } from "./office-context.ts";
 import { OFFICE_NOTES_SKILL } from "./office-notes-skill.ts";
@@ -23,6 +23,10 @@ export interface PrepareSpawnContextInput {
   readonly versionId: string | undefined;
   readonly prompt: string;
   readonly briefing?: BriefingPacket;
+  // Per-spawn override of the role's default effort. When supplied, beats
+  // role.effort. When omitted, role.effort applies (or claude's default if
+  // neither is set).
+  readonly effortOverride?: EffortLevel;
 }
 
 export interface SpawnContext {
@@ -48,7 +52,17 @@ export function prepareSpawnContext(
   deps: SpawnPipelineDeps,
   input: PrepareSpawnContextInput,
 ): PrepareSpawnContextResult {
-  const { mode, workspace, role, agent, sessionId, versionId, prompt, briefing } = input;
+  const {
+    mode,
+    workspace,
+    role,
+    agent,
+    sessionId,
+    versionId,
+    prompt,
+    briefing,
+    effortOverride,
+  } = input;
 
   const bundle = versionId === undefined ? null : deps.roleVersions.loadAsBundle(versionId);
   if (bundle === null) {
@@ -96,6 +110,7 @@ export function prepareSpawnContext(
     ...(officeDir === null ? {} : { CLOBBER_OFFICE_DIR: officeDir }),
   };
 
+  const effectiveEffort = effortOverride ?? role.effort;
   const spawnOptions: RuntimeSpawnOptions = {
     hookUrl: deps.hookUrl,
     prompt: effectivePrompt,
@@ -103,6 +118,7 @@ export function prepareSpawnContext(
     sessionId,
     ...(role.permission_mode === undefined ? {} : { permissionMode: role.permission_mode }),
     ...(role.allowed_tools === undefined ? {} : { allowedTools: role.allowed_tools }),
+    ...(effectiveEffort === undefined ? {} : { effort: effectiveEffort }),
     env,
     materialized,
     systemPrompt: effectiveBundle.systemPrompt,

@@ -7,7 +7,7 @@ import {
   type HookSettings,
 } from "./spawn-config.ts";
 import { serializeUserMessage } from "./stream-json.ts";
-import type { PermissionMode } from "@clobber/shared";
+import type { EffortLevel, PermissionMode } from "@clobber/shared";
 import type { RuntimeCommand } from "./runtime-provider.ts";
 import type { RuntimeEvent, RuntimeStartupResult } from "./runtime-events.ts";
 import { normalizeCodexExecEvent } from "./codex-jsonl.ts";
@@ -22,6 +22,7 @@ export interface SpawnAgentOptions {
   readonly hookAsync?: boolean;
   readonly permissionMode?: PermissionMode;
   readonly allowedTools?: readonly string[];
+  readonly effort?: EffortLevel;
   readonly appendSystemPrompt?: string;
   readonly displayName?: string;
   readonly claudeBin?: string;
@@ -100,6 +101,7 @@ function buildClaudeCommand(sessionId: string, opts: SpawnAgentOptions): Runtime
       ...(opts.pluginDirs === undefined ? {} : { pluginDirs: opts.pluginDirs }),
       ...(opts.permissionMode === undefined ? {} : { permissionMode: opts.permissionMode }),
       ...(opts.allowedTools === undefined ? {} : { allowedTools: opts.allowedTools }),
+      ...(opts.effort === undefined ? {} : { effort: opts.effort }),
       ...(opts.appendSystemPrompt === undefined
         ? {}
         : { appendSystemPrompt: opts.appendSystemPrompt }),
