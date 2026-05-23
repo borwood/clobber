@@ -5,6 +5,7 @@ export * from "./agent.ts";
 export * from "./agent-status.ts";
 export * from "./final-report.ts";
 export * from "./final-report-callback.ts";
+export * from "./boot-context-provider.ts";
 export * from "./manager-skill-policy.ts";
 export * from "./agent-question.ts";
 export * from "./session.ts";

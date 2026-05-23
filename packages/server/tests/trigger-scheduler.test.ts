@@ -149,6 +149,17 @@ function makeHarness(initial: Date): Harness {
   };
 }
 
+// A cron-triggered spawn now runs an async boot-context provider, so the
+// cron timer dispatches fire-and-forget; advancing the fake clock kicks off
+// that async work but does not await it. Yielding to a real macrotask drains
+// the pending microtasks so the dispatch (spawn + audit) settles before we
+// assert. (The webhook / workspace-open fire paths return a promise the test
+// awaits directly, so they don't need this.)
+async function flushAfter(clock: TestClock, ms: number): Promise<void> {
+  clock.advance(ms);
+  await Bun.sleep(0);
+}
+
 function getCurrentVersion(h: Harness, roleId: string): RoleVersion {
   const role = h.roles.get(roleId) as Role;
   return h.roleVersions.get(role.current_version_id!)!;
@@ -179,7 +190,7 @@ function setManagerWorkspaceOpen(h: Harness, debounceMs?: number): void {
 }
 
 describe("TriggerScheduler — cron firing", () => {
-  it("fires a cron trigger at the expected time and spawns a fresh session for an idle persistent agent", () => {
+  it("fires a cron trigger at the expected time and spawns a fresh session for an idle persistent agent", async () => {
     // Start at 2026-05-05T08:59:00Z, cron at 9:00am UTC daily
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
     setManagerCron(h, "0 9 * * *");
@@ -188,11 +199,11 @@ describe("TriggerScheduler — cron firing", () => {
     expect(h.spawnCalls.length).toBe(0);
 
     // Advance 30 seconds — not yet
-    h.clock.advance(30_000);
+    await flushAfter(h.clock, 30_000);
     expect(h.spawnCalls.length).toBe(0);
 
     // Advance to 9:00:00 — should fire
-    h.clock.advance(30_000);
+    await flushAfter(h.clock, 30_000);
     expect(h.spawnCalls.length).toBe(1);
     expect(h.spawnCalls[0]!.prompt).toContain("0 9 * * *");
     // The triggered-wake spawn goes through attachSessionToAgent, so it gets the
@@ -215,7 +226,7 @@ describe("TriggerScheduler — cron firing", () => {
     h.db.close();
   });
 
-  it("injects the synthetic prompt into a live persistent agent that is idle", () => {
+  it("injects the synthetic prompt into a live persistent agent that is idle", async () => {
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
     setManagerCron(h, "0 9 * * *");
 
@@ -235,7 +246,7 @@ describe("TriggerScheduler — cron firing", () => {
     h.registry.setBusy(sessionId, false);
 
     h.scheduler.start();
-    h.clock.advance(60_000); // arrive at 9:00:00
+    await flushAfter(h.clock, 60_000); // arrive at 9:00:00
     expect(h.spawnCalls.length).toBe(0);
 
     const text = Buffer.concat(writes).toString("utf8");
@@ -256,7 +267,7 @@ describe("TriggerScheduler — cron firing", () => {
     h.db.close();
   });
 
-  it("records skipped-busy when a live session is busy and does not inject", () => {
+  it("records skipped-busy when a live session is busy and does not inject", async () => {
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
     setManagerCron(h, "0 9 * * *");
 
@@ -275,7 +286,7 @@ describe("TriggerScheduler — cron firing", () => {
     // registry registers busy=true by default — perfect.
 
     h.scheduler.start();
-    h.clock.advance(60_000);
+    await flushAfter(h.clock, 60_000);
     expect(h.spawnCalls.length).toBe(0);
     expect(writes.length).toBe(0);
 
@@ -287,12 +298,12 @@ describe("TriggerScheduler — cron firing", () => {
     h.db.close();
   });
 
-  it("re-fires daily — schedules the next occurrence after firing", () => {
+  it("re-fires daily — schedules the next occurrence after firing", async () => {
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
     setManagerCron(h, "0 9 * * *");
     h.scheduler.start();
 
-    h.clock.advance(60_000); // first fire at 09:00 — spawns a fresh session
+    await flushAfter(h.clock, 60_000); // first fire at 09:00 — spawns a fresh session
     expect(h.spawnCalls.length).toBe(1);
     const firstSessionId = h.spawnCalls[0]!.sessionId;
 
@@ -300,7 +311,7 @@ describe("TriggerScheduler — cron firing", () => {
     h.registry.setBusy(firstSessionId, false);
 
     // Advance another 24h — cron should fire again into the live, idle session
-    h.clock.advance(24 * 60 * 60 * 1000);
+    await flushAfter(h.clock, 24 * 60 * 60 * 1000);
 
     const audit = h.dispatches.listForAgent(h.managerAgentId);
     expect(audit.length).toBe(2);
@@ -312,7 +323,7 @@ describe("TriggerScheduler — cron firing", () => {
     h.db.close();
   });
 
-  it("two agents with the same cron expression both fire independently", () => {
+  it("two agents with the same cron expression both fire independently", async () => {
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
     setManagerCron(h, "0 9 * * *");
 
@@ -324,7 +335,7 @@ describe("TriggerScheduler — cron firing", () => {
     });
 
     h.scheduler.start();
-    h.clock.advance(60_000);
+    await flushAfter(h.clock, 60_000);
 
     expect(h.spawnCalls.length).toBe(2);
     const audits = h.dispatches.listForWorkspace(h.workspaceId);
@@ -338,12 +349,12 @@ describe("TriggerScheduler — cron firing", () => {
     h.db.close();
   });
 
-  it("scheduler.reloadRole picks up trigger edits without restart", () => {
+  it("scheduler.reloadRole picks up trigger edits without restart", async () => {
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
     h.scheduler.start();
 
     // No triggers yet — advance past 9am, nothing fires
-    h.clock.advance(60_000);
+    await flushAfter(h.clock, 60_000);
     expect(h.spawnCalls.length).toBe(0);
 
     // Now set a trigger for 10am and reload
@@ -351,14 +362,14 @@ describe("TriggerScheduler — cron firing", () => {
     h.scheduler.reloadRole(h.managerRoleId);
 
     // Advance to 10:00 (currently 09:00, so +1h)
-    h.clock.advance(60 * 60 * 1000);
+    await flushAfter(h.clock, 60 * 60 * 1000);
     expect(h.spawnCalls.length).toBe(1);
 
     h.scheduler.stop();
     h.db.close();
   });
 
-  it("does not fire triggers configured on ephemeral roles", () => {
+  it("does not fire triggers configured on ephemeral roles", async () => {
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
 
     // Force a worker version with a cron trigger directly via role-version-store
@@ -387,14 +398,14 @@ describe("TriggerScheduler — cron firing", () => {
     });
 
     h.scheduler.start();
-    h.clock.advance(60_000);
+    await flushAfter(h.clock, 60_000);
     expect(h.spawnCalls.length).toBe(0);
 
     h.scheduler.stop();
     h.db.close();
   });
 
-  it("records unsupported-kind dispatch rows for trigger kinds without an implementation", () => {
+  it("records unsupported-kind dispatch rows for trigger kinds without an implementation", async () => {
     // file-watch + issue-assigned aren't implemented as live event sources — they
     // should land in the audit log as unsupported-kind so the modularity gap is
     // visible instead of silent. (Webhook + workspace-open ARE implemented via
@@ -410,7 +421,7 @@ describe("TriggerScheduler — cron firing", () => {
     });
 
     h.scheduler.start();
-    h.clock.advance(48 * 60 * 60 * 1000);
+    await flushAfter(h.clock, 48 * 60 * 60 * 1000);
     expect(h.spawnCalls.length).toBe(0);
 
     const audit = h.dispatches.listForAgent(h.managerAgentId);
@@ -430,7 +441,7 @@ describe("TriggerScheduler — cron firing", () => {
 });
 
 describe("TriggerScheduler — per-workspace trigger overrides", () => {
-  it("does not register or fire a cron trigger whose id is in the workspace override map", () => {
+  it("does not register or fire a cron trigger whose id is in the workspace override map", async () => {
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
     setManagerCron(h, "0 9 * * *");
     h.workspaces.updateConfig(h.workspaceId, {
@@ -440,7 +451,7 @@ describe("TriggerScheduler — per-workspace trigger overrides", () => {
     });
 
     h.scheduler.start();
-    h.clock.advance(60_000); // cross 09:00
+    await flushAfter(h.clock, 60_000); // cross 09:00
     expect(h.spawnCalls.length).toBe(0);
 
     const audit = h.dispatches.listForAgent(h.managerAgentId);
@@ -452,7 +463,7 @@ describe("TriggerScheduler — per-workspace trigger overrides", () => {
     h.db.close();
   });
 
-  it("does not fire a webhook trigger whose id is in the workspace override map", () => {
+  it("does not fire a webhook trigger whose id is in the workspace override map", async () => {
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
     setManagerWebhook(h, "/hooks/x");
     h.workspaces.updateConfig(h.workspaceId, {
@@ -462,7 +473,7 @@ describe("TriggerScheduler — per-workspace trigger overrides", () => {
     });
 
     h.scheduler.start();
-    const result = h.scheduler.fireWebhook("/hooks/x", { sample: 1 });
+    const result = await h.scheduler.fireWebhook("/hooks/x", { sample: 1 });
     expect(result.dispatched).toBe(0);
     expect(h.spawnCalls.length).toBe(0);
 
@@ -475,7 +486,7 @@ describe("TriggerScheduler — per-workspace trigger overrides", () => {
     h.db.close();
   });
 
-  it("non-overridden triggers on the same role continue to fire normally", () => {
+  it("non-overridden triggers on the same role continue to fire normally", async () => {
     // Disable the 9am cron; leave a 10am cron alone — the 10am should still fire.
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
     const role = h.roles.get(h.managerRoleId) as Role;
@@ -494,10 +505,10 @@ describe("TriggerScheduler — per-workspace trigger overrides", () => {
 
     h.scheduler.start();
     // Cross 09:00 — disabled, should not fire
-    h.clock.advance(60_000);
+    await flushAfter(h.clock, 60_000);
     expect(h.spawnCalls.length).toBe(0);
     // Cross 10:00 — should fire
-    h.clock.advance(60 * 60 * 1000);
+    await flushAfter(h.clock, 60 * 60 * 1000);
     expect(h.spawnCalls.length).toBe(1);
     expect(h.spawnCalls[0]!.prompt).toContain("0 10 * * *");
 
@@ -505,14 +516,14 @@ describe("TriggerScheduler — per-workspace trigger overrides", () => {
     h.db.close();
   });
 
-  it("scheduler.reloadAgent picks up an override added after registration", () => {
+  it("scheduler.reloadAgent picks up an override added after registration", async () => {
     // Start with the cron firing normally; then add an override and reload.
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
     setManagerCron(h, "0 9 * * *");
     h.scheduler.start();
 
     // First fire at 09:00 — no override yet
-    h.clock.advance(60_000);
+    await flushAfter(h.clock, 60_000);
     expect(h.spawnCalls.length).toBe(1);
 
     // Disable the trigger and reload
@@ -526,7 +537,7 @@ describe("TriggerScheduler — per-workspace trigger overrides", () => {
     // Mark first session idle so an injection would otherwise happen
     h.registry.setBusy(h.spawnCalls[0]!.sessionId, false);
     // Cross next 09:00 — disabled, should not produce a second spawn or injection
-    h.clock.advance(24 * 60 * 60 * 1000);
+    await flushAfter(h.clock, 24 * 60 * 60 * 1000);
     expect(h.spawnCalls.length).toBe(1);
 
     const audit = h.dispatches.listForAgent(h.managerAgentId);
@@ -540,7 +551,7 @@ describe("TriggerScheduler — per-workspace trigger overrides", () => {
     h.db.close();
   });
 
-  it("override map for a different role does not affect this role's triggers", () => {
+  it("override map for a different role does not affect this role's triggers", async () => {
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
     setManagerCron(h, "0 9 * * *");
     // Disable a trigger on the (unrelated) worker role
@@ -551,7 +562,7 @@ describe("TriggerScheduler — per-workspace trigger overrides", () => {
     });
 
     h.scheduler.start();
-    h.clock.advance(60_000);
+    await flushAfter(h.clock, 60_000);
     expect(h.spawnCalls.length).toBe(1);
 
     h.scheduler.stop();
@@ -560,7 +571,7 @@ describe("TriggerScheduler — per-workspace trigger overrides", () => {
 });
 
 describe("TriggerScheduler — webhook firing", () => {
-  it("fires a webhook trigger when fireWebhook is called for a matching path and spawns a fresh session", () => {
+  it("fires a webhook trigger when fireWebhook is called for a matching path and spawns a fresh session", async () => {
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
     const role = h.roles.get(h.managerRoleId) as Role;
     const cur = getCurrentVersion(h, h.managerRoleId);
@@ -569,7 +580,7 @@ describe("TriggerScheduler — webhook firing", () => {
     });
 
     h.scheduler.start();
-    const result = h.scheduler.fireWebhook("/hooks/x", { sample: 1 });
+    const result = await h.scheduler.fireWebhook("/hooks/x", { sample: 1 });
     expect(result.dispatched).toBe(1);
 
     expect(h.spawnCalls.length).toBe(1);
@@ -584,7 +595,7 @@ describe("TriggerScheduler — webhook firing", () => {
     h.db.close();
   });
 
-  it("returns dispatched=0 and writes nothing when no agent has a webhook trigger at that path", () => {
+  it("returns dispatched=0 and writes nothing when no agent has a webhook trigger at that path", async () => {
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
     const role = h.roles.get(h.managerRoleId) as Role;
     const cur = getCurrentVersion(h, h.managerRoleId);
@@ -593,7 +604,7 @@ describe("TriggerScheduler — webhook firing", () => {
     });
 
     h.scheduler.start();
-    const result = h.scheduler.fireWebhook("/hooks/y", undefined);
+    const result = await h.scheduler.fireWebhook("/hooks/y", undefined);
     expect(result.dispatched).toBe(0);
     expect(h.spawnCalls.length).toBe(0);
 
@@ -601,7 +612,7 @@ describe("TriggerScheduler — webhook firing", () => {
     h.db.close();
   });
 
-  it("injects into a live, idle persistent agent on webhook fire (mirrors cron behaviour)", () => {
+  it("injects into a live, idle persistent agent on webhook fire (mirrors cron behaviour)", async () => {
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
     const role = h.roles.get(h.managerRoleId) as Role;
     const cur = getCurrentVersion(h, h.managerRoleId);
@@ -624,7 +635,7 @@ describe("TriggerScheduler — webhook firing", () => {
     h.registry.setBusy(sessionId, false);
 
     h.scheduler.start();
-    const result = h.scheduler.fireWebhook("/hooks/x", undefined);
+    const result = await h.scheduler.fireWebhook("/hooks/x", undefined);
     expect(result.dispatched).toBe(1);
     expect(h.spawnCalls.length).toBe(0);
 
@@ -641,7 +652,7 @@ describe("TriggerScheduler — webhook firing", () => {
     h.db.close();
   });
 
-  it("fires every matching agent when two persistent agents register the same webhook path", () => {
+  it("fires every matching agent when two persistent agents register the same webhook path", async () => {
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
     const role = h.roles.get(h.managerRoleId) as Role;
     const cur = getCurrentVersion(h, h.managerRoleId);
@@ -655,7 +666,7 @@ describe("TriggerScheduler — webhook firing", () => {
     });
 
     h.scheduler.start();
-    const result = h.scheduler.fireWebhook("/hooks/x", undefined);
+    const result = await h.scheduler.fireWebhook("/hooks/x", undefined);
     expect(result.dispatched).toBe(2);
 
     const audits = h.dispatches.listForWorkspace(h.workspaceId);
@@ -667,23 +678,23 @@ describe("TriggerScheduler — webhook firing", () => {
     h.db.close();
   });
 
-  it("reloadRole picks up newly-added webhook triggers without restart", () => {
+  it("reloadRole picks up newly-added webhook triggers without restart", async () => {
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
     h.scheduler.start();
 
     // No triggers yet
-    expect(h.scheduler.fireWebhook("/hooks/x", undefined).dispatched).toBe(0);
+    expect((await h.scheduler.fireWebhook("/hooks/x", undefined)).dispatched).toBe(0);
 
     setManagerWebhook(h, "/hooks/x");
     h.scheduler.reloadRole(h.managerRoleId);
 
-    expect(h.scheduler.fireWebhook("/hooks/x", undefined).dispatched).toBe(1);
+    expect((await h.scheduler.fireWebhook("/hooks/x", undefined)).dispatched).toBe(1);
 
     h.scheduler.stop();
     h.db.close();
   });
 
-  it("threads the webhook payload into the synthesized prompt on the spawn path", () => {
+  it("threads the webhook payload into the synthesized prompt on the spawn path", async () => {
     // Canonical use case: GitHub posts a PR-opened payload — the agent needs
     // to know *which* PR. The trigger's path alone is not enough.
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
@@ -698,7 +709,7 @@ describe("TriggerScheduler — webhook firing", () => {
       action: "opened",
       pull_request: { number: 143, title: "fix: payload passthrough" },
     };
-    const result = h.scheduler.fireWebhook("/hooks/gh-pr", payload);
+    const result = await h.scheduler.fireWebhook("/hooks/gh-pr", payload);
     expect(result.dispatched).toBe(1);
 
     expect(h.spawnCalls.length).toBe(1);
@@ -712,7 +723,7 @@ describe("TriggerScheduler — webhook firing", () => {
     h.db.close();
   });
 
-  it("threads the webhook payload into the synthesized prompt on the inject path", () => {
+  it("threads the webhook payload into the synthesized prompt on the inject path", async () => {
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
     const role = h.roles.get(h.managerRoleId) as Role;
     const cur = getCurrentVersion(h, h.managerRoleId);
@@ -739,7 +750,7 @@ describe("TriggerScheduler — webhook firing", () => {
       action: "opened",
       pull_request: { number: 143, title: "fix: payload passthrough" },
     };
-    const result = h.scheduler.fireWebhook("/hooks/gh-pr", payload);
+    const result = await h.scheduler.fireWebhook("/hooks/gh-pr", payload);
     expect(result.dispatched).toBe(1);
 
     const text = Buffer.concat(writes).toString("utf8");
@@ -758,12 +769,12 @@ describe("TriggerScheduler — webhook firing", () => {
 });
 
 describe("TriggerScheduler — workspace-open firing", () => {
-  it("fires a workspace-open trigger and spawns a fresh session for an idle persistent agent", () => {
+  it("fires a workspace-open trigger and spawns a fresh session for an idle persistent agent", async () => {
     const h = makeHarness(new Date("2026-05-05T09:00:00.000Z"));
     setManagerWorkspaceOpen(h);
     h.scheduler.start();
 
-    const result = h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined);
+    const result = await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined);
     expect(result.dispatched).toBe(1);
     expect(h.spawnCalls.length).toBe(1);
     expect(h.spawnCalls[0]!.prompt).toContain("workspace");
@@ -777,11 +788,11 @@ describe("TriggerScheduler — workspace-open firing", () => {
     h.db.close();
   });
 
-  it("returns dispatched=0 and writes nothing when no agent has a workspace-open trigger in that workspace", () => {
+  it("returns dispatched=0 and writes nothing when no agent has a workspace-open trigger in that workspace", async () => {
     const h = makeHarness(new Date("2026-05-05T09:00:00.000Z"));
     h.scheduler.start();
 
-    const result = h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined);
+    const result = await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined);
     expect(result.dispatched).toBe(0);
     expect(h.spawnCalls.length).toBe(0);
 
@@ -789,7 +800,7 @@ describe("TriggerScheduler — workspace-open firing", () => {
     h.db.close();
   });
 
-  it("injects into a live, idle persistent agent on workspace-open fire", () => {
+  it("injects into a live, idle persistent agent on workspace-open fire", async () => {
     const h = makeHarness(new Date("2026-05-05T09:00:00.000Z"));
     setManagerWorkspaceOpen(h);
 
@@ -808,7 +819,7 @@ describe("TriggerScheduler — workspace-open firing", () => {
     h.registry.setBusy(sessionId, false);
 
     h.scheduler.start();
-    const result = h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined);
+    const result = await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined);
     expect(result.dispatched).toBe(1);
     expect(h.spawnCalls.length).toBe(0);
 
@@ -822,24 +833,24 @@ describe("TriggerScheduler — workspace-open firing", () => {
     h.db.close();
   });
 
-  it("debounces repeat fires within the default 10s window per trigger-instance", () => {
+  it("debounces repeat fires within the default 10s window per trigger-instance", async () => {
     const h = makeHarness(new Date("2026-05-05T09:00:00.000Z"));
     setManagerWorkspaceOpen(h);
     h.scheduler.start();
 
-    expect(h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined).dispatched).toBe(1);
+    expect((await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined)).dispatched).toBe(1);
     expect(h.spawnCalls.length).toBe(1);
 
     // Mark first session idle so further fires would inject if not debounced
     h.registry.setBusy(h.spawnCalls[0]!.sessionId, false);
 
     // Fire again 5s later — debounced
-    h.clock.advance(5_000);
-    expect(h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined).dispatched).toBe(0);
+    await flushAfter(h.clock, 5_000);
+    expect((await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined)).dispatched).toBe(0);
 
     // Advance past 10s total — fires again
-    h.clock.advance(6_000);
-    expect(h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined).dispatched).toBe(1);
+    await flushAfter(h.clock, 6_000);
+    expect((await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined)).dispatched).toBe(1);
 
     const audit = h.dispatches.listForAgent(h.managerAgentId);
     expect(audit.length).toBe(2);
@@ -850,25 +861,25 @@ describe("TriggerScheduler — workspace-open firing", () => {
     h.db.close();
   });
 
-  it("honours a custom debounce_ms from the trigger config", () => {
+  it("honours a custom debounce_ms from the trigger config", async () => {
     const h = makeHarness(new Date("2026-05-05T09:00:00.000Z"));
     setManagerWorkspaceOpen(h, 100);
     h.scheduler.start();
 
-    expect(h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined).dispatched).toBe(1);
+    expect((await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined)).dispatched).toBe(1);
     h.registry.setBusy(h.spawnCalls[0]!.sessionId, false);
 
-    h.clock.advance(50);
-    expect(h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined).dispatched).toBe(0);
+    await flushAfter(h.clock, 50);
+    expect((await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined)).dispatched).toBe(0);
 
-    h.clock.advance(60);
-    expect(h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined).dispatched).toBe(1);
+    await flushAfter(h.clock, 60);
+    expect((await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined)).dispatched).toBe(1);
 
     h.scheduler.stop();
     h.db.close();
   });
 
-  it("fires every persistent agent with a workspace-open trigger in the workspace", () => {
+  it("fires every persistent agent with a workspace-open trigger in the workspace", async () => {
     const h = makeHarness(new Date("2026-05-05T09:00:00.000Z"));
     setManagerWorkspaceOpen(h);
     const secondAgent = h.agents.create({
@@ -878,7 +889,7 @@ describe("TriggerScheduler — workspace-open firing", () => {
     });
 
     h.scheduler.start();
-    const result = h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined);
+    const result = await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined);
     expect(result.dispatched).toBe(2);
 
     const audits = h.dispatches.listForWorkspace(h.workspaceId);
@@ -890,7 +901,7 @@ describe("TriggerScheduler — workspace-open firing", () => {
     h.db.close();
   });
 
-  it("debounce is per-trigger-instance — each agent maintains its own lastFiredAt", () => {
+  it("debounce is per-trigger-instance — each agent maintains its own lastFiredAt", async () => {
     // Two agents on the same workspace-open trigger. After both fire once,
     // both are debounced together. Advance past the window — both fire again.
     // The point of the test: lastFiredAt is independent per scheduled entry,
@@ -904,26 +915,26 @@ describe("TriggerScheduler — workspace-open firing", () => {
     });
     h.scheduler.start();
 
-    expect(h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined).dispatched).toBe(2);
+    expect((await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined)).dispatched).toBe(2);
     for (const call of h.spawnCalls) h.registry.setBusy(call.sessionId, false);
 
-    h.clock.advance(5_000);
-    expect(h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined).dispatched).toBe(0);
+    await flushAfter(h.clock, 5_000);
+    expect((await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined)).dispatched).toBe(0);
 
-    h.clock.advance(6_000);
-    expect(h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined).dispatched).toBe(2);
+    await flushAfter(h.clock, 6_000);
+    expect((await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined)).dispatched).toBe(2);
 
     h.scheduler.stop();
     h.db.close();
   });
 
-  it("threads the workspace-open payload into the synthesized prompt", () => {
+  it("threads the workspace-open payload into the synthesized prompt", async () => {
     const h = makeHarness(new Date("2026-05-05T09:00:00.000Z"));
     setManagerWorkspaceOpen(h);
     h.scheduler.start();
 
     const payload = { workspace_id: h.workspaceId, opened_at: 1736000000000 };
-    const result = h.scheduler.fireWorkspaceOpen(h.workspaceId, payload);
+    const result = await h.scheduler.fireWorkspaceOpen(h.workspaceId, payload);
     expect(result.dispatched).toBe(1);
     expect(h.spawnCalls.length).toBe(1);
     const prompt = h.spawnCalls[0]!.prompt;
@@ -934,7 +945,7 @@ describe("TriggerScheduler — workspace-open firing", () => {
     h.db.close();
   });
 
-  it("workspace-open in workspace A does not fire when workspace B is opened", () => {
+  it("workspace-open in workspace A does not fire when workspace B is opened", async () => {
     const h = makeHarness(new Date("2026-05-05T09:00:00.000Z"));
     setManagerWorkspaceOpen(h);
     const ws2 = h.workspaces.create({
@@ -943,7 +954,7 @@ describe("TriggerScheduler — workspace-open firing", () => {
     });
 
     h.scheduler.start();
-    const result = h.scheduler.fireWorkspaceOpen(ws2.id, undefined);
+    const result = await h.scheduler.fireWorkspaceOpen(ws2.id, undefined);
     expect(result.dispatched).toBe(0);
     expect(h.spawnCalls.length).toBe(0);
 
@@ -951,7 +962,7 @@ describe("TriggerScheduler — workspace-open firing", () => {
     h.db.close();
   });
 
-  it("does not fire workspace-open triggers configured on ephemeral roles", () => {
+  it("does not fire workspace-open triggers configured on ephemeral roles", async () => {
     const h = makeHarness(new Date("2026-05-05T09:00:00.000Z"));
     const workerRole = h.roles.get(h.workerRoleId) as Role;
     const cur = h.roleVersions.get(workerRole.current_version_id!)!;
@@ -975,7 +986,7 @@ describe("TriggerScheduler — workspace-open firing", () => {
     });
 
     h.scheduler.start();
-    const result = h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined);
+    const result = await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined);
     expect(result.dispatched).toBe(0);
     expect(h.spawnCalls.length).toBe(0);
 
@@ -983,7 +994,7 @@ describe("TriggerScheduler — workspace-open firing", () => {
     h.db.close();
   });
 
-  it("records disabled-by-workspace for a workspace-open trigger disabled via overrides", () => {
+  it("records disabled-by-workspace for a workspace-open trigger disabled via overrides", async () => {
     const h = makeHarness(new Date("2026-05-05T09:00:00.000Z"));
     setManagerWorkspaceOpen(h);
     h.workspaces.updateConfig(h.workspaceId, {
@@ -993,7 +1004,7 @@ describe("TriggerScheduler — workspace-open firing", () => {
     });
 
     h.scheduler.start();
-    const result = h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined);
+    const result = await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined);
     expect(result.dispatched).toBe(0);
     expect(h.spawnCalls.length).toBe(0);
 
@@ -1006,15 +1017,15 @@ describe("TriggerScheduler — workspace-open firing", () => {
     h.db.close();
   });
 
-  it("reloadAgent picks up a newly-added workspace-open trigger without restart", () => {
+  it("reloadAgent picks up a newly-added workspace-open trigger without restart", async () => {
     const h = makeHarness(new Date("2026-05-05T09:00:00.000Z"));
     h.scheduler.start();
-    expect(h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined).dispatched).toBe(0);
+    expect((await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined)).dispatched).toBe(0);
 
     setManagerWorkspaceOpen(h);
     h.scheduler.reloadAgent(h.managerAgentId);
 
-    expect(h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined).dispatched).toBe(1);
+    expect((await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined)).dispatched).toBe(1);
 
     h.scheduler.stop();
     h.db.close();

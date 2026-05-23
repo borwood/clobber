@@ -183,7 +183,7 @@ describe("spawn — office continuity at spawn (#55)", () => {
     await teardown(h);
   });
 
-  it("re-attaching the same persistent agent surfaces notes written in the prior session", () => {
+  it("re-attaching the same persistent agent surfaces notes written in the prior session", async () => {
     const db = createDatabase(":memory:");
     const workspaces = createWorkspaceStore(db);
     const roles = createRoleStore(db);
@@ -246,7 +246,7 @@ describe("spawn — office continuity at spawn (#55)", () => {
     const workspace = workspaces.get(ws.id)!;
 
     // First attach — empty office on wake
-    const r1 = attachSessionToAgent(spawnDeps, {
+    const r1 = await attachSessionToAgent(spawnDeps, {
       workspace,
       role,
       agent,
@@ -263,7 +263,7 @@ describe("spawn — office continuity at spawn (#55)", () => {
     );
 
     // Second attach to the SAME agent — note should appear in the prefix
-    const r2 = attachSessionToAgent(spawnDeps, {
+    const r2 = await attachSessionToAgent(spawnDeps, {
       workspace,
       role,
       agent,

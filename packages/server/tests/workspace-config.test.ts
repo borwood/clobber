@@ -32,7 +32,7 @@ beforeEach(async () => {
     reloadRole: (roleId) => {
       reloadedRoles.push(roleId);
     },
-    fireWorkspaceOpen: () => ({ dispatched: 0 }),
+    fireWorkspaceOpen: async () => ({ dispatched: 0 }),
   };
   registerWorkspaceRoutes(app, {
     db,

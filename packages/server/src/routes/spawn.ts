@@ -69,7 +69,7 @@ export function registerSpawnRoutes(app: FastifyInstance, deps: SpawnRouteDeps):
       return { error: "role not found" };
     }
 
-    const result = executeSpawn(deps, {
+    const result = await executeSpawn(deps, {
       workspace,
       role,
       prompt,

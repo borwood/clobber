@@ -44,7 +44,10 @@ export function createCronScheduler(
     const delay = Math.max(0, nextAt.getTime() - now.getTime());
     entry.handle = clock.setTimeout(() => {
       entry.handle = null;
-      dispatchTrigger(dispatchDeps, entry, entry.trigger, undefined);
+      // Reschedule the next tick immediately so cadence is independent of how
+      // long the dispatch (which may run an async boot-context provider) takes;
+      // dispatchTrigger records its own outcome and never rejects.
+      void dispatchTrigger(dispatchDeps, entry, entry.trigger, undefined);
       if (isStarted() && isStillTracked(entry)) scheduleNext(entry);
     }, delay);
   }

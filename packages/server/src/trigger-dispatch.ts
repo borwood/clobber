@@ -1,5 +1,5 @@
 import type { RuntimeProvider } from "@clobber/runtime";
-import type { RoleTrigger } from "@clobber/shared";
+import type { Agent, Role, RoleTrigger, Workspace } from "@clobber/shared";
 import type { AgentStore } from "./agent-store.ts";
 import type { RoleStore } from "./role-store.ts";
 import type { WorkspaceStore } from "./workspace-store.ts";
@@ -10,7 +10,7 @@ import type {
   TriggerDispatchStore,
   DispatchOutcome,
 } from "./trigger-dispatch-store.ts";
-import type { AttachSessionFn } from "./trigger-scheduler.ts";
+import type { AttachOutcome, AttachSessionFn } from "./trigger-scheduler.ts";
 
 export interface AgentBinding {
   readonly agentId: string;
@@ -36,12 +36,12 @@ export interface DispatchDeps {
 // records skipped-busy / errored otherwise. Returns true if the dispatch
 // landed in the audit log; false if the agent / role / workspace went away
 // between trigger registration and fire.
-export function dispatchTrigger(
+export async function dispatchTrigger(
   deps: DispatchDeps,
   binding: AgentBinding,
   trigger: RoleTrigger,
   payload: unknown,
-): boolean {
+): Promise<boolean> {
   const firedAt = deps.clock.now().getTime();
   const agent = deps.agents.get(binding.agentId);
   if (agent === null) return false;
@@ -55,10 +55,14 @@ export function dispatchTrigger(
     .filter((s) => s.agent_id === binding.agentId);
 
   if (activeForAgent.length === 0) {
-    const result = deps.attachSession({ workspace, role, agent, prompt });
-    const outcome: DispatchOutcome = result.ok ? "spawned" : "errored";
-    const sessionId = result.ok ? result.session_id : undefined;
-    const error = result.ok ? undefined : result.error;
+    // attachSession can now throw — a configured boot-context provider that
+    // fails (Engineering Rule 3) propagates out of spawn-context. On a fire-
+    // and-forget trigger path there's no caller to surface a 500 to, so we
+    // translate the throw into an errored dispatch (the same audit outcome a
+    // non-ok result produces) rather than crashing the cron timer. This is
+    // not a Rule-3 swallow: the failure is recorded loudly in the dispatch
+    // log with its message, not discarded. Trigger-path semantics per #166.
+    const attached = await attachOutcome(deps, { workspace, role, agent, prompt });
     deps.dispatches.append({
       workspace_id: binding.workspaceId,
       role_id: binding.roleId,
@@ -66,9 +70,9 @@ export function dispatchTrigger(
       trigger_kind: trigger.kind,
       trigger_payload: trigger,
       fired_at: firedAt,
-      dispatch_outcome: outcome,
-      ...(sessionId === undefined ? {} : { session_id: sessionId }),
-      ...(error === undefined ? {} : { error }),
+      dispatch_outcome: attached.outcome,
+      ...(attached.sessionId === undefined ? {} : { session_id: attached.sessionId }),
+      ...(attached.error === undefined ? {} : { error: attached.error }),
     });
     return true;
   }
@@ -114,6 +118,26 @@ export function dispatchTrigger(
     session_id: live.sessionId,
   });
   return true;
+}
+
+interface AttachOutcomeResult {
+  readonly outcome: DispatchOutcome;
+  readonly sessionId?: string;
+  readonly error?: string;
+}
+
+async function attachOutcome(
+  deps: Pick<DispatchDeps, "attachSession">,
+  input: { workspace: Workspace; role: Role; agent: Agent; prompt: string },
+): Promise<AttachOutcomeResult> {
+  let result: AttachOutcome;
+  try {
+    result = await deps.attachSession(input);
+  } catch (err) {
+    return { outcome: "errored", error: err instanceof Error ? err.message : String(err) };
+  }
+  if (result.ok) return { outcome: "spawned", sessionId: result.session_id };
+  return { outcome: "errored", error: result.error };
 }
 
 export function recordUnsupportedTrigger(
