@@ -17,5 +17,6 @@ export const managerRole = defineRole({
     defaultCeiling: 1,
     permissionMode: "bypassPermissions",
     allowedTools: ["Bash", "Read", "Edit", "Write", "Glob", "Grep"],
+    effort: "xhigh",
   },
 });

@@ -18,6 +18,7 @@ export const workerRole = defineRole({
     defaultCeiling: 3,
     permissionMode: "bypassPermissions",
     allowedTools: ["Bash", "Read", "Edit", "Write", "Glob", "Grep"],
+    effort: "high",
     sdlc: defaultSdlcProfile,
   },
 });

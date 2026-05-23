@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { RuntimeProvider } from "@clobber/runtime";
-import type { Agent, BriefingPacket, Role, Workspace } from "@clobber/shared";
+import type { Agent, BriefingPacket, EffortLevel, Role, Workspace } from "@clobber/shared";
 import type { WorkspaceRoleStore } from "./workspace-role-store.ts";
 import type { WorkspaceStore } from "./workspace-store.ts";
 import type { AgentStore } from "./agent-store.ts";
@@ -41,6 +41,7 @@ export interface SpawnPipelineInput {
   readonly prompt: string;
   readonly label: string;
   readonly briefing?: BriefingPacket;
+  readonly effortOverride?: EffortLevel;
 }
 
 export interface SpawnPipelineSuccess {
@@ -95,7 +96,7 @@ export function executeSpawn(
   deps: SpawnPipelineDeps,
   input: SpawnPipelineInput,
 ): SpawnPipelineResult {
-  const { workspace, role, prompt, label, briefing } = input;
+  const { workspace, role, prompt, label, briefing, effortOverride } = input;
 
   const capacity = checkCapacity(deps, workspace, role);
   if (capacity !== null) return capacity;
@@ -111,6 +112,7 @@ export function executeSpawn(
     agent,
     prompt,
     ...(briefing === undefined ? {} : { briefing }),
+    ...(effortOverride === undefined ? {} : { effortOverride }),
   });
 }
 
@@ -120,13 +122,14 @@ export interface AttachSessionInput {
   readonly agent: Agent;
   readonly prompt: string;
   readonly briefing?: BriefingPacket;
+  readonly effortOverride?: EffortLevel;
 }
 
 export function attachSessionToAgent(
   deps: SpawnPipelineDeps,
   input: AttachSessionInput,
 ): SpawnPipelineSuccess | SpawnPipelineNoBundleError {
-  const { workspace, role, agent, prompt, briefing } = input;
+  const { workspace, role, agent, prompt, briefing, effortOverride } = input;
   const sessionId = randomUUID();
   const versionId = role.current_version_id;
 
@@ -139,6 +142,7 @@ export function attachSessionToAgent(
     versionId,
     prompt,
     ...(briefing === undefined ? {} : { briefing }),
+    ...(effortOverride === undefined ? {} : { effortOverride }),
   });
   if (!prepared.ok) return prepared;
   const ctx = prepared.context;

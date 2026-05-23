@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { PermissionModeSchema } from "../hooks/payloads.ts";
 
+// Reasoning depth knob exposed by `claude --effort <level>`. Mirrors the
+// upstream CLI's enum — kept in lockstep with what the runtime can pass through.
+export const EffortLevelSchema = z.enum(["low", "medium", "high", "xhigh", "max"]);
+export type EffortLevel = z.infer<typeof EffortLevelSchema>;
+
 export const SdlcPhaseSchema = z.object({
   id: z
     .string()
@@ -39,6 +44,7 @@ export const RoleSchema = z.object({
   description: z.string().min(1).optional(),
   permission_mode: PermissionModeSchema.optional(),
   allowed_tools: z.array(z.string().min(1)).optional(),
+  effort: EffortLevelSchema.optional(),
   persistent: z.boolean(),
   workspace_id: z.string().uuid().optional(),
   current_version_id: z.string().uuid().optional(),
@@ -121,6 +127,7 @@ export const CreateRoleRequestSchema = z.object({
   description: z.string().min(1).optional(),
   permission_mode: PermissionModeSchema.optional(),
   allowed_tools: z.array(z.string().min(1)).optional(),
+  effort: EffortLevelSchema.optional(),
   persistent: z.boolean(),
 });
 export type CreateRoleRequest = z.infer<typeof CreateRoleRequestSchema>;

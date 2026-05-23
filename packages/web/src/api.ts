@@ -83,11 +83,14 @@ export interface Whiteboard {
   readonly desks: readonly DeskCard[];
 }
 
+export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max";
+
 export interface SpawnRequest {
   readonly workspace_id: string;
   readonly role_id: string;
   readonly prompt: string;
   readonly label?: string;
+  readonly effort?: EffortLevel;
 }
 
 export interface SpawnResponse {
