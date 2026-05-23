@@ -56,7 +56,7 @@ export function registerPersistentAgentsRoutes(
         };
       }
 
-      const result = attachSessionToAgent(spawnPipelineDeps, {
+      const result = await attachSessionToAgent(spawnPipelineDeps, {
         workspace,
         role,
         agent,

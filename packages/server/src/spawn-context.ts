@@ -4,9 +4,10 @@ import type {
   RoleBundleData,
   RuntimeSpawnOptions,
 } from "@clobber/runtime";
-import type { Agent, BriefingPacket, Role, Workspace } from "@clobber/shared";
+import type { Agent, BootContext, BriefingPacket, Role, Workspace } from "@clobber/shared";
 import { ensureOffice } from "./office-store.ts";
 import { composeOfficeContext } from "./office-context.ts";
+import { runBootContextProvider } from "./boot-context-provider.ts";
 import { OFFICE_NOTES_SKILL } from "./office-notes-skill.ts";
 import { deskDirFor, writeBriefingPacket } from "./desk-store.ts";
 import { generateTokenValue } from "./session-token-store.ts";
@@ -44,10 +45,10 @@ export type PrepareSpawnContextResult =
   | { readonly ok: true; readonly context: SpawnContext }
   | PrepareSpawnContextNoBundleError;
 
-export function prepareSpawnContext(
+export async function prepareSpawnContext(
   deps: SpawnPipelineDeps,
   input: PrepareSpawnContextInput,
-): PrepareSpawnContextResult {
+): Promise<PrepareSpawnContextResult> {
   const { mode, workspace, role, agent, sessionId, versionId, prompt, briefing } = input;
 
   const bundle = versionId === undefined ? null : deps.roleVersions.loadAsBundle(versionId);
@@ -71,9 +72,33 @@ export function prepareSpawnContext(
   const effectiveBundle: RoleBundleData = officeDir === null
     ? bundle
     : injectOfficeNotesSkill(bundle);
-  const effectivePrompt = officeDir === null
-    ? prompt
-    : `${composeOfficeContext(officeDir)}\n\n${prompt}`;
+
+  // Boot-context provider runs for every spawn (not gated to persistent like
+  // office-context); the provider script branches on role_name itself if it
+  // wants audience-specific behaviour. noop returns "" → nothing injected.
+  const bootContext: BootContext = {
+    workspace_id: workspace.id,
+    agent_id: agent.id,
+    role_id: role.id,
+    role_name: role.name,
+    persistent: role.persistent,
+  };
+  const workspaceContext = await runBootContextProvider(
+    workspace.boot_context_provider,
+    bootContext,
+  );
+
+  // Order: durable workspace framing first, instance-specific office
+  // continuity next, the task prompt last.
+  const segments: string[] = [];
+  if (workspaceContext !== "") {
+    segments.push(`[Workspace context]\n${workspaceContext}\n[End of workspace context]`);
+  }
+  if (officeDir !== null) {
+    segments.push(composeOfficeContext(officeDir));
+  }
+  segments.push(prompt);
+  const effectivePrompt = segments.join("\n\n");
 
   const materialized = deps.runtimeProvider.prepareBundle({
     bundle: effectiveBundle,

@@ -133,7 +133,7 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
         return { error: `role not found: ${roleName}` };
       }
 
-      const result = executeSpawn(deps, {
+      const result = await executeSpawn(deps, {
         workspace,
         role,
         prompt,

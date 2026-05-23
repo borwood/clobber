@@ -6,8 +6,10 @@ import {
   DEFAULT_ROLE_EDIT_FORBIDDEN_KEYS,
   DEFAULT_TRIGGER_OVERRIDES,
   DEFAULT_FINAL_REPORT_CALLBACK,
+  DEFAULT_BOOT_CONTEXT_PROVIDER,
   DEFAULT_MANAGER_SKILL_POLICY,
   WorkspaceSchema,
+  type BootContextProvider,
   type CreateWorkspaceRequest,
   type FinalReportCallback,
   type ManagerSkillPolicy,
@@ -23,6 +25,7 @@ export interface WorkspaceConfigPatch {
   readonly role_edit_policy?: RoleEditPolicy;
   readonly trigger_overrides?: TriggerOverrides;
   readonly final_report_callback?: FinalReportCallback;
+  readonly boot_context_provider?: BootContextProvider;
   readonly manager_skill_policy?: ManagerSkillPolicy;
 }
 
@@ -44,6 +47,7 @@ interface Row {
   role_edit_policy: string;
   trigger_overrides: string;
   final_report_callback: string;
+  boot_context_provider: string;
   manager_skill_policy: string;
   created_at: number;
 }
@@ -58,6 +62,7 @@ function rowToWorkspace(row: Row): Workspace {
     role_edit_policy: JSON.parse(row.role_edit_policy),
     trigger_overrides: JSON.parse(row.trigger_overrides),
     final_report_callback: JSON.parse(row.final_report_callback),
+    boot_context_provider: JSON.parse(row.boot_context_provider),
     manager_skill_policy: JSON.parse(row.manager_skill_policy),
     created_at: row.created_at,
   });
@@ -66,8 +71,8 @@ function rowToWorkspace(row: Row): Workspace {
 export function createWorkspaceStore(db: Database): WorkspaceStore {
   const insertStmt = db.prepare(
     `INSERT INTO workspaces
-       (id, name, repo_path, setting_sources, wake_prompt, role_edit_policy, trigger_overrides, final_report_callback, manager_skill_policy, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, name, repo_path, setting_sources, wake_prompt, role_edit_policy, trigger_overrides, final_report_callback, boot_context_provider, manager_skill_policy, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const getStmt = db.prepare("SELECT * FROM workspaces WHERE id = ?");
   const findByNameStmt = db.prepare("SELECT * FROM workspaces WHERE name = ?");
@@ -89,6 +94,8 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
         req.trigger_overrides ?? { ...DEFAULT_TRIGGER_OVERRIDES };
       const callback: FinalReportCallback =
         req.final_report_callback ?? { ...DEFAULT_FINAL_REPORT_CALLBACK };
+      const bootContextProvider: BootContextProvider =
+        req.boot_context_provider ?? { ...DEFAULT_BOOT_CONTEXT_PROVIDER };
       const skillPolicy: ManagerSkillPolicy = req.manager_skill_policy ?? {
         allow_self_grant: DEFAULT_MANAGER_SKILL_POLICY.allow_self_grant,
         allowed_skills: [...DEFAULT_MANAGER_SKILL_POLICY.allowed_skills],
@@ -102,6 +109,7 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
         JSON.stringify(policy),
         JSON.stringify(overrides),
         JSON.stringify(callback),
+        JSON.stringify(bootContextProvider),
         JSON.stringify(skillPolicy),
         created_at,
       );
@@ -114,6 +122,7 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
         role_edit_policy: { forbidden_keys: [...policy.forbidden_keys] },
         trigger_overrides: overrides,
         final_report_callback: callback,
+        boot_context_provider: bootContextProvider,
         manager_skill_policy: {
           allow_self_grant: skillPolicy.allow_self_grant,
           allowed_skills: [...skillPolicy.allowed_skills],
@@ -159,6 +168,10 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
       if (config.final_report_callback !== undefined) {
         fragments.push("final_report_callback = ?");
         values.push(JSON.stringify(config.final_report_callback));
+      }
+      if (config.boot_context_provider !== undefined) {
+        fragments.push("boot_context_provider = ?");
+        values.push(JSON.stringify(config.boot_context_provider));
       }
       if (config.manager_skill_policy !== undefined) {
         fragments.push("manager_skill_policy = ?");

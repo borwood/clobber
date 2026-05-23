@@ -91,10 +91,10 @@ export type SpawnPipelineResult =
   | SpawnPipelineCapacityError
   | SpawnPipelineNoBundleError;
 
-export function executeSpawn(
+export async function executeSpawn(
   deps: SpawnPipelineDeps,
   input: SpawnPipelineInput,
-): SpawnPipelineResult {
+): Promise<SpawnPipelineResult> {
   const { workspace, role, prompt, label, briefing } = input;
 
   const capacity = checkCapacity(deps, workspace, role);
@@ -122,15 +122,15 @@ export interface AttachSessionInput {
   readonly briefing?: BriefingPacket;
 }
 
-export function attachSessionToAgent(
+export async function attachSessionToAgent(
   deps: SpawnPipelineDeps,
   input: AttachSessionInput,
-): SpawnPipelineSuccess | SpawnPipelineNoBundleError {
+): Promise<SpawnPipelineSuccess | SpawnPipelineNoBundleError> {
   const { workspace, role, agent, prompt, briefing } = input;
   const sessionId = randomUUID();
   const versionId = role.current_version_id;
 
-  const prepared = prepareSpawnContext(deps, {
+  const prepared = await prepareSpawnContext(deps, {
     mode: "attach",
     workspace,
     role,
@@ -188,7 +188,7 @@ export async function resumeSessionTurn(
   const agent = session.agent_id === undefined ? null : deps.agents.get(session.agent_id);
   if (agent === null) return { ok: false, status: 422, error: "agent not found" };
 
-  const prepared = prepareSpawnContext(deps, {
+  const prepared = await prepareSpawnContext(deps, {
     mode: "resume",
     workspace,
     role,

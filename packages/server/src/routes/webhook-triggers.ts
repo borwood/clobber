@@ -21,7 +21,7 @@ export function registerWebhookTriggersRoutes(
       reply.code(400);
       return { error: "invalid webhook fire request", issues: parsed.error.issues };
     }
-    const result = deps.scheduler.fireWebhook(
+    const result = await deps.scheduler.fireWebhook(
       parsed.data.path,
       parsed.data.payload,
     );

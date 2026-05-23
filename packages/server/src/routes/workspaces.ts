@@ -79,6 +79,9 @@ export function registerWorkspaceRoutes(
         ...(parsed.data.final_report_callback === undefined
           ? {}
           : { final_report_callback: parsed.data.final_report_callback }),
+        ...(parsed.data.boot_context_provider === undefined
+          ? {}
+          : { boot_context_provider: parsed.data.boot_context_provider }),
         ...(parsed.data.manager_skill_policy === undefined
           ? {}
           : { manager_skill_policy: parsed.data.manager_skill_policy }),
@@ -105,7 +108,7 @@ export function registerWorkspaceRoutes(
         return { error: "workspace not found" };
       }
       const payload = { workspace_id: workspace.id, opened_at: Date.now() };
-      const result = scheduler.fireWorkspaceOpen(workspace.id, payload);
+      const result = await scheduler.fireWorkspaceOpen(workspace.id, payload);
       return { dispatched: result.dispatched };
     },
   );

@@ -40,7 +40,7 @@ export type AttachSessionFn = (input: {
   readonly role: Role;
   readonly agent: Agent;
   readonly prompt: string;
-}) => AttachOutcome;
+}) => Promise<AttachOutcome>;
 
 export interface TriggerSchedulerDeps {
   readonly db: Database;
@@ -70,8 +70,8 @@ export interface TriggerScheduler {
   stop(): void;
   reloadRole(roleId: string): void;
   reloadAgent(agentId: string): void;
-  fireWebhook(path: string, payload: unknown): FireWebhookResult;
-  fireWorkspaceOpen(workspaceId: string, payload: unknown): FireWorkspaceOpenResult;
+  fireWebhook(path: string, payload: unknown): Promise<FireWebhookResult>;
+  fireWorkspaceOpen(workspaceId: string, payload: unknown): Promise<FireWorkspaceOpenResult>;
 }
 
 interface ScheduledWebhook extends AgentBinding {
@@ -241,22 +241,25 @@ export function createTriggerScheduler(
     for (const r of rows) reloadAgent(r.id);
   }
 
-  function fireWebhook(path: string, payload: unknown): FireWebhookResult {
+  async function fireWebhook(
+    path: string,
+    payload: unknown,
+  ): Promise<FireWebhookResult> {
     const set = webhooksByPath.get(path);
     if (set === undefined) return { dispatched: 0 };
     let dispatched = 0;
     for (const entry of set) {
-      if (dispatchTrigger(dispatchDeps, entry, entry.trigger, payload)) {
+      if (await dispatchTrigger(dispatchDeps, entry, entry.trigger, payload)) {
         dispatched += 1;
       }
     }
     return { dispatched };
   }
 
-  function fireWorkspaceOpen(
+  async function fireWorkspaceOpen(
     workspaceId: string,
     payload: unknown,
-  ): FireWorkspaceOpenResult {
+  ): Promise<FireWorkspaceOpenResult> {
     const set = workspaceOpensByWorkspace.get(workspaceId);
     if (set === undefined) return { dispatched: 0 };
     const now = deps.clock.now().getTime();
@@ -268,7 +271,7 @@ export function createTriggerScheduler(
       ) {
         continue;
       }
-      if (dispatchTrigger(dispatchDeps, entry, entry.trigger, payload)) {
+      if (await dispatchTrigger(dispatchDeps, entry, entry.trigger, payload)) {
         entry.lastFiredAt = now;
         dispatched += 1;
       }
