@@ -33,5 +33,5 @@ Make the test you just wrote go green, and don't break anything else.
 - The type-checker is silent.
 - No new lint warnings (run the repo's lint script if it has one).
 
-Mark the `implement` item in your `TodoWrite` list as `completed` and the
-next phase's item as `in_progress`. Then move to `open-pr/`.
+Mark the `implement` task as `completed` (via `TaskUpdate`) and the next
+phase as `in_progress`. Then move to `open-pr/`.

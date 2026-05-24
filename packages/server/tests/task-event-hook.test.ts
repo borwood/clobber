@@ -97,7 +97,7 @@ interface BootedAgent {
 let repoPath: string;
 
 beforeEach(() => {
-  repoPath = mkdtempSync(join(tmpdir(), "clobber-todowrite-hook-"));
+  repoPath = mkdtempSync(join(tmpdir(), "clobber-task-hook-"));
 });
 
 afterEach(() => {
@@ -142,185 +142,172 @@ function readLog(h: Harness, agentId: string, kind?: string): LogRow[] {
   return h.db.prepare(sql).all(...params) as LogRow[];
 }
 
-interface TodoItem {
-  readonly content: string;
-  readonly activeForm?: string;
-  readonly status: "pending" | "in_progress" | "completed";
-}
-
-function todoWriteHook(sessionId: string, todos: TodoItem[]): HookPayload {
+// Real TaskCreate PostToolUse payload shape (captured from the live event store):
+// input { subject, description, activeForm? }; response { task: { id, subject } }.
+// A freshly created task is always `pending` (status is not present in the payload).
+function taskCreateHook(
+  sessionId: string,
+  task: { id: string; subject: string; activeForm?: string },
+): HookPayload {
   return {
     session_id: sessionId,
     transcript_path: "/tmp/t.jsonl",
     cwd: "/tmp",
-    permission_mode: "default",
+    permission_mode: "bypassPermissions",
     hook_event_name: "PostToolUse",
-    tool_name: "TodoWrite",
-    tool_input: { todos },
+    tool_name: "TaskCreate",
+    tool_input: {
+      subject: task.subject,
+      description: `do ${task.subject}`,
+      ...(task.activeForm === undefined ? {} : { activeForm: task.activeForm }),
+    },
     tool_use_id: `toolu_${Math.random().toString(36).slice(2, 10)}`,
-    tool_response: { success: true },
+    tool_response: { task: { id: task.id, subject: task.subject } },
   };
 }
 
-describe("PostToolUse(TodoWrite) → agent_status_log (#87)", () => {
-  it("first TodoWrite emits a todo-snapshot + one phase-transition per item (prev=absent)", async () => {
+// Real TaskUpdate PostToolUse payload shape:
+// input { taskId, status?, subject? }; response { success, taskId, updatedFields[], statusChange? }.
+function taskUpdateHook(
+  sessionId: string,
+  update: {
+    taskId: string;
+    status?: "pending" | "in_progress" | "completed" | "deleted";
+    subject?: string;
+    from?: string;
+  },
+): HookPayload {
+  const input: Record<string, unknown> = { taskId: update.taskId };
+  if (update.status !== undefined) input.status = update.status;
+  if (update.subject !== undefined) input.subject = update.subject;
+  const response: Record<string, unknown> = {
+    success: true,
+    taskId: update.taskId,
+    updatedFields: Object.keys(input).filter((k) => k !== "taskId"),
+  };
+  if (update.status !== undefined && update.from !== undefined) {
+    response.statusChange = { from: update.from, to: update.status };
+  }
+  return {
+    session_id: sessionId,
+    transcript_path: "/tmp/t.jsonl",
+    cwd: "/tmp",
+    permission_mode: "bypassPermissions",
+    hook_event_name: "PostToolUse",
+    tool_name: "TaskUpdate",
+    tool_input: input,
+    tool_use_id: `toolu_${Math.random().toString(36).slice(2, 10)}`,
+    tool_response: response,
+  };
+}
+
+async function hook(h: Harness, payload: HookPayload): Promise<number> {
+  const res = await h.server.inject({ method: "POST", url: "/hook", payload });
+  return res.statusCode;
+}
+
+describe("PostToolUse(Task*) → agent_status_log (#169)", () => {
+  it("first TaskCreate emits a task-snapshot + one phase-transition (prev=absent)", async () => {
     const h = buildHarness();
     const boot = await bootAgent(h);
 
-    const todos: TodoItem[] = [
-      { content: "research", status: "in_progress" },
-      { content: "failing-test", status: "pending" },
-      { content: "implement", status: "pending" },
-    ];
+    expect(
+      await hook(h, taskCreateHook(boot.sessionId, { id: "1", subject: "research", activeForm: "researching" })),
+    ).toBe(200);
 
-    const res = await h.server.inject({
-      method: "POST",
-      url: "/hook",
-      payload: todoWriteHook(boot.sessionId, todos),
-    });
-    expect(res.statusCode).toBe(200);
-
-    const snapshots = readLog(h, boot.agentId, "todo-snapshot");
+    const snapshots = readLog(h, boot.agentId, "task-snapshot");
     expect(snapshots).toHaveLength(1);
-    const snapshot = snapshots[0]!;
-    expect(snapshot.session_id).toBe(boot.sessionId);
-    expect(JSON.parse(snapshot.details_json!)).toEqual({ todos });
+    expect(JSON.parse(snapshots[0]!.details_json!)).toEqual({
+      tasks: [{ id: "1", content: "research", status: "pending", activeForm: "researching" }],
+    });
 
     const transitions = readLog(h, boot.agentId, "phase-transition");
-    expect(transitions).toHaveLength(3);
-
-    const research = transitions.find(
-      (r) => (JSON.parse(r.details_json!) as { phase: string }).phase === "research",
-    );
-    expect(research).toBeDefined();
-    expect(research!.state).toBe("in_progress");
-    expect(JSON.parse(research!.details_json!)).toEqual({
+    expect(transitions).toHaveLength(1);
+    expect(transitions[0]!.state).toBe("pending");
+    expect(JSON.parse(transitions[0]!.details_json!)).toEqual({
       phase: "research",
       prev_status: "(absent)",
-      new_status: "in_progress",
+      new_status: "pending",
     });
-
-    const test = transitions.find(
-      (r) => (JSON.parse(r.details_json!) as { phase: string }).phase === "failing-test",
-    );
-    expect(test!.state).toBe("pending");
-    expect((JSON.parse(test!.details_json!) as { prev_status: string }).prev_status).toBe("(absent)");
 
     await teardown(h);
   });
 
-  it("second TodoWrite with status change emits one phase-transition", async () => {
+  it("TaskUpdate flips an existing task's status and emits one phase-transition", async () => {
     const h = buildHarness();
     const boot = await bootAgent(h);
 
-    const initial: TodoItem[] = [
-      { content: "research", status: "in_progress" },
-      { content: "implement", status: "pending" },
-    ];
-    await h.server.inject({
-      method: "POST",
-      url: "/hook",
-      payload: todoWriteHook(boot.sessionId, initial),
-    });
+    await hook(h, taskCreateHook(boot.sessionId, { id: "1", subject: "research", activeForm: "researching" }));
+    await hook(h, taskCreateHook(boot.sessionId, { id: "2", subject: "implement", activeForm: "implementing" }));
+    await hook(h, taskUpdateHook(boot.sessionId, { taskId: "1", status: "in_progress", from: "pending" }));
 
-    const updated: TodoItem[] = [
-      { content: "research", status: "completed" },
-      { content: "implement", status: "in_progress" },
-    ];
-    await h.server.inject({
-      method: "POST",
-      url: "/hook",
-      payload: todoWriteHook(boot.sessionId, updated),
-    });
-
-    const snapshots = readLog(h, boot.agentId, "todo-snapshot");
-    expect(snapshots).toHaveLength(2);
-
+    // 2 creates (absent→pending) + 1 update (pending→in_progress) = 3 transitions.
     const transitions = readLog(h, boot.agentId, "phase-transition");
-    // Initial: 2 transitions (both new). Update: 2 transitions (both changed status).
-    expect(transitions).toHaveLength(4);
+    expect(transitions).toHaveLength(3);
 
-    const lastTwo = transitions.slice(-2);
-    const research = lastTwo.find(
-      (r) => (JSON.parse(r.details_json!) as { phase: string }).phase === "research",
-    );
-    expect(research!.state).toBe("completed");
-    expect(JSON.parse(research!.details_json!)).toEqual({
+    const last = transitions[transitions.length - 1]!;
+    expect(last.state).toBe("in_progress");
+    expect(JSON.parse(last.details_json!)).toEqual({
       phase: "research",
-      prev_status: "in_progress",
-      new_status: "completed",
-    });
-
-    const implement = lastTwo.find(
-      (r) => (JSON.parse(r.details_json!) as { phase: string }).phase === "implement",
-    );
-    expect(implement!.state).toBe("in_progress");
-    expect(JSON.parse(implement!.details_json!)).toEqual({
-      phase: "implement",
       prev_status: "pending",
       new_status: "in_progress",
     });
 
-    await teardown(h);
-  });
-
-  it("identical TodoWrite emits nothing new", async () => {
-    const h = buildHarness();
-    const boot = await bootAgent(h);
-
-    const todos: TodoItem[] = [{ content: "research", status: "in_progress" }];
-
-    await h.server.inject({
-      method: "POST",
-      url: "/hook",
-      payload: todoWriteHook(boot.sessionId, todos),
-    });
-    await h.server.inject({
-      method: "POST",
-      url: "/hook",
-      payload: todoWriteHook(boot.sessionId, todos),
-    });
-
-    expect(readLog(h, boot.agentId, "todo-snapshot")).toHaveLength(1);
-    expect(readLog(h, boot.agentId, "phase-transition")).toHaveLength(1);
+    // Latest snapshot reflects the reconstructed full list with task 1 advanced.
+    const snapshots = readLog(h, boot.agentId, "task-snapshot");
+    const latest = JSON.parse(snapshots[snapshots.length - 1]!.details_json!) as {
+      tasks: { id: string; content: string; status: string; activeForm?: string }[];
+    };
+    expect(latest.tasks).toEqual([
+      { id: "1", content: "research", status: "in_progress", activeForm: "researching" },
+      { id: "2", content: "implement", status: "pending", activeForm: "implementing" },
+    ]);
 
     await teardown(h);
   });
 
-  it("removed item emits a phase-transition to 'removed'", async () => {
+  it("TaskUpdate to in_progress then completed emits both transitions in order", async () => {
     const h = buildHarness();
     const boot = await bootAgent(h);
 
-    const initial: TodoItem[] = [
-      { content: "research", status: "completed" },
-      { content: "scratch-task", status: "completed" },
-    ];
-    await h.server.inject({
-      method: "POST",
-      url: "/hook",
-      payload: todoWriteHook(boot.sessionId, initial),
-    });
-
-    const trimmed: TodoItem[] = [{ content: "research", status: "completed" }];
-    await h.server.inject({
-      method: "POST",
-      url: "/hook",
-      payload: todoWriteHook(boot.sessionId, trimmed),
-    });
+    await hook(h, taskCreateHook(boot.sessionId, { id: "1", subject: "research" }));
+    await hook(h, taskUpdateHook(boot.sessionId, { taskId: "1", status: "in_progress", from: "pending" }));
+    await hook(h, taskUpdateHook(boot.sessionId, { taskId: "1", status: "completed", from: "in_progress" }));
 
     const transitions = readLog(h, boot.agentId, "phase-transition");
-    const removal = transitions.find((r) => r.state === "removed");
+    const states = transitions.map((t) => t.state);
+    expect(states).toEqual(["pending", "in_progress", "completed"]);
+
+    await teardown(h);
+  });
+
+  it("TaskUpdate status=deleted emits a 'removed' transition and drops the task from the snapshot", async () => {
+    const h = buildHarness();
+    const boot = await bootAgent(h);
+
+    await hook(h, taskCreateHook(boot.sessionId, { id: "1", subject: "research" }));
+    await hook(h, taskCreateHook(boot.sessionId, { id: "2", subject: "scratch" }));
+    await hook(h, taskUpdateHook(boot.sessionId, { taskId: "2", status: "deleted", from: "pending" }));
+
+    const transitions = readLog(h, boot.agentId, "phase-transition");
+    const removal = transitions.find((t) => t.state === "removed");
     expect(removal).toBeDefined();
     expect(JSON.parse(removal!.details_json!)).toEqual({
-      phase: "scratch-task",
-      prev_status: "completed",
+      phase: "scratch",
+      prev_status: "pending",
       new_status: "removed",
     });
 
+    const snapshots = readLog(h, boot.agentId, "task-snapshot");
+    const latest = JSON.parse(snapshots[snapshots.length - 1]!.details_json!) as {
+      tasks: { id: string }[];
+    };
+    expect(latest.tasks.map((t) => t.id)).toEqual(["1"]);
+
     await teardown(h);
   });
 
-  it("non-TodoWrite PostToolUse is ignored", async () => {
+  it("non-Task* PostToolUse is ignored", async () => {
     const h = buildHarness();
     const boot = await bootAgent(h);
 
@@ -333,18 +320,17 @@ describe("PostToolUse(TodoWrite) → agent_status_log (#87)", () => {
       tool_name: "Bash",
       tool_input: { command: "ls" },
       tool_use_id: "toolu_bash",
-      tool_response: { stdout: "x", stderr: "", interrupted: false, isImage: false, noOutputExpected: false },
+      tool_response: { stdout: "x", stderr: "", interrupted: false },
     };
+    await hook(h, bashHook);
 
-    await h.server.inject({ method: "POST", url: "/hook", payload: bashHook });
-
-    expect(readLog(h, boot.agentId, "todo-snapshot")).toHaveLength(0);
+    expect(readLog(h, boot.agentId, "task-snapshot")).toHaveLength(0);
     expect(readLog(h, boot.agentId, "phase-transition")).toHaveLength(0);
 
     await teardown(h);
   });
 
-  it("malformed TodoWrite tool_input is silently ignored (does not 400 the hook)", async () => {
+  it("malformed Task* tool_input is silently ignored (does not 400 the hook)", async () => {
     const h = buildHarness();
     const boot = await bootAgent(h);
 
@@ -354,16 +340,14 @@ describe("PostToolUse(TodoWrite) → agent_status_log (#87)", () => {
       cwd: "/tmp",
       permission_mode: "default",
       hook_event_name: "PostToolUse",
-      tool_name: "TodoWrite",
-      tool_input: { not_todos: "garbage" },
+      tool_name: "TaskCreate",
+      tool_input: { not_a_subject: "garbage" },
       tool_use_id: "toolu_bad",
       tool_response: {},
     };
+    expect(await hook(h, bad)).toBe(200);
 
-    const res = await h.server.inject({ method: "POST", url: "/hook", payload: bad });
-    expect(res.statusCode).toBe(200);
-
-    expect(readLog(h, boot.agentId, "todo-snapshot")).toHaveLength(0);
+    expect(readLog(h, boot.agentId, "task-snapshot")).toHaveLength(0);
     expect(readLog(h, boot.agentId, "phase-transition")).toHaveLength(0);
 
     await teardown(h);

@@ -41,7 +41,7 @@ checks complete.)
 - All required checks are green.
 - The PR is in a state a reviewer can merge without further work from you.
 
-Mark the `watch-ci` item in your `TodoWrite` list as `completed` — that's the
+Mark the `watch-ci` task as `completed` (via `TaskUpdate`) — that's the
 end of the SDLC pipeline.
 
 Then submit your structured **final report**:
