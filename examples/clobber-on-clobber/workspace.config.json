@@ -5,18 +5,7 @@
   "wake_prompt": "You have been woken in the clobber-on-clobber workspace. Run `clobber whoami` and `clobber agents list` to orient. Scan the open issues assigned in this repo for readiness; raise questions where an issue conflicts with another or with a prior decision; group related work under a parent issue using GitHub sub-issue relationships (never close the children). Document your reasoning as comments on the relevant issues, then dispatch a worker via `/assignment <issue numbers> <notes>`. Spawn only when there is enough ready work for a clean single-issue assignment.",
   "trigger_overrides": {},
   "final_report_callback": {
-    "kind": "exec",
-    "command": "gh",
-    "args": [
-      "issue",
-      "create",
-      "--repo",
-      "brennan-volter/clobber",
-      "--title",
-      "worker final-report",
-      "--body-file",
-      "-"
-    ]
+    "kind": "noop"
   },
   "boot_context_provider": {
     "kind": "exec",

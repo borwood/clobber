@@ -42,6 +42,7 @@ describe("managerRole", () => {
       "status",
       "agents",
       "transcript",
+      "reports",
       "kill",
       "self-skills",
     ];
