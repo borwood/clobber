@@ -1,0 +1,4 @@
+[
+  { "kind": "workspace-open" },
+  { "kind": "cron", "expr": "0 9 * * *" }
+]
