@@ -54,7 +54,19 @@ PR's blast radius). Otherwise, run `/assignment` once per issue.
    `in_progress`) — the seed stays plain phase data, the worker adapts it to
    whatever task tool the harness exposes.
 
-3. **Compose the briefing packet** — a small directory of files. Standard
+3. **Consult your workspace's wisdom log.** Before you compose the brief,
+   read your workspace's behavioral-wisdom log for prior findings that bear
+   on *this* dispatch — how a worker on a similar issue went sideways, a
+   recurring tax to pre-empt, a sequencing or naming insight worth passing
+   on. Its location is in your **boot context** (the workspace injects a
+   pointer there; the engine itself names no specific log). Surface only the
+   findings relevant to this assignment, and fold them into the brief — a
+   one-line "watch out for X, the log notes Y" in `assignment.md` is enough.
+   This consult is structural: you do it *every* time you brief, by
+   construction, not when you remember to. If your boot context carries no
+   such pointer, this workspace hasn't wired a wisdom log — skip the step.
+
+4. **Compose the briefing packet** — a small directory of files. Standard
    layout:
 
    ```
@@ -74,7 +86,7 @@ PR's blast radius). Otherwise, run `/assignment` once per issue.
    PR's worth referencing. Skip it if the repo's `CLAUDE.md` already covers
    what the worker needs.
 
-4. **Spawn the worker.**
+5. **Spawn the worker.**
 
    ```
    clobber spawn worker \
@@ -104,7 +116,7 @@ PR's blast radius). Otherwise, run `/assignment` once per issue.
    If you find yourself reaching for `max` often, the lever to pull is
    usually a better brief, not a deeper worker.
 
-5. **Status emit.** After the spawn returns, post one `clobber note`
+6. **Status emit.** After the spawn returns, post one `clobber note`
    summarizing what you dispatched and to which session — the audit trail
    for the workspace board.
 

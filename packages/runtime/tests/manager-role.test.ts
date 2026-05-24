@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { managerRole } from "../src/index.ts";
 
@@ -58,6 +58,41 @@ describe("managerRole", () => {
     expect(body).toMatch(/seed-todos\.json/);
     expect(body).toMatch(/--briefing-dir/);
     expect(body).toMatch(/clobber spawn worker\b/);
+  });
+
+  it("embeds a structural wisdom-log consult into the assignment skill (#178)", () => {
+    const pluginRoot = join(managerRole.bundleRoot, managerRole.manifest.pluginTemplatePath);
+    const body = readFileSync(join(pluginRoot, "skills", "assignment", "SKILL.md"), "utf8");
+    // consume rides assignment by construction — it must reference the wisdom
+    // log and the boot context that locates it, generically.
+    expect(body).toMatch(/wisdom log/i);
+    expect(body).toMatch(/boot context/i);
+  });
+
+  it("ships a generic wisdom-capture skill with the observation/mechanic/lesson shape (#178)", () => {
+    const pluginRoot = join(managerRole.bundleRoot, managerRole.manifest.pluginTemplatePath);
+    const skillPath = join(pluginRoot, "skills", "wisdom-capture", "SKILL.md");
+    expect(existsSync(skillPath)).toBe(true);
+    const body = readFileSync(skillPath, "utf8");
+    expect(body).toMatch(/^name:\s*wisdom-capture$/m);
+    expect(body).toMatch(/observation/i);
+    expect(body).toMatch(/mechanic/i);
+    expect(body).toMatch(/lesson/i);
+    expect(body).toMatch(/boot context/i);
+  });
+
+  it("keeps the engine manager skills free of any workspace-specific log location (#178)", () => {
+    const skillsDir = join(
+      managerRole.bundleRoot,
+      managerRole.manifest.pluginTemplatePath,
+      "skills",
+    );
+    for (const entry of readdirSync(skillsDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const skillFile = join(skillsDir, entry.name, "SKILL.md");
+      if (!existsSync(skillFile)) continue;
+      expect(readFileSync(skillFile, "utf8")).not.toMatch(/tasks#20/);
+    }
   });
 
   it("ships hooks/hooks.json wrapped in { hooks } and with the __CLOBBER_HOOK_URL__ placeholder", () => {
