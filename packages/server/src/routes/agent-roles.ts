@@ -4,7 +4,6 @@ import { z } from "zod";
 import {
   RoleSkillSchema,
   RoleTriggerSchema,
-  type Role,
   type RoleListEntry,
 } from "@clobber/shared";
 import type { SessionTokenStore } from "../session-token-store.ts";
@@ -15,12 +14,12 @@ import type { WorkspaceRoleStore } from "../workspace-role-store.ts";
 import type { WorkspaceStore } from "../workspace-store.ts";
 import type { TriggerScheduler } from "../trigger-scheduler.ts";
 import { forkRole } from "../fork-role.ts";
-import { editRole, type RoleEditPatch } from "../edit-role.ts";
+import { type RoleEditPatch } from "../edit-role.ts";
+import { applyRoleEdit, triggersRequirePersistent } from "../apply-role-edit.ts";
+import { resolveRoleByIdOrName } from "../resolve-role.ts";
 import { withAgentAuth } from "./_with-agent-auth.ts";
 import { buildDetail, buildListEntry } from "./_agent-roles-views.ts";
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROLE_NAME_RE = /^[A-Za-z0-9_-]+$/;
 
 const ForkBodySchema = z.object({
@@ -52,16 +51,6 @@ export interface AgentRolesRouteDeps {
   readonly scheduler: Pick<TriggerScheduler, "reloadRole">;
 }
 
-function resolveRoleByIdOrName(
-  idOrName: string,
-  workspaceId: string,
-  deps: AgentRolesRouteDeps,
-): Role | null {
-  return UUID_RE.test(idOrName)
-    ? deps.roles.get(idOrName)
-    : deps.roles.findInWorkspace(workspaceId, idOrName);
-}
-
 export function registerAgentRolesRoutes(
   app: FastifyInstance,
   deps: AgentRolesRouteDeps,
@@ -91,7 +80,7 @@ export function registerAgentRolesRoutes(
           return { error: "invalid fork request", issues: parsed.error.issues };
         }
         const { idOrName } = request.params;
-        const source = resolveRoleByIdOrName(idOrName, session.workspace_id, deps);
+        const source = resolveRoleByIdOrName(deps.roles, idOrName, session.workspace_id);
         if (source === null || source.workspace_id !== session.workspace_id) {
           reply.code(404);
           return { error: `role not found: ${idOrName}` };
@@ -168,16 +157,12 @@ export function registerAgentRolesRoutes(
           };
         }
         const { idOrName } = request.params;
-        const role = resolveRoleByIdOrName(idOrName, session.workspace_id, deps);
+        const role = resolveRoleByIdOrName(deps.roles, idOrName, session.workspace_id);
         if (role === null || role.workspace_id !== session.workspace_id) {
           reply.code(404);
           return { error: `role not found: ${idOrName}` };
         }
-        if (
-          parsed.data.triggers !== undefined &&
-          parsed.data.triggers.length > 0 &&
-          !role.persistent
-        ) {
+        if (triggersRequirePersistent(role, parsed.data.triggers)) {
           reply.code(422);
           return { error: "triggers are only allowed on persistent roles" };
         }
@@ -217,12 +202,9 @@ export function registerAgentRolesRoutes(
               ? {}
               : { triggers: parsed.data.triggers }),
           };
-          const result = editRole(deps.db, role, currentVersion, patch);
+          const result = applyRoleEdit(deps.db, deps.scheduler, role, currentVersion, patch);
           response.version_id = result.version_id;
           response.version = result.version;
-          if (parsed.data.triggers !== undefined) {
-            deps.scheduler.reloadRole(role.id);
-          }
         }
         reply.code(200);
         return response;
@@ -242,7 +224,7 @@ export function registerAgentRolesRoutes(
           return { error: "invalid ceiling request", issues: parsed.error.issues };
         }
         const { idOrName } = request.params;
-        const role = resolveRoleByIdOrName(idOrName, session.workspace_id, deps);
+        const role = resolveRoleByIdOrName(deps.roles, idOrName, session.workspace_id);
         if (role === null || role.workspace_id !== session.workspace_id) {
           reply.code(404);
           return { error: `role not found: ${idOrName}` };
@@ -265,7 +247,7 @@ export function registerAgentRolesRoutes(
       deps,
       async (request, reply, { session }) => {
         const { idOrName } = request.params;
-        const role = resolveRoleByIdOrName(idOrName, session.workspace_id, deps);
+        const role = resolveRoleByIdOrName(deps.roles, idOrName, session.workspace_id);
         if (role === null || role.workspace_id !== session.workspace_id) {
           reply.code(404);
           return { error: `role not found: ${idOrName}` };
