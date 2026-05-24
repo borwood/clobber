@@ -11,7 +11,7 @@ import type { AgentQuestionWaiter } from "../agent-question-waiter.ts";
 import type { AgentStatusLogStore } from "../agent-status-log-store.ts";
 import type { WorkspaceStore } from "../workspace-store.ts";
 import { endSession } from "../session-lifecycle.ts";
-import { applyTodoWrite } from "../todo-write-handler.ts";
+import { applyTaskEvent } from "../task-event-handler.ts";
 import { guardOfficeBoundary } from "../office-boundary-guard.ts";
 import { bridgeAskUserQuestion } from "../ask-user-question-bridge.ts";
 
@@ -56,7 +56,7 @@ export function registerHookRoutes(
       if (bridged !== null) return bridged;
     }
     if (payload.hook_event_name === "PostToolUse") {
-      applyTodoWrite(payload, deps);
+      applyTaskEvent(payload, deps);
     }
     return { continue: true };
   });

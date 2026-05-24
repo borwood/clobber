@@ -20,13 +20,17 @@ prompt; the prompt does not override the protocol.
 1. List the desk: `ls "$CLOBBER_DESK_DIR"`. If the directory is missing or
    empty, the manager spawned you without a packet — only then proceed from
    the user prompt alone.
-2. **`seed-todos.json`** — if present, **call `TodoWrite` with its contents
-   before any other tool call.** This is a hard contract, not a suggestion.
-   `TodoWrite` is a deferred tool in this harness, so its schema may not be
-   pre-loaded; if your first invocation errors with `InputValidationError`,
-   run `ToolSearch(select:TodoWrite)` to load the schema, then call
-   `TodoWrite`. Do **not** paraphrase, summarize, or merely describe
-   `seed-todos.json` — invoke the tool with its contents.
+2. **`seed-todos.json`** — if present, **lay down its phase plan via the
+   harness's task tool before any other tool call.** This is a hard contract,
+   not a suggestion. The file is a tool-agnostic JSON array of phases
+   (`content` / `status` / `activeForm` per entry); translate it into the
+   task tool this harness exposes — currently the `Task*` family. Issue one
+   `TaskCreate` per phase in array order (its `subject` is the phase's
+   `content`, carry `activeForm` through), then `TaskUpdate` the first phase
+   to `in_progress`. The task tools are deferred in this harness, so load
+   their schemas with `ToolSearch(select:TaskCreate,TaskUpdate)` first if they
+   aren't already callable. Do **not** paraphrase or merely describe
+   `seed-todos.json` — embody it as tasks.
 3. **`assignment.md`** — if present, this is the issue (or bundle of issues)
    you're shipping. Read it before research; it's denser than the user prompt
    you receive in the conversation.
@@ -51,39 +55,41 @@ Read the per-phase skill (`skills/<phase>/SKILL.md`) when you enter that
 phase if one exists. Each one is short and points to companion files / CLI
 `--help` for detail; you don't need to memorize them up front.
 
-## Phase tracking via TodoWrite
+## Phase tracking via the task tool
 
-Your `TodoWrite` list is the SDLC phase plan for this assignment — not a
-scratchpad. The clobber server hooks `TodoWrite` and derives phase-transition
-events from successive snapshots, so the workspace board can show progress
-without you posting status updates at every boundary.
+Your task list is the SDLC phase plan for this assignment — not a scratchpad.
+The clobber server hooks the harness's task tool (`TaskCreate`/`TaskUpdate`)
+and derives phase-transition events from successive snapshots, so the
+workspace board can show progress without you posting status updates at every
+boundary.
 
 The contract:
 
-1. **At assignment start**, write your `TodoWrite` list as the phase plan
-   (typically the phases above, or whatever the assignment prescribes for
-   this workspace). One item per phase. The first item starts `in_progress`;
-   the rest start `pending`.
-2. **As you progress**, update the `status` of items: `pending` → `in_progress`
-   when you enter a phase, `in_progress` → `completed` when you exit it.
-3. **Don't add or remove items** unless an unanticipated phase is genuinely
+1. **At assignment start**, create one task per phase (typically the phases
+   above, or whatever the assignment prescribes for this workspace) in
+   dependency order. The first phase starts `in_progress` (set it with
+   `TaskUpdate`); the rest stay `pending`.
+2. **As you progress**, `TaskUpdate` the status of phases: `pending` →
+   `in_progress` when you enter a phase, `in_progress` → `completed` when you
+   exit it.
+3. **Don't add or remove phases** unless an unanticipated one is genuinely
    needed (e.g., you discovered a migration step the assignment didn't
    foresee). When you do add one, put it in its dependency-correct position;
    the diff hook will record it as a new phase.
-4. **Don't use `TodoWrite` for scratch sub-task tracking** within a phase. Use
-   `clobber note` for that, or keep it in your head. The phase list should
+4. **Don't use the task list for scratch sub-task tracking** within a phase.
+   Use `clobber note` for that, or keep it in your head. The phase list should
    stay readable as "where am I in the SDLC?" — not as "what's my next typing
    action?"
 
-Prefer one `in_progress` item at a time unless you're genuinely working two
+Prefer one `in_progress` phase at a time unless you're genuinely working two
 phases in parallel.
 
 ## Session-level status
 
 `clobber status` is still useful for the coarser session-level signal that the
-TodoWrite list can't carry: `blocked` (with `clobber ask`) when you need human
+task list can't carry: `blocked` (with `clobber ask`) when you need human
 input, and `done` at the very end as your handoff. You don't need to post
-`working` updates at every phase boundary — TodoWrite covers that.
+`working` updates at every phase boundary — the task list covers that.
 
 Read `skills/status/SKILL.md` for the grammar.
 

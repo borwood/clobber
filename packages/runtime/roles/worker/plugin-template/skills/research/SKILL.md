@@ -34,5 +34,5 @@ implementation, this is the moment to use `clobber ask` (see
 - You know what test will demonstrate the bug or the feature.
 - You've checked there isn't already an open PR doing this.
 
-Mark the `research` item in your `TodoWrite` list as `completed` and the next
-phase's item as `in_progress`. Then move to `failing-test/`.
+Mark the `research` task as `completed` (via `TaskUpdate`) and the next phase
+as `in_progress`. Then move to `failing-test/`.

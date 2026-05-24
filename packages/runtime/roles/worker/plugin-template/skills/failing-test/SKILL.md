@@ -40,5 +40,5 @@ a test that fails for the wrong reason gives no signal.
 - It fails when run, for the expected reason.
 - The failure message points at the gap your impl phase will close.
 
-Mark the `failing-test` item in your `TodoWrite` list as `completed` and the
-next phase's item as `in_progress`. Then move to `implement/`.
+Mark the `failing-test` task as `completed` (via `TaskUpdate`) and the next
+phase as `in_progress`. Then move to `implement/`.

@@ -41,7 +41,7 @@ the structured flags. Prefer the structured form when you can.
 ## Order at end of session
 
 1. CI green.
-2. Mark `watch-ci` complete in your TodoWrite list.
+2. Mark `watch-ci` complete via `TaskUpdate`.
 3. `clobber report --well ... --badly ... --useful ...`.
 4. `clobber status done "<one-line outcome>"` — your handoff to the
    manager.

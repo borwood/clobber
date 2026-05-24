@@ -34,7 +34,8 @@ PR's blast radius). Otherwise, run `/assignment` once per issue.
    phases: `research → failing-test → implement → open-pr → watch-ci`. Use
    them unless the issue body explicitly redefines the workflow, or the
    worker's role has been forked with a different `sdlc` profile. Compose
-   the plan as a JSON array shaped for `TodoWrite`:
+   the plan as a tool-agnostic JSON array of phases (`content` / `status` /
+   `activeForm` per entry):
 
    ```json
    [
@@ -47,8 +48,11 @@ PR's blast radius). Otherwise, run `/assignment` once per issue.
    ```
 
    The first item starts `in_progress`; the rest start `pending`. Keep each
-   `content` short — phase + one-line specific intent. The worker will read
-   this from disk on its first turn and call `TodoWrite` with it.
+   `content` short — phase + one-line specific intent. The worker reads this
+   from disk on its first turn and translates it into the harness's task tool
+   (currently one `TaskCreate` per phase, then `TaskUpdate` the first to
+   `in_progress`) — the seed stays plain phase data, the worker adapts it to
+   whatever task tool the harness exposes.
 
 3. **Compose the briefing packet** — a small directory of files. Standard
    layout:

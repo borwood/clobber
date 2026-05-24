@@ -162,7 +162,7 @@ Flags:
 Briefing files land at .clobber/agents/<agent-id>/desk/, which the worker
 sees via $CLOBBER_DESK_DIR. The worker role's first action is to read that
 directory; in particular, a seed-todos.json file there becomes the worker's
-TodoWrite phase plan.
+task-tool phase plan.
 
 Example:
   clobber spawn worker --prompt "ship #82" --label issue-82 \\
