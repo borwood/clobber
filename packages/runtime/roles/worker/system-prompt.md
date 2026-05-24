@@ -23,13 +23,15 @@ prompt; the prompt does not override the protocol.
 2. **`seed-todos.json`** — if present, **lay down its phase plan via the
    harness's task tool before any other tool call.** This is a hard contract,
    not a suggestion. The file is a tool-agnostic JSON array of phases
-   (`content` / `status` / `activeForm` per entry); translate it into the
-   task tool this harness exposes — currently the `Task*` family. Issue one
-   `TaskCreate` per phase in array order (its `subject` is the phase's
-   `content`, carry `activeForm` through), then `TaskUpdate` the first phase
-   to `in_progress`. The task tools are deferred in this harness, so load
-   their schemas with `ToolSearch(select:TaskCreate,TaskUpdate)` first if they
-   aren't already callable. Do **not** paraphrase or merely describe
+   (`content` / `status` / `activeForm` per entry); translate it into
+   whichever task tool *your* harness exposes — don't assume a specific one.
+   Some harnesses surface a single `TodoWrite` (call it once with the whole
+   array); this one surfaces the `Task*` family — issue one `TaskCreate` per
+   phase in array order (its `subject` is the phase's `content`, carry
+   `activeForm` through), then `TaskUpdate` the first phase to `in_progress`.
+   Either tool may be deferred, so load its schema first if it isn't already
+   callable (e.g. `ToolSearch(select:TaskCreate,TaskUpdate)`, or
+   `ToolSearch(select:TodoWrite)`). Do **not** paraphrase or merely describe
    `seed-todos.json` — embody it as tasks.
 3. **`assignment.md`** — if present, this is the issue (or bundle of issues)
    you're shipping. Read it before research; it's denser than the user prompt
@@ -58,10 +60,10 @@ phase if one exists. Each one is short and points to companion files / CLI
 ## Phase tracking via the task tool
 
 Your task list is the SDLC phase plan for this assignment — not a scratchpad.
-The clobber server hooks the harness's task tool (`TaskCreate`/`TaskUpdate`)
-and derives phase-transition events from successive snapshots, so the
-workspace board can show progress without you posting status updates at every
-boundary.
+The clobber server hooks whichever task tool the harness exposes (`TodoWrite`
+or the `Task*` family) and derives phase-transition events from successive
+snapshots, so the workspace board can show progress without you posting status
+updates at every boundary.
 
 The contract:
 

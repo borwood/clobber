@@ -49,10 +49,11 @@ PR's blast radius). Otherwise, run `/assignment` once per issue.
 
    The first item starts `in_progress`; the rest start `pending`. Keep each
    `content` short — phase + one-line specific intent. The worker reads this
-   from disk on its first turn and translates it into the harness's task tool
-   (currently one `TaskCreate` per phase, then `TaskUpdate` the first to
-   `in_progress`) — the seed stays plain phase data, the worker adapts it to
-   whatever task tool the harness exposes.
+   from disk on its first turn and translates it into whichever task tool its
+   harness exposes — a single `TodoWrite` call, or one `TaskCreate` per phase
+   then `TaskUpdate` the first to `in_progress` for the `Task*` family. Keep
+   the seed itself plain phase data and name no specific tool here; the worker
+   adapts it to whatever its harness surfaces.
 
 3. **Consult your workspace's wisdom log.** Before you compose the brief,
    read your workspace's behavioral-wisdom log for prior findings that bear
