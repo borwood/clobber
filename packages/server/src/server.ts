@@ -141,9 +141,12 @@ export function createServer(opts: ServerOptions): FastifyInstance {
   });
   registerRoleRoutes(app, { roles: opts.roles });
   registerWorkspaceRoleRoutes(app, {
+    db: opts.db,
     workspaces: opts.workspaces,
     roles: opts.roles,
+    roleVersions: opts.roleVersions,
     workspaceRoles: opts.workspaceRoles,
+    scheduler,
   });
   registerAgentRoutes(app, {
     sessionTokens: opts.sessionTokens,

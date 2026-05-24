@@ -50,24 +50,19 @@ A few deliberate choices:
 > `repo_path` in `workspace.config.json` is a placeholder. Replace it with the **absolute path**
 > to your clobber checkout before loading.
 
-1. **Create the workspace** from the config — `POST /workspaces` with the file as the body:
+The loader spans both seams in one command (#181):
 
-   ```sh
-   curl -X POST "$CLOBBER_URL/workspaces" \
-     -H 'content-type: application/json' \
-     --data-binary @examples/clobber-on-clobber/workspace.config.json
-   ```
+```sh
+clobber workspace create --config examples/clobber-on-clobber/
+```
 
-   This seats the manager and applies all four workspace-config primitives.
+This reads `workspace.config.json` (→ `POST /workspaces`, seating the manager and applying every
+workspace-config primitive) and `manager-triggers.json` (→ `PUT /workspaces/:id/roles/manager/triggers`,
+applying the manager's triggers). The worker SDLC profile is the shipped role default — nothing to
+load. The two seams it drives are still distinct (see [Why two files](#why-two-files-a-seam-note)).
 
-2. **Give the manager its triggers.** Triggers live on the role-version, not the workspace config,
-   so apply `manager-triggers.json` to the manager role via the role-edit seam
-   (`PATCH /agent/roles/manager` with `{ "triggers": [...] }`). This is the same self-grant
-   mechanism the manager uses for skills (#146/#148); the manager can also do this itself on its
-   first wake.
-
-3. **Open the room.** Opening the workspace fires the `workspace-open` trigger
-   (`POST /workspaces/:id/open`), waking the manager.
+Then **open the room** to fire the `workspace-open` trigger (`POST /workspaces/:id/open`) and wake
+the manager.
 
 ## The manual acceptance loop (what the human walks to verify #150)
 
@@ -87,10 +82,10 @@ it just filed, and multi-agent fan-out.
 
 ## Why two files (a seam note)
 
-clobber has no single "load this directory" command today. A workspace config is ingested by
-`POST /workspaces` (`CreateWorkspaceRequest`), but **trigger enablement** and **the worker SDLC
-profile** are not part of that shape — triggers live on the role-version (`triggers_json`) and the
-SDLC profile lives on the worker role manifest (`sdlc: defaultSdlcProfile`). So this example is
-composed from the workspace-config seam **plus** the role-edit seam. A future
-`clobber workspace create --config <dir>` loader that ingests a whole example directory in one
-step would close that gap; until then, the two-step load above is the honest path.
+A workspace config is ingested by `POST /workspaces` (`CreateWorkspaceRequest`), but **trigger
+enablement** and **the worker SDLC profile** are not part of that shape — triggers live on the
+role-version (`triggers_json`) and the SDLC profile lives on the worker role manifest
+(`sdlc: defaultSdlcProfile`). So this example is composed from the workspace-config seam **plus**
+the role-trigger seam. `clobber workspace create --config <dir>` (#181) drives both in one step via
+`POST /workspaces` then `PUT /workspaces/:id/roles/manager/triggers` (#186) — it does not collapse
+the two artifacts into one, it spans them.
