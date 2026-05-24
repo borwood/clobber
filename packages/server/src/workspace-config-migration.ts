@@ -44,6 +44,12 @@ export function migrateWorkspaceConfig(db: Database): void {
   ensureColumn(
     db,
     "workspaces",
+    "spawn_worktree",
+    `TEXT NOT NULL DEFAULT '{"kind":"off"}'`,
+  );
+  ensureColumn(
+    db,
+    "workspaces",
     "manager_skill_policy",
     `TEXT NOT NULL DEFAULT '{"allow_self_grant":false,"allowed_skills":[]}'`,
   );

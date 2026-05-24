@@ -10,10 +10,22 @@ truth for branch naming, commit format, and PR body conventions; defer to it.
 
 ## Branch
 
-If the repo's `CLAUDE.md` mandates worktrees (clobber and several adjacent
-repos do), use `git worktree add ../<slug> -b <branch> main` rather than
-checking out in-place. The branch name follows whatever convention `CLAUDE.md`
-sets — typically `<type>/<short-slug>`.
+**First check whether you're already in a worktree.** If the workspace spawned
+you into one (`spawn_worktree` on), you start in a dedicated worktree on your
+own branch — adding another would nest worktrees and fail. Detect it:
+
+```sh
+[ "$(git rev-parse --git-dir)" != "$(git rev-parse --git-common-dir)" ] \
+  && echo "already in a worktree — skip worktree add"
+```
+
+If that prints (you're in a linked worktree), skip `git worktree add` entirely
+and just commit on the current branch.
+
+Otherwise, if the repo's `CLAUDE.md` mandates worktrees (clobber and several
+adjacent repos do), use `git worktree add ../<slug> -b <branch> main` rather
+than checking out in-place. The branch name follows whatever convention
+`CLAUDE.md` sets — typically `<type>/<short-slug>`.
 
 ## Commits
 

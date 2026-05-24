@@ -11,6 +11,7 @@ import { runBootContextProvider } from "./boot-context-provider.ts";
 import { OFFICE_NOTES_SKILL } from "./office-notes-skill.ts";
 import { deskDirFor, writeBriefingPacket } from "./desk-store.ts";
 import { generateTokenValue } from "./session-token-store.ts";
+import { resolveSpawnCwd } from "./spawn-worktree.ts";
 import type { SpawnPipelineDeps } from "./spawn-pipeline.ts";
 
 export type SpawnMode = "attach" | "resume";
@@ -136,10 +137,11 @@ export async function prepareSpawnContext(
   };
 
   const effectiveEffort = effortOverride ?? role.effort;
+  const cwd = resolveSpawnCwd(workspace, agent, mode);
   const spawnOptions: RuntimeSpawnOptions = {
     hookUrl: deps.hookUrl,
     prompt: effectivePrompt,
-    cwd: workspace.repo_path,
+    cwd,
     sessionId,
     ...(role.permission_mode === undefined ? {} : { permissionMode: role.permission_mode }),
     ...(role.allowed_tools === undefined ? {} : { allowedTools: role.allowed_tools }),

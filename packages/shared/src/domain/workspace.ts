@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { FinalReportCallbackSchema } from "./final-report-callback.ts";
 import { BootContextProviderSchema } from "./boot-context-provider.ts";
+import { SpawnWorktreeSchema } from "./spawn-worktree.ts";
 import { ManagerSkillPolicySchema } from "./manager-skill-policy.ts";
 
 export const SettingSourceSchema = z.enum(["user", "project", "local"]);
@@ -69,6 +70,7 @@ export const WorkspaceSchema = z.object({
   trigger_overrides: TriggerOverridesSchema,
   final_report_callback: FinalReportCallbackSchema,
   boot_context_provider: BootContextProviderSchema,
+  spawn_worktree: SpawnWorktreeSchema,
   manager_skill_policy: ManagerSkillPolicySchema,
   created_at: z.number().int().nonnegative(),
 });
@@ -83,6 +85,7 @@ export const CreateWorkspaceRequestSchema = z.object({
   trigger_overrides: TriggerOverridesSchema.optional(),
   final_report_callback: FinalReportCallbackSchema.optional(),
   boot_context_provider: BootContextProviderSchema.optional(),
+  spawn_worktree: SpawnWorktreeSchema.optional(),
   manager_skill_policy: ManagerSkillPolicySchema.optional(),
 });
 export type CreateWorkspaceRequest = z.infer<typeof CreateWorkspaceRequestSchema>;
@@ -95,6 +98,7 @@ export const UpdateWorkspaceConfigRequestSchema = z
     trigger_overrides: TriggerOverridesSchema.optional(),
     final_report_callback: FinalReportCallbackSchema.optional(),
     boot_context_provider: BootContextProviderSchema.optional(),
+    spawn_worktree: SpawnWorktreeSchema.optional(),
     manager_skill_policy: ManagerSkillPolicySchema.optional(),
   })
   .refine(
@@ -105,10 +109,11 @@ export const UpdateWorkspaceConfigRequestSchema = z
       v.trigger_overrides !== undefined ||
       v.final_report_callback !== undefined ||
       v.boot_context_provider !== undefined ||
+      v.spawn_worktree !== undefined ||
       v.manager_skill_policy !== undefined,
     {
       message:
-        "must include at least one of setting_sources, wake_prompt, role_edit_policy, trigger_overrides, final_report_callback, boot_context_provider, manager_skill_policy",
+        "must include at least one of setting_sources, wake_prompt, role_edit_policy, trigger_overrides, final_report_callback, boot_context_provider, spawn_worktree, manager_skill_policy",
     },
   );
 export type UpdateWorkspaceConfigRequest = z.infer<

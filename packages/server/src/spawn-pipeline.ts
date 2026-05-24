@@ -168,7 +168,9 @@ export async function attachSessionToAgent(
     // still show it after the agent row is deleted on non-persistent end.
     ...(agent.label === undefined ? {} : { label: agent.label }),
     pid: spawned.pid,
-    transcript_path: deps.runtimeProvider.transcriptPath(workspace.repo_path, sessionId),
+    // Derive from the resolved cwd, not repo_path: with spawn_worktree on the
+    // session runs in a worktree, and the transcript lands under that slug.
+    transcript_path: deps.runtimeProvider.transcriptPath(ctx.spawnOptions.cwd, sessionId),
   });
   bindLiveSession(deps, sessionId, ctx, spawned);
 
