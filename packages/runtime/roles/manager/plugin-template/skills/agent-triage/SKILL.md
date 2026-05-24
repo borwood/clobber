@@ -146,8 +146,8 @@ merged PR from the same head; `MERGEABLE`/`CLEAN`).
   (local + remote), `git worktree prune`.
 - `clobber kill <session-id>`.
 - Record outcomes traceable to evidence: the merge, any **verified** tickets
-  (with citations), any wisdom entries. Update the roadmap via `/clobber-pm
-  note` if the triage changed plans.
+  (with citations), any wisdom entries. Update your project's roadmap/PM
+  record if the triage changed plans.
 - Anything not grounded in the triad → leave in a *needs-grounding* state;
   do **not** file it. A parked lead is recoverable; a false ticket propagates.
 
