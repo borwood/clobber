@@ -6,6 +6,7 @@ import { killCommand } from "./commands/kill.ts";
 import { transcriptCommand } from "./commands/transcript.ts";
 import { statusCommand } from "./commands/status.ts";
 import { reportCommand } from "./commands/report.ts";
+import { reportsCommand } from "./commands/reports.ts";
 import { askCommand } from "./commands/ask.ts";
 import { rolesCommand } from "./commands/roles.ts";
 import { workspaceCommand } from "./commands/workspace.ts";
@@ -32,6 +33,7 @@ function buildRegistry(): CommandRegistry {
   registry.register(transcriptCommand);
   registry.register(statusCommand);
   registry.register(reportCommand);
+  registry.register(reportsCommand);
   registry.register(askCommand);
   registry.register(rolesCommand);
   registry.register(workspaceCommand);

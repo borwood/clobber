@@ -251,6 +251,70 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
     }),
   );
 
+  app.get(
+    "/agent/reports",
+    withAgentAuth("reports", deps, async (_request, _reply, { session }) => {
+      const entries = deps.agentStatusLog.listFinalReportsForWorkspace(
+        session.workspace_id,
+      );
+      const reports = entries.map((entry) => {
+        const target = deps.sessions.get(entry.session_id);
+        if (target === null) {
+          throw new Error(`session missing for final-report ${entry.id}`);
+        }
+        const role = deps.roles.get(target.role_id);
+        if (role === null) {
+          throw new Error(`role missing for session ${target.id}`);
+        }
+        return {
+          session_id: entry.session_id,
+          role: role.name,
+          ...(target.label === undefined ? {} : { label: target.label }),
+          state: entry.state,
+          summary: entry.summary,
+          created_at: entry.created_at,
+        };
+      });
+      return { reports };
+    }),
+  );
+
+  app.get<{ Params: { id: string } }>(
+    "/agent/reports/:id",
+    withAgentAuth<{ Params: { id: string } }>(
+      "reports",
+      deps,
+      async (request, reply, { session }) => {
+        const target = deps.sessions.get(request.params.id);
+        if (target === null || target.workspace_id !== session.workspace_id) {
+          reply.code(404);
+          return { error: "session not found" };
+        }
+        const entry = deps.agentStatusLog.latestForSession(
+          target.id,
+          "final-report",
+        );
+        if (entry === null) {
+          reply.code(404);
+          return { error: "no final report for session" };
+        }
+        const role = deps.roles.get(target.role_id);
+        if (role === null) {
+          throw new Error(`role missing for session ${target.id}`);
+        }
+        return {
+          session_id: target.id,
+          role: role.name,
+          ...(target.label === undefined ? {} : { label: target.label }),
+          state: entry.state,
+          summary: entry.summary,
+          created_at: entry.created_at,
+          report: entry.details,
+        };
+      },
+    ),
+  );
+
   app.post<{ Params: { id: string } }>(
     "/agent/sessions/:id/kill",
     withAgentAuth<{ Params: { id: string } }>(

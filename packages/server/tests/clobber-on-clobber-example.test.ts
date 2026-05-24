@@ -29,17 +29,12 @@ describe("examples/clobber-on-clobber — dogfood workspace config (#150)", () =
     expect(parsed.success).toBe(true);
   });
 
-  it("final_report_callback (#147) files a GH issue into this repo via exec", () => {
+  it("final_report_callback (#196) is noop — the DB is the record, the manager triages", () => {
+    // Blanket GH-issue filing per worker finish was rejected as noisy (#196):
+    // reports already persist to agent_status_log, #171 wakes the manager with
+    // each one, and it files a ticket / captures wisdom only when actionable.
     const cb = loadConfig().final_report_callback;
-    expect(cb?.kind).toBe("exec");
-    if (cb?.kind !== "exec") throw new Error("expected exec callback");
-    expect(cb.command).toBe("gh");
-    expect(cb.args).toEqual(
-      expect.arrayContaining(["issue", "create", "brennan-volter/clobber"]),
-    );
-    // The runner pipes the FinalReportPayload JSON to stdin — there is no
-    // arg-templating — so the body must be read from stdin, not a static arg.
-    expect(cb.args).toEqual(expect.arrayContaining(["--body-file", "-"]));
+    expect(cb?.kind).toBe("noop");
   });
 
   it("boot_context_provider (#166) emits a POINTER to the wisdom log, not its body", () => {

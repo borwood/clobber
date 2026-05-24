@@ -45,6 +45,10 @@ export interface AgentStatusLogStore {
   // agent_id) so it survives the reaper deleting an ephemeral agent — the
   // session row and its final-report rows persist. Used by fireSessionEnded.
   latestForSession(sessionId: string, kind: AgentStatusLogKind): AgentStatusLogEntry | null;
+  // All final-report rows across a workspace's sessions, newest first. Scoped
+  // via the sessions join (not agent_id) so reports from reaped ephemeral
+  // agents stay visible — the manager's triage read interface (`clobber reports`).
+  listFinalReportsForWorkspace(workspaceId: string): AgentStatusLogEntry[];
 }
 
 interface Row {
@@ -89,6 +93,12 @@ export function createAgentStatusLogStore(db: Database): AgentStatusLogStore {
     WHERE session_id = ? AND kind = ?
     ORDER BY created_at DESC, id DESC
     LIMIT 1
+  `);
+  const finalReportsForWorkspaceStmt = db.prepare(`
+    SELECT log.* FROM agent_status_log log
+    JOIN sessions s ON s.id = log.session_id
+    WHERE log.kind = 'final-report' AND s.workspace_id = ?
+    ORDER BY log.created_at DESC, log.id DESC
   `);
 
   return {
@@ -135,6 +145,11 @@ export function createAgentStatusLogStore(db: Database): AgentStatusLogStore {
     latestForSession(sessionId, kind) {
       const row = latestForSessionStmt.get(sessionId, kind) as Row | null;
       return row === null ? null : rowToEntry(row);
+    },
+
+    listFinalReportsForWorkspace(workspaceId) {
+      const rows = finalReportsForWorkspaceStmt.all(workspaceId) as Row[];
+      return rows.map(rowToEntry);
     },
   };
 }
