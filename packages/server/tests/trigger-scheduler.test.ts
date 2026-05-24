@@ -13,6 +13,7 @@ import { createAgentQuestionStore } from "../src/agent-question-store.ts";
 import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import { createAgentRegistry } from "../src/agent-registry.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
+import { createAgentStatusLogStore } from "../src/agent-status-log-store.ts";
 import { createTriggerScheduler } from "../src/trigger-scheduler.ts";
 import { createTestClock, type TestClock } from "../src/clock.ts";
 import { editRole } from "../src/edit-role.ts";
@@ -63,6 +64,7 @@ function makeHarness(initial: Date): Harness {
   const agentQuestionWaiter = createAgentQuestionWaiter();
   const registry = createAgentRegistry();
   const dispatches = createTriggerDispatchStore(db);
+  const agentStatusLog = createAgentStatusLogStore(db);
 
   const ws = workspaces.create({ name: "ws", repo_path: repo.path });
   seedWorkspaceRoles(db, ws.id);
@@ -113,6 +115,7 @@ function makeHarness(initial: Date): Harness {
     runtimeProvider: claudeRuntimeProvider,
     agentQuestions,
     agentQuestionWaiter,
+    onSessionEnded: () => {},
   };
 
   const scheduler = createTriggerScheduler({
@@ -126,6 +129,7 @@ function makeHarness(initial: Date): Harness {
     registry,
     runtimeProvider: claudeRuntimeProvider,
     dispatches,
+    agentStatusLog,
     attachSession: (input) => attachSessionToAgent(spawnDeps, input),
   });
 

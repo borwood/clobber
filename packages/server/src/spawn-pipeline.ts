@@ -33,6 +33,11 @@ export interface SpawnPipelineDeps {
   readonly runtimeProvider: RuntimeProvider;
   readonly agentQuestions: AgentQuestionStore;
   readonly agentQuestionWaiter: AgentQuestionWaiter;
+  // Fired once, on the reaper call that actually transitions a session to
+  // ended, so a crash / non-zero exit (where no SessionEnd hook arrives) still
+  // wakes a manager declaring a `session-ended` trigger. Injected late by the
+  // server to break the spawn-pipeline ↔ scheduler construction cycle.
+  readonly onSessionEnded: (workspaceId: string, finishedSessionId: string) => void;
 }
 
 export interface SpawnPipelineInput {
@@ -253,11 +258,13 @@ function bindLiveSession(
   spawned.exited.then((code) => {
     deps.registry.unregister(sessionId);
     if (endOnCleanExit) {
-      endSession(sessionId, deps);
+      const ended = endSession(sessionId, deps);
+      if (ended !== null) deps.onSessionEnded(ended.workspaceId, ended.sessionId);
       return;
     }
     if (code !== 0 && code !== null) {
-      endSession(sessionId, deps);
+      const ended = endSession(sessionId, deps);
+      if (ended !== null) deps.onSessionEnded(ended.workspaceId, ended.sessionId);
     }
   });
 }

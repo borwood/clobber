@@ -78,12 +78,20 @@ export const WorkspaceOpenTriggerSchema = z.object({
   kind: z.literal("workspace-open"),
   debounce_ms: z.number().int().nonnegative().optional(),
 });
+// Fires when any session in the workspace ends (clean exit, crash, or kill),
+// sourced from the reaper's callers — the cross-agent "a worker finished" wake.
+// A persistent role (the manager) declaring it gets woken with the finished
+// session's outcome rebuilt from persistent state. See #171.
+export const SessionEndedTriggerSchema = z.object({
+  kind: z.literal("session-ended"),
+});
 export const RoleTriggerSchema = z.discriminatedUnion("kind", [
   CronTriggerSchema,
   FileWatchTriggerSchema,
   WebhookTriggerSchema,
   IssueAssignedTriggerSchema,
   WorkspaceOpenTriggerSchema,
+  SessionEndedTriggerSchema,
 ]);
 export type RoleTrigger = z.infer<typeof RoleTriggerSchema>;
 
@@ -105,6 +113,8 @@ export function triggerId(trigger: RoleTrigger): string {
         : `issue-assigned:${trigger.repo}`;
     case "workspace-open":
       return "workspace-open";
+    case "session-ended":
+      return "session-ended";
   }
 }
 

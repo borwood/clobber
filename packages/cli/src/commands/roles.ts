@@ -80,6 +80,7 @@ function formatTrigger(t: RoleTrigger): string {
       ? "workspace-open"
       : `workspace-open — debounce \`${t.debounce_ms}ms\``;
   }
+  if (t.kind === "session-ended") return "session-ended";
   return t.repo === undefined
     ? "issue-assigned"
     : `issue-assigned — repo \`${t.repo}\``;

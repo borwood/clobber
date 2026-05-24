@@ -241,6 +241,7 @@ describe("spawn — office continuity at spawn (#55)", () => {
       runtimeProvider: claudeRuntimeProvider,
       agentQuestions,
       agentQuestionWaiter,
+      onSessionEnded: () => {},
     };
 
     const workspace = workspaces.get(ws.id)!;
