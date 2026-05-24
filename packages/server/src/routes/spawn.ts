@@ -42,6 +42,7 @@ export interface SpawnRouteDeps {
   readonly agentQuestions: AgentQuestionStore;
   readonly agentQuestionWaiter: AgentQuestionWaiter;
   readonly scheduler: Pick<TriggerScheduler, "reloadAgent">;
+  readonly onSessionEnded: (workspaceId: string, finishedSessionId: string) => void;
 }
 
 export function registerSpawnRoutes(app: FastifyInstance, deps: SpawnRouteDeps): void {

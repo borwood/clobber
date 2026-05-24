@@ -41,6 +41,14 @@ export function createServer(opts: ServerOptions): FastifyInstance {
   const runtimeProvider =
     opts.runtimeProvider === undefined ? claudeRuntimeProvider : opts.runtimeProvider;
 
+  // Declared before construction so the spawn-pipeline's onSessionEnded can
+  // reference it without a circular dependency — the scheduler in turn closes
+  // over spawnPipelineDeps for attachSession. Both resolve by call time.
+  let scheduler: ReturnType<typeof createTriggerScheduler>;
+  const onSessionEnded = (workspaceId: string, finishedSessionId: string): void => {
+    void scheduler.fireSessionEnded(workspaceId, finishedSessionId);
+  };
+
   const spawnPipelineDeps: SpawnPipelineDeps = {
     workspaces: opts.workspaces,
     workspaceRoles: opts.workspaceRoles,
@@ -57,9 +65,10 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     runtimeProvider,
     agentQuestions: opts.agentQuestions,
     agentQuestionWaiter: opts.agentQuestionWaiter,
+    onSessionEnded,
   };
 
-  const scheduler = createTriggerScheduler({
+  scheduler = createTriggerScheduler({
     db: opts.db,
     clock,
     workspaces: opts.workspaces,
@@ -70,6 +79,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     registry,
     runtimeProvider,
     dispatches: opts.dispatches,
+    agentStatusLog: opts.agentStatusLog,
     attachSession: (input) => attachSessionToAgent(spawnPipelineDeps, input),
   });
 
@@ -84,6 +94,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     agentQuestionWaiter: opts.agentQuestionWaiter,
     registry,
     agentStatusLog: opts.agentStatusLog,
+    scheduler,
     ...(opts.askTimeoutMs === undefined ? {} : { askBridgeTimeoutMs: opts.askTimeoutMs }),
   });
   registerEventRoutes(app, { store: opts.store });
@@ -116,6 +127,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     agentQuestionWaiter: opts.agentQuestionWaiter,
     runtimeProvider,
     scheduler,
+    onSessionEnded,
   });
   registerWorkspaceRoutes(app, {
     db: opts.db,
@@ -166,6 +178,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     apiBase: opts.apiBase,
     cliEntry: opts.cliEntry,
     runtimeProvider,
+    onSessionEnded,
   });
   registerAgentRolesRoutes(app, {
     db: opts.db,

@@ -51,6 +51,7 @@ export interface AgentRouteDeps {
   readonly apiBase: string;
   readonly cliEntry: string;
   readonly runtimeProvider: RuntimeProvider;
+  readonly onSessionEnded: (workspaceId: string, finishedSessionId: string) => void;
 }
 
 const AgentSpawnBodySchema = z.object({

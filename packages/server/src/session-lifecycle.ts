@@ -19,16 +19,29 @@ export interface SessionTerminationDeps extends SessionLifecycleDeps {
   readonly registry: AgentRegistry;
 }
 
+// Identifies the session this call actually transitioned to ended, so callers
+// can fire a one-shot side effect (the `session-ended` wake) exactly once
+// regardless of which reaper path won the race.
+export interface EndedSessionInfo {
+  readonly sessionId: string;
+  readonly workspaceId: string;
+}
+
 /**
  * Idempotent end-of-session reaper. Called from both the SessionEnd hook
  * (interactive mode) and from the spawned child's `exit` event (covers
  * `claude -p`, crashes, signals — anywhere SessionEnd never fires).
- * Whichever path runs first wins; the second is a no-op.
+ * Whichever path runs first wins; the second is a no-op. Returns the ended
+ * session's identity on the winning call, `null` on a no-op — never throws on
+ * a missing/already-ended row, since both reaper paths legitimately race.
  */
-export function endSession(sessionId: string, deps: SessionLifecycleDeps): void {
+export function endSession(
+  sessionId: string,
+  deps: SessionLifecycleDeps,
+): EndedSessionInfo | null {
   const session = deps.sessions.get(sessionId);
-  if (session === null) return;
-  if (session.ended_at !== undefined) return;
+  if (session === null) return null;
+  if (session.ended_at !== undefined) return null;
 
   const cancelledIds = deps.agentQuestions.cancelAllForSession(sessionId);
   for (const id of cancelledIds) {
@@ -38,10 +51,11 @@ export function endSession(sessionId: string, deps: SessionLifecycleDeps): void 
 
   deps.sessions.markEnded(sessionId);
   deps.sessionTokens.revoke(sessionId);
-  if (session.agent_id === undefined) return;
-  const role = deps.roles.get(session.role_id);
-  if (role === null) return;
-  if (!role.persistent) deps.agents.delete(session.agent_id);
+  if (session.agent_id !== undefined) {
+    const role = deps.roles.get(session.role_id);
+    if (role !== null && !role.persistent) deps.agents.delete(session.agent_id);
+  }
+  return { sessionId, workspaceId: session.workspace_id };
 }
 
 /**

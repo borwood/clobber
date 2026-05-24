@@ -4,6 +4,7 @@ export type DispatchOutcome =
   | "spawned"
   | "injected"
   | "skipped-busy"
+  | "queued"
   | "skipped-at-capacity"
   | "errored"
   | "unsupported-kind"

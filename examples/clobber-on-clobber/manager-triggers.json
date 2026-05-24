@@ -1,4 +1,5 @@
 [
   { "kind": "workspace-open" },
-  { "kind": "cron", "expr": "0 9 * * *" }
+  { "kind": "cron", "expr": "0 9 * * *" },
+  { "kind": "session-ended" }
 ]

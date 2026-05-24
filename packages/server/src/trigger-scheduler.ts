@@ -25,6 +25,7 @@ import {
   recordDisabledTrigger,
   recordUnsupportedTrigger,
   type AgentBinding,
+  type BusyPolicy,
   type DispatchDeps,
 } from "./trigger-dispatch.ts";
 import { defaultSynthesizePrompt } from "./trigger-synthesize.ts";
@@ -33,6 +34,9 @@ import {
   addToKeyedIndex,
   clearAgentFromKeyedIndex,
 } from "./trigger-keyed-index.ts";
+import { createAgentWorkQueue } from "./agent-work-queue.ts";
+import type { AgentStatusLogStore } from "./agent-status-log-store.ts";
+import type { SessionEndedItem, SessionEndedWakePayload } from "./session-ended-wake.ts";
 
 export type AttachOutcome = SpawnPipelineSuccess | SpawnPipelineNoBundleError;
 export type AttachSessionFn = (input: {
@@ -53,6 +57,7 @@ export interface TriggerSchedulerDeps {
   readonly registry: AgentRegistry;
   readonly runtimeProvider: RuntimeProvider;
   readonly dispatches: TriggerDispatchStore;
+  readonly agentStatusLog: AgentStatusLogStore;
   readonly attachSession: AttachSessionFn;
   readonly synthesizePrompt?: (trigger: RoleTrigger, payload: unknown) => string;
 }
@@ -65,6 +70,10 @@ export interface FireWorkspaceOpenResult {
   readonly dispatched: number;
 }
 
+export interface FireSessionEndedResult {
+  readonly dispatched: number;
+}
+
 export interface TriggerScheduler {
   start(): void;
   stop(): void;
@@ -72,6 +81,16 @@ export interface TriggerScheduler {
   reloadAgent(agentId: string): void;
   fireWebhook(path: string, payload: unknown): Promise<FireWebhookResult>;
   fireWorkspaceOpen(workspaceId: string, payload: unknown): Promise<FireWorkspaceOpenResult>;
+  // Fired from the reaper's callers when a session ends. Enumerates persistent
+  // agents in the workspace declaring a `session-ended` trigger and wakes each
+  // with the finished session's outcome (rebuilt from persistent state).
+  fireSessionEnded(
+    workspaceId: string,
+    finishedSessionId: string,
+  ): Promise<FireSessionEndedResult>;
+  // Called on an agent's Stop (busy→idle): delivers any completion wakes that
+  // were enqueued while it was busy, coalesced into one.
+  flushPendingWakes(agentId: string): Promise<void>;
 }
 
 interface ScheduledWebhook extends AgentBinding {
@@ -82,6 +101,10 @@ interface ScheduledWorkspaceOpen extends AgentBinding {
   readonly trigger: { kind: "workspace-open"; debounce_ms?: number | undefined };
   readonly debounceMs: number;
   lastFiredAt: number | null;
+}
+
+interface ScheduledSessionEnded extends AgentBinding {
+  readonly trigger: { kind: "session-ended" };
 }
 
 const UNSUPPORTED_KINDS: ReadonlySet<RoleTrigger["kind"]> = new Set([
@@ -114,6 +137,19 @@ export function createTriggerScheduler(
   const webhooksByPath = new Map<string, Set<ScheduledWebhook>>();
   const workspaceOpensByAgent = new Map<string, Set<ScheduledWorkspaceOpen>>();
   const workspaceOpensByWorkspace = new Map<string, Set<ScheduledWorkspaceOpen>>();
+  const sessionEndedByAgent = new Map<string, Set<ScheduledSessionEnded>>();
+  const sessionEndedByWorkspace = new Map<string, Set<ScheduledSessionEnded>>();
+  // Completion wakes that arrived while the target agent was busy, held per
+  // agent until its next idle (the Stop hook → flushPendingWakes).
+  const pendingWakes = createAgentWorkQueue<SessionEndedItem>();
+  const enqueueWhileBusy: BusyPolicy = {
+    kind: "enqueue",
+    enqueue: (binding, _trigger, payload) => {
+      for (const item of (payload as SessionEndedWakePayload).ended) {
+        pendingWakes.enqueue(binding.agentId, item);
+      }
+    },
+  };
   let started = false;
   const cronScheduler = createCronScheduler(deps.clock, dispatchDeps, () => started);
 
@@ -151,6 +187,13 @@ export function createTriggerScheduler(
       workspaceOpensByAgent,
       workspaceOpensByWorkspace,
     );
+    clearAgentFromKeyedIndex<ScheduledSessionEnded>(
+      agentId,
+      (e) => e.workspaceId,
+      sessionEndedByAgent,
+      sessionEndedByWorkspace,
+    );
+    pendingWakes.clear(agentId);
   }
 
   function registerAgent(agentId: string): void {
@@ -200,6 +243,16 @@ export function createTriggerScheduler(
         );
         continue;
       }
+      if (trigger.kind === "session-ended") {
+        addToKeyedIndex(
+          { ...binding, trigger },
+          agentId,
+          binding.workspaceId,
+          sessionEndedByAgent,
+          sessionEndedByWorkspace,
+        );
+        continue;
+      }
       if (UNSUPPORTED_KINDS.has(trigger.kind)) {
         recordUnsupportedTrigger(dispatchDeps, binding, trigger);
       }
@@ -227,6 +280,8 @@ export function createTriggerScheduler(
     webhooksByPath.clear();
     workspaceOpensByAgent.clear();
     workspaceOpensByWorkspace.clear();
+    sessionEndedByAgent.clear();
+    sessionEndedByWorkspace.clear();
   }
 
   function reloadAgent(agentId: string): void {
@@ -279,6 +334,51 @@ export function createTriggerScheduler(
     return { dispatched };
   }
 
+  // Rebuild a completion item from persistent state. The ephemeral agent is
+  // gone (reaped), but the session row and its final-report row survive — a
+  // report present means a rich wake, absent means a bare crash/kill triage.
+  function buildSessionEndedItem(finishedSessionId: string): SessionEndedItem | null {
+    const session = deps.sessions.get(finishedSessionId);
+    if (session === null) return null;
+    const report = deps.agentStatusLog.latestForSession(finishedSessionId, "final-report");
+    return {
+      sessionId: finishedSessionId,
+      label: session.label === undefined ? null : session.label,
+      summary: report === null ? null : report.summary,
+    };
+  }
+
+  async function fireSessionEnded(
+    workspaceId: string,
+    finishedSessionId: string,
+  ): Promise<FireSessionEndedResult> {
+    const set = sessionEndedByWorkspace.get(workspaceId);
+    if (set === undefined) return { dispatched: 0 };
+    const item = buildSessionEndedItem(finishedSessionId);
+    if (item === null) return { dispatched: 0 };
+    const payload: SessionEndedWakePayload = { ended: [item] };
+    let dispatched = 0;
+    for (const entry of set) {
+      if (
+        await dispatchTrigger(dispatchDeps, entry, entry.trigger, payload, enqueueWhileBusy)
+      ) {
+        dispatched += 1;
+      }
+    }
+    return { dispatched };
+  }
+
+  async function flushPendingWakes(agentId: string): Promise<void> {
+    const items = pendingWakes.drain(agentId);
+    if (items.length === 0) return;
+    const set = sessionEndedByAgent.get(agentId);
+    if (set === undefined) return;
+    const entry = set.values().next().value;
+    if (entry === undefined) return;
+    const payload: SessionEndedWakePayload = { ended: items };
+    await dispatchTrigger(dispatchDeps, entry, entry.trigger, payload, enqueueWhileBusy);
+  }
+
   return {
     start,
     stop,
@@ -286,5 +386,7 @@ export function createTriggerScheduler(
     reloadAgent,
     fireWebhook,
     fireWorkspaceOpen,
+    fireSessionEnded,
+    flushPendingWakes,
   };
 }

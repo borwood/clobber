@@ -18,6 +18,24 @@ export interface AgentBinding {
   readonly workspaceId: string;
 }
 
+// What dispatchTrigger does when the target session is live but busy. The
+// default (`drop`) preserves cron/webhook semantics: record skipped-busy and
+// move on. `enqueue` is for wakes that must not be lost — the queued item is
+// handed to a substrate (see agent-work-queue) and flushed when the agent goes
+// idle. #171 uses this so a busy manager never drops a completion signal.
+export type BusyPolicy =
+  | { readonly kind: "drop" }
+  | {
+      readonly kind: "enqueue";
+      readonly enqueue: (
+        binding: AgentBinding,
+        trigger: RoleTrigger,
+        payload: unknown,
+      ) => void;
+    };
+
+const DROP_ON_BUSY: BusyPolicy = { kind: "drop" };
+
 export interface DispatchDeps {
   readonly clock: Clock;
   readonly agents: AgentStore;
@@ -41,6 +59,7 @@ export async function dispatchTrigger(
   binding: AgentBinding,
   trigger: RoleTrigger,
   payload: unknown,
+  busyPolicy: BusyPolicy = DROP_ON_BUSY,
 ): Promise<boolean> {
   const firedAt = deps.clock.now().getTime();
   const agent = deps.agents.get(binding.agentId);
@@ -79,6 +98,20 @@ export async function dispatchTrigger(
 
   const live = deps.registry.get(activeForAgent[0]!.id);
   if (live === null || live.busy) {
+    if (live !== null && busyPolicy.kind === "enqueue") {
+      busyPolicy.enqueue(binding, trigger, payload);
+      deps.dispatches.append({
+        workspace_id: binding.workspaceId,
+        role_id: binding.roleId,
+        agent_id: binding.agentId,
+        trigger_kind: trigger.kind,
+        trigger_payload: trigger,
+        fired_at: firedAt,
+        dispatch_outcome: "queued",
+        session_id: live.sessionId,
+      });
+      return true;
+    }
     deps.dispatches.append({
       workspace_id: binding.workspaceId,
       role_id: binding.roleId,

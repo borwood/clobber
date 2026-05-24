@@ -14,6 +14,7 @@ import { endSession } from "../session-lifecycle.ts";
 import { applyTaskEvent } from "../task-event-handler.ts";
 import { guardOfficeBoundary } from "../office-boundary-guard.ts";
 import { bridgeAskUserQuestion } from "../ask-user-question-bridge.ts";
+import type { TriggerScheduler } from "../trigger-scheduler.ts";
 
 const DEFAULT_ASK_BRIDGE_TIMEOUT_MS = 30 * 60 * 1000;
 
@@ -28,6 +29,7 @@ export interface RegisterHookRoutesDeps {
   agentQuestions: AgentQuestionStore;
   agentQuestionWaiter: AgentQuestionWaiter;
   agentStatusLog: AgentStatusLogStore;
+  scheduler: Pick<TriggerScheduler, "fireSessionEnded" | "flushPendingWakes">;
   askBridgeTimeoutMs?: number;
 }
 
@@ -44,7 +46,7 @@ export function registerHookRoutes(
     }
     const payload = parsed.data;
     deps.store.append(payload);
-    applySessionLifecycle(payload, deps);
+    await applySessionLifecycle(payload, deps);
     if (payload.hook_event_name === "PreToolUse") {
       const denial = guardOfficeBoundary(payload, deps);
       if (denial !== null) return denial;
@@ -62,7 +64,7 @@ export function registerHookRoutes(
   });
 }
 
-function applySessionLifecycle(
+async function applySessionLifecycle(
   payload: HookPayload,
   deps: {
     sessions: SessionStore;
@@ -72,8 +74,9 @@ function applySessionLifecycle(
     registry: AgentRegistry;
     agentQuestions: AgentQuestionStore;
     agentQuestionWaiter: AgentQuestionWaiter;
+    scheduler: Pick<TriggerScheduler, "fireSessionEnded" | "flushPendingWakes">;
   },
-): void {
+): Promise<void> {
   const session = deps.sessions.get(payload.session_id);
   if (session === null) return;
 
@@ -83,9 +86,17 @@ function applySessionLifecycle(
 
   if (payload.hook_event_name === "Stop") {
     deps.registry.setBusy(payload.session_id, false);
+    // Busy→idle: deliver any completion wakes that queued while this agent
+    // (typically the manager) was mid-turn.
+    if (session.agent_id !== undefined) {
+      await deps.scheduler.flushPendingWakes(session.agent_id);
+    }
   }
 
   if (payload.hook_event_name === "SessionEnd") {
-    endSession(payload.session_id, deps);
+    const ended = endSession(payload.session_id, deps);
+    if (ended !== null) {
+      await deps.scheduler.fireSessionEnded(ended.workspaceId, ended.sessionId);
+    }
   }
 }

@@ -42,8 +42,8 @@ A few deliberate choices:
   Scenario-triggered *consult/capture* skills (the actual log usage) are tracked separately in
   **#178**; when built, those two skills join `allowed_skills`.
 - **`trigger_overrides` is empty on purpose.** It is a *disable* map keyed by role-instance id —
-  it cannot *enable* anything. The manager's `workspace-open` + `cron` triggers live in
-  `manager-triggers.json`; leaving `trigger_overrides` empty keeps both active.
+  it cannot *enable* anything. The manager's `workspace-open` + `cron` + `session-ended` triggers
+  live in `manager-triggers.json`; leaving `trigger_overrides` empty keeps them all active.
 
 ## How to load it into a fresh clobber workspace
 
@@ -75,7 +75,9 @@ With the spawning session out of the loop after manager-wake, you should observe
 4. The worker **walks the SDLC unattended** and **opens a PR** end-to-end.
 5. The worker's **final-report fires the `gh issue create` callback** — a new internal ticket
    appears in `brennan-volter/clobber`.
-6. **You review and merge** the PR. The loop closes.
+6. **The worker's session end wakes the manager** via the `session-ended` trigger (#171) — no
+   polling stopgap needed; the manager reconsiders whether to dispatch the next job.
+7. **You review and merge** the PR. The loop closes.
 
 Out of scope for v1 (per #150): the manager merging PRs itself, the manager triaging the tickets
 it just filed, and multi-agent fan-out.

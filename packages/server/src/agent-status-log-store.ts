@@ -41,6 +41,10 @@ export interface ListForAgentOptions {
 export interface AgentStatusLogStore {
   append(req: AppendStatusLogRequest): AgentStatusLogEntry;
   listForAgent(agentId: string, opts?: ListForAgentOptions): AgentStatusLogEntry[];
+  // Most recent log row of a kind for a session. Keyed by session_id (not
+  // agent_id) so it survives the reaper deleting an ephemeral agent — the
+  // session row and its final-report rows persist. Used by fireSessionEnded.
+  latestForSession(sessionId: string, kind: AgentStatusLogKind): AgentStatusLogEntry | null;
 }
 
 interface Row {
@@ -79,6 +83,12 @@ export function createAgentStatusLogStore(db: Database): AgentStatusLogStore {
       (agent_id, session_id, event_id, kind, state, summary, details_json, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     RETURNING *
+  `);
+  const latestForSessionStmt = db.prepare(`
+    SELECT * FROM agent_status_log
+    WHERE session_id = ? AND kind = ?
+    ORDER BY created_at DESC, id DESC
+    LIMIT 1
   `);
 
   return {
@@ -120,6 +130,11 @@ export function createAgentStatusLogStore(db: Database): AgentStatusLogStore {
       params.push(limit);
       const rows = db.prepare(sql).all(...params) as Row[];
       return rows.map(rowToEntry);
+    },
+
+    latestForSession(sessionId, kind) {
+      const row = latestForSessionStmt.get(sessionId, kind) as Row | null;
+      return row === null ? null : rowToEntry(row);
     },
   };
 }
