@@ -1,0 +1,32 @@
+{
+  "name": "clobber-on-clobber",
+  "repo_path": "/absolute/path/to/your/clobber/checkout",
+  "setting_sources": ["user", "project", "local"],
+  "wake_prompt": "You have been woken in the clobber-on-clobber workspace. Run `clobber whoami` and `clobber agents list` to orient. Scan the open issues assigned in this repo for readiness; raise questions where an issue conflicts with another or with a prior decision; group related work under a parent issue using GitHub sub-issue relationships (never close the children). Document your reasoning as comments on the relevant issues, then dispatch a worker via `/assignment <issue numbers> <notes>`. Spawn only when there is enough ready work for a clean single-issue assignment.",
+  "trigger_overrides": {},
+  "final_report_callback": {
+    "kind": "exec",
+    "command": "gh",
+    "args": [
+      "issue",
+      "create",
+      "--repo",
+      "brennan-volter/clobber",
+      "--title",
+      "worker final-report",
+      "--body-file",
+      "-"
+    ]
+  },
+  "boot_context_provider": {
+    "kind": "exec",
+    "command": "echo",
+    "args": [
+      "Behavioral-wisdom log lives at brennan-volter/tasks#20 — consult it when orchestrating, and append to it when you learn something durable about agent behavior."
+    ]
+  },
+  "manager_skill_policy": {
+    "allow_self_grant": true,
+    "allowed_skills": ["clobber-pm"]
+  }
+}
