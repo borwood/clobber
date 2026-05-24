@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import type { Agent, Workspace } from "@clobber/shared";
 import type { SpawnMode } from "./spawn-context.ts";
@@ -70,6 +71,27 @@ function createWorktree(
   if (res.exitCode !== 0) {
     throw new Error(
       `git worktree add failed (exit ${res.exitCode}): ${res.stderr.toString().trim()}`,
+    );
+  }
+  installDeps(worktreePath);
+}
+
+// A fresh worktree shares no files with the shared checkout, so it has no
+// node_modules — the worker can't typecheck/test/build until deps install.
+// Install them now so `spawn_worktree: on` yields a worktree that's
+// immediately workable (#201). A repo with no package.json has nothing to
+// install; skipping it keeps non-node worktrees (and bun, which errors with
+// no manifest) from breaking the spawn.
+function installDeps(worktreePath: string): void {
+  if (!existsSync(join(worktreePath, "package.json"))) return;
+  const res = Bun.spawnSync(["bun", "install"], {
+    cwd: worktreePath,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (res.exitCode !== 0) {
+    throw new Error(
+      `bun install failed in worktree ${worktreePath} (exit ${res.exitCode}): ${res.stderr.toString().trim()}`,
     );
   }
 }

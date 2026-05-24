@@ -1,22 +1,52 @@
 import { describe, expect, it } from "bun:test";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { claudeRuntimeProvider } from "@clobber/runtime";
 import { buildHarness, teardown, type Harness } from "./_spawn-harness.ts";
+
+function gitRun(repoPath: string, args: string[]): void {
+  const res = Bun.spawnSync(["git", ...args], { cwd: repoPath });
+  if (res.exitCode !== 0) {
+    throw new Error(`git ${args.join(" ")} failed: ${res.stderr.toString()}`);
+  }
+}
 
 // The harness' repoPath is a bare temp dir; `git worktree add` needs a real
 // repo with at least one commit. Initialize one in place.
 function gitInit(repoPath: string): void {
-  const run = (args: string[]) => {
-    const res = Bun.spawnSync(["git", ...args], { cwd: repoPath });
-    if (res.exitCode !== 0) {
-      throw new Error(`git ${args.join(" ")} failed: ${res.stderr.toString()}`);
-    }
-  };
-  run(["init", "-q", "-b", "main"]);
-  run(["config", "user.email", "test@clobber.invalid"]);
-  run(["config", "user.name", "clobber-test"]);
-  run(["commit", "--allow-empty", "-q", "-m", "root"]);
+  gitRun(repoPath, ["init", "-q", "-b", "main"]);
+  gitRun(repoPath, ["config", "user.email", "test@clobber.invalid"]);
+  gitRun(repoPath, ["config", "user.name", "clobber-test"]);
+  gitRun(repoPath, ["commit", "--allow-empty", "-q", "-m", "root"]);
+}
+
+// Initialize a repo whose committed tree carries a package.json with a single
+// offline `file:` dependency. After `git worktree add`, the worktree inherits
+// the manifest + the local dep package, so a `bun install` resolves it with no
+// network — node_modules/<dep> appearing proves the create path installed.
+function gitInitWithLocalDep(repoPath: string): void {
+  gitInit(repoPath);
+  writeFileSync(
+    join(repoPath, "package.json"),
+    JSON.stringify({
+      name: "root",
+      private: true,
+      dependencies: { localdep: "file:./localdep" },
+    }),
+  );
+  mkdirSync(join(repoPath, "localdep"));
+  writeFileSync(
+    join(repoPath, "localdep", "package.json"),
+    JSON.stringify({ name: "localdep", version: "1.0.0" }),
+  );
+  gitRun(repoPath, ["add", "-A"]);
+  gitRun(repoPath, ["commit", "-q", "-m", "add package with local dep"]);
+}
+
+// Worktrees land beside the repo at <dirname>/<basename>-worktrees/, outside
+// repoPath — so teardown(h) (which only removes repoPath) won't reach them.
+function worktreesRoot(repoPath: string): string {
+  return join(dirname(repoPath), `${basename(repoPath)}-worktrees`);
 }
 
 async function spawnWorker(
@@ -97,6 +127,29 @@ describe("spawn_worktree (#174): per-workspace auto-worktree on spawn", () => {
     expect(second.statusCode).toBe(500);
     expect(h.records).toHaveLength(1);
 
+    await teardown(h);
+  });
+
+  it("on: the create path installs deps so the worker can build immediately (#201)", async () => {
+    const h = buildHarness(claudeRuntimeProvider);
+    gitInitWithLocalDep(h.repoPath);
+    const ws = h.workspaces.create({
+      name: "ws",
+      repo_path: h.repoPath,
+      spawn_worktree: { kind: "on" },
+    });
+    const role = h.roles.create({ name: "worker", persistent: false });
+    h.workspaceRoles.setCeiling(ws.id, role.id, 1);
+
+    const res = await spawnWorker(h, ws.id, role.id, "201");
+    expect(res.statusCode).toBe(200);
+
+    const cwd = h.records[0]!.req.cwd;
+    // A fresh worktree has no node_modules; if the create path ran `bun
+    // install`, the file: dependency resolves into the worktree's tree.
+    expect(existsSync(join(cwd, "node_modules", "localdep"))).toBe(true);
+
+    rmSync(worktreesRoot(h.repoPath), { recursive: true, force: true });
     await teardown(h);
   });
 });
