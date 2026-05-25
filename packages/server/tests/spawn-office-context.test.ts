@@ -124,7 +124,7 @@ describe("spawn — office continuity at spawn (#55)", () => {
     expect(res.statusCode).toBe(200);
 
     expect(h.calls).toHaveLength(1);
-    const prompt = h.calls[0]!.prompt;
+    const prompt = h.calls[0]!.prompt!;
     expect(prompt).toContain("[Previously in this office]");
     expect(prompt).toContain("office is empty");
     expect(prompt).toContain("[End of previously]");
@@ -274,7 +274,7 @@ describe("spawn — office continuity at spawn (#55)", () => {
     expect(calls).toHaveLength(2);
     expect(calls[1]!.prompt).toContain("notes-2026-05-04-120000.md");
     expect(calls[1]!.prompt).not.toContain("office is empty");
-    expect(calls[1]!.prompt.endsWith("second wake")).toBe(true);
+    expect(calls[1]!.prompt!.endsWith("second wake")).toBe(true);
 
     db.close();
   });

@@ -14,7 +14,9 @@ import { normalizeCodexExecEvent } from "./codex-jsonl.ts";
 
 export interface SpawnAgentOptions {
   readonly hookUrl: string;
-  readonly prompt: string;
+  // Absent on a bare resume: nothing is written to the child's stdin, so the
+  // resumed thread idles instead of burning a turn on an empty user message.
+  readonly prompt: string | undefined;
   readonly cwd: string;
   readonly sessionId?: string;
   // Resume an existing claude conversation thread instead of starting fresh.
@@ -65,7 +67,9 @@ export function spawnAgent(opts: SpawnAgentOptions): SpawnedAgent {
 
   const stdin = child.stdin;
   if (opts.command === undefined) {
-    stdin.write(serializeUserMessage(opts.prompt));
+    if (opts.prompt !== undefined) {
+      stdin.write(serializeUserMessage(opts.prompt));
+    }
   } else if (command.stdin !== undefined) {
     stdin.write(command.stdin);
     stdin.end();

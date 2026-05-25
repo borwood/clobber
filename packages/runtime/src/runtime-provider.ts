@@ -40,7 +40,9 @@ export interface PrepareBundleOptions {
 
 export interface RuntimeSpawnOptions {
   readonly hookUrl: string;
-  readonly prompt: string;
+  // Absent on a bare resume: no user turn to inject. A fresh spawn always
+  // carries one.
+  readonly prompt: string | undefined;
   readonly cwd: string;
   readonly sessionId: string;
   readonly permissionMode?: PermissionMode;
@@ -59,7 +61,7 @@ export interface RuntimeResumeOptions extends RuntimeSpawnOptions {
 
 export interface RuntimeSpawnRequest {
   readonly hookUrl: string;
-  readonly prompt: string;
+  readonly prompt?: string;
   readonly cwd: string;
   readonly sessionId: string;
   readonly providerThreadId?: string;
@@ -105,7 +107,7 @@ export const claudeRuntimeProvider: RuntimeProvider = {
   buildSpawnRequest(opts) {
     return {
       hookUrl: opts.hookUrl,
-      prompt: opts.prompt,
+      ...(opts.prompt === undefined ? {} : { prompt: opts.prompt }),
       cwd: opts.cwd,
       sessionId: opts.sessionId,
       ...(opts.permissionMode === undefined
@@ -185,6 +187,9 @@ function buildCodexRequest(
     readonly resume?: boolean;
   },
 ): RuntimeSpawnRequest {
+  if (opts.prompt === undefined) {
+    throw new Error("Codex runtime requires a prompt; bare resume is unsupported");
+  }
   const prompt = buildCodexPrompt(opts.systemPrompt, opts.prompt);
   const args = [...commandOpts.args];
   if (opts.permissionMode === "bypassPermissions") {

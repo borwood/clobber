@@ -213,7 +213,7 @@ describe("POST /agent/spawn", () => {
     const call = h.calls[h.calls.length - 1]!;
     expect(call.cwd).toBe(repoPath);
     // Manager is persistent → office-context prefix is prepended; user prompt is the suffix.
-    expect(call.prompt.endsWith("audit auth.ts")).toBe(true);
+    expect(call.prompt!.endsWith("audit auth.ts")).toBe(true);
 
     const session = h.sessions.get(body.session_id);
     expect(session).not.toBeNull();

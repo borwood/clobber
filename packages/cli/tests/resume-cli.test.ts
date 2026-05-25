@@ -31,7 +31,7 @@ interface Harness {
   baseUrl: string;
   managerToken: string;
   endedSessionId: string;
-  resumePrompts: string[];
+  resumePrompts: Array<string | undefined>;
   repoPath: string;
 }
 
@@ -59,7 +59,7 @@ beforeAll(async () => {
   const managerRole = roles.findInWorkspace(ws.id, "manager")!;
   const workerRole = roles.findInWorkspace(ws.id, "worker")!;
 
-  const resumePrompts: string[] = [];
+  const resumePrompts: Array<string | undefined> = [];
   let pidCounter = 8000;
   const spawner: AgentSpawner = (req): SpawnedAgentInfo => {
     pidCounter += 1;
@@ -171,7 +171,7 @@ describe("clobber CLI — resume", () => {
     });
     expect(code).toBe(0);
     expect(s.out()).toMatch(harness.endedSessionId);
-    expect(harness.resumePrompts.some((p) => p.includes("open the PR now"))).toBe(true);
+    expect(harness.resumePrompts.some((p) => p?.includes("open the PR now"))).toBe(true);
   });
 
   it("exits 2 with usage when no session id is given", async () => {

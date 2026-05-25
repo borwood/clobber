@@ -186,13 +186,13 @@ describe("POST /spawn — manager bundle materialization", () => {
       "--json",
       "--cd",
       repoPath,
-      call.prompt,
+      call.prompt!,
     ]);
 
     expect(call.prompt).toContain("<clobber-role-system-prompt>");
     expect(call.prompt).toMatch(/Manager/);
     expect(call.prompt).toContain("[Previously in this office]");
-    expect(call.prompt.endsWith("go")).toBe(true);
+    expect(call.prompt!.endsWith("go")).toBe(true);
 
     expect(call.env!["CLOBBER_API_BASE"]).toBe("http://127.0.0.1:3300");
     expect(call.env!["CLOBBER_SESSION_ID"]).toBe(body.session_id);

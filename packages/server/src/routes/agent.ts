@@ -54,7 +54,7 @@ export interface AgentRouteDeps {
   readonly onSessionEnded: (workspaceId: string, finishedSessionId: string) => void;
   readonly resumeEnded: (input: {
     readonly sessionId: string;
-    readonly prompt: string;
+    readonly prompt: string | undefined;
   }) => Promise<ResumeEndedResult>;
 }
 
@@ -361,7 +361,7 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
         }
         const result = await deps.resumeEnded({
           sessionId: target.id,
-          prompt: parsed.data.prompt ?? "",
+          prompt: parsed.data.prompt,
         });
         if (!result.ok) {
           const { ok: _ok, status, ...rest } = result;
