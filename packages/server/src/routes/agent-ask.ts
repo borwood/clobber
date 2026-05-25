@@ -3,6 +3,7 @@ import {
   AgentAskRequestSchema,
   AgentAnswerRequestSchema,
   normalizeAskOptions,
+  type AskQuestion,
 } from "@clobber/shared";
 import type { SessionTokenStore } from "../session-token-store.ts";
 import type { SessionStore } from "../session-store.ts";
@@ -41,16 +42,14 @@ export function registerAgentAskRoutes(
       }
 
       const options = normalizeAskOptions(parsed.data.options);
+      const question: AskQuestion = {
+        question: parsed.data.question,
+        multi_select: parsed.data.multi_select === true,
+        ...(parsed.data.header === undefined ? {} : { header: parsed.data.header }),
+        ...(options === undefined ? {} : { options: [...options] }),
+      };
       const resolution = await askAndAwaitAnswer(
-        {
-          session_id: session.id,
-          question: parsed.data.question,
-          ...(parsed.data.header === undefined ? {} : { header: parsed.data.header }),
-          ...(options === undefined ? {} : { options }),
-          ...(parsed.data.multi_select === undefined
-            ? {}
-            : { multi_select: parsed.data.multi_select }),
-        },
+        { session_id: session.id, questions: [question] },
         timeoutMs,
         deps,
       );

@@ -1,17 +1,14 @@
 import type { Database } from "bun:sqlite";
 import type {
   AgentState,
-  AskOption,
+  AskQuestion,
   LatestAgentStatus,
   RoleVersionRef,
 } from "@clobber/shared";
 
 export interface OpenSessionQuestion {
   readonly id: string;
-  readonly question: string;
-  readonly header?: string;
-  readonly options?: readonly AskOption[];
-  readonly multi_select: boolean;
+  readonly questions: readonly AskQuestion[];
   readonly asked_at: number;
 }
 
@@ -49,10 +46,7 @@ interface Row {
   status_summary: string | null;
   status_updated_at: number | null;
   question_id: string | null;
-  question_text: string | null;
-  question_header: string | null;
-  question_options_json: string | null;
-  question_multi_select: number | null;
+  question_questions_json: string | null;
   question_asked_at: number | null;
   pinned_version_id: string | null;
   pinned_version_number: number | null;
@@ -81,19 +75,13 @@ function pickStatus(row: Row): LatestAgentStatus | undefined {
 
 function pickOpenQuestion(row: Row): OpenSessionQuestion | undefined {
   if (row.question_id === null) return undefined;
-  if (row.question_text === null) return undefined;
+  if (row.question_questions_json === null) return undefined;
   if (row.question_asked_at === null) return undefined;
-  const out: OpenSessionQuestion = {
+  return {
     id: row.question_id,
-    question: row.question_text,
+    questions: JSON.parse(row.question_questions_json) as readonly AskQuestion[],
     asked_at: row.question_asked_at,
-    multi_select: row.question_multi_select === 1,
-    ...(row.question_header === null ? {} : { header: row.question_header }),
-    ...(row.question_options_json === null
-      ? {}
-      : { options: JSON.parse(row.question_options_json) as readonly AskOption[] }),
   };
-  return out;
 }
 
 export function createWorkspaceSessionSummaries(db: Database): WorkspaceSessionSummaries {
@@ -121,12 +109,9 @@ export function createWorkspaceSessionSummaries(db: Database): WorkspaceSessionS
       st.state      AS status_state,
       st.summary    AS status_summary,
       st.updated_at AS status_updated_at,
-      q.id           AS question_id,
-      q.question     AS question_text,
-      q.header       AS question_header,
-      q.options_json AS question_options_json,
-      q.multi_select AS question_multi_select,
-      q.asked_at     AS question_asked_at,
+      q.id             AS question_id,
+      q.questions_json AS question_questions_json,
+      q.asked_at       AS question_asked_at,
       pv.id         AS pinned_version_id,
       pv.version    AS pinned_version_number,
       cv.id         AS current_version_id,

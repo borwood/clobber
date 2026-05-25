@@ -66,6 +66,7 @@ export function MailboxContent(props: MailboxContentProps) {
         <>
           {selected.open_question !== undefined && (
             <AskWidget
+              key={selected.open_question.id}
               question={selected.open_question}
               onAnswer={async (answer) => {
                 await api.answerQuestion(

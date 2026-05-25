@@ -6,9 +6,8 @@ function fakeQuestion(overrides: Partial<AgentQuestion> = {}): AgentQuestion {
   return {
     id: "q1",
     session_id: "s1",
-    question: "go?",
+    questions: [{ question: "go?", multi_select: false }],
     status: "pending",
-    multi_select: false,
     asked_at: 1,
     ...overrides,
   };

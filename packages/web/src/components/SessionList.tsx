@@ -1,6 +1,12 @@
 import { useState } from "react";
-import type { SessionSummary } from "../api.ts";
+import type { OpenQuestion, SessionSummary } from "../api.ts";
 import { STATE_DOT, pickTone } from "./state-tones.ts";
+
+function openQuestionLabel(q: OpenQuestion): string {
+  const first = q.questions[0]!.question;
+  const extra = q.questions.length - 1;
+  return extra > 0 ? `${first} (+${extra} more)` : first;
+}
 
 interface Props {
   readonly sessions: readonly SessionSummary[];
@@ -81,7 +87,7 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume }:
               </div>
               {s.open_question !== undefined && !isEnded && (
                 <div className="mt-1 text-xs text-amber-200 truncate italic">
-                  {s.open_question.question}
+                  {openQuestionLabel(s.open_question)}
                 </div>
               )}
               {s.latest_status !== undefined && !isEnded && (

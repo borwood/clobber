@@ -1,5 +1,10 @@
 import { z } from "zod";
-import type { AskOption, PreToolUsePayload } from "@clobber/shared";
+import {
+  decodePanelAnswer,
+  type AskOption,
+  type AskQuestion,
+  type PreToolUsePayload,
+} from "@clobber/shared";
 import {
   askAndAwaitAnswer,
   type AskResolution,
@@ -28,7 +33,8 @@ const AskUserQuestionInputSchema = z.object({
         multiSelect: z.boolean().optional(),
       }),
     )
-    .min(1),
+    .min(1)
+    .max(4),
 });
 
 export interface AskBridgeResponse {
@@ -55,39 +61,17 @@ export async function bridgeAskUserQuestion(
   const parsed = AskUserQuestionInputSchema.safeParse(payload.tool_input);
   if (!parsed.success) return null;
 
-  const first = parsed.data.questions[0];
-  if (first === undefined) return null;
+  const questions: readonly AskQuestion[] = parsed.data.questions.map((q) => ({
+    question: q.question,
+    ...(q.header === undefined ? {} : { header: q.header }),
+    options: q.options.map(toAskOption),
+    multi_select: q.multiSelect === true,
+  }));
 
-  const options: readonly AskOption[] = first.options.map((opt) => {
-    const out: AskOption = { label: opt.label };
-    if (opt.description !== undefined) out.description = opt.description;
-    if (opt.preview !== undefined) out.preview = opt.preview;
-    return out;
-  });
-
-  const multiSelect = first.multiSelect === true;
   const resolution = await askAndAwaitAnswer(
-    {
-      session_id: payload.session_id,
-      question: first.question,
-      ...(first.header === undefined ? {} : { header: first.header }),
-      options,
-      multi_select: multiSelect,
-    },
+    { session_id: payload.session_id, questions },
     deps.askTimeoutMs,
     deps,
-  );
-
-  const droppedCount = parsed.data.questions.length - 1;
-  const additionalContext = renderContext(
-    {
-      question: first.question,
-      ...(first.header === undefined ? {} : { header: first.header }),
-    },
-    options,
-    multiSelect,
-    droppedCount,
-    resolution,
   );
 
   return {
@@ -95,9 +79,16 @@ export async function bridgeAskUserQuestion(
       hookEventName: "PreToolUse",
       permissionDecision: "deny",
       permissionDecisionReason: ASK_BRIDGE_REASON_STAMP,
-      additionalContext,
+      additionalContext: renderContext(questions, resolution),
     },
   };
+}
+
+function toAskOption(opt: z.infer<typeof AskUserQuestionOptionSchema>): AskOption {
+  const out: AskOption = { label: opt.label };
+  if (opt.description !== undefined) out.description = opt.description;
+  if (opt.preview !== undefined) out.preview = opt.preview;
+  return out;
 }
 
 interface Selection {
@@ -105,75 +96,61 @@ interface Selection {
   readonly option_index: number | null;
 }
 
-interface AnsweredContext {
-  readonly status: "answered";
+interface AnsweredQuestion {
   readonly question: string;
   readonly header?: string;
   readonly multi_select: boolean;
   readonly selections: readonly Selection[];
   readonly raw: string;
-  readonly dropped_question_count?: number;
-  readonly notes?: readonly string[];
+  readonly notes?: string;
 }
 
-interface UnresolvedContext {
-  readonly status: "timed_out" | "cancelled";
+interface EchoedQuestion {
   readonly question: string;
   readonly header?: string;
   readonly multi_select: boolean;
-  readonly dropped_question_count?: number;
-  readonly notes?: readonly string[];
 }
 
 function renderContext(
-  question: { readonly question: string; readonly header?: string },
-  options: readonly AskOption[],
-  multiSelect: boolean,
-  droppedCount: number,
+  questions: readonly AskQuestion[],
   resolution: AskResolution,
 ): string {
-  const notes = collectNotes(droppedCount);
-
   if (resolution.status === "answered") {
-    const ctx: AnsweredContext = {
-      status: "answered",
-      question: question.question,
-      ...(question.header === undefined ? {} : { header: question.header }),
-      multi_select: multiSelect,
-      selections: parseSelections(resolution.answer, options, multiSelect),
-      raw: resolution.answer,
-      ...(droppedCount > 0 ? { dropped_question_count: droppedCount } : {}),
-      ...(notes.length > 0 ? { notes } : {}),
-    };
-    return JSON.stringify(ctx);
+    const parts = decodePanelAnswer(resolution.answer, questions.length);
+    const answers: readonly AnsweredQuestion[] = questions.map((q, i) => {
+      const part = parts[i];
+      if (part === undefined) throw new Error(`missing answer for question ${i}`);
+      return {
+        question: q.question,
+        ...(q.header === undefined ? {} : { header: q.header }),
+        multi_select: q.multi_select,
+        selections: parseSelections(part.raw, q.options, q.multi_select),
+        raw: part.raw,
+        ...(part.notes === undefined ? {} : { notes: part.notes }),
+      };
+    });
+    return JSON.stringify({ status: "answered", answers });
   }
 
-  const ctx: UnresolvedContext = {
-    status: resolution.status,
-    question: question.question,
-    ...(question.header === undefined ? {} : { header: question.header }),
-    multi_select: multiSelect,
-    ...(droppedCount > 0 ? { dropped_question_count: droppedCount } : {}),
-    ...(notes.length > 0 ? { notes } : {}),
-  };
-  return JSON.stringify(ctx);
-}
-
-function collectNotes(droppedCount: number): readonly string[] {
-  if (droppedCount === 0) return [];
-  return [
-    `${droppedCount} extra AskUserQuestion question${droppedCount === 1 ? "" : "s"} beyond the first were dropped; resend as separate calls if needed.`,
-  ];
+  const echoed: readonly EchoedQuestion[] = questions.map((q) => ({
+    question: q.question,
+    ...(q.header === undefined ? {} : { header: q.header }),
+    multi_select: q.multi_select,
+  }));
+  return JSON.stringify({ status: resolution.status, questions: echoed });
 }
 
 function parseSelections(
   raw: string,
-  options: readonly AskOption[],
+  options: readonly AskOption[] | undefined,
   multiSelect: boolean,
 ): readonly Selection[] {
   const labels = parseAnswerLabels(raw, multiSelect);
   return labels.map((label) => {
-    const idx = options.findIndex((opt) => opt.label === label);
+    const idx =
+      options === undefined
+        ? -1
+        : options.findIndex((opt) => opt.label === label);
     return { label, option_index: idx === -1 ? null : idx };
   });
 }
