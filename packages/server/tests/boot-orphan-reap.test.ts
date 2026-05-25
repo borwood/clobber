@@ -89,7 +89,7 @@ describe("reapOrphanedSessions (boot-time)", () => {
     h.db.close();
   });
 
-  it("deletes ephemeral agents and preserves persistent ones", async () => {
+  it("preserves agents (ephemeral and persistent) so resume can reattach", async () => {
     const h = buildHarness();
     const ephemeral = seed(h, { persistent: false });
     const persistent = seed(h, { persistent: true });
@@ -103,8 +103,55 @@ describe("reapOrphanedSessions (boot-time)", () => {
       agentQuestionWaiter: h.agentQuestionWaiter,
     });
 
-    expect(h.agents.get(ephemeral.agentId)).toBeNull();
+    // The agent row survives end so `clobber resume` can reattach to the same
+    // worktree/desk/identity — for non-persistent workers too.
+    expect(h.agents.get(ephemeral.agentId)).not.toBeNull();
     expect(h.agents.get(persistent.agentId)).not.toBeNull();
+    h.db.close();
+  });
+
+  it("flags every active session was-live-at-shutdown (reaped or skipped)", async () => {
+    const h = buildHarness();
+    const claude = seed(h, { persistent: false });
+    const codex = seed(h, {
+      persistent: true,
+      runtimeProvider: "codex",
+      providerThreadId: "thread-1",
+    });
+
+    reapOrphanedSessions({
+      sessions: h.sessions,
+      agents: h.agents,
+      roles: h.roles,
+      sessionTokens: h.sessionTokens,
+      agentQuestions: h.agentQuestions,
+      agentQuestionWaiter: h.agentQuestionWaiter,
+      runtimeProvider: codexRuntimeProvider,
+    });
+
+    // Reaped claude row: ended + flagged.
+    expect(typeof h.sessions.get(claude.sessionId)!.ended_at).toBe("number");
+    expect(h.sessions.get(claude.sessionId)!.was_live_at_shutdown).toBe(true);
+    // Skipped codex row: still active + flagged.
+    expect(h.sessions.get(codex.sessionId)!.ended_at).toBeUndefined();
+    expect(h.sessions.get(codex.sessionId)!.was_live_at_shutdown).toBe(true);
+    h.db.close();
+  });
+
+  it("does not flag sessions that were already ended before boot", async () => {
+    const h = buildHarness();
+    const done = seed(h, { persistent: false, preEnded: true });
+
+    reapOrphanedSessions({
+      sessions: h.sessions,
+      agents: h.agents,
+      roles: h.roles,
+      sessionTokens: h.sessionTokens,
+      agentQuestions: h.agentQuestions,
+      agentQuestionWaiter: h.agentQuestionWaiter,
+    });
+
+    expect(h.sessions.get(done.sessionId)!.was_live_at_shutdown).toBeUndefined();
     h.db.close();
   });
 

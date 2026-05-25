@@ -44,6 +44,7 @@ describe("managerRole", () => {
       "transcript",
       "reports",
       "kill",
+      "resume",
       "self-skills",
     ];
     for (const cmd of verbsTrainedByBundle) {

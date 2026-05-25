@@ -7,6 +7,7 @@ interface Props {
   readonly selectedId: string | null;
   readonly onSelect: (id: string) => void;
   readonly onEnd: (id: string) => Promise<void>;
+  readonly onResume: (id: string) => Promise<void>;
 }
 
 function relativeTime(ts: number): string {
@@ -17,9 +18,10 @@ function relativeTime(ts: number): string {
   return `${Math.floor(delta / 3_600_000)}h ago`;
 }
 
-export function SessionList({ sessions, selectedId, onSelect, onEnd }: Props) {
+export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume }: Props) {
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [endingId, setEndingId] = useState<string | null>(null);
+  const [resumingId, setResumingId] = useState<string | null>(null);
 
   if (sessions.length === 0) {
     return (
@@ -36,6 +38,8 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd }: Props) {
         const isEnded = s.ended_at !== undefined;
         const isConfirming = confirmingId === s.session_id;
         const isEnding = endingId === s.session_id;
+        const isResuming = resumingId === s.session_id;
+        const wasLive = s.was_live_at_shutdown === true;
         const tone = pickTone(s, isEnded);
         const primary = s.label ?? s.session_id;
         return (
@@ -86,6 +90,14 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd }: Props) {
                 </div>
               )}
               <div className="mt-1 flex items-center gap-2 text-xs text-zinc-500">
+                {wasLive && (
+                  <span
+                    className="px-1.5 py-0.5 rounded bg-sky-800 text-sky-100"
+                    title="Running when clobber last closed — resume to pick up unfinished business"
+                  >
+                    was live
+                  </span>
+                )}
                 {isEnded ? (
                   <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500">
                     ended
@@ -103,6 +115,27 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd }: Props) {
                 <span className="ml-auto">{relativeTime(s.last_seen_at)}</span>
               </div>
             </button>
+
+            {isEnded && (
+              <button
+                type="button"
+                aria-label="Resume session"
+                title="Resume session"
+                disabled={isResuming}
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  setResumingId(s.session_id);
+                  try {
+                    await onResume(s.session_id);
+                  } finally {
+                    setResumingId(null);
+                  }
+                }}
+                className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded text-zinc-500 hover:text-sky-400 hover:bg-zinc-800 transition-colors disabled:opacity-50"
+              >
+                ↻
+              </button>
+            )}
 
             {!isEnded && !isConfirming && (
               <button

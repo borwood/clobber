@@ -24,6 +24,7 @@ export interface SessionSummary {
   readonly event_count: number;
   readonly last_event_name?: string;
   readonly ended_at?: number;
+  readonly was_live_at_shutdown?: boolean;
   readonly latest_status?: LatestAgentStatus;
   readonly open_question?: OpenSessionQuestion;
   readonly role_version?: RoleVersionRef;
@@ -43,6 +44,7 @@ interface Row {
   event_count: number;
   last_event_name: string | null;
   ended_at: number | null;
+  was_live_at_shutdown: number;
   status_state: string | null;
   status_summary: string | null;
   status_updated_at: number | null;
@@ -108,6 +110,7 @@ export function createWorkspaceSessionSummaries(db: Database): WorkspaceSessionS
       COALESCE(MAX(e.received_at), s.started_at) AS last_seen_at,
       COUNT(e.id) AS event_count,
       s.ended_at AS ended_at,
+      s.was_live_at_shutdown AS was_live_at_shutdown,
       (
         SELECT hook_event_name
           FROM events e2
@@ -170,6 +173,7 @@ export function createWorkspaceSessionSummaries(db: Database): WorkspaceSessionS
           event_count: row.event_count,
           ...(row.last_event_name === null ? {} : { last_event_name: row.last_event_name }),
           ...(row.ended_at === null ? {} : { ended_at: row.ended_at }),
+          ...(row.was_live_at_shutdown === 1 ? { was_live_at_shutdown: true } : {}),
           ...(latest_status === undefined ? {} : { latest_status }),
           ...(open_question === undefined ? {} : { open_question }),
           ...(role_version === undefined ? {} : { role_version }),

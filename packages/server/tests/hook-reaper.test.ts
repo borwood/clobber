@@ -160,7 +160,7 @@ describe("hook reaper + transcript pickup", () => {
     await teardown(h);
   });
 
-  it("SessionEnd reaps an ephemeral agent (session.agent_id becomes undefined via FK SET NULL)", async () => {
+  it("SessionEnd preserves an ephemeral agent so the session stays resumable", async () => {
     const h = buildHarness();
     const seed = seedSession(h, { persistent: false });
 
@@ -175,10 +175,12 @@ describe("hook reaper + transcript pickup", () => {
       },
     });
 
-    expect(h.agents.get(seed.agentId)).toBeNull();
+    // The agent row survives end so `clobber resume` can reattach to the same
+    // worktree/desk/identity; only the session is marked ended.
+    expect(h.agents.get(seed.agentId)).not.toBeNull();
     const session = h.sessions.get(seed.sessionId);
     expect(session).not.toBeNull();
-    expect(session!.agent_id).toBeUndefined();
+    expect(session!.agent_id).toBe(seed.agentId);
     expect(typeof session!.ended_at).toBe("number");
 
     await teardown(h);

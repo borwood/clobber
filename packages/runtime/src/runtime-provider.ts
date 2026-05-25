@@ -122,6 +122,16 @@ export const claudeRuntimeProvider: RuntimeProvider = {
         : { settingSources: opts.settingSources }),
     };
   },
+  buildResumeRequest(opts) {
+    // Resume reuses the spawn request verbatim but flags the existing thread so
+    // spawn-agent emits `claude --resume <id>` instead of `--session-id <id>`.
+    // The follow-up prompt still flows in over stdin as a user message.
+    return {
+      ...claudeRuntimeProvider.buildSpawnRequest(opts),
+      providerThreadId: opts.providerThreadId,
+      resume: true,
+    };
+  },
   initialProviderThreadId(sessionId) {
     return sessionId;
   },

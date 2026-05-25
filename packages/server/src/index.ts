@@ -42,6 +42,9 @@ const spawner: AgentSpawner = (req) => {
     prompt: req.prompt,
     cwd: req.cwd,
     ...(req.sessionId === undefined ? {} : { sessionId: req.sessionId }),
+    ...(req.resume === true && req.providerThreadId !== undefined
+      ? { resumeThreadId: req.providerThreadId }
+      : {}),
     ...(req.pluginDirs === undefined ? {} : { pluginDirs: req.pluginDirs }),
     ...(req.permissionMode === undefined ? {} : { permissionMode: req.permissionMode }),
     ...(req.allowedTools === undefined ? {} : { allowedTools: req.allowedTools }),

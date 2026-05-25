@@ -17,6 +17,8 @@ export interface SpawnAgentOptions {
   readonly prompt: string;
   readonly cwd: string;
   readonly sessionId?: string;
+  // Resume an existing claude conversation thread instead of starting fresh.
+  readonly resumeThreadId?: string;
   readonly settings?: HookSettings;
   readonly pluginDirs?: readonly string[];
   readonly hookAsync?: boolean;
@@ -97,6 +99,7 @@ function buildClaudeCommand(sessionId: string, opts: SpawnAgentOptions): Runtime
     bin: opts.claudeBin === undefined ? "claude" : opts.claudeBin,
     args: buildClaudeArgs({
       sessionId,
+      ...(opts.resumeThreadId === undefined ? {} : { resumeThreadId: opts.resumeThreadId }),
       ...(settings === undefined ? {} : { settings }),
       ...(opts.pluginDirs === undefined ? {} : { pluginDirs: opts.pluginDirs }),
       ...(opts.permissionMode === undefined ? {} : { permissionMode: opts.permissionMode }),

@@ -128,7 +128,8 @@ describe("real-process external exit reaping (issue #11)", () => {
       "sessions.ended_at set after SIGKILL",
     );
     expect(typeof ended.ended_at).toBe("number");
-    expect(h.agents.get(body.agent_id)).toBeNull();
+    // Agent row survives the reap so the session stays resumable.
+    expect(h.agents.get(body.agent_id)).not.toBeNull();
 
     await teardown(h);
   });

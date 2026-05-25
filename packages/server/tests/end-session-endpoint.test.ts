@@ -130,7 +130,9 @@ describe("POST /sessions/:id/end", () => {
     expect(h.killCalls).toEqual([
       { sessionId: spawned.session_id, signal: "SIGTERM" },
     ]);
-    expect(h.agents.get(spawned.agent_id)).toBeNull();
+    // Agent row is preserved on end (resume reattaches to it); only the
+    // session is ended, which is what frees the ceiling slot.
+    expect(h.agents.get(spawned.agent_id)).not.toBeNull();
 
     await teardown(h);
   });
