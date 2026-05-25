@@ -33,8 +33,8 @@ Goal: brief the session on where clobber is in 5–8 lines so the user can decid
 **Step 1 — Read state, in this order:**
 
 ```bash
-gh issue view 70 --repo brennan-volter/clobber                                    # roadmap body
-gh issue view 70 --repo brennan-volter/clobber --comments                         # decisions log
+gh issue view 70 --repo brennan-volter/clobber --json body --jq .body              # roadmap body (plain `gh issue view` errors on the Projects-classic deprecation)
+gh issue view 70 --repo brennan-volter/clobber --json comments --jq '.comments[]'  # decisions log
 gh issue list  --repo brennan-volter/clobber --state open --limit 50 --json number,title,labels,createdAt
 gh pr list     --repo brennan-volter/clobber --state open --json number,title,headRefName,isDraft
 git -C /home/bjnwo/claude-workspace/brennan_volter.ai/brennan-volter/clobber log --oneline -10 main
