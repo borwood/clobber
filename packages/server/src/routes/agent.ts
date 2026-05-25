@@ -21,7 +21,7 @@ import {
   FinalReportSchema,
   summarizeFinalReport,
 } from "@clobber/shared";
-import { executeSpawn } from "../spawn-pipeline.ts";
+import { executeSpawn, type ResumeEndedResult } from "../spawn-pipeline.ts";
 import { terminateSession } from "../session-lifecycle.ts";
 import { readTranscript } from "../transcript-reader.ts";
 import {
@@ -52,7 +52,15 @@ export interface AgentRouteDeps {
   readonly cliEntry: string;
   readonly runtimeProvider: RuntimeProvider;
   readonly onSessionEnded: (workspaceId: string, finishedSessionId: string) => void;
+  readonly resumeEnded: (input: {
+    readonly sessionId: string;
+    readonly prompt: string;
+  }) => Promise<ResumeEndedResult>;
 }
+
+const ResumeBodySchema = z.object({
+  prompt: z.string().optional(),
+});
 
 const AgentSpawnBodySchema = z.object({
   role: z.string().min(1),
@@ -331,6 +339,36 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
         }
         terminateSession(target.id, deps);
         return { ok: true };
+      },
+    ),
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/agent/sessions/:id/resume",
+    withAgentAuth<{ Params: { id: string } }>(
+      "resume",
+      deps,
+      async (request, reply, { session }) => {
+        const target = deps.sessions.get(request.params.id);
+        if (target === null || target.workspace_id !== session.workspace_id) {
+          reply.code(404);
+          return { error: "session not found" };
+        }
+        const parsed = ResumeBodySchema.safeParse(request.body ?? {});
+        if (!parsed.success) {
+          reply.code(400);
+          return { error: "invalid resume request", issues: parsed.error.issues };
+        }
+        const result = await deps.resumeEnded({
+          sessionId: target.id,
+          prompt: parsed.data.prompt ?? "",
+        });
+        if (!result.ok) {
+          const { ok: _ok, status, ...rest } = result;
+          reply.code(status);
+          return rest;
+        }
+        return { session_id: result.session_id, pid: result.pid };
       },
     ),
   );

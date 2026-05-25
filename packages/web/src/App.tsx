@@ -192,6 +192,14 @@ export function App() {
                 setError(e instanceof Error ? e.message : String(e));
               }
             }}
+            onResume={async (id) => {
+              try {
+                await api.resumeSession(id);
+                setSelectedSession(id);
+              } catch (e) {
+                setError(e instanceof Error ? e.message : String(e));
+              }
+            }}
           />
         </aside>
 

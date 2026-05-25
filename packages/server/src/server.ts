@@ -21,6 +21,7 @@ import { createFinalReportConsumer } from "./final-report-consumer.ts";
 import {
   attachSessionToAgent,
   resumeSessionTurn,
+  resumeEndedSession,
   type SpawnPipelineDeps,
 } from "./spawn-pipeline.ts";
 import { createSystemClock } from "./clock.ts";
@@ -109,6 +110,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     registry,
     runtimeProvider,
     resumeTurn: (input) => resumeSessionTurn(spawnPipelineDeps, input),
+    resumeEnded: (input) => resumeEndedSession(spawnPipelineDeps, input),
   });
   registerSpawnRoutes(app, {
     workspaces: opts.workspaces,
@@ -179,6 +181,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     cliEntry: opts.cliEntry,
     runtimeProvider,
     onSessionEnded,
+    resumeEnded: (input) => resumeEndedSession(spawnPipelineDeps, input),
   });
   registerAgentRolesRoutes(app, {
     db: opts.db,

@@ -151,7 +151,7 @@ async function spawn(
 }
 
 describe("process-exit reaper (issue #5)", () => {
-  it("ephemeral agent: child exit marks session ended and deletes the agent", async () => {
+  it("ephemeral agent: child exit marks session ended but preserves the agent row", async () => {
     const h = buildHarness();
     const { ws, role } = seedWorkspaceRole(h, { persistent: false });
 
@@ -164,7 +164,7 @@ describe("process-exit reaper (issue #5)", () => {
     const session = h.sessions.get(spawned.session_id);
     expect(session).not.toBeNull();
     expect(typeof session!.ended_at).toBe("number");
-    expect(h.agents.get(spawned.agent_id)).toBeNull();
+    expect(h.agents.get(spawned.agent_id)).not.toBeNull();
 
     await teardown(h);
   });
@@ -194,7 +194,7 @@ describe("process-exit reaper (issue #5)", () => {
     await h.spawnControl.exit(spawned.session_id, 137);
 
     expect(typeof h.sessions.get(spawned.session_id)!.ended_at).toBe("number");
-    expect(h.agents.get(spawned.agent_id)).toBeNull();
+    expect(h.agents.get(spawned.agent_id)).not.toBeNull();
 
     await teardown(h);
   });
@@ -207,7 +207,7 @@ describe("process-exit reaper (issue #5)", () => {
     await h.spawnControl.exit(spawned.session_id, null);
 
     expect(typeof h.sessions.get(spawned.session_id)!.ended_at).toBe("number");
-    expect(h.agents.get(spawned.agent_id)).toBeNull();
+    expect(h.agents.get(spawned.agent_id)).not.toBeNull();
 
     await teardown(h);
   });
@@ -257,7 +257,7 @@ describe("process-exit reaper (issue #5)", () => {
     expect(hookRes.statusCode).toBe(200);
 
     expect(h.sessions.get(spawned.session_id)!.ended_at).toBe(endedAtAfterExit!);
-    expect(h.agents.get(spawned.agent_id)).toBeNull();
+    expect(h.agents.get(spawned.agent_id)).not.toBeNull();
 
     await teardown(h);
   });
@@ -282,12 +282,12 @@ describe("process-exit reaper (issue #5)", () => {
     expect(hookRes.statusCode).toBe(200);
     const endedAtAfterHook = h.sessions.get(spawned.session_id)!.ended_at;
     expect(typeof endedAtAfterHook).toBe("number");
-    expect(h.agents.get(spawned.agent_id)).toBeNull();
+    expect(h.agents.get(spawned.agent_id)).not.toBeNull();
 
     await h.spawnControl.exit(spawned.session_id, 0);
 
     expect(h.sessions.get(spawned.session_id)!.ended_at).toBe(endedAtAfterHook!);
-    expect(h.agents.get(spawned.agent_id)).toBeNull();
+    expect(h.agents.get(spawned.agent_id)).not.toBeNull();
 
     await teardown(h);
   });

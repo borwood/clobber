@@ -13,6 +13,10 @@ export const SessionSchema = z.object({
   started_at: z.number().int().nonnegative(),
   ended_at: z.number().int().nonnegative().optional(),
   transcript_path: z.string().min(1).optional(),
+  // Set when boot reconciliation finds this session still active from a
+  // previous server process — it was live when clobber last closed. The UI
+  // surfaces these as resume candidates. Cleared when the session is resumed.
+  was_live_at_shutdown: z.boolean().optional(),
 });
 export type Session = z.infer<typeof SessionSchema>;
 

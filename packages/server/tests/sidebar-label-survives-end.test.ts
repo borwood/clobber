@@ -117,7 +117,7 @@ async function spawn(h: Harness, label: string): Promise<{ session_id: string; a
 }
 
 describe("sidebar label survives non-persistent session end (#?)", () => {
-  it("non-persistent ended session keeps its label even after the agent row is deleted", async () => {
+  it("non-persistent ended session keeps its label even if the agent row is gone", async () => {
     const h = buildHarness({ persistent: false });
     const spawned = await spawn(h, "fix-the-bug");
 
@@ -125,13 +125,16 @@ describe("sidebar label survives non-persistent session end (#?)", () => {
     const before = await listSummaries(h);
     expect(before.find((s) => s.session_id === spawned.session_id)?.label).toBe("fix-the-bug");
 
-    // End the session — for non-persistent roles this deletes the agent row.
+    // End the session, then drop the agent row directly — agents now survive
+    // end (so resume can reattach), so we simulate the only remaining way the
+    // agent can vanish to prove the denormalized label still covers it.
     const endRes = await h.server.inject({
       method: "POST",
       url: `/sessions/${spawned.session_id}/end`,
     });
     expect(endRes.statusCode).toBe(200);
-    expect(h.agents.get(spawned.agent_id)).toBeNull(); // confirm the deletion happened
+    h.agents.delete(spawned.agent_id);
+    expect(h.agents.get(spawned.agent_id)).toBeNull();
 
     // Regression: label must still be on the summary so the sidebar doesn't
     // fall back to displaying the session UUID.

@@ -39,6 +39,7 @@ export interface SessionSummary {
   readonly event_count: number;
   readonly last_event_name?: string;
   readonly ended_at?: number;
+  readonly was_live_at_shutdown?: boolean;
   readonly latest_status?: LatestAgentStatus;
   readonly open_question?: OpenQuestion;
   readonly role_version?: RoleVersionRef;
@@ -161,6 +162,11 @@ export const api = {
   endSession: (sessionId: string) =>
     postJson<{ ok: true }>(
       `/sessions/${encodeURIComponent(sessionId)}/end`,
+      {},
+    ),
+  resumeSession: (sessionId: string) =>
+    postJson<{ ok: true; session_id: string; pid: number }>(
+      `/sessions/${encodeURIComponent(sessionId)}/resume`,
       {},
     ),
   interruptSession: (sessionId: string) =>

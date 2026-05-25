@@ -5,6 +5,7 @@ import { migrateWorkspaceConfig } from "./workspace-config-migration.ts";
 import { migrateSessionRuntime } from "./session-runtime-migration.ts";
 import { migrateAgentQuestionShape } from "./agent-question-shape-migration.ts";
 import { migrateRoleEffort } from "./role-effort-migration.ts";
+import { migrateSessionWasLive } from "./session-was-live-migration.ts";
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS events (
@@ -100,6 +101,7 @@ const SCHEMA = `
     started_at      INTEGER NOT NULL,
     ended_at        INTEGER,
     transcript_path TEXT,
+    was_live_at_shutdown INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (agent_id)        REFERENCES agents(id)        ON DELETE SET NULL,
     FOREIGN KEY (workspace_id)    REFERENCES workspaces(id)    ON DELETE CASCADE,
     FOREIGN KEY (role_id)         REFERENCES roles(id)         ON DELETE CASCADE,
@@ -200,6 +202,7 @@ export function createDatabase(path: string): Database {
   migrateWorkspaceConfig(db);
   migrateAgentQuestionShape(db);
   migrateRoleEffort(db);
+  migrateSessionWasLive(db);
   return db;
 }
 

@@ -13,7 +13,11 @@ import type { AgentQuestionWaiter } from "../agent-question-waiter.ts";
 import { readTranscript } from "../transcript-reader.ts";
 import { endSession, terminateSession } from "../session-lifecycle.ts";
 import { appendTranscriptNotification } from "../transcript-marker.ts";
-import type { ResumeTurnSuccess, ResumeTurnError } from "../spawn-pipeline.ts";
+import type {
+  ResumeTurnSuccess,
+  ResumeTurnError,
+  ResumeEndedResult,
+} from "../spawn-pipeline.ts";
 
 interface IdParam {
   id: string;
@@ -25,6 +29,10 @@ interface SessionsQuery {
 
 const PromptBodySchema = z.object({
   prompt: z.string().min(1),
+});
+
+const ResumeBodySchema = z.object({
+  prompt: z.string().optional(),
 });
 
 export function registerSessionRoutes(
@@ -41,6 +49,10 @@ export function registerSessionRoutes(
       readonly sessionId: string;
       readonly prompt: string;
     }) => Promise<ResumeTurnSuccess | ResumeTurnError>;
+    resumeEnded: (input: {
+      readonly sessionId: string;
+      readonly prompt: string;
+    }) => Promise<ResumeEndedResult>;
     agentQuestions: AgentQuestionStore;
     agentQuestionWaiter: AgentQuestionWaiter;
   },
@@ -139,6 +151,27 @@ export function registerSessionRoutes(
       }
       terminateSession(request.params.id, deps);
       return { ok: true };
+    },
+  );
+
+  app.post<{ Params: IdParam }>(
+    "/sessions/:id/resume",
+    async (request, reply) => {
+      const parsed = ResumeBodySchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        reply.code(400);
+        return { error: "invalid resume request", issues: parsed.error.issues };
+      }
+      const result = await deps.resumeEnded({
+        sessionId: request.params.id,
+        prompt: parsed.data.prompt ?? "",
+      });
+      if (!result.ok) {
+        const { ok: _ok, status, ...rest } = result;
+        reply.code(status);
+        return rest;
+      }
+      return { ok: true, session_id: result.session_id, pid: result.pid };
     },
   );
 

@@ -56,6 +56,10 @@ export function buildHookSettings(opts: BuildHookSettingsOptions): HookSettings 
 
 export interface BuildClaudeArgsOptions {
   readonly sessionId: string;
+  // When set, resume the existing claude conversation thread (`--resume <id>`)
+  // instead of starting a fresh one (`--session-id <id>`). For claude the
+  // provider thread id and the clobber session id are the same value.
+  readonly resumeThreadId?: string;
   readonly settings?: HookSettings;
   readonly pluginDirs?: readonly string[];
   readonly permissionMode?: PermissionMode;
@@ -71,7 +75,10 @@ export interface BuildClaudeArgsOptions {
 }
 
 export function buildClaudeArgs(opts: BuildClaudeArgsOptions): string[] {
-  const args: string[] = ["--session-id", opts.sessionId];
+  const args: string[] =
+    opts.resumeThreadId === undefined
+      ? ["--session-id", opts.sessionId]
+      : ["--resume", opts.resumeThreadId];
 
   if (opts.settings !== undefined) {
     args.push("--settings", JSON.stringify(opts.settings));

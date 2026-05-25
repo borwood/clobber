@@ -6,6 +6,11 @@ export interface SessionStore {
   get(id: string): Session | null;
   countActive(workspaceId: string, roleId: string): number;
   markEnded(id: string): boolean;
+  // Revive an ended session: clear ended_at and the was-live-at-shutdown flag
+  // so the row counts as active again and drops out of the resume-candidate set.
+  markActive(id: string): boolean;
+  // Flag a session as live-at-shutdown (set at boot reconciliation).
+  markWasLiveAtShutdown(id: string): boolean;
   updatePid(id: string, pid: number): boolean;
   updateProviderThreadId(id: string, providerThreadId: string): boolean;
   updateTranscriptPath(id: string, path: string): boolean;
@@ -27,6 +32,7 @@ interface Row {
   started_at: number;
   ended_at: number | null;
   transcript_path: string | null;
+  was_live_at_shutdown: number;
 }
 
 function rowToSession(row: Row): Session {
@@ -46,6 +52,7 @@ function rowToSession(row: Row): Session {
   if (row.label !== null) input["label"] = row.label;
   if (row.ended_at !== null) input["ended_at"] = row.ended_at;
   if (row.transcript_path !== null) input["transcript_path"] = row.transcript_path;
+  if (row.was_live_at_shutdown === 1) input["was_live_at_shutdown"] = true;
   return SessionSchema.parse(input);
 }
 
@@ -61,6 +68,12 @@ export function createSessionStore(db: Database): SessionStore {
   );
   const markEndedStmt = db.prepare(
     "UPDATE sessions SET ended_at = ? WHERE id = ? AND ended_at IS NULL",
+  );
+  const markActiveStmt = db.prepare(
+    "UPDATE sessions SET ended_at = NULL, was_live_at_shutdown = 0 WHERE id = ?",
+  );
+  const markWasLiveStmt = db.prepare(
+    "UPDATE sessions SET was_live_at_shutdown = 1 WHERE id = ?",
   );
   const updatePidStmt = db.prepare(
     "UPDATE sessions SET pid = ? WHERE id = ? AND ended_at IS NULL",
@@ -136,6 +149,16 @@ export function createSessionStore(db: Database): SessionStore {
 
     markEnded(id) {
       const result = markEndedStmt.run(Date.now(), id);
+      return result.changes > 0;
+    },
+
+    markActive(id) {
+      const result = markActiveStmt.run(id);
+      return result.changes > 0;
+    },
+
+    markWasLiveAtShutdown(id) {
+      const result = markWasLiveStmt.run(id);
       return result.changes > 0;
     },
 

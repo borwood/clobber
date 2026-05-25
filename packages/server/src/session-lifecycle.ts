@@ -51,10 +51,11 @@ export function endSession(
 
   deps.sessions.markEnded(sessionId);
   deps.sessionTokens.revoke(sessionId);
-  if (session.agent_id !== undefined) {
-    const role = deps.roles.get(session.role_id);
-    if (role !== null && !role.persistent) deps.agents.delete(session.agent_id);
-  }
+  // The agent row is intentionally preserved on end (including for
+  // non-persistent workers): `clobber resume` reattaches to the *same* agent id
+  // so its worktree, desk, and identity survive a clean exit or a restart. The
+  // whiteboard already gates non-persistent agents on having an active session,
+  // so a lingering agent row never shows a phantom desk.
   return { sessionId, workspaceId: session.workspace_id };
 }
 
