@@ -5,19 +5,24 @@ import type { SpawnMode } from "./spawn-context.ts";
 
 // Resolves the working directory a session is spawned into. With the
 // workspace's spawn_worktree policy off this is the shared checkout (today's
-// behavior). With it on, each fresh spawn (attach) gets its own git worktree —
-// the isolation that makes parallel worker dispatch collision-free — and the
-// session's cwd is that worktree. Resume reuses the worktree created at attach.
+// behavior). With it on, the worktree is agent-scoped: created on the agent's
+// FIRST attach, reused on every attach and resume after. A persistent agent's
+// wake is a fresh attach for an existing agent, so keying create on first-attach
+// (not on `mode` or `role.persistent`) is what lets it re-wake without git
+// refusing a second `worktree add` (#217). first-attach is the invariant;
+// persistence is only a proxy for it.
 //
 // Cleanup of these worktrees is out of scope (#198); this only ever creates.
 export function resolveSpawnCwd(
   workspace: Workspace,
   agent: Agent,
   mode: SpawnMode,
+  agentHasSession: boolean,
 ): string {
   if (workspace.spawn_worktree.kind === "off") return workspace.repo_path;
   const { branch, worktreePath } = deriveWorktree(workspace.repo_path, agent);
-  if (mode === "attach") createWorktree(workspace.repo_path, branch, worktreePath);
+  const firstAttach = mode === "attach" && !agentHasSession;
+  if (firstAttach) createWorktree(workspace.repo_path, branch, worktreePath);
   return worktreePath;
 }
 

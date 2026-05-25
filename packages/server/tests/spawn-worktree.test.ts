@@ -130,6 +130,42 @@ describe("spawn_worktree (#174): per-workspace auto-worktree on spawn", () => {
     await teardown(h);
   });
 
+  it("on: a persistent agent's second attach (wake) reuses its worktree instead of re-creating (#217)", async () => {
+    const h = buildHarness(claudeRuntimeProvider);
+    gitInit(h.repoPath);
+    const ws = h.workspaces.create({
+      name: "ws",
+      repo_path: h.repoPath,
+      spawn_worktree: { kind: "on" },
+    });
+    const role = h.roles.create({ name: "manager", persistent: true });
+    h.workspaceRoles.setCeiling(ws.id, role.id, 1);
+
+    // First attach: the persistent agent boots, creating its worktree.
+    const first = await spawnWorker(h, ws.id, role.id, "manager");
+    expect(first.statusCode).toBe(200);
+    const agentId = (first.json() as { agent_id: string }).agent_id;
+    const firstCwd = h.records[0]!.req.cwd;
+    expect(firstCwd).not.toBe(h.repoPath);
+
+    // The first session ends; the agent goes idle (the worktree stays — #198).
+    await h.records[0]!.exit(0);
+
+    // Waking the SAME agent is a second attach. It must resolve to the existing
+    // worktree, not re-run `git worktree add` (which git refuses → regression).
+    const wake = await h.server.inject({
+      method: "POST",
+      url: `/persistent-agents/${agentId}/wake`,
+      payload: {},
+    });
+    expect(wake.statusCode).toBe(200);
+    expect(h.records).toHaveLength(2);
+    expect(h.records[1]!.req.cwd).toBe(firstCwd);
+
+    rmSync(worktreesRoot(h.repoPath), { recursive: true, force: true });
+    await teardown(h);
+  });
+
   it("on: the create path installs deps so the worker can build immediately (#201)", async () => {
     const h = buildHarness(claudeRuntimeProvider);
     gitInitWithLocalDep(h.repoPath);
