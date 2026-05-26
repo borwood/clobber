@@ -112,7 +112,7 @@ describe("codexRuntimeProvider", () => {
       "--cd",
       "/repo",
       "--dangerously-bypass-approvals-and-sandbox",
-      req.prompt,
+      req.prompt!,
     ]);
     expect(req.prompt).toContain("You are a worker.");
     expect(req.prompt).toContain("do work");
@@ -144,7 +144,7 @@ describe("codexRuntimeProvider", () => {
         "resume",
         "019e0b86-a368-7702-9bf3-f5dce89dc9e9",
         "--json",
-        req.prompt,
+        req.prompt!,
       ],
       stdoutEventFormat: "codex-jsonl",
     });

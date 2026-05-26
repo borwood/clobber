@@ -126,7 +126,7 @@ describe("spawn — boot-context provider injection (#166)", () => {
     expect(res.statusCode).toBe(200);
 
     expect(h.calls).toHaveLength(1);
-    const prompt = h.calls[0]!.prompt;
+    const prompt = h.calls[0]!.prompt!;
     expect(prompt).toContain(MARK_START);
     expect(prompt).toContain("ACCUMULATED-WISDOM");
     expect(prompt).toContain(MARK_END);
@@ -166,7 +166,7 @@ describe("spawn — boot-context provider injection (#166)", () => {
     });
     expect(res.statusCode).toBe(200);
 
-    const prompt = h.calls[0]!.prompt;
+    const prompt = h.calls[0]!.prompt!;
     expect(prompt).toContain("DURABLE-FRAMING");
     expect(prompt).toContain("[Previously in this office]");
     // Order: workspace context, then office context, then the task.

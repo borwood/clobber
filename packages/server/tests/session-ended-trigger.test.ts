@@ -63,7 +63,7 @@ function buildHarness(initial: Date): Harness {
     const exited = new Promise<number | null>((resolve) => {
       resolveExit = resolve;
     });
-    spawns.push({ sessionId: req.sessionId, prompt: req.prompt, writes, resolveExit });
+    spawns.push({ sessionId: req.sessionId, prompt: req.prompt!, writes, resolveExit });
     return { sessionId: req.sessionId, pid: pidCounter, exited, stdin, kill: () => {} };
   };
 

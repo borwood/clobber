@@ -89,7 +89,7 @@ function makeHarness(initial: Date): Harness {
     const stdin = new PassThrough();
     stdin.resume();
     liveStdins.set(req.sessionId, stdin);
-    spawnCalls.push({ prompt: req.prompt, sessionId: req.sessionId });
+    spawnCalls.push({ prompt: req.prompt!, sessionId: req.sessionId });
     return {
       sessionId: req.sessionId,
       pid: 7000 + spawnCalls.length,

@@ -23,7 +23,8 @@ export interface PrepareSpawnContextInput {
   readonly agent: Agent;
   readonly sessionId: string;
   readonly versionId: string | undefined;
-  readonly prompt: string;
+  // Absent on a bare resume — no task turn to compose.
+  readonly prompt: string | undefined;
   readonly briefing?: BriefingPacket;
   // Per-spawn override of the role's default effort. When supplied, beats
   // role.effort. When omitted, role.effort applies (or claude's default if
@@ -112,8 +113,11 @@ export async function prepareSpawnContext(
   if (officeDir !== null) {
     segments.push(composeOfficeContext(officeDir));
   }
-  segments.push(prompt);
-  const effectivePrompt = segments.join("\n\n");
+  if (prompt !== undefined) {
+    segments.push(prompt);
+  }
+  // Nothing to inject (bare resume, no boot/office context) => no user turn.
+  const effectivePrompt = segments.length === 0 ? undefined : segments.join("\n\n");
 
   const materialized = deps.runtimeProvider.prepareBundle({
     bundle: effectiveBundle,

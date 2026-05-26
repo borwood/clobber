@@ -194,6 +194,35 @@ describe("POST /agent/sessions/:id/resume", () => {
     expect(h.resumeRequests[0]!.providerThreadId).toBe(ended.sessionId);
   });
 
+  it("a prompted resume forwards exactly the prompt to the runtime", async () => {
+    const ended = seedEndedWorkerSession(h);
+    const res = await h.server.inject({
+      method: "POST",
+      url: `/agent/sessions/${ended.sessionId}/resume`,
+      headers: { authorization: `Bearer ${h.managerToken}` },
+      payload: { prompt: "ship it" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(h.resumeRequests.length).toBe(1);
+    // The seeded workspace uses the noop boot-context provider, so the resume
+    // prompt flows through unwrapped — exactly the injected user turn.
+    expect(h.resumeRequests[0]!.prompt).toBe("ship it");
+  });
+
+  it("a bare resume composes no user message for the runtime", async () => {
+    const ended = seedEndedWorkerSession(h);
+    const res = await h.server.inject({
+      method: "POST",
+      url: `/agent/sessions/${ended.sessionId}/resume`,
+      headers: { authorization: `Bearer ${h.managerToken}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(h.resumeRequests.length).toBe(1);
+    // No prompt + noop boot context => nothing to inject. The `?? ""` default
+    // that used to fabricate an empty user turn (#227) is gone.
+    expect(h.resumeRequests[0]!.prompt).toBeUndefined();
+  });
+
   it("a worker is denied (403) — workers don't bring sessions back", async () => {
     const ended = seedEndedWorkerSession(h);
     const res = await h.server.inject({

@@ -219,7 +219,7 @@ export async function resumeSessionTurn(
  */
 export async function resumeEndedSession(
   deps: SpawnPipelineDeps,
-  input: { readonly sessionId: string; readonly prompt: string },
+  input: { readonly sessionId: string; readonly prompt: string | undefined },
 ): Promise<ResumeEndedResult> {
   const session = deps.sessions.get(input.sessionId);
   if (session === null) return { ok: false, status: 404, error: "session not found" };
@@ -245,7 +245,7 @@ export async function resumeEndedSession(
 async function performResume(
   deps: SpawnPipelineDeps,
   session: Session,
-  prompt: string,
+  prompt: string | undefined,
 ): Promise<ResumeTurnSuccess | ResumeTurnError> {
   if (!deps.runtimeProvider.capabilities.resume || deps.runtimeProvider.buildResumeRequest === undefined) {
     return { ok: false, status: 409, error: "runtime does not support resume" };

@@ -61,7 +61,7 @@ function buildHarness(initial: Date): Harness {
     stdin.resume();
     spawns.push({
       sessionId: req.sessionId,
-      prompt: req.prompt,
+      prompt: req.prompt!,
       stdin,
       writes,
     });

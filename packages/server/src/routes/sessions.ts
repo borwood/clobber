@@ -51,7 +51,7 @@ export function registerSessionRoutes(
     }) => Promise<ResumeTurnSuccess | ResumeTurnError>;
     resumeEnded: (input: {
       readonly sessionId: string;
-      readonly prompt: string;
+      readonly prompt: string | undefined;
     }) => Promise<ResumeEndedResult>;
     agentQuestions: AgentQuestionStore;
     agentQuestionWaiter: AgentQuestionWaiter;
@@ -164,7 +164,7 @@ export function registerSessionRoutes(
       }
       const result = await deps.resumeEnded({
         sessionId: request.params.id,
-        prompt: parsed.data.prompt ?? "",
+        prompt: parsed.data.prompt,
       });
       if (!result.ok) {
         const { ok: _ok, status, ...rest } = result;

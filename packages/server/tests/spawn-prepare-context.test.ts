@@ -40,7 +40,7 @@ describe("prepareSpawnContext (#125) is the shared spawn/attach/resume seam", ()
     expect(attachEnv!["PATH"]!.startsWith(join(h.repoPath, ".clobber", "bin"))).toBe(true);
 
     expect(attachReq.prompt).toContain("[Previously in this office]");
-    expect(attachReq.prompt.endsWith("first turn")).toBe(true);
+    expect(attachReq.prompt!.endsWith("first turn")).toBe(true);
     expect(attachReq.resume).toBeUndefined();
     expect(attachReq.providerThreadId).toBeUndefined();
 
@@ -73,7 +73,7 @@ describe("prepareSpawnContext (#125) is the shared spawn/attach/resume seam", ()
     );
 
     expect(resumeReq.prompt).toContain("[Previously in this office]");
-    expect(resumeReq.prompt.endsWith("second turn")).toBe(true);
+    expect(resumeReq.prompt!.endsWith("second turn")).toBe(true);
     expect(resumeReq.resume).toBe(true);
     expect(resumeReq.providerThreadId).toBe(`thread-${spawnBody.session_id}`);
 
