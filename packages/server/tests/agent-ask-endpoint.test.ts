@@ -252,10 +252,10 @@ describe("POST /agent/ask", () => {
     expect(q1Res.json() as unknown).toEqual({ resolution: "cancelled" });
 
     // Wait for Q2's row to land.
-    let q2Open: { id: string; question: string } | null = null;
+    let q2Open: { id: string } | null = null;
     for (let i = 0; i < 50; i++) {
       const open = h.questions.getOpenForSession(boot.sessionId);
-      if (open !== null && open.question === "second?") {
+      if (open !== null && open.questions[0]!.question === "second?") {
         q2Open = open;
         break;
       }
@@ -270,10 +270,10 @@ describe("POST /agent/ask", () => {
     });
     const summaries = summariesRes.json() as Array<{
       session_id: string;
-      open_question?: { id: string; question: string };
+      open_question?: { id: string; questions: { question: string }[] };
     }>;
     const own = summaries.find((s) => s.session_id === boot.sessionId)!;
-    expect(own.open_question?.question).toBe("second?");
+    expect(own.open_question?.questions[0]?.question).toBe("second?");
 
     // Answering Q2 resolves the in-flight call.
     await h.server.inject({
@@ -439,16 +439,21 @@ describe("GET /sessions surfaces open_question", () => {
       session_id: string;
       open_question?: {
         id: string;
-        question: string;
-        options?: ReadonlyArray<{ label: string }>;
+        questions: ReadonlyArray<{
+          question: string;
+          multi_select: boolean;
+          options?: ReadonlyArray<{ label: string }>;
+        }>;
       };
     }>;
     const own = summaries.find((s) => s.session_id === boot.sessionId)!;
     expect(own.open_question).toBeDefined();
-    expect(own.open_question!.question).toBe("merge?");
-    expect(own.open_question!.options).toEqual([
-      { label: "yes" },
-      { label: "no" },
+    expect(own.open_question!.questions).toEqual([
+      {
+        question: "merge?",
+        multi_select: false,
+        options: [{ label: "yes" }, { label: "no" }],
+      },
     ]);
 
     // Cleanup

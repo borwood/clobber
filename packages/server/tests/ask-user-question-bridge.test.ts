@@ -3,7 +3,11 @@ import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { PreToolUsePayload } from "@clobber/shared";
+import {
+  encodePanelAnswer,
+  type AgentQuestion,
+  type PreToolUsePayload,
+} from "@clobber/shared";
 import { createServer } from "../src/server.ts";
 import { createDatabase } from "../src/db.ts";
 import { createEventStore } from "../src/event-store.ts";
@@ -97,23 +101,20 @@ function seedSession(h: Harness): { sessionId: string } {
   return { sessionId };
 }
 
-function askUserQuestionHookPayload(
+const SINGLE_QUESTION = {
+  question: "Pick a release strategy",
+  header: "Release",
+  options: [
+    { label: "Roll forward", description: "Ship the fix on top of the current release" },
+    { label: "Roll back", description: "Revert to the previous tag", preview: "git revert v1.2" },
+  ],
+  multiSelect: false,
+};
+
+function hookPayload(
   sessionId: string,
-  overrides?: Partial<PreToolUsePayload["tool_input"]>,
+  questions: readonly unknown[] = [SINGLE_QUESTION],
 ): Record<string, unknown> {
-  const baseInput = {
-    questions: [
-      {
-        question: "Pick a release strategy",
-        header: "Release",
-        options: [
-          { label: "Roll forward", description: "Ship the fix on top of the current release" },
-          { label: "Roll back", description: "Revert to the previous tag", preview: "git revert v1.2" },
-        ],
-        multiSelect: false,
-      },
-    ],
-  };
   return {
     session_id: sessionId,
     transcript_path: "/tmp/t.jsonl",
@@ -122,20 +123,18 @@ function askUserQuestionHookPayload(
     hook_event_name: "PreToolUse",
     tool_name: "AskUserQuestion",
     tool_use_id: "tool-use-1",
-    tool_input: overrides === undefined ? baseInput : { ...baseInput, ...overrides },
+    tool_input: { questions },
   };
 }
 
 async function waitForOpenQuestion(
   h: Harness,
   sessionId: string,
-  matching?: (q: { readonly question: string }) => boolean,
-): Promise<string> {
+  matching?: (q: AgentQuestion) => boolean,
+): Promise<AgentQuestion> {
   for (let i = 0; i < 200; i++) {
     const open = h.questions.getOpenForSession(sessionId);
-    if (open !== null && (matching === undefined || matching(open))) {
-      return open.id;
-    }
+    if (open !== null && (matching === undefined || matching(open))) return open;
     await Bun.sleep(5);
   }
   throw new Error("timed out waiting for open question");
@@ -149,29 +148,36 @@ interface BridgeOutput {
 }
 
 function parseBridgeOutput(rawJson: string): BridgeOutput {
-  const body = JSON.parse(rawJson) as {
-    hookSpecificOutput: BridgeOutput;
-  };
+  const body = JSON.parse(rawJson) as { hookSpecificOutput: BridgeOutput };
   return body.hookSpecificOutput;
 }
 
+interface AnsweredCtx {
+  status: string;
+  answers: Array<{
+    question: string;
+    header?: string;
+    multi_select: boolean;
+    selections: Array<{ label: string; option_index: number | null }>;
+    raw: string;
+    notes?: string;
+  }>;
+}
+
 describe("PreToolUse bridge for AskUserQuestion", () => {
-  it("returns a structured answered context with selection index and minimal reason stamp", async () => {
+  it("single question: preserves rich options (incl preview) and round-trips a bare answer", async () => {
     const h = buildHarness();
     const { sessionId } = seedSession(h);
 
     const hookPromise = h.server.inject({
       method: "POST",
       url: "/hook",
-      payload: askUserQuestionHookPayload(sessionId),
+      payload: hookPayload(sessionId),
     });
 
-    const openId = await waitForOpenQuestion(h, sessionId);
-    const opened = h.questions.get(openId)!;
-    expect(opened.question).toBe("Pick a release strategy");
-    expect(opened.header).toBe("Release");
-    expect(opened.multi_select).toBe(false);
-    expect(opened.options).toEqual([
+    const opened = await waitForOpenQuestion(h, sessionId);
+    expect(opened.questions).toHaveLength(1);
+    expect(opened.questions[0]!.options).toEqual([
       { label: "Roll forward", description: "Ship the fix on top of the current release" },
       { label: "Roll back", description: "Revert to the previous tag", preview: "git revert v1.2" },
     ]);
@@ -179,239 +185,191 @@ describe("PreToolUse bridge for AskUserQuestion", () => {
     await h.server.inject({
       method: "POST",
       url: `/sessions/${sessionId}/answer`,
-      payload: { question_id: openId, answer: "Roll forward" },
+      payload: { question_id: opened.id, answer: "Roll forward" },
     });
 
-    const hookRes = await hookPromise;
-    expect(hookRes.statusCode).toBe(200);
-    const out = parseBridgeOutput(hookRes.body);
-    expect(out.hookEventName).toBe("PreToolUse");
+    const out = parseBridgeOutput((await hookPromise).body);
     expect(out.permissionDecision).toBe("deny");
     expect(out.permissionDecisionReason).toBe(ASK_BRIDGE_REASON_STAMP);
-
-    const ctx = JSON.parse(out.additionalContext) as {
-      status: string;
-      question: string;
-      header?: string;
-      multi_select: boolean;
-      selections: Array<{ label: string; option_index: number | null }>;
-      raw: string;
-    };
+    const ctx = JSON.parse(out.additionalContext) as AnsweredCtx;
     expect(ctx).toEqual({
       status: "answered",
-      question: "Pick a release strategy",
-      header: "Release",
-      multi_select: false,
-      selections: [{ label: "Roll forward", option_index: 0 }],
-      raw: "Roll forward",
+      answers: [
+        {
+          question: "Pick a release strategy",
+          header: "Release",
+          multi_select: false,
+          selections: [{ label: "Roll forward", option_index: 0 }],
+          raw: "Roll forward",
+        },
+      ],
     });
-
     await teardown(h);
   });
 
-  it("marks single-select free-text answers with option_index=null", async () => {
+  it("single question: a free-text answer maps to option_index=null", async () => {
     const h = buildHarness();
     const { sessionId } = seedSession(h);
-
-    const hookPromise = h.server.inject({
-      method: "POST",
-      url: "/hook",
-      payload: askUserQuestionHookPayload(sessionId),
-    });
-
-    const openId = await waitForOpenQuestion(h, sessionId);
+    const hookPromise = h.server.inject({ method: "POST", url: "/hook", payload: hookPayload(sessionId) });
+    const opened = await waitForOpenQuestion(h, sessionId);
     await h.server.inject({
       method: "POST",
       url: `/sessions/${sessionId}/answer`,
-      payload: { question_id: openId, answer: "rebase instead" },
+      payload: { question_id: opened.id, answer: "rebase instead" },
     });
-
-    const out = parseBridgeOutput((await hookPromise).body);
-    const ctx = JSON.parse(out.additionalContext) as {
-      selections: Array<{ label: string; option_index: number | null }>;
-      raw: string;
-    };
-    expect(ctx.selections).toEqual([{ label: "rebase instead", option_index: null }]);
-    expect(ctx.raw).toBe("rebase instead");
+    const ctx = JSON.parse(parseBridgeOutput((await hookPromise).body).additionalContext) as AnsweredCtx;
+    expect(ctx.answers[0]!.selections).toEqual([{ label: "rebase instead", option_index: null }]);
     await teardown(h);
   });
 
-  it("multi-select: parses a JSON-array answer into ordered selections with indices", async () => {
+  it("single question + free-text note: keeps the selection AND the note (envelope round-trip)", async () => {
+    const h = buildHarness();
+    const { sessionId } = seedSession(h);
+    const hookPromise = h.server.inject({ method: "POST", url: "/hook", payload: hookPayload(sessionId) });
+    const opened = await waitForOpenQuestion(h, sessionId);
+    await h.server.inject({
+      method: "POST",
+      url: `/sessions/${sessionId}/answer`,
+      payload: {
+        question_id: opened.id,
+        answer: encodePanelAnswer([{ raw: "Roll forward", notes: "ship after standup" }]),
+      },
+    });
+    const ctx = JSON.parse(parseBridgeOutput((await hookPromise).body).additionalContext) as AnsweredCtx;
+    expect(ctx.answers).toEqual([
+      {
+        question: "Pick a release strategy",
+        header: "Release",
+        multi_select: false,
+        selections: [{ label: "Roll forward", option_index: 0 }],
+        raw: "Roll forward",
+        notes: "ship after standup",
+      },
+    ]);
+    await teardown(h);
+  });
+
+  it("three-question panel: stores ONE row carrying all three, no flattening", async () => {
     const h = buildHarness();
     const { sessionId } = seedSession(h);
 
-    const hookPromise = h.server.inject({
-      method: "POST",
-      url: "/hook",
-      payload: askUserQuestionHookPayload(sessionId, {
-        questions: [
-          {
-            question: "Which checks to skip?",
-            header: "Skip",
-            multiSelect: true,
-            options: [
-              { label: "lint" },
-              { label: "type-check" },
-              { label: "tests" },
-            ],
-          },
-        ],
-      }),
-    });
+    const questions = [
+      { question: "First?", header: "First", options: [{ label: "a" }, { label: "b" }], multiSelect: false },
+      { question: "Second?", header: "Second", options: [{ label: "x", preview: "<diagram x>" }, { label: "y" }], multiSelect: false },
+      { question: "Third?", header: "Third", options: [{ label: "1" }, { label: "2" }], multiSelect: false },
+    ];
+    const hookPromise = h.server.inject({ method: "POST", url: "/hook", payload: hookPayload(sessionId, questions) });
 
-    const openId = await waitForOpenQuestion(h, sessionId);
-    const opened = h.questions.get(openId)!;
-    expect(opened.multi_select).toBe(true);
-    expect(opened.header).toBe("Skip");
+    const opened = await waitForOpenQuestion(h, sessionId);
+    expect(opened.questions).toHaveLength(3);
+    expect(opened.questions[1]!.options![0]!.preview).toBe("<diagram x>");
 
     await h.server.inject({
       method: "POST",
       url: `/sessions/${sessionId}/answer`,
-      payload: { question_id: openId, answer: JSON.stringify(["lint", "tests"]) },
+      payload: { question_id: opened.id, answer: encodePanelAnswer([{ raw: "a" }, { raw: "x" }, { raw: "1" }]) },
     });
 
-    const out = parseBridgeOutput((await hookPromise).body);
-    const ctx = JSON.parse(out.additionalContext) as {
-      status: string;
-      multi_select: boolean;
-      selections: Array<{ label: string; option_index: number | null }>;
-      raw: string;
-    };
+    const ctx = JSON.parse(parseBridgeOutput((await hookPromise).body).additionalContext) as AnsweredCtx;
     expect(ctx.status).toBe("answered");
-    expect(ctx.multi_select).toBe(true);
-    expect(ctx.selections).toEqual([
+    expect(ctx.answers.map((a) => a.question)).toEqual(["First?", "Second?", "Third?"]);
+    expect(ctx.answers.map((a) => a.selections[0]!.option_index)).toEqual([0, 0, 0]);
+    expect(ctx.answers[1]!.raw).toBe("x");
+    await teardown(h);
+  });
+
+  it("per-question multiSelect is honored independently across the panel", async () => {
+    const h = buildHarness();
+    const { sessionId } = seedSession(h);
+
+    const questions = [
+      { question: "Which checks to skip?", header: "Skip", multiSelect: true, options: [{ label: "lint" }, { label: "type-check" }, { label: "tests" }] },
+      { question: "Which db?", header: "DB", multiSelect: false, options: [{ label: "sqlite" }, { label: "postgres" }] },
+    ];
+    const hookPromise = h.server.inject({ method: "POST", url: "/hook", payload: hookPayload(sessionId, questions) });
+    const opened = await waitForOpenQuestion(h, sessionId);
+    expect(opened.questions[0]!.multi_select).toBe(true);
+    expect(opened.questions[1]!.multi_select).toBe(false);
+
+    await h.server.inject({
+      method: "POST",
+      url: `/sessions/${sessionId}/answer`,
+      payload: {
+        question_id: opened.id,
+        answer: encodePanelAnswer([
+          { raw: JSON.stringify(["lint", "tests"]) },
+          { raw: "postgres", notes: "managed instance please" },
+        ]),
+      },
+    });
+
+    const ctx = JSON.parse(parseBridgeOutput((await hookPromise).body).additionalContext) as AnsweredCtx;
+    expect(ctx.answers[0]!.selections).toEqual([
       { label: "lint", option_index: 0 },
       { label: "tests", option_index: 2 },
     ]);
-    expect(ctx.raw).toBe('["lint","tests"]');
+    expect(ctx.answers[1]!.selections).toEqual([{ label: "postgres", option_index: 1 }]);
+    expect(ctx.answers[1]!.notes).toBe("managed instance please");
     await teardown(h);
   });
 
-  it("multi-select: a non-JSON free-text answer is treated as a single label with null index", async () => {
+  it("rejects a partial answer at submit (400) and leaves the ask recoverable", async () => {
     const h = buildHarness();
     const { sessionId } = seedSession(h);
+    const questions = [
+      { question: "First?", header: "First", options: [{ label: "a" }, { label: "b" }], multiSelect: false },
+      { question: "Second?", header: "Second", options: [{ label: "x" }, { label: "y" }], multiSelect: false },
+    ];
+    const hookPromise = h.server.inject({ method: "POST", url: "/hook", payload: hookPayload(sessionId, questions) });
+    const opened = await waitForOpenQuestion(h, sessionId);
 
-    const hookPromise = h.server.inject({
+    // A two-question panel answered with a one-entry envelope is a partial answer:
+    // rejected at submit, and the row stays pending (not stranded as answered).
+    const partial = await h.server.inject({
       method: "POST",
-      url: "/hook",
-      payload: askUserQuestionHookPayload(sessionId, {
-        questions: [
-          {
-            question: "Which checks to skip?",
-            header: "Skip",
-            multiSelect: true,
-            options: [
-              { label: "lint" },
-              { label: "type-check" },
-              { label: "tests" },
-            ],
-          },
-        ],
-      }),
+      url: `/sessions/${sessionId}/answer`,
+      payload: { question_id: opened.id, answer: JSON.stringify({ answers: [{ raw: "a" }] }) },
     });
+    expect(partial.statusCode).toBe(400);
+    expect(h.questions.getOpenForSession(sessionId)!.id).toBe(opened.id);
 
-    const openId = await waitForOpenQuestion(h, sessionId);
+    // A complete answer then resolves the still-open ask.
     await h.server.inject({
       method: "POST",
       url: `/sessions/${sessionId}/answer`,
-      payload: { question_id: openId, answer: "skip none, run all" },
+      payload: { question_id: opened.id, answer: encodePanelAnswer([{ raw: "a" }, { raw: "x" }]) },
     });
-
-    const out = parseBridgeOutput((await hookPromise).body);
-    const ctx = JSON.parse(out.additionalContext) as {
-      selections: Array<{ label: string; option_index: number | null }>;
-    };
-    expect(ctx.selections).toEqual([
-      { label: "skip none, run all", option_index: null },
-    ]);
+    const ctx = JSON.parse(parseBridgeOutput((await hookPromise).body).additionalContext) as AnsweredCtx;
+    expect(ctx.answers.map((a) => a.raw)).toEqual(["a", "x"]);
     await teardown(h);
   });
 
-  it("returns status=timed_out in the structured context (with the question echoed) when no answer arrives", async () => {
+  it("returns status=timed_out echoing every question when no answer arrives", async () => {
     const h = buildHarness(50);
     const { sessionId } = seedSession(h);
-
-    const res = await h.server.inject({
-      method: "POST",
-      url: "/hook",
-      payload: askUserQuestionHookPayload(sessionId),
-    });
-    expect(res.statusCode).toBe(200);
-    const out = parseBridgeOutput(res.body);
-    const ctx = JSON.parse(out.additionalContext) as {
+    const questions = [
+      { question: "First?", header: "First", options: [{ label: "a" }, { label: "b" }], multiSelect: false },
+      { question: "Second?", header: "Second", options: [{ label: "x" }, { label: "y" }], multiSelect: true },
+    ];
+    const res = await h.server.inject({ method: "POST", url: "/hook", payload: hookPayload(sessionId, questions) });
+    const ctx = JSON.parse(parseBridgeOutput(res.body).additionalContext) as {
       status: string;
-      question: string;
-      header?: string;
-      multi_select: boolean;
+      questions: Array<{ question: string; header?: string; multi_select: boolean }>;
     };
     expect(ctx).toEqual({
       status: "timed_out",
-      question: "Pick a release strategy",
-      header: "Release",
-      multi_select: false,
+      questions: [
+        { question: "First?", header: "First", multi_select: false },
+        { question: "Second?", header: "Second", multi_select: true },
+      ],
     });
     expect(h.questions.getOpenForSession(sessionId)).toBeNull();
-    await teardown(h);
-  });
-
-  it("flags multi-question lossy flatten via dropped_question_count + notes; answered status still set", async () => {
-    const h = buildHarness();
-    const { sessionId } = seedSession(h);
-
-    const hookPromise = h.server.inject({
-      method: "POST",
-      url: "/hook",
-      payload: askUserQuestionHookPayload(sessionId, {
-        questions: [
-          {
-            question: "First?",
-            header: "First",
-            options: [{ label: "a" }, { label: "b" }],
-            multiSelect: false,
-          },
-          {
-            question: "Second?",
-            header: "Second",
-            options: [{ label: "x" }, { label: "y" }],
-            multiSelect: false,
-          },
-          {
-            question: "Third?",
-            header: "Third",
-            options: [{ label: "1" }, { label: "2" }],
-            multiSelect: false,
-          },
-        ],
-      }),
-    });
-
-    const openId = await waitForOpenQuestion(h, sessionId);
-    expect(h.questions.get(openId)!.question).toBe("First?");
-
-    await h.server.inject({
-      method: "POST",
-      url: `/sessions/${sessionId}/answer`,
-      payload: { question_id: openId, answer: "a" },
-    });
-
-    const out = parseBridgeOutput((await hookPromise).body);
-    const ctx = JSON.parse(out.additionalContext) as {
-      status: string;
-      dropped_question_count: number;
-      notes: string[];
-      selections: Array<{ label: string; option_index: number | null }>;
-    };
-    expect(ctx.status).toBe("answered");
-    expect(ctx.dropped_question_count).toBe(2);
-    expect(ctx.notes[0]).toContain("2 extra AskUserQuestion questions");
-    expect(ctx.selections).toEqual([{ label: "a", option_index: 0 }]);
     await teardown(h);
   });
 
   it("does not intercept tools other than AskUserQuestion", async () => {
     const h = buildHarness();
     const { sessionId } = seedSession(h);
-
     const res = await h.server.inject({
       method: "POST",
       url: "/hook",
@@ -424,7 +382,7 @@ describe("PreToolUse bridge for AskUserQuestion", () => {
         tool_name: "Read",
         tool_use_id: "tool-use-2",
         tool_input: { file_path: "/tmp/x.txt" },
-      },
+      } satisfies PreToolUsePayload,
     });
     expect(res.statusCode).toBe(200);
     expect(res.json() as unknown).toEqual({ continue: true });
@@ -432,49 +390,31 @@ describe("PreToolUse bridge for AskUserQuestion", () => {
     await teardown(h);
   });
 
-  it("returns status=cancelled when an in-flight bridge is superseded by a fresh AskUserQuestion call", async () => {
+  it("returns status=cancelled when an in-flight bridge is superseded by a fresh call", async () => {
     const h = buildHarness();
     const { sessionId } = seedSession(h);
 
-    const firstPromise = h.server.inject({
-      method: "POST",
-      url: "/hook",
-      payload: askUserQuestionHookPayload(sessionId),
-    });
-
+    const firstPromise = h.server.inject({ method: "POST", url: "/hook", payload: hookPayload(sessionId) });
     await waitForOpenQuestion(h, sessionId);
 
     const secondPromise = h.server.inject({
       method: "POST",
       url: "/hook",
-      payload: askUserQuestionHookPayload(sessionId, {
-        questions: [
-          {
-            question: "Replacement?",
-            header: "Again",
-            options: [{ label: "yes" }, { label: "no" }],
-            multiSelect: false,
-          },
-        ],
-      }),
+      payload: hookPayload(sessionId, [
+        { question: "Replacement?", header: "Again", options: [{ label: "yes" }, { label: "no" }], multiSelect: false },
+      ]),
     });
 
-    const firstOut = parseBridgeOutput((await firstPromise).body);
-    const firstCtx = JSON.parse(firstOut.additionalContext) as { status: string };
+    const firstCtx = JSON.parse(parseBridgeOutput((await firstPromise).body).additionalContext) as { status: string };
     expect(firstCtx.status).toBe("cancelled");
 
-    const secondOpenId = await waitForOpenQuestion(
-      h,
-      sessionId,
-      (q) => q.question === "Replacement?",
-    );
+    const second = await waitForOpenQuestion(h, sessionId, (q) => q.questions[0]!.question === "Replacement?");
     await h.server.inject({
       method: "POST",
       url: `/sessions/${sessionId}/answer`,
-      payload: { question_id: secondOpenId, answer: "yes" },
+      payload: { question_id: second.id, answer: "yes" },
     });
     await secondPromise;
-
     await teardown(h);
   });
 });

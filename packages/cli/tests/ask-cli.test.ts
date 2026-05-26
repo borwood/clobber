@@ -195,7 +195,7 @@ describe("clobber CLI — ask", () => {
     for (let i = 0; i < 100; i++) {
       const open = harness.questions.getOpenForSession(harness.managerSessionId);
       if (open !== null) {
-        openOptions = open.options;
+        openOptions = open.questions[0]!.options;
         break;
       }
       await Bun.sleep(5);

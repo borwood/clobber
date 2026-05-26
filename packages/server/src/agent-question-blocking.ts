@@ -1,4 +1,4 @@
-import type { AskOption } from "@clobber/shared";
+import type { AskQuestion } from "@clobber/shared";
 import type { AgentQuestionStore } from "./agent-question-store.ts";
 import {
   QuestionTimeoutError,
@@ -12,10 +12,7 @@ export type AskResolution =
 
 export interface AskQuestionInput {
   readonly session_id: string;
-  readonly question: string;
-  readonly header?: string;
-  readonly options?: readonly AskOption[];
-  readonly multi_select?: boolean;
+  readonly questions: readonly AskQuestion[];
 }
 
 export interface AskBlockingDeps {
@@ -36,10 +33,7 @@ export async function askAndAwaitAnswer(
 
   const created = deps.agentQuestions.create({
     session_id: input.session_id,
-    question: input.question,
-    ...(input.header === undefined ? {} : { header: input.header }),
-    ...(input.options === undefined ? {} : { options: input.options }),
-    ...(input.multi_select === undefined ? {} : { multi_select: input.multi_select }),
+    questions: input.questions,
   });
 
   try {

@@ -3,7 +3,7 @@ import { migrateRoleVersions } from "./role-version-migration.ts";
 import { migrateSessionLabel } from "./session-label-migration.ts";
 import { migrateWorkspaceConfig } from "./workspace-config-migration.ts";
 import { migrateSessionRuntime } from "./session-runtime-migration.ts";
-import { migrateAgentQuestionShape } from "./agent-question-shape-migration.ts";
+import { migrateAgentQuestions } from "./agent-question-migration.ts";
 import { migrateRoleEffort } from "./role-effort-migration.ts";
 import { migrateSessionWasLive } from "./session-was-live-migration.ts";
 
@@ -150,14 +150,13 @@ const SCHEMA = `
     ON agent_status_log(kind, created_at DESC);
 
   CREATE TABLE IF NOT EXISTS agent_questions (
-    id            TEXT    PRIMARY KEY,
-    session_id    TEXT    NOT NULL,
-    question      TEXT    NOT NULL,
-    options_json  TEXT,
-    status        TEXT    NOT NULL,
-    answer        TEXT,
-    asked_at      INTEGER NOT NULL,
-    answered_at   INTEGER,
+    id             TEXT    PRIMARY KEY,
+    session_id     TEXT    NOT NULL,
+    questions_json TEXT    NOT NULL,
+    status         TEXT    NOT NULL,
+    answer         TEXT,
+    asked_at       INTEGER NOT NULL,
+    answered_at    INTEGER,
     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
   );
   CREATE INDEX IF NOT EXISTS idx_questions_session_status
@@ -200,7 +199,7 @@ export function createDatabase(path: string): Database {
   migrateSessionLabel(db);
   migrateSessionRuntime(db);
   migrateWorkspaceConfig(db);
-  migrateAgentQuestionShape(db);
+  migrateAgentQuestions(db);
   migrateRoleEffort(db);
   migrateSessionWasLive(db);
   return db;
