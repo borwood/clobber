@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import {
   AgentAskRequestSchema,
   AgentAnswerRequestSchema,
+  decodePanelAnswer,
   normalizeAskOptions,
   type AskQuestion,
 } from "@clobber/shared";
@@ -84,6 +85,18 @@ export function registerAgentAskRoutes(
       if (question.status !== "pending") {
         reply.code(409);
         return { error: "question already resolved", status: question.status };
+      }
+
+      // Reject a partial answer before it is recorded, so a short envelope
+      // can't strand the ask in `answered` with nothing for the bridge to read.
+      try {
+        decodePanelAnswer(parsed.data.answer, question.questions.length);
+      } catch {
+        reply.code(400);
+        return {
+          error: "answer must cover every question",
+          question_count: question.questions.length,
+        };
       }
 
       deps.agentQuestions.answer(question.id, parsed.data.answer);

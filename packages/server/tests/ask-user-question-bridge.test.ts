@@ -222,6 +222,33 @@ describe("PreToolUse bridge for AskUserQuestion", () => {
     await teardown(h);
   });
 
+  it("single question + free-text note: keeps the selection AND the note (envelope round-trip)", async () => {
+    const h = buildHarness();
+    const { sessionId } = seedSession(h);
+    const hookPromise = h.server.inject({ method: "POST", url: "/hook", payload: hookPayload(sessionId) });
+    const opened = await waitForOpenQuestion(h, sessionId);
+    await h.server.inject({
+      method: "POST",
+      url: `/sessions/${sessionId}/answer`,
+      payload: {
+        question_id: opened.id,
+        answer: encodePanelAnswer([{ raw: "Roll forward", notes: "ship after standup" }]),
+      },
+    });
+    const ctx = JSON.parse(parseBridgeOutput((await hookPromise).body).additionalContext) as AnsweredCtx;
+    expect(ctx.answers).toEqual([
+      {
+        question: "Pick a release strategy",
+        header: "Release",
+        multi_select: false,
+        selections: [{ label: "Roll forward", option_index: 0 }],
+        raw: "Roll forward",
+        notes: "ship after standup",
+      },
+    ]);
+    await teardown(h);
+  });
+
   it("three-question panel: stores ONE row carrying all three, no flattening", async () => {
     const h = buildHarness();
     const { sessionId } = seedSession(h);
@@ -286,7 +313,7 @@ describe("PreToolUse bridge for AskUserQuestion", () => {
     await teardown(h);
   });
 
-  it("rejects a partial answer that does not cover every question", async () => {
+  it("rejects a partial answer at submit (400) and leaves the ask recoverable", async () => {
     const h = buildHarness();
     const { sessionId } = seedSession(h);
     const questions = [
@@ -296,15 +323,24 @@ describe("PreToolUse bridge for AskUserQuestion", () => {
     const hookPromise = h.server.inject({ method: "POST", url: "/hook", payload: hookPayload(sessionId, questions) });
     const opened = await waitForOpenQuestion(h, sessionId);
 
-    // A two-question panel answered with a one-entry envelope is a partial answer.
-    await h.server.inject({
+    // A two-question panel answered with a one-entry envelope is a partial answer:
+    // rejected at submit, and the row stays pending (not stranded as answered).
+    const partial = await h.server.inject({
       method: "POST",
       url: `/sessions/${sessionId}/answer`,
       payload: { question_id: opened.id, answer: JSON.stringify({ answers: [{ raw: "a" }] }) },
     });
+    expect(partial.statusCode).toBe(400);
+    expect(h.questions.getOpenForSession(sessionId)!.id).toBe(opened.id);
 
-    const res = await hookPromise;
-    expect(res.statusCode).toBe(500);
+    // A complete answer then resolves the still-open ask.
+    await h.server.inject({
+      method: "POST",
+      url: `/sessions/${sessionId}/answer`,
+      payload: { question_id: opened.id, answer: encodePanelAnswer([{ raw: "a" }, { raw: "x" }]) },
+    });
+    const ctx = JSON.parse(parseBridgeOutput((await hookPromise).body).additionalContext) as AnsweredCtx;
+    expect(ctx.answers.map((a) => a.raw)).toEqual(["a", "x"]);
     await teardown(h);
   });
 

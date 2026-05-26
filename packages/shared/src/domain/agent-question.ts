@@ -102,21 +102,40 @@ export function encodePanelAnswer(parts: readonly PanelAnswerPart[]): string {
 
 /**
  * Inverse of {@link encodePanelAnswer}, keyed on how many questions the ask
- * carried. A single-question ask decodes the bare string; a multi-question ask
- * requires the envelope to cover every question — a short envelope is a
- * partial answer and is rejected.
+ * carried. A single-question ask is usually a bare string, but encode emits the
+ * envelope when a note rides alongside the selection — so we parse the envelope
+ * when it is present and fall back to the bare string otherwise. A
+ * multi-question ask requires the envelope to cover every question; a short
+ * envelope is a partial answer and is rejected.
  */
 export function decodePanelAnswer(
   raw: string,
   questionCount: number,
 ): readonly PanelAnswerPart[] {
   if (questionCount < 1) throw new Error("decodePanelAnswer: questionCount < 1");
-  if (questionCount === 1) return [{ raw }];
-  const parsed = PanelAnswerSchema.parse(JSON.parse(raw));
-  if (parsed.answers.length !== questionCount) {
+  const envelope = tryParsePanelAnswer(raw);
+  if (questionCount === 1) {
+    if (envelope !== null && envelope.answers.length === 1) return envelope.answers;
+    return [{ raw }];
+  }
+  if (envelope === null) {
+    throw new Error(`decodePanelAnswer: expected an envelope of ${questionCount} answers`);
+  }
+  if (envelope.answers.length !== questionCount) {
     throw new Error(
-      `decodePanelAnswer: expected ${questionCount} answers, got ${parsed.answers.length}`,
+      `decodePanelAnswer: expected ${questionCount} answers, got ${envelope.answers.length}`,
     );
   }
-  return parsed.answers;
+  return envelope.answers;
+}
+
+function tryParsePanelAnswer(raw: string): PanelAnswer | null {
+  let json: unknown;
+  try {
+    json = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  const parsed = PanelAnswerSchema.safeParse(json);
+  return parsed.success ? parsed.data : null;
 }
