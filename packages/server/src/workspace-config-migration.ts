@@ -50,6 +50,12 @@ export function migrateWorkspaceConfig(db: Database): void {
   ensureColumn(
     db,
     "workspaces",
+    "file_size_policy",
+    `TEXT NOT NULL DEFAULT '{"kind":"on","max_lines":300}'`,
+  );
+  ensureColumn(
+    db,
+    "workspaces",
     "manager_skill_policy",
     `TEXT NOT NULL DEFAULT '{"allow_self_grant":false,"allowed_skills":[]}'`,
   );

@@ -28,6 +28,7 @@ const SCHEMA = `
     final_report_callback TEXT    NOT NULL DEFAULT '{"kind":"noop"}',
     boot_context_provider TEXT    NOT NULL DEFAULT '{"kind":"noop"}',
     spawn_worktree        TEXT    NOT NULL DEFAULT '{"kind":"off"}',
+    file_size_policy      TEXT    NOT NULL DEFAULT '{"kind":"on","max_lines":300}',
     manager_skill_policy  TEXT    NOT NULL DEFAULT '{"allow_self_grant":false,"allowed_skills":[]}',
     created_at            INTEGER NOT NULL
   );

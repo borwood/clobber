@@ -85,6 +85,9 @@ export function registerWorkspaceRoutes(
         ...(parsed.data.spawn_worktree === undefined
           ? {}
           : { spawn_worktree: parsed.data.spawn_worktree }),
+        ...(parsed.data.file_size_policy === undefined
+          ? {}
+          : { file_size_policy: parsed.data.file_size_policy }),
         ...(parsed.data.manager_skill_policy === undefined
           ? {}
           : { manager_skill_policy: parsed.data.manager_skill_policy }),
