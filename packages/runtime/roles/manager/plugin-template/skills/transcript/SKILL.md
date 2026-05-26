@@ -11,7 +11,7 @@ troubleshoot bad runs, and audit work you spawned. Use it freely; transcripts
 are the raw material of role design.
 
 ```
-clobber transcript <session-id> [selector] [--detail low|medium|full] [--format text|json]
+clobber transcript <session-id> [selector] [--grep <pattern>] [--detail low|medium|full] [--format text|json]
 ```
 
 Get a `<session-id>` from `clobber agents list`. Workspace-scoped: you can only
@@ -39,6 +39,26 @@ see the full payload.
 | `low` | Only message turns (user / assistant text). For "what was actually said." |
 | `medium` (default) | Messages plus one-line summaries of events between them. |
 | `full` | Raw stream-json payloads. Use when you need exact tool inputs/results. |
+
+## Search (`--grep`)
+
+`--grep <pattern>` keeps only entries whose **rendered content matches** the
+regex — the same text you'd see at the active `--detail` level (tool-use
+command strings, assistant/user text, event summaries, or raw payload at
+`full`). Each surviving entry keeps its **id** and role/kind, so you can drill
+in afterward. This replaces the old `clobber transcript … | grep` fallback,
+which threw away ids and structure.
+
+- **Case-insensitive by default**; add `--case-sensitive` to opt in.
+- `-C, --context <n>` includes ±N surrounding entries per match.
+- **Composes with selectors** — a bare `--grep` searches the *whole*
+  transcript; `--grep X --from <id>` searches only that window.
+
+```
+clobber transcript <id> --grep 'clobber status'          # did it post status?
+clobber transcript <id> --grep 'git checkout' --context 2 # find the call + nearby
+clobber transcript <id> --grep 'env' --from 40 --detail low
+```
 
 ## Investigation patterns
 

@@ -49,7 +49,7 @@ export function registerAgentSessionRoutes(app: FastifyInstance, deps: AgentRout
           reply.code(404);
           return { error: `entry id out of range: ${sel.id}` };
         }
-        return formatTranscript(lines, sel, parsed.detail);
+        return formatTranscript(lines, sel, parsed.detail, parsed.filter);
       },
     ),
   );

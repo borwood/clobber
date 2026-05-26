@@ -21,7 +21,7 @@ import { createAgentQuestionWaiter } from "@clobber/server/agent-question-waiter
 import type { AgentSpawner, SpawnedAgentInfo } from "@clobber/server/types.ts";
 import { createTriggerDispatchStore } from "@clobber/server/trigger-dispatch-store.ts";
 import { createFinalReportConsumerStateStore } from "@clobber/server/final-report-consumer.ts";
-import { run } from "../src/main.ts";
+import { run, runWithExit } from "../src/main.ts";
 
 interface Harness {
   app: ReturnType<typeof createServer>;
@@ -282,6 +282,125 @@ describe("clobber CLI — transcript", () => {
     });
     expect(code).toBe(2);
     expect(s.err()).toMatch(/session/i);
+  });
+
+  it("--grep returns only matching entries with ids + role/kind", async () => {
+    const s = captureStreams();
+    const code = await run({
+      argv: ["transcript", harness.childSessionId, "--grep", "ls", "--format", "json"],
+      env: env(),
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(0);
+    const parsed = JSON.parse(s.out()) as {
+      entries: Array<{ id: string; summary?: string }>;
+    };
+    expect(parsed.entries).toHaveLength(1);
+    expect(parsed.entries[0]!.id).toBe("3");
+    expect(parsed.entries[0]!.summary).toContain("Bash");
+  });
+
+  it("--grep is case-insensitive by default", async () => {
+    const s = captureStreams();
+    const code = await run({
+      argv: ["transcript", harness.childSessionId, "--grep", "PONG", "--format", "json"],
+      env: env(),
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(0);
+    const parsed = JSON.parse(s.out()) as { entries: Array<{ id: string; content?: string }> };
+    expect(parsed.entries.map((e) => e.id)).toEqual(["2"]);
+  });
+
+  it("--case-sensitive makes --grep respect case", async () => {
+    const s = captureStreams();
+    const code = await run({
+      argv: [
+        "transcript",
+        harness.childSessionId,
+        "--grep",
+        "PONG",
+        "--case-sensitive",
+        "--format",
+        "json",
+      ],
+      env: env(),
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(0);
+    const parsed = JSON.parse(s.out()) as { entries: unknown[] };
+    expect(parsed.entries).toHaveLength(0);
+  });
+
+  it("--context N adds surrounding entries around each match", async () => {
+    const s = captureStreams();
+    const code = await run({
+      argv: [
+        "transcript",
+        harness.childSessionId,
+        "--grep",
+        "ls",
+        "--context",
+        "1",
+        "--format",
+        "json",
+      ],
+      env: env(),
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(0);
+    const parsed = JSON.parse(s.out()) as { entries: Array<{ id: string }> };
+    expect(parsed.entries.map((e) => e.id)).toEqual(["2", "3", "4"]);
+  });
+
+  it("--grep composes with --from to search within a window", async () => {
+    const s = captureStreams();
+    const code = await run({
+      argv: [
+        "transcript",
+        harness.childSessionId,
+        "--grep",
+        "good",
+        "--from",
+        "3",
+        "--format",
+        "json",
+      ],
+      env: env(),
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(0);
+    const parsed = JSON.parse(s.out()) as { entries: Array<{ id: string }> };
+    expect(parsed.entries.map((e) => e.id)).toEqual(["5"]);
+  });
+
+  it("exits 2 when --context is given without --grep", async () => {
+    const s = captureStreams();
+    const code = await run({
+      argv: ["transcript", harness.childSessionId, "--context", "2"],
+      env: env(),
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(2);
+    expect(s.err()).toMatch(/grep/i);
+  });
+
+  it("exits with an error on an invalid --grep regex", async () => {
+    const s = captureStreams();
+    const code = await runWithExit({
+      argv: ["transcript", harness.childSessionId, "--grep", "("],
+      env: env(),
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).not.toBe(0);
+    expect(s.err()).toMatch(/regex|pattern|grep/i);
   });
 
   it("exits 2 when multiple selectors are combined", async () => {
