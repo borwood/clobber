@@ -18,6 +18,12 @@ export interface AgentBinding {
   readonly workspaceId: string;
 }
 
+// How many bindings a fire-path actually dispatched to. Shared across every
+// fire entry point (webhook, workspace-open, session-ended).
+export interface DispatchResult {
+  readonly dispatched: number;
+}
+
 // What dispatchTrigger does when the target session is live but busy. The
 // default (`drop`) preserves cron/webhook semantics: record skipped-busy and
 // move on. `enqueue` is for wakes that must not be lost — the queued item is
