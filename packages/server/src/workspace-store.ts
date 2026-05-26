@@ -8,10 +8,12 @@ import {
   DEFAULT_FINAL_REPORT_CALLBACK,
   DEFAULT_BOOT_CONTEXT_PROVIDER,
   DEFAULT_SPAWN_WORKTREE,
+  DEFAULT_FILE_SIZE_POLICY,
   DEFAULT_MANAGER_SKILL_POLICY,
   WorkspaceSchema,
   type BootContextProvider,
   type CreateWorkspaceRequest,
+  type FileSizePolicy,
   type FinalReportCallback,
   type ManagerSkillPolicy,
   type RoleEditPolicy,
@@ -29,6 +31,7 @@ export interface WorkspaceConfigPatch {
   readonly final_report_callback?: FinalReportCallback;
   readonly boot_context_provider?: BootContextProvider;
   readonly spawn_worktree?: SpawnWorktree;
+  readonly file_size_policy?: FileSizePolicy;
   readonly manager_skill_policy?: ManagerSkillPolicy;
 }
 
@@ -52,6 +55,7 @@ interface Row {
   final_report_callback: string;
   boot_context_provider: string;
   spawn_worktree: string;
+  file_size_policy: string;
   manager_skill_policy: string;
   created_at: number;
 }
@@ -68,6 +72,7 @@ function rowToWorkspace(row: Row): Workspace {
     final_report_callback: JSON.parse(row.final_report_callback),
     boot_context_provider: JSON.parse(row.boot_context_provider),
     spawn_worktree: JSON.parse(row.spawn_worktree),
+    file_size_policy: JSON.parse(row.file_size_policy),
     manager_skill_policy: JSON.parse(row.manager_skill_policy),
     created_at: row.created_at,
   });
@@ -76,8 +81,8 @@ function rowToWorkspace(row: Row): Workspace {
 export function createWorkspaceStore(db: Database): WorkspaceStore {
   const insertStmt = db.prepare(
     `INSERT INTO workspaces
-       (id, name, repo_path, setting_sources, wake_prompt, role_edit_policy, trigger_overrides, final_report_callback, boot_context_provider, spawn_worktree, manager_skill_policy, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, name, repo_path, setting_sources, wake_prompt, role_edit_policy, trigger_overrides, final_report_callback, boot_context_provider, spawn_worktree, file_size_policy, manager_skill_policy, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const getStmt = db.prepare("SELECT * FROM workspaces WHERE id = ?");
   const findByNameStmt = db.prepare("SELECT * FROM workspaces WHERE name = ?");
@@ -103,6 +108,8 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
         req.boot_context_provider ?? { ...DEFAULT_BOOT_CONTEXT_PROVIDER };
       const spawnWorktree: SpawnWorktree =
         req.spawn_worktree ?? { ...DEFAULT_SPAWN_WORKTREE };
+      const fileSizePolicy: FileSizePolicy =
+        req.file_size_policy ?? { ...DEFAULT_FILE_SIZE_POLICY };
       const skillPolicy: ManagerSkillPolicy = req.manager_skill_policy ?? {
         allow_self_grant: DEFAULT_MANAGER_SKILL_POLICY.allow_self_grant,
         allowed_skills: [...DEFAULT_MANAGER_SKILL_POLICY.allowed_skills],
@@ -118,6 +125,7 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
         JSON.stringify(callback),
         JSON.stringify(bootContextProvider),
         JSON.stringify(spawnWorktree),
+        JSON.stringify(fileSizePolicy),
         JSON.stringify(skillPolicy),
         created_at,
       );
@@ -132,6 +140,7 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
         final_report_callback: callback,
         boot_context_provider: bootContextProvider,
         spawn_worktree: spawnWorktree,
+        file_size_policy: fileSizePolicy,
         manager_skill_policy: {
           allow_self_grant: skillPolicy.allow_self_grant,
           allowed_skills: [...skillPolicy.allowed_skills],
@@ -185,6 +194,10 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
       if (config.spawn_worktree !== undefined) {
         fragments.push("spawn_worktree = ?");
         values.push(JSON.stringify(config.spawn_worktree));
+      }
+      if (config.file_size_policy !== undefined) {
+        fragments.push("file_size_policy = ?");
+        values.push(JSON.stringify(config.file_size_policy));
       }
       if (config.manager_skill_policy !== undefined) {
         fragments.push("manager_skill_policy = ?");

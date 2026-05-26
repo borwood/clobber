@@ -14,6 +14,7 @@ import { endSession } from "../session-lifecycle.ts";
 import { applyTaskEvent } from "../task-event-handler.ts";
 import { guardOfficeBoundary } from "../office-boundary-guard.ts";
 import { bridgeAskUserQuestion } from "../ask-user-question-bridge.ts";
+import { buildFileSizeReminder } from "../file-size-reminder.ts";
 import type { TriggerScheduler } from "../trigger-scheduler.ts";
 
 const DEFAULT_ASK_BRIDGE_TIMEOUT_MS = 30 * 60 * 1000;
@@ -59,6 +60,8 @@ export function registerHookRoutes(
     }
     if (payload.hook_event_name === "PostToolUse") {
       applyTaskEvent(payload, deps);
+      const reminder = buildFileSizeReminder(payload, deps);
+      if (reminder !== null) return reminder;
     }
     return { continue: true };
   });
