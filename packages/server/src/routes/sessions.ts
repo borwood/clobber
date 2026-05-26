@@ -17,7 +17,7 @@ import type {
   ResumeTurnSuccess,
   ResumeTurnError,
   ResumeEndedResult,
-} from "../spawn-pipeline.ts";
+} from "../resume-pipeline.ts";
 
 interface IdParam {
   id: string;

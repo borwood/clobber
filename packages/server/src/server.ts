@@ -18,12 +18,8 @@ import { registerWebhookTriggersRoutes } from "./routes/webhook-triggers.ts";
 import { createAgentRegistry } from "./agent-registry.ts";
 import { createTriggerScheduler } from "./trigger-scheduler.ts";
 import { createFinalReportConsumer } from "./final-report-consumer.ts";
-import {
-  attachSessionToAgent,
-  resumeSessionTurn,
-  resumeEndedSession,
-  type SpawnPipelineDeps,
-} from "./spawn-pipeline.ts";
+import { attachSessionToAgent, type SpawnPipelineDeps } from "./spawn-pipeline.ts";
+import { resumeSessionTurn, resumeEndedSession } from "./resume-pipeline.ts";
 import { createSystemClock } from "./clock.ts";
 
 export type {
