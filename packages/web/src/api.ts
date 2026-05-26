@@ -142,6 +142,7 @@ export const api = {
       `/sessions?workspace_id=${encodeURIComponent(workspaceId)}`,
     ),
   listWorkspaces: () => getJson<Workspace[]>("/workspaces"),
+  liveWorkspaceIds: () => getJson<string[]>("/sessions/live-workspaces"),
   createWorkspace: (req: CreateWorkspaceRequest) => postJson<Workspace>("/workspaces", req),
   listWorkspaceRoles: (workspaceId: string) =>
     getJson<WorkspaceRoleAssignment[]>(
