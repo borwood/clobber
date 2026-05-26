@@ -2,14 +2,22 @@ import type { TranscriptLine } from "./transcript-reader.ts";
 
 export type Detail = "low" | "medium" | "full";
 
-export type SelectionKind = "default" | "last" | "entry" | "from" | "to";
+export type SelectionKind = "default" | "all" | "last" | "entry" | "from" | "to";
 
 export type Selection =
   | { readonly kind: "default"; readonly n: number }
+  | { readonly kind: "all" }
   | { readonly kind: "last"; readonly n: number }
   | { readonly kind: "entry"; readonly id: string }
   | { readonly kind: "from"; readonly id: string; readonly limit: number }
   | { readonly kind: "to"; readonly id: string; readonly limit: number };
+
+// A content search applied after the selection window is rendered: keep only
+// entries whose rendered text matches, plus `context` neighbours on each side.
+export interface GrepFilter {
+  readonly regex: RegExp;
+  readonly context: number;
+}
 
 export interface FormattedEntry {
   readonly id: string;
@@ -157,6 +165,7 @@ export function formatTranscript(
   lines: readonly TranscriptLine[],
   selection: Selection,
   detail: Detail,
+  filter?: GrepFilter,
 ): FormattedTranscript {
   const total = lines.length;
   const ids = lines.map((_, i) => i.toString());
@@ -166,7 +175,30 @@ export function formatTranscript(
     const e = formatEntry(line, id, detail);
     if (e !== null) entries.push(e);
   }
-  return { total, selection, entries };
+  const filtered = filter === undefined ? entries : applyGrep(entries, filter);
+  return { total, selection, entries: filtered };
+}
+
+function entrySearchText(e: FormattedEntry): string {
+  if (e.content !== undefined) return e.content;
+  if (e.summary !== undefined) return e.summary;
+  if (e.payload !== undefined) return JSON.stringify(e.payload);
+  return e.type;
+}
+
+function applyGrep(
+  entries: readonly FormattedEntry[],
+  filter: GrepFilter,
+): readonly FormattedEntry[] {
+  const keep = new Set<number>();
+  for (let i = 0; i < entries.length; i += 1) {
+    if (filter.regex.test(entrySearchText(entries[i]!))) {
+      const lo = Math.max(0, i - filter.context);
+      const hi = Math.min(entries.length - 1, i + filter.context);
+      for (let j = lo; j <= hi; j += 1) keep.add(j);
+    }
+  }
+  return entries.filter((_, i) => keep.has(i));
 }
 
 interface IndexedLine {
@@ -180,6 +212,9 @@ function applySelection(
   selection: Selection,
 ): readonly IndexedLine[] {
   const all: IndexedLine[] = lines.map((line, i) => ({ line, id: ids[i]! }));
+  if (selection.kind === "all") {
+    return all;
+  }
   if (selection.kind === "entry") {
     const idx = parseIndex(selection.id, lines.length);
     return idx === null ? [] : [all[idx]!];
@@ -218,10 +253,18 @@ export interface TranscriptQuery {
   readonly to?: string;
   readonly limit?: string;
   readonly detail?: string;
+  readonly grep?: string;
+  readonly context?: string;
+  readonly caseSensitive?: string;
 }
 
 export type ParseQueryResult =
-  | { readonly ok: true; readonly selection: Selection; readonly detail: Detail }
+  | {
+      readonly ok: true;
+      readonly selection: Selection;
+      readonly detail: Detail;
+      readonly filter?: GrepFilter;
+    }
   | { readonly ok: false; readonly error: string };
 
 const DEFAULT_N = 20;
@@ -232,6 +275,12 @@ export function parseTranscriptQuery(q: TranscriptQuery): ParseQueryResult {
   if (detail !== "low" && detail !== "medium" && detail !== "full") {
     return { ok: false, error: `invalid detail: ${detail}` };
   }
+  const filterResult = parseGrepFilter(q);
+  if (!filterResult.ok) return filterResult;
+  const filter = filterResult.filter;
+  const withFilter = (selection: Selection): ParseQueryResult =>
+    filter === undefined ? { ok: true, selection, detail } : { ok: true, selection, detail, filter };
+
   const selectors = [q.last, q.entry, q.from, q.to].filter((v) => v !== undefined);
   if (selectors.length > 1) {
     return { ok: false, error: "only one selector may be set (--last|--entry|--from|--to)" };
@@ -239,25 +288,56 @@ export function parseTranscriptQuery(q: TranscriptQuery): ParseQueryResult {
   if (q.last !== undefined) {
     const n = parsePositive(q.last);
     if (n === null) return { ok: false, error: `invalid last: ${q.last}` };
-    return { ok: true, selection: { kind: "last", n }, detail };
+    return withFilter({ kind: "last", n });
   }
   if (q.entry !== undefined) {
     if (q.limit !== undefined) {
       return { ok: false, error: "--limit is not allowed with --entry" };
     }
-    return { ok: true, selection: { kind: "entry", id: q.entry }, detail };
+    return withFilter({ kind: "entry", id: q.entry });
   }
   if (q.from !== undefined) {
     const limit = q.limit === undefined ? DEFAULT_LIMIT : parsePositive(q.limit);
     if (limit === null) return { ok: false, error: `invalid limit: ${q.limit}` };
-    return { ok: true, selection: { kind: "from", id: q.from, limit }, detail };
+    return withFilter({ kind: "from", id: q.from, limit });
   }
   if (q.to !== undefined) {
     const limit = q.limit === undefined ? DEFAULT_LIMIT : parsePositive(q.limit);
     if (limit === null) return { ok: false, error: `invalid limit: ${q.limit}` };
-    return { ok: true, selection: { kind: "to", id: q.to, limit }, detail };
+    return withFilter({ kind: "to", id: q.to, limit });
   }
-  return { ok: true, selection: { kind: "default", n: DEFAULT_N }, detail };
+  // With --grep and no explicit window, search the whole transcript — a plain
+  // `--grep` should behave like grep, not silently limit to the last 20 entries.
+  return withFilter(filter === undefined ? { kind: "default", n: DEFAULT_N } : { kind: "all" });
+}
+
+type GrepFilterResult =
+  | { readonly ok: true; readonly filter?: GrepFilter }
+  | { readonly ok: false; readonly error: string };
+
+function parseGrepFilter(q: TranscriptQuery): GrepFilterResult {
+  if (q.grep === undefined) {
+    if (q.context !== undefined) return { ok: false, error: "--context requires --grep" };
+    if (q.caseSensitive !== undefined) {
+      return { ok: false, error: "--case-sensitive requires --grep" };
+    }
+    return { ok: true };
+  }
+  const context = q.context === undefined ? 0 : parseNonNegative(q.context);
+  if (context === null) return { ok: false, error: `invalid context: ${q.context}` };
+  const flags = q.caseSensitive === undefined ? "i" : "";
+  let regex: RegExp;
+  try {
+    regex = new RegExp(q.grep, flags);
+  } catch (err) {
+    return { ok: false, error: `invalid grep regex: ${(err as Error).message}` };
+  }
+  return { ok: true, filter: { regex, context } };
+}
+
+function parseNonNegative(s: string): number | null {
+  if (!/^\d+$/.test(s)) return null;
+  return Number.parseInt(s, 10);
 }
 
 function parsePositive(s: string): number | null {

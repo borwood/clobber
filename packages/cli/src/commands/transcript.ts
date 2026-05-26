@@ -43,11 +43,33 @@ export function parseTranscriptFlags(args: readonly string[]): ParsedFlags {
   const query: string[] = [];
   let format: "text" | "json" = "text";
   let selectorCount = 0;
+  let hasGrep = false;
+  let hasContext = false;
+  let hasCaseSensitive = false;
 
   for (let i = 0; i < rest.length; i += 1) {
     const flag = rest[i];
     if (flag === undefined) break;
     const value = rest[i + 1];
+    if (flag === "--grep") {
+      if (value === undefined) throw new CliUsageError("transcript: --grep needs a value");
+      hasGrep = true;
+      query.push(`grep=${encodeURIComponent(value)}`);
+      i += 1;
+      continue;
+    }
+    if (flag === "--context" || flag === "-C") {
+      if (value === undefined) throw new CliUsageError("transcript: --context needs a value");
+      hasContext = true;
+      query.push(`context=${encodeURIComponent(value)}`);
+      i += 1;
+      continue;
+    }
+    if (flag === "--case-sensitive") {
+      hasCaseSensitive = true;
+      query.push("caseSensitive=true");
+      continue;
+    }
     if (flag === "--format") {
       if (value !== "text" && value !== "json") {
         throw new CliUsageError("transcript: --format must be 'text' or 'json'");
@@ -90,6 +112,13 @@ export function parseTranscriptFlags(args: readonly string[]): ParsedFlags {
     throw new CliUsageError(`transcript: unknown flag: ${flag}`);
   }
 
+  if (!hasGrep && hasContext) {
+    throw new CliUsageError("transcript: --context requires --grep");
+  }
+  if (!hasGrep && hasCaseSensitive) {
+    throw new CliUsageError("transcript: --case-sensitive requires --grep");
+  }
+
   return { sessionId, query: query.join("&"), format };
 }
 
@@ -129,6 +158,13 @@ Selectors (mutually exclusive — pick at most one):
   --from <id>                      Show entries starting at this id (inclusive).
   --to <id>                        Show entries up to this id (inclusive).
 
+Search (composes with any selector; default window is the whole transcript):
+  --grep <pattern>                Keep only entries whose rendered content
+                                  matches <pattern> (regex). Searches the text
+                                  shown at the active --detail level.
+  -C, --context <n>               Include ±N surrounding entries per match.
+  --case-sensitive                Match case-sensitively (default: insensitive).
+
 Flags:
   -d, --detail <low|medium|full>  How much payload to include per entry.
   --limit <n>                     Cap the number of returned entries.
@@ -138,6 +174,8 @@ Flags:
 Example:
   clobber transcript 0b2f4e1a-... --tail 20 --detail medium
   clobber transcript 0b2f4e1a-... -n 5 --json
+  clobber transcript 0b2f4e1a-... --grep 'clobber status' --context 2
+  clobber transcript 0b2f4e1a-... --grep 'git checkout' --from 40
 
 Skill: see manager:transcript for selector strategy and investigation patterns.`;
 
