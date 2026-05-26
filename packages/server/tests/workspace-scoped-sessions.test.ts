@@ -73,19 +73,23 @@ interface Seeded {
   readonly sessionId: string;
 }
 
-function seedSession(h: Harness, workspaceName: string): Seeded {
-  const ws = h.workspaces.create({ name: workspaceName, repo_path: "/r" });
+function seedInWorkspace(h: Harness, workspaceId: string): string {
   const role = h.roles.create({ name: `role-${randomUUID()}`, persistent: false });
-  const agent = h.agents.create({ workspace_id: ws.id, role_id: role.id });
+  const agent = h.agents.create({ workspace_id: workspaceId, role_id: role.id });
   const sessionId = randomUUID();
   h.sessions.create({
     id: sessionId,
     agent_id: agent.id,
-    workspace_id: ws.id,
+    workspace_id: workspaceId,
     role_id: role.id,
     pid: 9000,
   });
-  return { workspaceId: ws.id, sessionId };
+  return sessionId;
+}
+
+function seedSession(h: Harness, workspaceName: string): Seeded {
+  const ws = h.workspaces.create({ name: workspaceName, repo_path: "/r" });
+  return { workspaceId: ws.id, sessionId: seedInWorkspace(h, ws.id) };
 }
 
 const baseEnvelope = {
@@ -359,6 +363,33 @@ describe("GET /sessions — workspace-scoped summaries", () => {
     expect(res[0]!.session_id).toBe(sessionId);
     expect(res[0]!.role_name).toBe("worker");
     expect(res[0]!.label).toBeUndefined();
+
+    await teardown(h);
+  });
+
+  it("GET /sessions/live-workspaces lists ids of workspaces with a live session, deduped, and drops ended ones", async () => {
+    const h = buildHarness();
+    const a = seedSession(h, "alpha");
+    const b = seedSession(h, "beta");
+    // A second live session in alpha must not double-count its workspace id.
+    seedInWorkspace(h, a.workspaceId);
+    const empty = h.workspaces.create({ name: "empty", repo_path: "/r" });
+
+    const live = (await h.server.inject({
+      method: "GET",
+      url: "/sessions/live-workspaces",
+    })).json() as string[];
+
+    expect([...live].sort()).toEqual([a.workspaceId, b.workspaceId].sort());
+    expect(live).not.toContain(empty.id);
+
+    // End beta's only session → its workspace drops out (ended_at IS NULL predicate).
+    h.sessions.markEnded(b.sessionId);
+    const after = (await h.server.inject({
+      method: "GET",
+      url: "/sessions/live-workspaces",
+    })).json() as string[];
+    expect(after).toEqual([a.workspaceId]);
 
     await teardown(h);
   });

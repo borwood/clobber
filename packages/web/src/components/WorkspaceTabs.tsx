@@ -1,21 +1,38 @@
-import { useState } from "react";
+import { useState, type MouseEvent } from "react";
 import { api, type Workspace } from "../api.ts";
+import { buildPath } from "../router.ts";
 import { FolderPicker } from "./FolderPicker.tsx";
 
 interface Props {
   readonly workspaces: readonly Workspace[];
+  // Workspace ids with ≥1 live session (`ended_at IS NULL`).
+  readonly liveWorkspaceIds: ReadonlySet<string>;
   readonly selectedId: string | null;
   readonly onSelect: (id: string) => void;
   readonly onCreated: (ws: Workspace) => void;
 }
 
-export function WorkspaceSwitcher({ workspaces, selectedId, onSelect, onCreated }: Props) {
+// A workspace earns a tab when it has a live session OR is the one the URL
+// currently points at. Modified clicks (middle/cmd/ctrl) and right-click fall
+// through to the native anchor so the browser opens the workspace in a new
+// window/tab on the right URL.
+export function WorkspaceTabs({
+  workspaces,
+  liveWorkspaceIds,
+  selectedId,
+  onSelect,
+  onCreated,
+}: Props) {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [repoPath, setRepoPath] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+
+  const visible = workspaces.filter(
+    (w) => liveWorkspaceIds.has(w.id) || w.id === selectedId,
+  );
 
   async function submit() {
     if (name.trim().length === 0 || repoPath.trim().length === 0) return;
@@ -34,21 +51,32 @@ export function WorkspaceSwitcher({ workspaces, selectedId, onSelect, onCreated 
     }
   }
 
+  function handleTabClick(e: MouseEvent<HTMLAnchorElement>, id: string): void {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    onSelect(id);
+  }
+
   return (
-    <div className="flex items-center gap-2">
-      <select
-        value={selectedId ?? ""}
-        onChange={(e) => onSelect(e.target.value)}
-        disabled={workspaces.length === 0}
-        className="px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-sm font-mono text-zinc-200 focus:outline-none focus:border-zinc-600 disabled:opacity-50"
-      >
-        {workspaces.length === 0 && <option value="">— no workspaces —</option>}
-        {workspaces.map((w) => (
-          <option key={w.id} value={w.id}>
+    <div className="flex items-center gap-1">
+      {visible.map((w) => {
+        const active = w.id === selectedId;
+        return (
+          <a
+            key={w.id}
+            href={buildPath(w.id, null)}
+            aria-current={active ? "page" : undefined}
+            onClick={(e) => handleTabClick(e, w.id)}
+            className={`px-3 py-1 rounded-t text-sm font-mono border-b-2 ${
+              active
+                ? "text-zinc-100 border-emerald-500"
+                : "text-zinc-400 border-transparent hover:text-zinc-200 hover:border-zinc-700"
+            }`}
+          >
             {w.name}
-          </option>
-        ))}
-      </select>
+          </a>
+        );
+      })}
 
       {creating ? (
         <div className="flex items-center gap-1 relative">

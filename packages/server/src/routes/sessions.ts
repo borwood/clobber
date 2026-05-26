@@ -69,6 +69,15 @@ export function registerSessionRoutes(
     }));
   });
 
+  // Workspace ids with at least one live session (`ended_at IS NULL`), across
+  // every workspace — the same predicate /spawn uses. The web derives its
+  // workspace tab strip from this so a window can show tabs (and reflect
+  // another window's spawn activity) without polling /sessions per workspace.
+  app.get("/sessions/live-workspaces", async () => {
+    const ids = new Set(deps.sessions.listActive().map((s) => s.workspace_id));
+    return [...ids];
+  });
+
   app.get<{ Params: IdParam }>(
     "/sessions/:id/transcript",
     async (request, reply) => {
