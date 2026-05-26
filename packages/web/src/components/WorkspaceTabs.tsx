@@ -1,21 +1,23 @@
 import { useState, type MouseEvent } from "react";
-import { api, type Workspace } from "../api.ts";
+import { slugify, type Workspace } from "@clobber/shared";
 import { buildPath } from "../router.ts";
-import { FolderPicker } from "./FolderPicker.tsx";
+import { WorkspaceCreateForm } from "./WorkspaceCreateForm.tsx";
 
 interface Props {
   readonly workspaces: readonly Workspace[];
   // Workspace ids with ≥1 live session (`ended_at IS NULL`).
   readonly liveWorkspaceIds: ReadonlySet<string>;
   readonly selectedId: string | null;
-  readonly onSelect: (id: string) => void;
+  readonly onSelect: (slug: string) => void;
   readonly onCreated: (ws: Workspace) => void;
 }
 
-// A workspace earns a tab when it has a live session OR is the one the URL
-// currently points at. Modified clicks (middle/cmd/ctrl) and right-click fall
-// through to the native anchor so the browser opens the workspace in a new
-// window/tab on the right URL.
+// A workspace earns a *tab* when it has a live session OR is the one the URL
+// currently points at. The rest are reachable through the `[+]` dropdown, which
+// lists every workspace and carries the create form as its sticky bottom item
+// (#243) — so `/` with nothing live is never a dead-end. Modified clicks
+// (middle/cmd/ctrl) and right-click fall through to the native anchor so the
+// browser opens the workspace in a new window/tab on the right URL.
 export function WorkspaceTabs({
   workspaces,
   liveWorkspaceIds,
@@ -23,50 +25,31 @@ export function WorkspaceTabs({
   onSelect,
   onCreated,
 }: Props) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [name, setName] = useState("");
-  const [repoPath, setRepoPath] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [pickerOpen, setPickerOpen] = useState(false);
 
   const visible = workspaces.filter(
     (w) => liveWorkspaceIds.has(w.id) || w.id === selectedId,
   );
 
-  async function submit() {
-    if (name.trim().length === 0 || repoPath.trim().length === 0) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const created = await api.createWorkspace({ name, repo_path: repoPath });
-      onCreated(created);
-      setName("");
-      setRepoPath("");
-      setCreating(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function handleTabClick(e: MouseEvent<HTMLAnchorElement>, id: string): void {
+  function navigateTo(e: MouseEvent<HTMLAnchorElement>, slug: string): void {
     if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
-    onSelect(id);
+    onSelect(slug);
+    setMenuOpen(false);
   }
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-1 relative">
       {visible.map((w) => {
         const active = w.id === selectedId;
+        const slug = slugify(w.name);
         return (
           <a
             key={w.id}
-            href={buildPath(w.id, null)}
+            href={buildPath(slug, null)}
             aria-current={active ? "page" : undefined}
-            onClick={(e) => handleTabClick(e, w.id)}
+            onClick={(e) => navigateTo(e, slug)}
             className={`px-3 py-1 rounded-t text-sm font-mono border-b-2 ${
               active
                 ? "text-zinc-100 border-emerald-500"
@@ -78,72 +61,64 @@ export function WorkspaceTabs({
         );
       })}
 
-      {creating ? (
-        <div className="flex items-center gap-1 relative">
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="name"
-            className="px-2 py-1 w-24 bg-zinc-900 border border-zinc-800 rounded text-xs focus:outline-none focus:border-zinc-600"
-          />
-          <input
-            type="text"
-            value={repoPath}
-            onChange={(e) => setRepoPath(e.target.value)}
-            placeholder="/repo/path"
-            className="px-2 py-1 w-40 bg-zinc-900 border border-zinc-800 rounded text-xs font-mono focus:outline-none focus:border-zinc-600"
-          />
-          <button
-            type="button"
-            onClick={() => setPickerOpen((open) => !open)}
-            className="px-2 py-1 rounded text-xs text-zinc-300 hover:text-zinc-100 border border-zinc-800 hover:border-zinc-600"
-            title="Browse for a folder"
-          >
-            browse…
-          </button>
-          <button
-            type="button"
-            onClick={() => void submit()}
-            disabled={busy || name.trim().length === 0 || repoPath.trim().length === 0}
-            className="px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 disabled:bg-zinc-800 disabled:text-zinc-500 text-xs"
-          >
-            {busy ? "…" : "create"}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setCreating(false);
-              setPickerOpen(false);
-              setError(null);
-            }}
-            className="px-2 py-1 rounded text-xs text-zinc-400 hover:text-zinc-200"
-          >
-            cancel
-          </button>
-          {pickerOpen && (
-            <FolderPicker
-              {...(repoPath.trim().length > 0 ? { initialPath: repoPath } : {})}
-              onSelect={(absolutePath) => {
-                setRepoPath(absolutePath);
-                setPickerOpen(false);
-              }}
-              onCancel={() => setPickerOpen(false)}
-            />
-          )}
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setCreating(true)}
-          className="px-2 py-1 rounded text-xs text-zinc-400 hover:text-zinc-200 border border-zinc-800 hover:border-zinc-700"
-        >
-          + new
-        </button>
-      )}
+      <button
+        type="button"
+        aria-label="Open workspace menu"
+        onClick={() => {
+          setMenuOpen((open) => !open);
+          setCreating(false);
+        }}
+        className="px-2 py-1 rounded text-sm text-zinc-400 hover:text-zinc-200 border border-zinc-800 hover:border-zinc-700"
+      >
+        +
+      </button>
 
-      {error !== null && (
-        <span className="text-xs text-red-400 font-mono break-all">{error}</span>
+      {menuOpen && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+          <div
+            role="menu"
+            className="absolute top-full left-0 mt-1 z-20 w-64 bg-zinc-950 border border-zinc-800 rounded shadow-xl flex flex-col"
+          >
+            <div className="max-h-72 overflow-y-auto py-1">
+              {workspaces.map((w) => {
+                const slug = slugify(w.name);
+                return (
+                  <a
+                    key={w.id}
+                    href={buildPath(slug, null)}
+                    onClick={(e) => navigateTo(e, slug)}
+                    className={`block px-3 py-1.5 text-sm font-mono hover:bg-zinc-800 ${
+                      w.id === selectedId ? "text-zinc-100" : "text-zinc-300"
+                    }`}
+                  >
+                    {w.name}
+                  </a>
+                );
+              })}
+            </div>
+            <div className="border-t border-zinc-800 p-2 sticky bottom-0 bg-zinc-950">
+              {creating ? (
+                <WorkspaceCreateForm
+                  onCreated={(ws) => {
+                    setCreating(false);
+                    setMenuOpen(false);
+                    onCreated(ws);
+                  }}
+                  onCancel={() => setCreating(false)}
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setCreating(true)}
+                  className="w-full text-left px-1 py-1 text-sm text-emerald-400 hover:text-emerald-300"
+                >
+                  + new workspace…
+                </button>
+              )}
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

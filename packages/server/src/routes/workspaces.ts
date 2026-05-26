@@ -3,6 +3,7 @@ import type { Database } from "bun:sqlite";
 import {
   CreateWorkspaceRequestSchema,
   UpdateWorkspaceConfigRequestSchema,
+  slugify,
 } from "@clobber/shared";
 import type { WorkspaceStore } from "../workspace-store.ts";
 import type { TriggerScheduler } from "../trigger-scheduler.ts";
@@ -34,7 +35,12 @@ export function registerWorkspaceRoutes(
       reply.code(400);
       return { error: validation.error };
     }
-    if (workspaces.findByName(parsed.data.name) !== null) {
+    const slug = slugify(parsed.data.name);
+    if (slug === "") {
+      reply.code(400);
+      return { error: "workspace name has no url-safe characters" };
+    }
+    if (workspaces.findBySlug(slug) !== null) {
       reply.code(409);
       return { error: "workspace name already exists" };
     }

@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import type { Agent, Workspace } from "@clobber/shared";
+import { slugify, type Agent, type Workspace } from "@clobber/shared";
 import type { SpawnMode } from "./spawn-context.ts";
 
 // Resolves the working directory a session is spawned into. With the
@@ -41,6 +41,9 @@ function deriveWorktree(
     );
   }
   const slug = slugify(agent.label);
+  if (slug === "") {
+    throw new Error(`spawn_worktree could not derive a slug from label "${agent.label}"`);
+  }
   const branch = `clobber/${slug}`;
   const worktreePath = join(
     dirname(repoPath),
@@ -48,17 +51,6 @@ function deriveWorktree(
     slug,
   );
   return { branch, worktreePath };
-}
-
-function slugify(label: string): string {
-  const slug = label
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  if (slug === "") {
-    throw new Error(`spawn_worktree could not derive a slug from label "${label}"`);
-  }
-  return slug;
 }
 
 // Branches off the repo's current HEAD. git itself throws loudly if the branch

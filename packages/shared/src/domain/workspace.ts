@@ -61,6 +61,17 @@ export type TriggerOverrides = z.infer<typeof TriggerOverridesSchema>;
 
 export const DEFAULT_TRIGGER_OVERRIDES: TriggerOverrides = {};
 
+// Deterministic name → URL slug. With unique-name enforcement at create time
+// this keeps name↔slug 1:1, so `/w/:slug` resolves to a workspace without a
+// stored slug column. Returns "" for names with no url-safe characters; callers
+// reject those (an unrouteable name).
+export function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 export const WorkspaceSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1),
