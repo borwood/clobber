@@ -102,8 +102,9 @@ Past the bootstrap commits, no work directly on `main`. Use `git worktree add` f
 ## Stack-Specific Notes
 
 - Sessions are spawned with `--session-id <clobber-uuid>` so we control the ID and can resume/audit.
-- Hook scripts POST to Clobber's local HTTP API. `CLOBBER_URL` and `CLOBBER_AGENT_ID` (and `CLOBBER_SESSION_ID`) are passed via env on spawn.
+- Hook scripts and the `clobber` CLI POST to Clobber's local HTTP API. The spawn pipeline (`packages/server/src/spawn-context.ts`) injects `CLOBBER_API_BASE`, `CLOBBER_SESSION_TOKEN`, `CLOBBER_SESSION_ID`, and `CLOBBER_WORKSPACE_ID` (plus `CLOBBER_ROLE` and, when applicable, `CLOBBER_DESK_DIR` / `CLOBBER_OFFICE_DIR`) into the session env.
 - `clobber ask "<question>"` blocks until the UI replies; the reply is printed to stdout for the agent to read.
+- `clobber status`, `clobber note`, and `clobber report` succeed silently — they print nothing on success, so don't read absence of output as failure.
 - An agent's native `AskUserQuestion` tool call is intercepted via `PreToolUse` and routed through the same ask-widget pipeline (`packages/server/src/ask-user-question-bridge.ts`). Every role with `AskUserQuestion` in its tool list gets workspace-aware UX without per-role prompt surgery; `clobber ask` remains the explicit programmatic path.
 - `clobber status "<message>"` and `clobber note "<text>"` are fire-and-forget.
 - Roles are composed via `defineRole(manifest)`. The shipped `worker` role declares an `sdlc` profile (default: research → failing-test → implement → open-pr → watch-ci) that the system-prompt template renders dynamically; forks can override the profile to express a different workflow. `manager` is persistent with always-on triggers; `worker` is ephemeral and autonomous.
