@@ -291,6 +291,56 @@ describe("workspaces endpoints", () => {
     b.cleanup();
   });
 
+  it("POST /workspaces returns 409 when a different name collides by slug", async () => {
+    const { server, db } = buildServer();
+    const a = makeRepoFixture("clobber-ws-");
+    const b = makeRepoFixture("clobber-ws-");
+
+    const first = await server.inject({
+      method: "POST",
+      url: "/workspaces",
+      payload: { name: "My Repo", repo_path: a.path },
+    });
+    expect(first.statusCode).toBe(201);
+
+    // Distinct name, same derived slug ("my-repo") → must be rejected so
+    // /w/<slug> resolution stays 1:1.
+    const second = await server.inject({
+      method: "POST",
+      url: "/workspaces",
+      payload: { name: "my repo", repo_path: b.path },
+    });
+    expect(second.statusCode).toBe(409);
+    const body = second.json() as { error: string };
+    expect(body.error).toBe("workspace name already exists");
+
+    const list = (await server.inject({ method: "GET", url: "/workspaces" })).json() as Workspace[];
+    expect(list).toHaveLength(1);
+
+    await server.close();
+    db.close();
+    a.cleanup();
+    b.cleanup();
+  });
+
+  it("POST /workspaces rejects a name with no url-safe characters with 400", async () => {
+    const { server, db } = buildServer();
+    const repo = makeRepoFixture("clobber-ws-");
+
+    const res = await server.inject({
+      method: "POST",
+      url: "/workspaces",
+      payload: { name: "@@@", repo_path: repo.path },
+    });
+    expect(res.statusCode).toBe(400);
+    const body = res.json() as { error: string };
+    expect(body.error).toBe("workspace name has no url-safe characters");
+
+    await server.close();
+    db.close();
+    repo.cleanup();
+  });
+
   it("GET /workspaces orders most-recently-created first", async () => {
     const { server, db } = buildServer();
     const r1 = makeRepoFixture("clobber-ws-");

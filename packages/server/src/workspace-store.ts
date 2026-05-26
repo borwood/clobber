@@ -11,6 +11,7 @@ import {
   DEFAULT_FILE_SIZE_POLICY,
   DEFAULT_MANAGER_SKILL_POLICY,
   WorkspaceSchema,
+  slugify,
   type BootContextProvider,
   type CreateWorkspaceRequest,
   type FileSizePolicy,
@@ -38,7 +39,9 @@ export interface WorkspaceConfigPatch {
 export interface WorkspaceStore {
   create(req: CreateWorkspaceRequest): Workspace;
   get(id: string): Workspace | null;
-  findByName(name: string): Workspace | null;
+  // Matches on the derived slug, so it catches names that differ yet slugify to
+  // the same path (e.g. "My Repo" vs "my repo"). Keeps `/w/:slug` 1:1.
+  findBySlug(slug: string): Workspace | null;
   list(): Workspace[];
   updateConfig(id: string, config: WorkspaceConfigPatch): Workspace | null;
   delete(id: string): boolean;
@@ -85,7 +88,6 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const getStmt = db.prepare("SELECT * FROM workspaces WHERE id = ?");
-  const findByNameStmt = db.prepare("SELECT * FROM workspaces WHERE name = ?");
   const listStmt = db.prepare(
     "SELECT * FROM workspaces ORDER BY created_at DESC, id DESC",
   );
@@ -154,9 +156,10 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
       return row === null ? null : rowToWorkspace(row);
     },
 
-    findByName(name) {
-      const row = findByNameStmt.get(name) as Row | null;
-      return row === null ? null : rowToWorkspace(row);
+    findBySlug(slug) {
+      const rows = listStmt.all() as Row[];
+      const row = rows.find((r) => slugify(r.name) === slug);
+      return row === undefined ? null : rowToWorkspace(row);
     },
 
     list() {

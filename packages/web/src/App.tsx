@@ -17,6 +17,7 @@ import { RolePicker } from "./components/RolePicker.tsx";
 import { WhiteboardView } from "./components/WhiteboardView.tsx";
 import { ViewSwitcher, type WorkspaceView } from "./components/ViewSwitcher.tsx";
 import { MailboxContent } from "./components/MailboxContent.tsx";
+import { slugify } from "@clobber/shared";
 import { usePolledResource } from "./hooks/usePolledResource.ts";
 import { useLocation } from "./hooks/useLocation.ts";
 import { buildPath, parseLocation } from "./router.ts";
@@ -41,7 +42,7 @@ function readStoredView(): WorkspaceView {
 
 export function App() {
   const { pathname, navigate } = useLocation();
-  const { workspaceId, sessionId } = parseLocation(pathname);
+  const { workspaceSlug, sessionId } = parseLocation(pathname);
 
   const [configOpen, setConfigOpen] = useState(false);
   const [roleId, setRoleId] = useState<string | null>(null);
@@ -65,12 +66,15 @@ export function App() {
   );
   const liveWorkspaceIds = new Set(liveIdsPoll.data ?? EMPTY_LIVE_IDS);
 
-  // The URL is the source of truth, but a workspace id only becomes active once
-  // it's confirmed present. `/w/<bad-id>` resolves to null (empty state) once
-  // the workspace list has loaded.
-  const workspaceValid = workspaceId !== null && workspaces.some((w) => w.id === workspaceId);
-  const activeWorkspaceId = workspaceValid ? workspaceId : null;
-  const invalidWorkspace = workspaceId !== null && workspacesLoaded && !workspaceValid;
+  // The URL carries a human-readable name slug, resolved back to a workspace via
+  // deterministic slugify(name). `/w/<unknown-slug>` → empty state once loaded.
+  const activeWorkspace =
+    workspaceSlug === null
+      ? undefined
+      : workspaces.find((w) => slugify(w.name) === workspaceSlug);
+  const activeWorkspaceId = activeWorkspace === undefined ? null : activeWorkspace.id;
+  const invalidWorkspace =
+    workspaceSlug !== null && workspacesLoaded && activeWorkspace === undefined;
   const selectedSession = activeWorkspaceId === null ? null : sessionId;
 
   const rolesPoll = usePolledResource(
@@ -159,7 +163,7 @@ export function App() {
   }
 
   function focusSession(id: string): void {
-    navigate(buildPath(activeWorkspaceId, id));
+    navigate(buildPath(workspaceSlug, id));
   }
 
   return (
@@ -170,8 +174,8 @@ export function App() {
           workspaces={workspaces}
           liveWorkspaceIds={liveWorkspaceIds}
           selectedId={activeWorkspaceId}
-          onSelect={(id) => navigate(buildPath(id, null))}
-          onCreated={(ws) => navigate(buildPath(ws.id, null))}
+          onSelect={(slug) => navigate(buildPath(slug, null))}
+          onCreated={(ws) => navigate(buildPath(slugify(ws.name), null))}
         />
         {activeWorkspaceId !== null && (
           <button
