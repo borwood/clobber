@@ -166,23 +166,24 @@ describe("POST /persistent-agents/:id/wake", () => {
     await teardown(h);
   });
 
-  it("uses the workspace's wake_prompt for the prompt body", async () => {
+  it("a no-task wake produces no fabricated user turn — durable framing rides the system prompt", async () => {
     const h = buildHarness();
-    const ws = h.workspaces.create({
-      name: "ws",
-      repo_path: repoPath,
-      wake_prompt: "custom workspace wake prompt — return to the floor",
-    });
+    const ws = h.workspaces.create({ name: "ws", repo_path: repoPath });
     seedWorkspaceRoles(h.db, ws.id);
     const role = h.db
       .prepare("SELECT id FROM roles WHERE name = ? AND workspace_id = ?")
       .get("manager", ws.id) as { id: string };
     h.workspaceRoles.setCeiling(ws.id, role.id, 5);
+
     const agent = h.agents.create({
       workspace_id: ws.id,
       role_id: role.id,
       label: "boss",
     });
+
+    const officeDir = join(repoPath, ".clobber", "offices", agent.id);
+    mkdirSync(officeDir, { recursive: true });
+    writeFileSync(join(officeDir, "notes-2026-05-04-090000.md"), "TODO: review PR #41\n");
 
     const res = await h.server.inject({
       method: "POST",
@@ -191,12 +192,16 @@ describe("POST /persistent-agents/:id/wake", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(h.calls).toHaveLength(1);
-    expect(h.calls[0]!.prompt).toContain("custom workspace wake prompt");
+    // No synthetic "orient yourself" turn.
+    expect(h.calls[0]!.prompt).toBeUndefined();
+    // Office continuity is composed into the system prompt instead.
+    expect(h.calls[0]!.appendSystemPrompt).toContain("[Previously in this office]");
+    expect(h.calls[0]!.appendSystemPrompt).toContain("notes-2026-05-04-090000.md");
 
     await teardown(h);
   });
 
-  it("creates a new session for an idle persistent agent and prepends office context", async () => {
+  it("creates a new session for an idle persistent agent and composes office context", async () => {
     const h = buildHarness();
     const ws = h.workspaces.create({ name: "ws", repo_path: repoPath });
     seedWorkspaceRoles(h.db, ws.id);
@@ -228,9 +233,9 @@ describe("POST /persistent-agents/:id/wake", () => {
     expect(typeof body.pid).toBe("number");
 
     expect(h.calls).toHaveLength(1);
-    const prompt = h.calls[0]!.prompt;
-    expect(prompt).toContain("[Previously in this office]");
-    expect(prompt).toContain("notes-2026-05-04-090000.md");
+    const system = h.calls[0]!.appendSystemPrompt;
+    expect(system).toContain("[Previously in this office]");
+    expect(system).toContain("notes-2026-05-04-090000.md");
 
     await teardown(h);
   });

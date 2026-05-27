@@ -7,6 +7,7 @@ import type {
 import type { Agent, BootContext, BriefingPacket, EffortLevel, Role, Workspace } from "@clobber/shared";
 import { ensureOffice } from "./office-store.ts";
 import { composeOfficeContext } from "./office-context.ts";
+import { composeSystemPrompt } from "./compose-system-prompt.ts";
 import { runBootContextProvider } from "./boot-context-provider.ts";
 import { OFFICE_NOTES_SKILL } from "./office-notes-skill.ts";
 import { deskDirFor, writeBriefingPacket } from "./desk-store.ts";
@@ -104,20 +105,22 @@ export async function prepareSpawnContext(
     bootContext,
   );
 
-  // Order: durable workspace framing first, instance-specific office
-  // continuity next, the task prompt last.
-  const segments: string[] = [];
+  // Durable framing rides the system prompt (layer B seeds): workspace
+  // context first, instance-specific office continuity next. The opening
+  // user message carries only the task kick — absent on a no-task wake.
+  const seeds: string[] = [];
   if (workspaceContext !== "") {
-    segments.push(`[Workspace context]\n${workspaceContext}\n[End of workspace context]`);
+    seeds.push(`[Workspace context]\n${workspaceContext}\n[End of workspace context]`);
   }
   if (officeDir !== null) {
-    segments.push(composeOfficeContext(officeDir));
+    seeds.push(composeOfficeContext(officeDir));
   }
-  if (prompt !== undefined) {
-    segments.push(prompt);
-  }
-  // Nothing to inject (bare resume, no boot/office context) => no user turn.
-  const effectivePrompt = segments.length === 0 ? undefined : segments.join("\n\n");
+  const systemPrompt = composeSystemPrompt({
+    framing: effectiveBundle.framing,
+    rolePrompt: effectiveBundle.systemPrompt,
+    seeds,
+    wakeProgramAddon: "",
+  });
 
   const materialized = deps.runtimeProvider.prepareBundle({
     bundle: effectiveBundle,
@@ -150,7 +153,7 @@ export async function prepareSpawnContext(
   const cwd = resolveSpawnCwd(workspace, agent, mode, agentHasSession);
   const spawnOptions: RuntimeSpawnOptions = {
     hookUrl: deps.hookUrl,
-    prompt: effectivePrompt,
+    prompt,
     cwd,
     sessionId,
     ...(role.permission_mode === undefined ? {} : { permissionMode: role.permission_mode }),
@@ -158,7 +161,7 @@ export async function prepareSpawnContext(
     ...(effectiveEffort === undefined ? {} : { effort: effectiveEffort }),
     env,
     materialized,
-    systemPrompt: effectiveBundle.systemPrompt,
+    systemPrompt,
     settingSources: workspace.setting_sources,
     ...(agent.label === undefined ? {} : { displayName: agent.label }),
   };

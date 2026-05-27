@@ -25,6 +25,7 @@ const HOOKS_TEMPLATE = JSON.stringify({
 const sampleBundle: RoleBundleData = {
   pluginName: "manager",
   description: "Permanent inhabitant of a workspace.",
+  framing: "You are the **Manager**.",
   systemPrompt: "You are the manager.",
   skills: [
     { name: "whoami", body: "# whoami\n\nRun `clobber whoami`." },

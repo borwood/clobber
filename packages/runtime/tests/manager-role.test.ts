@@ -22,7 +22,10 @@ describe("managerRole", () => {
 
   it("eagerly loads the system prompt content into LoadedRole", () => {
     expect(managerRole.systemPrompt.trim().length).toBeGreaterThan(20);
-    expect(managerRole.systemPrompt).toMatch(/Manager/);
+  });
+
+  it("lifts the role identity header into the framing layer (#210)", () => {
+    expect(managerRole.framing).toMatch(/Manager/);
   });
 
   it("ships a plugin template directory with .claude-plugin/plugin.json named after the role", () => {

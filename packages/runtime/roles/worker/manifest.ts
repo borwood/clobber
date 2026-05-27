@@ -12,6 +12,7 @@ export const workerRole = defineRole({
     description:
       "Autonomous SDLC worker. Spawned with one issue assignment; walks the SDLC profile's phases unattended; reports back via final-report.",
     systemPromptPath: "system-prompt.md",
+    framingPath: "framing.md",
     pluginTemplatePath: "plugin-template",
     allowedCliCommands: ["whoami", "ask", "status", "report"],
     persistent: false,

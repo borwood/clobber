@@ -55,6 +55,7 @@ export function editRole(
   const created = versions.create({
     role_id: role.id,
     version: nextVersion,
+    framing: currentVersion.framing,
     system_prompt: newSystemPrompt,
     skills_json: newSkillsJson,
     allowed_tools_json: newAllowedToolsJson,

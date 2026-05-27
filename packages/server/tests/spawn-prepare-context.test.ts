@@ -39,8 +39,8 @@ describe("prepareSpawnContext (#125) is the shared spawn/attach/resume seam", ()
     expect(typeof attachEnv!["CLOBBER_SESSION_TOKEN"]).toBe("string");
     expect(attachEnv!["PATH"]!.startsWith(join(h.repoPath, ".clobber", "bin"))).toBe(true);
 
-    expect(attachReq.prompt).toContain("[Previously in this office]");
-    expect(attachReq.prompt!.endsWith("first turn")).toBe(true);
+    expect(attachReq.appendSystemPrompt).toContain("[Previously in this office]");
+    expect(attachReq.prompt).toBe("first turn");
     expect(attachReq.resume).toBeUndefined();
     expect(attachReq.providerThreadId).toBeUndefined();
 
@@ -72,8 +72,8 @@ describe("prepareSpawnContext (#125) is the shared spawn/attach/resume seam", ()
       spawnBody.session_id,
     );
 
-    expect(resumeReq.prompt).toContain("[Previously in this office]");
-    expect(resumeReq.prompt!.endsWith("second turn")).toBe(true);
+    expect(resumeReq.appendSystemPrompt).toContain("[Previously in this office]");
+    expect(resumeReq.prompt).toBe("second turn");
     expect(resumeReq.resume).toBe(true);
     expect(resumeReq.providerThreadId).toBe(`thread-${spawnBody.session_id}`);
 

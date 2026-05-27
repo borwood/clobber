@@ -124,12 +124,12 @@ describe("spawn — office continuity at spawn (#55)", () => {
     expect(res.statusCode).toBe(200);
 
     expect(h.calls).toHaveLength(1);
-    const prompt = h.calls[0]!.prompt!;
-    expect(prompt).toContain("[Previously in this office]");
-    expect(prompt).toContain("office is empty");
-    expect(prompt).toContain("[End of previously]");
-    // The original user-provided prompt is still in there, AFTER the prefix
-    expect(prompt.endsWith("do work")).toBe(true);
+    const system = h.calls[0]!.appendSystemPrompt!;
+    expect(system).toContain("[Previously in this office]");
+    expect(system).toContain("office is empty");
+    expect(system).toContain("[End of previously]");
+    // The user-provided prompt rides the opening user turn alone.
+    expect(h.calls[0]!.prompt).toBe("do work");
 
     await teardown(h);
   });
@@ -156,8 +156,8 @@ describe("spawn — office continuity at spawn (#55)", () => {
 
     expect(h.calls).toHaveLength(2);
     // Both new agents → both their offices are empty
-    expect(h.calls[0]!.prompt).toContain("office is empty");
-    expect(h.calls[1]!.prompt).toContain("office is empty");
+    expect(h.calls[0]!.appendSystemPrompt).toContain("office is empty");
+    expect(h.calls[1]!.appendSystemPrompt).toContain("office is empty");
 
     await teardown(h);
   });
@@ -254,7 +254,7 @@ describe("spawn — office continuity at spawn (#55)", () => {
       prompt: "first wake",
     });
     expect(r1.ok).toBe(true);
-    expect(calls[0]!.prompt).toContain("office is empty");
+    expect(calls[0]!.appendSystemPrompt).toContain("office is empty");
 
     // Agent leaves a note before ending the session
     const officeDir = join(repoPath, ".clobber", "offices", agent.id);
@@ -272,9 +272,9 @@ describe("spawn — office continuity at spawn (#55)", () => {
     });
     expect(r2.ok).toBe(true);
     expect(calls).toHaveLength(2);
-    expect(calls[1]!.prompt).toContain("notes-2026-05-04-120000.md");
-    expect(calls[1]!.prompt).not.toContain("office is empty");
-    expect(calls[1]!.prompt!.endsWith("second wake")).toBe(true);
+    expect(calls[1]!.appendSystemPrompt).toContain("notes-2026-05-04-120000.md");
+    expect(calls[1]!.appendSystemPrompt).not.toContain("office is empty");
+    expect(calls[1]!.prompt).toBe("second wake");
 
     db.close();
   });

@@ -66,6 +66,7 @@ describe("RoleDetailResponseSchema", () => {
     current_version: {
       id: UUID_B,
       version: 1,
+      framing: "You are a **Worker**.",
       system_prompt: "You are a worker.",
       skills: [{ name: "status", body: "Use clobber status." }],
       allowed_tools: ["Bash"],

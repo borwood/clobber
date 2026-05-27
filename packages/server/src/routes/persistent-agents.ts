@@ -56,11 +56,14 @@ export function registerPersistentAgentsRoutes(
         };
       }
 
+      // A no-task wake produces no opening user message — durable framing
+      // and office continuity ride the composed system prompt instead. The
+      // turn-kick will come from the selected wake-program (#212).
       const result = await attachSessionToAgent(spawnPipelineDeps, {
         workspace,
         role,
         agent,
-        prompt: workspace.wake_prompt,
+        prompt: undefined,
       });
       if (!result.ok) {
         const { ok: _ok, status, ...rest } = result;

@@ -10,6 +10,7 @@ export class RoleManifestError extends Error {
 export interface LoadedRole {
   readonly bundleRoot: string;
   readonly manifest: RoleManifest;
+  readonly framing: string;
   readonly systemPrompt: string;
 }
 
@@ -57,6 +58,8 @@ export function defineRole(opts: DefineRoleOptions): LoadedRole {
     );
   }
 
+  const framing = loadFraming(opts.root, manifest);
+
   const pluginRootAbs = join(opts.root, manifest.pluginTemplatePath);
   if (!existsSync(pluginRootAbs) || !statSync(pluginRootAbs).isDirectory()) {
     throw new RoleManifestError(
@@ -97,5 +100,22 @@ export function defineRole(opts: DefineRoleOptions): LoadedRole {
     }
   }
 
-  return Object.freeze({ bundleRoot: opts.root, manifest, systemPrompt });
+  return Object.freeze({ bundleRoot: opts.root, manifest, framing, systemPrompt });
+}
+
+function loadFraming(root: string, manifest: RoleManifest): string {
+  if (manifest.framingPath === undefined) return "";
+  const framingAbs = join(root, manifest.framingPath);
+  if (!existsSync(framingAbs)) {
+    throw new RoleManifestError(
+      `framing file missing in role bundle "${manifest.name}": ${manifest.framingPath}`,
+    );
+  }
+  const raw = readFileSync(framingAbs, "utf8");
+  if (raw.trim().length === 0) {
+    throw new RoleManifestError(
+      `framing file is empty for role "${manifest.name}": ${manifest.framingPath}`,
+    );
+  }
+  return raw;
 }

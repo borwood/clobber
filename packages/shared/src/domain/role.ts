@@ -122,6 +122,7 @@ export const RoleVersionSchema = z.object({
   id: z.string().uuid(),
   role_id: z.string().uuid(),
   version: z.number().int().positive(),
+  framing: z.string(),
   system_prompt: z.string().min(1),
   skills_json: z.string(),
   allowed_tools_json: z.string(),
@@ -189,6 +190,7 @@ export type RolesListResponse = z.infer<typeof RolesListResponseSchema>;
 export const RoleDetailVersionSchema = z.object({
   id: z.string().uuid(),
   version: z.number().int().positive(),
+  framing: z.string(),
   system_prompt: z.string().min(1),
   skills: z.array(RoleSkillSchema),
   allowed_tools: z.array(z.string().min(1)),

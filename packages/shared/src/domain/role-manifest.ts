@@ -17,6 +17,9 @@ export const RoleManifestSchema = z
     name: z.string().min(1),
     description: z.string().min(1),
     systemPromptPath: RelativeBundlePath,
+    // Layer A — the role-unique identity header, kept separate from the
+    // static system prompt so it composes ahead of seeds and wake-programs.
+    framingPath: RelativeBundlePath.optional(),
     pluginTemplatePath: RelativeBundlePath,
     allowedCliCommands: z.array(z.string().min(1)).readonly(),
     persistent: z.boolean(),
