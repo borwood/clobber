@@ -51,6 +51,7 @@ export function buildDetail(
       hooks: JSON.parse(version.hooks_json),
       triggers: JSON.parse(version.triggers_json),
       seed_refs: JSON.parse(version.seed_refs_json),
+      wake_programs: JSON.parse(version.wake_programs_json),
       created_at: version.created_at,
     },
     version_history: deps.roleVersions.listForRole(role.id),

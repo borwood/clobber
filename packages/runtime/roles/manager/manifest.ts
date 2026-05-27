@@ -1,8 +1,15 @@
-import { dirname } from "node:path";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineRole } from "../../src/role-manifest/index.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+
+// The `orient` opening move (layer C): the readiness sweep the manager runs
+// when woken to take stock. Defined here, but NOT the manager's default — the
+// default flip to `idle` (so a human tap is a conversation, not a forced orient)
+// is #215. Selection wires up in #213.
+const orientProgramSystem = readFileSync(join(HERE, "wake-programs/orient.md"), "utf8");
 
 export const managerRole = defineRole({
   root: HERE,
@@ -26,6 +33,15 @@ export const managerRole = defineRole({
       { name: "office-manifest", enabled: true },
       { name: "repo-sdlc", enabled: true },
       { name: "wisdom-pointer", enabled: true },
+    ],
+    wakePrograms: [
+      {
+        name: "orient",
+        system: orientProgramSystem,
+        user:
+          "You've been woken to take stock. Run your orientation sweep, then " +
+          "summarise what changed and what needs a decision now.",
+      },
     ],
   },
 });

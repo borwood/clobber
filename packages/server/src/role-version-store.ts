@@ -5,6 +5,7 @@ import {
   RoleSkillSchema,
   RoleVersionSchema,
   SeedRefsSchema,
+  WakeProgramsSchema,
   type RoleVersion,
 } from "@clobber/shared";
 import { z } from "zod";
@@ -20,6 +21,7 @@ export interface CreateRoleVersionInput {
   readonly hooks_json: string;
   readonly triggers_json: string;
   readonly seed_refs_json: string;
+  readonly wake_programs_json: string;
 }
 
 export interface RoleVersionSummary {
@@ -47,6 +49,7 @@ interface Row {
   hooks_json: string;
   triggers_json: string;
   seed_refs_json: string;
+  wake_programs_json: string;
   created_at: number;
 }
 
@@ -70,6 +73,7 @@ function rowToVersion(row: Row): RoleVersion {
     hooks_json: row.hooks_json,
     triggers_json: row.triggers_json,
     seed_refs_json: row.seed_refs_json,
+    wake_programs_json: row.wake_programs_json,
     created_at: row.created_at,
   });
 }
@@ -77,8 +81,8 @@ function rowToVersion(row: Row): RoleVersion {
 export function createRoleVersionStore(db: Database): RoleVersionStore {
   const insertStmt = db.prepare(
     `INSERT INTO role_versions
-       (id, role_id, version, framing, system_prompt, skills_json, allowed_tools_json, allowed_cli_commands_json, hooks_json, triggers_json, seed_refs_json, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, role_id, version, framing, system_prompt, skills_json, allowed_tools_json, allowed_cli_commands_json, hooks_json, triggers_json, seed_refs_json, wake_programs_json, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const getStmt = db.prepare("SELECT * FROM role_versions WHERE id = ?");
   const listForRoleStmt = db.prepare(
@@ -104,6 +108,7 @@ export function createRoleVersionStore(db: Database): RoleVersionStore {
         input.hooks_json,
         input.triggers_json,
         input.seed_refs_json,
+        input.wake_programs_json,
         created_at,
       );
       return rowToVersion(getStmt.get(id) as Row);
@@ -129,6 +134,7 @@ export function createRoleVersionStore(db: Database): RoleVersionStore {
 
       const skills = SkillsArraySchema.parse(JSON.parse(row.skills_json));
       const seedRefs = SeedRefsSchema.parse(JSON.parse(row.seed_refs_json));
+      const wakePrograms = WakeProgramsSchema.parse(JSON.parse(row.wake_programs_json));
       const data: RoleBundleData = {
         pluginName: roleRow.name,
         ...(roleRow.description === null
@@ -138,6 +144,7 @@ export function createRoleVersionStore(db: Database): RoleVersionStore {
         systemPrompt: row.system_prompt,
         skills,
         seedRefs,
+        wakePrograms,
         hooksJson: row.hooks_json,
       };
       return data;

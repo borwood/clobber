@@ -36,10 +36,17 @@ describe("workerRole", () => {
     expect(workerRole.systemPrompt).toMatch(/final report/i);
   });
 
-  it("first-action prompt points at the desk briefing packet (#90)", () => {
-    expect(workerRole.systemPrompt).toMatch(/CLOBBER_DESK_DIR/);
-    expect(workerRole.systemPrompt).toMatch(/seed-todos\.json/);
-    expect(workerRole.systemPrompt).toMatch(/assignment\.md/);
+  it("the `task` wake-program owns the desk-reading opening move (#212), lifted out of the durable prompt", () => {
+    // The "read your desk NOW" protocol is layer C of the `task` opening move,
+    // not durable framing — so the same role can be spawned `idle` (waiting).
+    const task = workerRole.manifest.wakePrograms?.find((p) => p.name === "task");
+    expect(task).toBeDefined();
+    expect(task!.system).toMatch(/CLOBBER_DESK_DIR/);
+    expect(task!.system).toMatch(/seed-todos\.json/);
+    expect(task!.system).toMatch(/assignment\.md/);
+    expect(task!.user).not.toBeNull();
+    // The durable system prompt no longer carries the desk protocol.
+    expect(workerRole.systemPrompt).not.toMatch(/CLOBBER_DESK_DIR/);
   });
 
   it("ships a plugin template with .claude-plugin/plugin.json named 'worker'", () => {

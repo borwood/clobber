@@ -44,6 +44,7 @@ export interface SpawnPipelineInput {
   readonly role: Role;
   readonly prompt: string;
   readonly label: string;
+  readonly wakeProgram?: string;
   readonly briefing?: BriefingPacket;
   readonly effortOverride?: EffortLevel;
 }
@@ -79,7 +80,7 @@ export async function executeSpawn(
   deps: SpawnPipelineDeps,
   input: SpawnPipelineInput,
 ): Promise<SpawnPipelineResult> {
-  const { workspace, role, prompt, label, briefing, effortOverride } = input;
+  const { workspace, role, prompt, label, wakeProgram, briefing, effortOverride } = input;
 
   const capacity = checkCapacity(deps, workspace, role);
   if (capacity !== null) return capacity;
@@ -94,6 +95,7 @@ export async function executeSpawn(
     role,
     agent,
     prompt,
+    ...(wakeProgram === undefined ? {} : { wakeProgram }),
     ...(briefing === undefined ? {} : { briefing }),
     ...(effortOverride === undefined ? {} : { effortOverride }),
   });
@@ -105,6 +107,7 @@ export interface AttachSessionInput {
   readonly agent: Agent;
   // Absent on a no-task wake — no opening user message to compose.
   readonly prompt: string | undefined;
+  readonly wakeProgram?: string;
   readonly briefing?: BriefingPacket;
   readonly effortOverride?: EffortLevel;
 }
@@ -113,7 +116,7 @@ export async function attachSessionToAgent(
   deps: SpawnPipelineDeps,
   input: AttachSessionInput,
 ): Promise<SpawnPipelineSuccess | SpawnPipelineNoBundleError> {
-  const { workspace, role, agent, prompt, briefing, effortOverride } = input;
+  const { workspace, role, agent, prompt, wakeProgram, briefing, effortOverride } = input;
   const sessionId = randomUUID();
   const versionId = role.current_version_id;
 
@@ -125,6 +128,7 @@ export async function attachSessionToAgent(
     sessionId,
     versionId,
     prompt,
+    ...(wakeProgram === undefined ? {} : { wakeProgram }),
     ...(briefing === undefined ? {} : { briefing }),
     ...(effortOverride === undefined ? {} : { effortOverride }),
   });
@@ -143,6 +147,8 @@ export async function attachSessionToAgent(
     role_version_id: versionId,
     runtime_provider: deps.runtimeProvider.id,
     ...(providerThreadId === undefined ? {} : { provider_thread_id: providerThreadId }),
+    // Persist the opening move so resume re-composes the same layer-C addon.
+    ...(wakeProgram === undefined ? {} : { wake_program: wakeProgram }),
     // Denormalize the agent's label onto the session so the sidebar can
     // still show it after the agent row is deleted on non-persistent end.
     ...(agent.label === undefined ? {} : { label: agent.label }),

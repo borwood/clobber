@@ -23,6 +23,9 @@ const SpawnBodySchema = z.object({
   prompt: z.string().min(1),
   label: z.string().optional(),
   effort: EffortLevelSchema.optional(),
+  // The selected opening move (#212). The minimal by-name seam — the richer
+  // selection surfaces (CLI ergonomics / trigger map / office picker) are #213.
+  wake_program: z.string().min(1).optional(),
 });
 
 export interface SpawnRouteDeps {
@@ -52,7 +55,7 @@ export function registerSpawnRoutes(app: FastifyInstance, deps: SpawnRouteDeps):
       reply.code(400);
       return { error: "invalid spawn request", issues: parsed.error.issues };
     }
-    const { workspace_id, role_id, prompt, effort } = parsed.data;
+    const { workspace_id, role_id, prompt, effort, wake_program } = parsed.data;
     const label = normalizeSpawnLabel(parsed.data.label);
     if (label === null) {
       reply.code(400);
@@ -75,6 +78,7 @@ export function registerSpawnRoutes(app: FastifyInstance, deps: SpawnRouteDeps):
       role,
       prompt,
       label,
+      ...(wake_program === undefined ? {} : { wakeProgram: wake_program }),
       ...(effort === undefined ? {} : { effortOverride: effort }),
     });
     if (!result.ok) {

@@ -70,12 +70,6 @@ describe("examples/clobber-on-clobber — dogfood workspace config (#150)", () =
     expect(loadConfig().trigger_overrides).toEqual({});
   });
 
-  it("wake_prompt is clobber-shaped — it dispatches workers via /assignment", () => {
-    const wake = loadConfig().wake_prompt;
-    expect(wake).toBeDefined();
-    expect(wake).toContain("/assignment");
-  });
-
   it("manager-triggers.json wires workspace-open (#149) + cron + worker-done (#240) + session-ended (#171) onto the manager role-version", () => {
     const triggers = z.array(RoleTriggerSchema).parse(readExampleJson("manager-triggers.json"));
     const ids = triggers.map(triggerId);

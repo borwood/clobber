@@ -123,6 +123,9 @@ async function performResume(
     sessionId: session.id,
     versionId: session.role_version_id ?? role.current_version_id,
     prompt,
+    // Re-compose the original opening move's layer C; the kick stays suppressed
+    // because prepareSpawnContext gates it on mode === "resume".
+    ...(session.wake_program === undefined ? {} : { wakeProgram: session.wake_program }),
   });
   if (!prepared.ok) return prepared;
   const ctx = prepared.context;

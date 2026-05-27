@@ -13,7 +13,6 @@ export function WorkspaceConfigModal({ workspace, onClose, onSaved }: Props) {
   const initial = new Set<SettingSource>(workspace.setting_sources);
   const [project, setProject] = useState(initial.has("project"));
   const [local, setLocal] = useState(initial.has("local"));
-  const [wakePrompt, setWakePrompt] = useState(workspace.wake_prompt);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,17 +20,11 @@ export function WorkspaceConfigModal({ workspace, onClose, onSaved }: Props) {
     const sources: SettingSource[] = ["user"];
     if (project) sources.push("project");
     if (local) sources.push("local");
-    const trimmed = wakePrompt.trim();
-    if (trimmed.length === 0) {
-      setError("wake prompt cannot be empty");
-      return;
-    }
     setBusy(true);
     setError(null);
     try {
       const updated = await api.updateWorkspaceConfig(workspace.id, {
         setting_sources: sources,
-        wake_prompt: trimmed,
       });
       onSaved(updated);
     } catch (e) {
@@ -104,22 +97,6 @@ export function WorkspaceConfigModal({ workspace, onClose, onSaved }: Props) {
               </span>
             </span>
           </label>
-        </div>
-
-        <div className="px-4 py-3 border-t border-zinc-800 space-y-2">
-          <div className="text-xs text-zinc-400 uppercase tracking-wide">
-            wake prompt
-          </div>
-          <div className="text-xs text-zinc-500">
-            What a persistent agent is told when you tap the wake button without
-            a specific task.
-          </div>
-          <textarea
-            value={wakePrompt}
-            onChange={(e) => setWakePrompt(e.target.value)}
-            rows={4}
-            className="w-full text-sm font-mono bg-zinc-900 border border-zinc-800 rounded p-2 text-zinc-100"
-          />
         </div>
 
         {error !== null && (

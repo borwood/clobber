@@ -91,16 +91,19 @@ PR's blast radius). Otherwise, run `/assignment` once per issue.
 
    ```
    clobber spawn worker \
+     --wake-program task \
      --prompt "ship issue #<n> end-to-end; full brief on your desk" \
      --label "<verb-noun>" \
      --briefing-dir /tmp/briefing-<label>
    ```
 
    The label follows `manager:spawn` conventions (`fix-flaky-test`,
-   `audit-auth`, `issue-82`). The briefing-dir contents land at
+   `audit-auth`, `issue-82`). `--wake-program task` is the worker's opening
+   move: it composes the "read your desk, start the SDLC" protocol (layer C)
+   and fires the kick. The briefing-dir contents land at
    `.clobber/agents/<the-worker's-agent-id>/desk/` before the worker takes
-   its first turn; the worker system prompt instructs it to read every
-   file there as its first action.
+   its first turn; the `task` program instructs it to read every file there
+   as its first action.
 
    **Tuning effort.** The worker role defaults to `--effort high`. The
    thesis is that *you* (the manager) carry the deep thinking — a tight

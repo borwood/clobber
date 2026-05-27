@@ -60,6 +60,7 @@ export function forkRole(
     hooks_json: sourceVersion.hooks_json,
     triggers_json: sourceVersion.triggers_json,
     seed_refs_json: sourceVersion.seed_refs_json,
+    wake_programs_json: sourceVersion.wake_programs_json,
   });
   setCurrentVersion.run(newVersion.id, id);
 

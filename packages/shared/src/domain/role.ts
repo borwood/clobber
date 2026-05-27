@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { PermissionModeSchema } from "../hooks/payloads.ts";
 import { SeedRefSchema } from "./seed.ts";
+import { WakeProgramSchema } from "./wake-program.ts";
 
 // Reasoning depth knob exposed by `claude --effort <level>`. Mirrors the
 // upstream CLI's enum — kept in lockstep with what the runtime can pass through.
@@ -143,6 +144,7 @@ export const RoleVersionSchema = z.object({
   hooks_json: z.string(),
   triggers_json: z.string(),
   seed_refs_json: z.string(),
+  wake_programs_json: z.string(),
   created_at: z.number().int().nonnegative(),
 });
 export type RoleVersion = z.infer<typeof RoleVersionSchema>;
@@ -211,6 +213,7 @@ export const RoleDetailVersionSchema = z.object({
   hooks: z.unknown(),
   triggers: z.array(RoleTriggerSchema),
   seed_refs: z.array(SeedRefSchema),
+  wake_programs: z.array(WakeProgramSchema),
   created_at: z.number().int().nonnegative(),
 });
 export type RoleDetailVersion = z.infer<typeof RoleDetailVersionSchema>;

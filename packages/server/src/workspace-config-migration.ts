@@ -14,12 +14,6 @@ export function migrateWorkspaceConfig(db: Database): void {
   ensureColumn(
     db,
     "workspaces",
-    "wake_prompt",
-    `TEXT NOT NULL DEFAULT 'You have been woken without a specific task. Review your office notes, then summarise where you left off and what (if anything) needs your attention next.'`,
-  );
-  ensureColumn(
-    db,
-    "workspaces",
     "role_edit_policy",
     `TEXT NOT NULL DEFAULT '{"forbidden_keys":["hooks","permission_mode"]}'`,
   );

@@ -59,6 +59,8 @@ const AgentSpawnBodySchema = z.object({
   label: z.string().optional(),
   briefing: BriefingPacketSchema.optional(),
   effort: EffortLevelSchema.optional(),
+  // The selected opening move (#212); the minimal by-name seam.
+  wake_program: z.string().min(1).optional(),
 });
 
 export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps): void {
@@ -140,6 +142,9 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
         role,
         prompt,
         label,
+        ...(parsed.data.wake_program === undefined
+          ? {}
+          : { wakeProgram: parsed.data.wake_program }),
         ...(parsed.data.briefing === undefined
           ? {}
           : { briefing: parsed.data.briefing }),

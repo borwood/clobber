@@ -17,6 +17,8 @@ export function migrateRoleVersions(db: Database): void {
     "TEXT NOT NULL DEFAULT '[]'",
   );
   ensureColumn(db, "role_versions", "seed_refs_json", "TEXT NOT NULL DEFAULT '[]'");
+  ensureColumn(db, "role_versions", "wake_programs_json", "TEXT NOT NULL DEFAULT '[]'");
+  ensureColumn(db, "sessions", "wake_program", "TEXT");
   dropLegacyGlobalUniqueName(db);
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_roles_workspace ON roles(workspace_id);
@@ -26,6 +28,7 @@ export function migrateRoleVersions(db: Database): void {
   backfillRoleVersions(db);
   backfillCliAllowLists(db);
   backfillSeedRefs(db);
+  backfillWakePrograms(db);
   backfillUnseededWorkspaces(db);
 }
 
@@ -148,6 +151,32 @@ function backfillSeedRefs(db: Database): void {
     if (loaded === null) continue;
     if (loaded.manifest.seedRefs === undefined) continue;
     update.run(JSON.stringify(loaded.manifest.seedRefs), row.version_id);
+  }
+}
+
+// Existing role_versions rows pre-date the wake_programs_json column; the
+// default is '[]'. For shipped roles we recover the intended programs from the
+// matching bundle's manifest so the live worker picks up its `task` opening move
+// (and the manager its `orient`) without a re-edit. Forked or unknown roles stay
+// at '[]' (same shape as the seed-refs backfill).
+function backfillWakePrograms(db: Database): void {
+  const rows = db
+    .prepare(
+      `SELECT rv.id AS version_id, r.name AS role_name
+         FROM role_versions rv
+         JOIN roles r ON r.id = rv.role_id
+         WHERE rv.wake_programs_json = '[]'`,
+    )
+    .all() as CliAllowListBackfillRow[];
+  if (rows.length === 0) return;
+  const update = db.prepare(
+    "UPDATE role_versions SET wake_programs_json = ? WHERE id = ?",
+  );
+  for (const row of rows) {
+    const loaded = loadRoleBundle(row.role_name);
+    if (loaded === null) continue;
+    if (loaded.manifest.wakePrograms === undefined) continue;
+    update.run(JSON.stringify(loaded.manifest.wakePrograms), row.version_id);
   }
 }
 

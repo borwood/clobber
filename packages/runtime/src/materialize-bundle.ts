@@ -1,6 +1,6 @@
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { RoleSkill, SeedRef } from "@clobber/shared";
+import type { RoleSkill, SeedRef, WakeProgram } from "@clobber/shared";
 
 export interface RoleBundleData {
   readonly pluginName: string;
@@ -9,6 +9,7 @@ export interface RoleBundleData {
   readonly systemPrompt: string;
   readonly skills: readonly RoleSkill[];
   readonly seedRefs: readonly SeedRef[];
+  readonly wakePrograms: readonly WakeProgram[];
   readonly hooksJson: string;
 }
 
