@@ -102,6 +102,7 @@ Past the bootstrap commits, no work directly on `main`. Use `git worktree add` f
 ## Stack-Specific Notes
 
 - Sessions are spawned with `--session-id <clobber-uuid>` so we control the ID and can resume/audit.
+- The clobber-composed `appendSystemPrompt` is captured per wake on `sessions.composed_system_prompt` (distinct from the `role_versions.system_prompt` template) and re-captured on resume, so the transcript can surface what the agent was actually told. The `/sessions/:id/transcript` route prepends it as a leading `system-prompt` pseudo-line, rendered behind the transcript's "show details" toggle.
 - Hook scripts POST to Clobber's local HTTP API. `CLOBBER_URL` and `CLOBBER_AGENT_ID` (and `CLOBBER_SESSION_ID`) are passed via env on spawn.
 - `clobber ask "<question>"` blocks until the UI replies; the reply is printed to stdout for the agent to read.
 - An agent's native `AskUserQuestion` tool call is intercepted via `PreToolUse` and routed through the same ask-widget pipeline (`packages/server/src/ask-user-question-bridge.ts`). Every role with `AskUserQuestion` in its tool list gets workspace-aware UX without per-role prompt surgery; `clobber ask` remains the explicit programmatic path.

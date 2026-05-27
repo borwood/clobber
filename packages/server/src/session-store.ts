@@ -12,6 +12,9 @@ export interface SessionStore {
   // Flag a session as live-at-shutdown (set at boot reconciliation).
   markWasLiveAtShutdown(id: string): boolean;
   updatePid(id: string, pid: number): boolean;
+  // Re-capture the composed prompt on resume so the row reflects the latest
+  // wake's rendered `appendSystemPrompt` (#253).
+  updateComposedSystemPrompt(id: string, prompt: string): boolean;
   updateProviderThreadId(id: string, providerThreadId: string): boolean;
   updateTranscriptPath(id: string, path: string): boolean;
   listForWorkspace(workspaceId: string): Session[];
@@ -34,6 +37,7 @@ interface Row {
   ended_at: number | null;
   transcript_path: string | null;
   was_live_at_shutdown: number;
+  composed_system_prompt: string | null;
 }
 
 function rowToSession(row: Row): Session {
@@ -55,14 +59,17 @@ function rowToSession(row: Row): Session {
   if (row.ended_at !== null) input["ended_at"] = row.ended_at;
   if (row.transcript_path !== null) input["transcript_path"] = row.transcript_path;
   if (row.was_live_at_shutdown === 1) input["was_live_at_shutdown"] = true;
+  if (row.composed_system_prompt !== null) {
+    input["composed_system_prompt"] = row.composed_system_prompt;
+  }
   return SessionSchema.parse(input);
 }
 
 export function createSessionStore(db: Database): SessionStore {
   const insertStmt = db.prepare(
     `INSERT INTO sessions
-       (id, agent_id, workspace_id, role_id, role_version_id, runtime_provider, provider_thread_id, wake_program, label, pid, started_at, ended_at, transcript_path)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+       (id, agent_id, workspace_id, role_id, role_version_id, runtime_provider, provider_thread_id, wake_program, label, pid, started_at, ended_at, transcript_path, composed_system_prompt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
   );
   const getStmt = db.prepare("SELECT * FROM sessions WHERE id = ?");
   const countActiveStmt = db.prepare(
@@ -79,6 +86,9 @@ export function createSessionStore(db: Database): SessionStore {
   );
   const updatePidStmt = db.prepare(
     "UPDATE sessions SET pid = ? WHERE id = ? AND ended_at IS NULL",
+  );
+  const updateComposedPromptStmt = db.prepare(
+    "UPDATE sessions SET composed_system_prompt = ? WHERE id = ?",
   );
   const updateProviderThreadIdStmt = db.prepare(
     "UPDATE sessions SET provider_thread_id = ? WHERE id = ? AND ended_at IS NULL",
@@ -109,6 +119,8 @@ export function createSessionStore(db: Database): SessionStore {
       const label = req.label === undefined ? null : req.label;
       const transcript_path =
         req.transcript_path === undefined ? null : req.transcript_path;
+      const composed_system_prompt =
+        req.composed_system_prompt === undefined ? null : req.composed_system_prompt;
       insertStmt.run(
         req.id,
         req.agent_id,
@@ -122,6 +134,7 @@ export function createSessionStore(db: Database): SessionStore {
         req.pid,
         started_at,
         transcript_path,
+        composed_system_prompt,
       );
       const out: Record<string, unknown> = {
         id: req.id,
@@ -139,6 +152,9 @@ export function createSessionStore(db: Database): SessionStore {
       if (req.wake_program !== undefined) out["wake_program"] = req.wake_program;
       if (req.label !== undefined) out["label"] = req.label;
       if (req.transcript_path !== undefined) out["transcript_path"] = req.transcript_path;
+      if (req.composed_system_prompt !== undefined) {
+        out["composed_system_prompt"] = req.composed_system_prompt;
+      }
       return SessionSchema.parse(out);
     },
 
@@ -169,6 +185,11 @@ export function createSessionStore(db: Database): SessionStore {
 
     updatePid(id, pid) {
       const result = updatePidStmt.run(pid, id);
+      return result.changes > 0;
+    },
+
+    updateComposedSystemPrompt(id, prompt) {
+      const result = updateComposedPromptStmt.run(prompt, id);
       return result.changes > 0;
     },
 

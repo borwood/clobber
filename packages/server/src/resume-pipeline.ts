@@ -163,6 +163,9 @@ async function performResume(
 
   deps.sessions.markActive(session.id);
   deps.sessions.updatePid(session.id, spawned.pid);
+  // The prompt is re-composed every wake; keep the row honest about the
+  // rendered prompt this resume actually ran with (#253).
+  deps.sessions.updateComposedSystemPrompt(session.id, ctx.spawnOptions.systemPrompt);
   bindLiveSession(deps, session.id, ctx, spawned);
   return { ok: true, session_id: session.id, pid: spawned.pid };
 }

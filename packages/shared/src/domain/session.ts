@@ -20,6 +20,10 @@ export const SessionSchema = z.object({
   // previous server process — it was live when clobber last closed. The UI
   // surfaces these as resume candidates. Cleared when the session is resumed.
   was_live_at_shutdown: z.boolean().optional(),
+  // The full clobber-composed `appendSystemPrompt` this session was spawned
+  // with — the rendered prompt, not the role-version template. Re-captured on
+  // each wake so per-session deltas are auditable (#253).
+  composed_system_prompt: z.string().min(1).optional(),
 });
 export type Session = z.infer<typeof SessionSchema>;
 
@@ -35,5 +39,6 @@ export const CreateSessionRequestSchema = z.object({
   label: z.string().min(1).optional(),
   pid: z.number().int().positive(),
   transcript_path: z.string().min(1).optional(),
+  composed_system_prompt: z.string().min(1).optional(),
 });
 export type CreateSessionRequest = z.infer<typeof CreateSessionRequestSchema>;
