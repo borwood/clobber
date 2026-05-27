@@ -238,10 +238,10 @@ export function App() {
                 persistView("mailbox");
                 focusSession(focusId);
               }}
-              onWake={async (agentId) => {
+              onWake={async (agentId, wakeProgram) => {
                 setWakingAgents((prev) => new Set(prev).add(agentId));
                 try {
-                  const result = await api.wakePersistentAgent(agentId);
+                  const result = await api.wakePersistentAgent(agentId, wakeProgram);
                   persistView("mailbox");
                   focusSession(result.session_id);
                 } catch (e) {

@@ -68,6 +68,9 @@ export interface OfficeCard {
   readonly active_session: SessionView | null;
   readonly last_started_at: number | null;
   readonly office: OfficePeek;
+  // Wake-programs the office affordance can offer — `idle` first, then the
+  // role's declared programs (#213).
+  readonly wake_programs: readonly string[];
 }
 
 export interface DeskCard {
@@ -151,10 +154,10 @@ export const api = {
   spawn: (req: SpawnRequest) => postJson<SpawnResponse>("/spawn", req),
   getWhiteboard: (workspaceId: string) =>
     getJson<Whiteboard>(`/workspaces/${encodeURIComponent(workspaceId)}/whiteboard`),
-  wakePersistentAgent: (agentId: string) =>
+  wakePersistentAgent: (agentId: string, wakeProgram?: string) =>
     postJson<SpawnResponse>(
       `/persistent-agents/${encodeURIComponent(agentId)}/wake`,
-      {},
+      wakeProgram === undefined ? {} : { wake_program: wakeProgram },
     ),
   getTranscript: (sessionId: string) =>
     getJson<TranscriptLine[]>(`/sessions/${encodeURIComponent(sessionId)}/transcript`),

@@ -76,6 +76,7 @@ export function editRole(
     triggers_json: newTriggersJson,
     seed_refs_json: newSeedRefsJson,
     wake_programs_json: newWakeProgramsJson,
+    default_wake_program: currentVersion.default_wake_program,
   });
 
   setCurrentVersion.run(created.id, role.id);

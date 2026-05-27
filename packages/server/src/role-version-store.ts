@@ -22,6 +22,7 @@ export interface CreateRoleVersionInput {
   readonly triggers_json: string;
   readonly seed_refs_json: string;
   readonly wake_programs_json: string;
+  readonly default_wake_program: string | null;
 }
 
 export interface RoleVersionSummary {
@@ -50,6 +51,7 @@ interface Row {
   triggers_json: string;
   seed_refs_json: string;
   wake_programs_json: string;
+  default_wake_program: string | null;
   created_at: number;
 }
 
@@ -74,6 +76,7 @@ function rowToVersion(row: Row): RoleVersion {
     triggers_json: row.triggers_json,
     seed_refs_json: row.seed_refs_json,
     wake_programs_json: row.wake_programs_json,
+    default_wake_program: row.default_wake_program,
     created_at: row.created_at,
   });
 }
@@ -81,8 +84,8 @@ function rowToVersion(row: Row): RoleVersion {
 export function createRoleVersionStore(db: Database): RoleVersionStore {
   const insertStmt = db.prepare(
     `INSERT INTO role_versions
-       (id, role_id, version, framing, system_prompt, skills_json, allowed_tools_json, allowed_cli_commands_json, hooks_json, triggers_json, seed_refs_json, wake_programs_json, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, role_id, version, framing, system_prompt, skills_json, allowed_tools_json, allowed_cli_commands_json, hooks_json, triggers_json, seed_refs_json, wake_programs_json, default_wake_program, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const getStmt = db.prepare("SELECT * FROM role_versions WHERE id = ?");
   const listForRoleStmt = db.prepare(
@@ -109,6 +112,7 @@ export function createRoleVersionStore(db: Database): RoleVersionStore {
         input.triggers_json,
         input.seed_refs_json,
         input.wake_programs_json,
+        input.default_wake_program,
         created_at,
       );
       return rowToVersion(getStmt.get(id) as Row);
@@ -145,6 +149,9 @@ export function createRoleVersionStore(db: Database): RoleVersionStore {
         skills,
         seedRefs,
         wakePrograms,
+        ...(row.default_wake_program === null
+          ? {}
+          : { defaultWakeProgram: row.default_wake_program }),
         hooksJson: row.hooks_json,
       };
       return data;

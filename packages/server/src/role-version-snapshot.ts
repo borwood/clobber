@@ -13,6 +13,7 @@ export interface RoleVersionSnapshot {
   readonly triggers_json: string;
   readonly seed_refs_json: string;
   readonly wake_programs_json: string;
+  readonly default_wake_program: string | null;
 }
 
 export interface SnapshotInputs {
@@ -40,6 +41,7 @@ export function snapshotShippedBundle(inputs: SnapshotInputs): RoleVersionSnapsh
     triggers_json: "[]",
     seed_refs_json: JSON.stringify(loaded.manifest.seedRefs ?? []),
     wake_programs_json: JSON.stringify(loaded.manifest.wakePrograms ?? []),
+    default_wake_program: loaded.manifest.defaultWakeProgram ?? null,
   };
 }
 

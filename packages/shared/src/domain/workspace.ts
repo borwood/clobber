@@ -37,15 +37,23 @@ export type RoleEditPolicy = z.infer<typeof RoleEditPolicySchema>;
 
 // Per-role-instance trigger disable list. The id of a trigger comes from
 // triggerId() in role.ts — a stable canonical form derived from the
-// trigger's shape (e.g. `cron:0 9 * * *`). Empty list = nothing disabled;
-// an absent entry for a role = nothing disabled. Forward-compatible: a
-// future per-trigger param override (changing a cron schedule, filtering
-// a webhook payload) would extend this object with additional fields.
+// trigger's shape (e.g. `cron:0 9 * * *`).
+//
+// `disabled_trigger_ids`: empty list = nothing disabled; an absent entry for a
+// role = nothing disabled.
+//
+// `wake_programs`: per-trigger-id override of the wake-program a fired trigger
+// composes, layered over the role-authored default on the trigger (`wake_program`
+// in role.ts). An absent key falls through to the role default; absent both
+// keeps the legacy synthesized-prompt-as-kick. This is the "future per-trigger
+// param override" the original disable-only shape anticipated — optional so
+// pre-existing stored overrides still parse.
 export const TriggerOverrideSchema = z.object({
   disabled_trigger_ids: z.array(z.string().min(1)).refine(
     (s) => new Set(s).size === s.length,
     { message: "disabled_trigger_ids must not contain duplicates" },
   ),
+  wake_programs: z.record(z.string().min(1), z.string().min(1)).optional(),
 });
 export type TriggerOverride = z.infer<typeof TriggerOverrideSchema>;
 

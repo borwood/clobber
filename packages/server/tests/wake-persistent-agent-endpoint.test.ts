@@ -21,6 +21,8 @@ import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
 import { createFinalReportConsumerStateStore } from "../src/final-report-consumer.ts";
 import { seedWorkspaceRoles } from "../src/seed-workspace-roles.ts";
+import { editRole } from "../src/edit-role.ts";
+import type { WakeProgram } from "@clobber/shared";
 import type { AgentSpawner, AgentSpawnRequest } from "../src/types.ts";
 
 let repoPath: string;
@@ -239,4 +241,71 @@ describe("POST /persistent-agents/:id/wake", () => {
 
     await teardown(h);
   });
+
+  it("wakes the manager with a chosen wake-program — composes its layer-C addon and kick (#213)", async () => {
+    // Surface 3 — the office affordance: a human picks a non-default program to
+    // wake the persistent agent with.
+    const h = buildHarness();
+    const ws = h.workspaces.create({ name: "ws", repo_path: repoPath });
+    seedWorkspaceRoles(h.db, ws.id);
+    const roleRow = h.db
+      .prepare("SELECT id FROM roles WHERE name = ? AND workspace_id = ?")
+      .get("manager", ws.id) as { id: string };
+    h.workspaceRoles.setCeiling(ws.id, roleRow.id, 5);
+    setManagerWakePrograms(h, roleRow.id, [
+      { name: "triage", system: "LAYER-C-TRIAGE", user: "Triage the queue." },
+    ]);
+
+    const agent = h.agents.create({ workspace_id: ws.id, role_id: roleRow.id, label: "boss" });
+
+    const res = await h.server.inject({
+      method: "POST",
+      url: `/persistent-agents/${agent.id}/wake`,
+      payload: { wake_program: "triage" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(h.calls).toHaveLength(1);
+    expect(h.calls[0]!.appendSystemPrompt).toContain("LAYER-C-TRIAGE");
+    expect(h.calls[0]!.prompt).toBe("Triage the queue.");
+    await teardown(h);
+  });
+
+  it("defaults the office wake to idle — no layer-C addon and no kick (#213)", async () => {
+    const h = buildHarness();
+    const ws = h.workspaces.create({ name: "ws", repo_path: repoPath });
+    seedWorkspaceRoles(h.db, ws.id);
+    const roleRow = h.db
+      .prepare("SELECT id FROM roles WHERE name = ? AND workspace_id = ?")
+      .get("manager", ws.id) as { id: string };
+    h.workspaceRoles.setCeiling(ws.id, roleRow.id, 5);
+    setManagerWakePrograms(h, roleRow.id, [
+      { name: "triage", system: "LAYER-C-TRIAGE", user: "Triage the queue." },
+    ]);
+
+    const agent = h.agents.create({ workspace_id: ws.id, role_id: roleRow.id, label: "boss" });
+
+    const res = await h.server.inject({
+      method: "POST",
+      url: `/persistent-agents/${agent.id}/wake`,
+      payload: {},
+    });
+    expect(res.statusCode).toBe(200);
+    expect(h.calls).toHaveLength(1);
+    // Even though the manager declares a `triage` program, the office wake
+    // defaults to idle — never auto-selecting a role program.
+    expect(h.calls[0]!.appendSystemPrompt).not.toContain("LAYER-C-TRIAGE");
+    expect(h.calls[0]!.prompt).toBeUndefined();
+    await teardown(h);
+  });
 });
+
+function setManagerWakePrograms(
+  h: Harness,
+  roleId: string,
+  programs: readonly WakeProgram[],
+): void {
+  const versions = createRoleVersionStore(h.db);
+  const role = h.roles.get(roleId)!;
+  const current = versions.get(role.current_version_id!)!;
+  editRole(h.db, role, current, { wakePrograms: programs });
+}

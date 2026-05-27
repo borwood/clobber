@@ -10,6 +10,9 @@ export interface RoleBundleData {
   readonly skills: readonly RoleSkill[];
   readonly seedRefs: readonly SeedRef[];
   readonly wakePrograms: readonly WakeProgram[];
+  // The default opening move for a fresh spawn that names none (#213). A program
+  // name (or `idle`); undefined → idle.
+  readonly defaultWakeProgram?: string;
   readonly hooksJson: string;
 }
 

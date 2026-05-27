@@ -62,6 +62,7 @@ const SCHEMA = `
     triggers_json             TEXT    NOT NULL DEFAULT '[]',
     seed_refs_json            TEXT    NOT NULL DEFAULT '[]',
     wake_programs_json        TEXT    NOT NULL DEFAULT '[]',
+    default_wake_program      TEXT,
     created_at                INTEGER NOT NULL,
     UNIQUE (role_id, version),
     FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE

@@ -18,6 +18,7 @@ export function migrateRoleVersions(db: Database): void {
   );
   ensureColumn(db, "role_versions", "seed_refs_json", "TEXT NOT NULL DEFAULT '[]'");
   ensureColumn(db, "role_versions", "wake_programs_json", "TEXT NOT NULL DEFAULT '[]'");
+  ensureColumn(db, "role_versions", "default_wake_program", "TEXT");
   ensureColumn(db, "sessions", "wake_program", "TEXT");
   dropLegacyGlobalUniqueName(db);
   db.exec(`
@@ -29,6 +30,7 @@ export function migrateRoleVersions(db: Database): void {
   backfillCliAllowLists(db);
   backfillSeedRefs(db);
   backfillWakePrograms(db);
+  backfillDefaultWakeProgram(db);
   backfillUnseededWorkspaces(db);
 }
 
@@ -177,6 +179,31 @@ function backfillWakePrograms(db: Database): void {
     if (loaded === null) continue;
     if (loaded.manifest.wakePrograms === undefined) continue;
     update.run(JSON.stringify(loaded.manifest.wakePrograms), row.version_id);
+  }
+}
+
+// Existing role_versions rows pre-date the default_wake_program column (NULL).
+// For shipped roles we recover the manifest's default so the live worker spawns
+// default to `task` without a re-edit; the manager declares none and stays NULL
+// (→ idle). Forked/unknown roles stay NULL. (#213)
+function backfillDefaultWakeProgram(db: Database): void {
+  const rows = db
+    .prepare(
+      `SELECT rv.id AS version_id, r.name AS role_name
+         FROM role_versions rv
+         JOIN roles r ON r.id = rv.role_id
+         WHERE rv.default_wake_program IS NULL`,
+    )
+    .all() as CliAllowListBackfillRow[];
+  if (rows.length === 0) return;
+  const update = db.prepare(
+    "UPDATE role_versions SET default_wake_program = ? WHERE id = ?",
+  );
+  for (const row of rows) {
+    const loaded = loadRoleBundle(row.role_name);
+    if (loaded === null) continue;
+    if (loaded.manifest.defaultWakeProgram === undefined) continue;
+    update.run(loaded.manifest.defaultWakeProgram, row.version_id);
   }
 }
 
