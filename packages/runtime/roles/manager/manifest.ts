@@ -11,6 +11,7 @@ export const managerRole = defineRole({
     description:
       "Permanent inhabitant of a workspace. Decomposes work, spawns workers, asks the user when blocked.",
     systemPromptPath: "system-prompt.md",
+    framingPath: "framing.md",
     pluginTemplatePath: "plugin-template",
     allowedCliCommands: ["*"],
     persistent: true,

@@ -38,7 +38,7 @@ interface Harness {
   workspaces: ReturnType<typeof createWorkspaceStore>;
   dispatches: ReturnType<typeof createTriggerDispatchStore>;
   scheduler: ReturnType<typeof createTriggerScheduler>;
-  spawnCalls: Array<{ prompt: string; sessionId: string }>;
+  spawnCalls: Array<{ prompt: string; appendSystemPrompt: string; sessionId: string }>;
   liveStdins: Map<string, PassThrough>;
 }
 
@@ -82,14 +82,18 @@ function makeHarness(initial: Date): Harness {
   });
 
   const liveStdins = new Map<string, PassThrough>();
-  const spawnCalls: Array<{ prompt: string; sessionId: string }> = [];
+  const spawnCalls: Array<{ prompt: string; appendSystemPrompt: string; sessionId: string }> = [];
 
   const spawner: AgentSpawner = (req): SpawnedAgentInfo => {
     if (req.sessionId === undefined) throw new Error("expected sessionId");
     const stdin = new PassThrough();
     stdin.resume();
     liveStdins.set(req.sessionId, stdin);
-    spawnCalls.push({ prompt: req.prompt!, sessionId: req.sessionId });
+    spawnCalls.push({
+      prompt: req.prompt!,
+      appendSystemPrompt: req.appendSystemPrompt!,
+      sessionId: req.sessionId,
+    });
     return {
       sessionId: req.sessionId,
       pid: 7000 + spawnCalls.length,
@@ -210,10 +214,10 @@ describe("TriggerScheduler — cron firing", () => {
     await flushAfter(h.clock, 30_000);
     expect(h.spawnCalls.length).toBe(1);
     expect(h.spawnCalls[0]!.prompt).toContain("0 9 * * *");
-    // The triggered-wake spawn goes through attachSessionToAgent, so it gets the
-    // same office-context prefix as a manual /spawn for a persistent role.
-    expect(h.spawnCalls[0]!.prompt).toContain("[Previously in this office]");
-    expect(h.spawnCalls[0]!.prompt).toContain("[End of previously]");
+    // The triggered-wake spawn goes through attachSessionToAgent, so office
+    // continuity rides the composed system prompt, same as a manual /spawn.
+    expect(h.spawnCalls[0]!.appendSystemPrompt).toContain("[Previously in this office]");
+    expect(h.spawnCalls[0]!.appendSystemPrompt).toContain("[End of previously]");
 
     // The new session should be tied to the manager agent
     const active = h.sessions.listActiveForWorkspace(h.workspaceId);
@@ -383,6 +387,7 @@ describe("TriggerScheduler — cron firing", () => {
     const v2 = h.roleVersions.create({
       role_id: workerRole.id,
       version: 2,
+      framing: cur.framing,
       system_prompt: cur.system_prompt,
       skills_json: cur.skills_json,
       allowed_tools_json: cur.allowed_tools_json,
@@ -973,6 +978,7 @@ describe("TriggerScheduler — workspace-open firing", () => {
     const v2 = h.roleVersions.create({
       role_id: workerRole.id,
       version: 2,
+      framing: cur.framing,
       system_prompt: cur.system_prompt,
       skills_json: cur.skills_json,
       allowed_tools_json: cur.allowed_tools_json,

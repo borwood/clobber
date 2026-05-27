@@ -44,6 +44,7 @@ export function buildDetail(
     current_version: {
       id: version.id,
       version: version.version,
+      framing: version.framing,
       system_prompt: version.system_prompt,
       skills: JSON.parse(version.skills_json),
       allowed_tools: JSON.parse(version.allowed_tools_json),

@@ -126,13 +126,13 @@ describe("spawn — boot-context provider injection (#166)", () => {
     expect(res.statusCode).toBe(200);
 
     expect(h.calls).toHaveLength(1);
-    const prompt = h.calls[0]!.prompt!;
-    expect(prompt).toContain(MARK_START);
-    expect(prompt).toContain("ACCUMULATED-WISDOM");
-    expect(prompt).toContain(MARK_END);
-    // Workspace framing comes first, the task body last.
-    expect(prompt.indexOf(MARK_START)).toBeLessThan(prompt.indexOf("ship the issue"));
-    expect(prompt.endsWith("ship the issue")).toBe(true);
+    // Workspace framing rides the composed system prompt; the user turn is
+    // only the task kick.
+    const system = h.calls[0]!.appendSystemPrompt!;
+    expect(system).toContain(MARK_START);
+    expect(system).toContain("ACCUMULATED-WISDOM");
+    expect(system).toContain(MARK_END);
+    expect(h.calls[0]!.prompt).toBe("ship the issue");
 
     // The provider received the BootContext as JSON on stdin.
     const ctx = JSON.parse(readFileSync(sinkPath, "utf8")) as BootContext;
@@ -166,12 +166,13 @@ describe("spawn — boot-context provider injection (#166)", () => {
     });
     expect(res.statusCode).toBe(200);
 
-    const prompt = h.calls[0]!.prompt!;
-    expect(prompt).toContain("DURABLE-FRAMING");
-    expect(prompt).toContain("[Previously in this office]");
-    // Order: workspace context, then office context, then the task.
-    expect(prompt.indexOf(MARK_START)).toBeLessThan(prompt.indexOf("[Previously in this office]"));
-    expect(prompt.indexOf("[Previously in this office]")).toBeLessThan(prompt.indexOf("do work"));
+    const system = h.calls[0]!.appendSystemPrompt!;
+    expect(system).toContain("DURABLE-FRAMING");
+    expect(system).toContain("[Previously in this office]");
+    // Order within the composed system prompt: workspace context, then office.
+    expect(system.indexOf(MARK_START)).toBeLessThan(system.indexOf("[Previously in this office]"));
+    // The task body rides the user turn alone.
+    expect(h.calls[0]!.prompt).toBe("do work");
 
     await teardown(h);
   });
@@ -288,10 +289,10 @@ describe("spawn — boot-context provider over http (#166)", () => {
     expect(captured[0]!.body.workspace_id).toBe(ws.id);
     expect(captured[0]!.body.role_name).toBe("worker");
 
-    const prompt = h.calls[0]!.prompt;
-    expect(prompt).toContain(MARK_START);
-    expect(prompt).toContain("HTTP-WISDOM");
-    expect(prompt).toContain(MARK_END);
+    const system = h.calls[0]!.appendSystemPrompt;
+    expect(system).toContain(MARK_START);
+    expect(system).toContain("HTTP-WISDOM");
+    expect(system).toContain(MARK_END);
 
     await teardown(h);
   });

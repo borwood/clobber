@@ -54,6 +54,7 @@ const SCHEMA = `
     id                        TEXT    PRIMARY KEY,
     role_id                   TEXT    NOT NULL,
     version                   INTEGER NOT NULL,
+    framing                   TEXT    NOT NULL DEFAULT '',
     system_prompt             TEXT    NOT NULL,
     skills_json               TEXT    NOT NULL,
     allowed_tools_json        TEXT    NOT NULL,

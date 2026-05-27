@@ -103,7 +103,8 @@ export interface AttachSessionInput {
   readonly workspace: Workspace;
   readonly role: Role;
   readonly agent: Agent;
-  readonly prompt: string;
+  // Absent on a no-task wake — no opening user message to compose.
+  readonly prompt: string | undefined;
   readonly briefing?: BriefingPacket;
   readonly effortOverride?: EffortLevel;
 }

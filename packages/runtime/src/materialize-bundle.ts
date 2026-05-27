@@ -5,6 +5,7 @@ import type { RoleSkill } from "@clobber/shared";
 export interface RoleBundleData {
   readonly pluginName: string;
   readonly description?: string;
+  readonly framing: string;
   readonly systemPrompt: string;
   readonly skills: readonly RoleSkill[];
   readonly hooksJson: string;

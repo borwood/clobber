@@ -9,6 +9,7 @@ export function migrateRoleVersions(db: Database): void {
   ensureColumn(db, "roles", "current_version_id", "TEXT");
   ensureColumn(db, "sessions", "role_version_id", "TEXT");
   ensureColumn(db, "role_versions", "triggers_json", "TEXT NOT NULL DEFAULT '[]'");
+  ensureColumn(db, "role_versions", "framing", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(
     db,
     "role_versions",

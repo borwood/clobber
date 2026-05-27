@@ -4,6 +4,7 @@ import { PLUGIN_HOOKS_REL, type LoadedRole } from "@clobber/runtime";
 import type { RoleSkill } from "@clobber/shared";
 
 export interface RoleVersionSnapshot {
+  readonly framing: string;
   readonly system_prompt: string;
   readonly skills_json: string;
   readonly allowed_tools_json: string;
@@ -26,6 +27,7 @@ export function snapshotShippedBundle(inputs: SnapshotInputs): RoleVersionSnapsh
   const hooks_json = readFileSync(hooksAbs, "utf8");
 
   return {
+    framing: loaded.framing,
     system_prompt: loaded.systemPrompt,
     skills_json: JSON.stringify(skills),
     allowed_tools_json: JSON.stringify(allowedTools),

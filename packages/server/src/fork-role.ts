@@ -52,6 +52,7 @@ export function forkRole(
   const newVersion = versions.create({
     role_id: id,
     version: 1,
+    framing: sourceVersion.framing,
     system_prompt: sourceVersion.system_prompt,
     skills_json: sourceVersion.skills_json,
     allowed_tools_json: sourceVersion.allowed_tools_json,
