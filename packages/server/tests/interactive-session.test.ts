@@ -196,28 +196,29 @@ describe("POST /sessions/:id/prompt — interactive sessions (issue #8)", () => 
     await teardown(h);
   });
 
-  it("returns 409 when the agent is busy (initial turn in progress, no Stop yet)", async () => {
+  it("injects to the live child's stdin while busy (initial turn in progress, no Stop yet)", async () => {
+    // #113: claude is a livePromptInjection provider — the CLI natively queues
+    // an inbound stdin message mid-turn, so a prompt sent to a busy session is
+    // injected to the same live stdin (same conversation) rather than rejected.
     const h = buildHarness();
     const spawned = await seedAndSpawn(h);
 
     const res = await h.server.inject({
       method: "POST",
       url: `/sessions/${spawned.session_id}/prompt`,
-      payload: { prompt: "too soon" },
+      payload: { prompt: "while busy" },
     });
-    expect(res.statusCode).toBe(409);
-    expect((res.json() as { error: string }).error).toBe("agent busy");
+    expect(res.statusCode).toBe(200);
 
     const stub = h.control.agents.find((a) => a.sessionId === spawned.session_id);
-    expect(stub!.writes.join("")).toBe("");
+    expect(stub!.writes.join("")).toBe(serializeUserMessage("while busy"));
 
     await teardown(h);
   });
 
-  it("two prompts back-to-back: first 200, second 409 until next Stop", async () => {
+  it("two rapid prompts while busy both inject, order preserved", async () => {
     const h = buildHarness();
     const spawned = await seedAndSpawn(h);
-    await fireStop(h, spawned.session_id);
 
     const first = await h.server.inject({
       method: "POST",
@@ -231,19 +232,11 @@ describe("POST /sessions/:id/prompt — interactive sessions (issue #8)", () => 
       url: `/sessions/${spawned.session_id}/prompt`,
       payload: { prompt: "two" },
     });
-    expect(second.statusCode).toBe(409);
-
-    await fireStop(h, spawned.session_id);
-    const third = await h.server.inject({
-      method: "POST",
-      url: `/sessions/${spawned.session_id}/prompt`,
-      payload: { prompt: "three" },
-    });
-    expect(third.statusCode).toBe(200);
+    expect(second.statusCode).toBe(200);
 
     const stub = h.control.agents.find((a) => a.sessionId === spawned.session_id);
     expect(stub!.writes.join("")).toBe(
-      serializeUserMessage("one") + serializeUserMessage("three"),
+      serializeUserMessage("one") + serializeUserMessage("two"),
     );
 
     await teardown(h);

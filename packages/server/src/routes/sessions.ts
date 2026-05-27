@@ -136,14 +136,14 @@ export function registerSessionRoutes(
         reply.code(409);
         return { error: "agent busy" };
       }
-      if (live.busy) {
-        reply.code(409);
-        return { error: "agent busy" };
-      }
       if (!deps.runtimeProvider.capabilities.livePromptInjection) {
         reply.code(409);
         return { error: "runtime does not support live prompt injection" };
       }
+      // No busy-reject: an injection-capable runtime (claude) natively queues an
+      // inbound stdin message mid-turn and processes it at the next turn
+      // boundary, all within the same long-lived process — so the prompt lands
+      // in the same conversation whether the agent is idle or busy (#113).
       live.stdin.write(deps.runtimeProvider.serializeUserPrompt(parsed.data.prompt));
       deps.registry.setBusy(sessionId, true);
       return { ok: true };
