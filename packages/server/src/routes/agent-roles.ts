@@ -4,6 +4,8 @@ import { z } from "zod";
 import {
   RoleSkillSchema,
   RoleTriggerSchema,
+  SeedRefSchema,
+  WakeProgramSchema,
   type RoleListEntry,
 } from "@clobber/shared";
 import type { SessionTokenStore } from "../session-token-store.ts";
@@ -36,6 +38,8 @@ const EditBodySchema = z
     skills: z.array(RoleSkillSchema).optional(),
     allowed_tools: z.array(z.string().min(1)).optional(),
     triggers: z.array(RoleTriggerSchema).optional(),
+    seed_refs: z.array(SeedRefSchema).optional(),
+    wake_programs: z.array(WakeProgramSchema).optional(),
     description: z.string().min(1).optional(),
   })
   .strict();
@@ -148,12 +152,14 @@ export function registerAgentRolesRoutes(
           parsed.data.system_prompt !== undefined ||
           parsed.data.skills !== undefined ||
           parsed.data.allowed_tools !== undefined ||
-          parsed.data.triggers !== undefined;
+          parsed.data.triggers !== undefined ||
+          parsed.data.seed_refs !== undefined ||
+          parsed.data.wake_programs !== undefined;
         if (!versionBumping && parsed.data.description === undefined) {
           reply.code(400);
           return {
             error:
-              "edit body must include at least one of system_prompt, skills, allowed_tools, triggers, description",
+              "edit body must include at least one of system_prompt, skills, allowed_tools, triggers, seed_refs, wake_programs, description",
           };
         }
         const { idOrName } = request.params;
@@ -201,6 +207,12 @@ export function registerAgentRolesRoutes(
             ...(parsed.data.triggers === undefined
               ? {}
               : { triggers: parsed.data.triggers }),
+            ...(parsed.data.seed_refs === undefined
+              ? {}
+              : { seedRefs: parsed.data.seed_refs }),
+            ...(parsed.data.wake_programs === undefined
+              ? {}
+              : { wakePrograms: parsed.data.wake_programs }),
           };
           const result = applyRoleEdit(deps.db, deps.scheduler, role, currentVersion, patch);
           response.version_id = result.version_id;

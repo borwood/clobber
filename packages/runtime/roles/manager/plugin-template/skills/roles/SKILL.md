@@ -1,6 +1,6 @@
 ---
 name: roles
-description: Inspect, fork, and edit the roles available in this workspace. Roles are how you encode "what a worker is" — system prompt, skills, tool allowlist, triggers.
+description: Inspect, fork, and edit the roles available in this workspace. Roles are how you encode "what a worker is" — system prompt, skills, tool allowlist, triggers, seeds, and wake-programs.
 ---
 
 # roles
@@ -12,8 +12,15 @@ spawning, to evolve a role you've seen come up short, or to fork a new variant
 for a workflow that doesn't fit any existing role.
 
 ```
-clobber roles <list|show|fork|edit|ceiling> [args...] [--json]
+clobber roles <list|show|fork|edit|ceiling|seeds|wake-programs> [args...] [--json]
 ```
+
+The composed system prompt a worker receives at spawn has three layers
+(epic #209): **A** role framing, **B** seeds, **C** the wake-program addon.
+`edit` shapes A (the system prompt) and the skill/tool surface; `seeds` shapes
+B; `wake-programs` shapes C and the opening kick. Reach for the seed/wake verbs
+at *authoring time* — when you're deciding what a role knows on every spawn and
+how it opens its session — not at boot.
 
 ## Subcommands
 
@@ -76,6 +83,70 @@ take effect on the next spawn.
 clobber roles edit repro-worker --add-skill bisect=./bisect.md
 clobber roles edit repro-worker --allowed-tools Bash,Read,Edit,Grep
 ```
+
+### `roles seeds <name|id> [add|enable|disable <seed> [--disabled]]`
+
+Seeds are layer-B compositional units of the system prompt — shareable,
+per-role-toggleable. With no action, lists the role's seed refs and whether
+each is enabled. `add` appends a ref (enabled unless `--disabled`); `enable` /
+`disable` flip an existing ref. Every change routes through the same versioned
+edit path as `edit`, so it bumps the role version.
+
+```
+clobber roles seeds my-worker                       # list refs + enabled state
+clobber roles seeds my-worker add repo-sdlc         # ref an existing catalog seed
+clobber roles seeds my-worker add house-rules --disabled
+clobber roles seeds my-worker disable wisdom-pointer
+```
+
+A ref points at a **catalog seed by name**. The catalog is the shipped defaults
+(`office-manifest`, `repo-sdlc`, `wisdom-pointer`) overlaid by the workspace's
+filesystem catalog at `<repo>/.clobber/seeds/<name>/seed.json`. A shipped
+default carries no privilege over one you author — both resolve through the same
+path at spawn.
+
+**Authoring a new seed definition** (static text or a dynamic script) means
+writing that catalog file, then ref'ing it with `roles seeds … add <name>`:
+
+```jsonc
+// <repo>/.clobber/seeds/house-rules/seed.json — a static seed
+{ "kind": "static", "text": "House rule: never force-push shared branches." }
+```
+```jsonc
+// <repo>/.clobber/seeds/branch-status/seed.json — a dynamic seed.
+// The {exec|http|noop} provider's command/args ARE the script; its stdout is
+// composed into the prompt at spawn. A filesystem entry shadows a default of
+// the same name.
+{ "kind": "dynamic",
+  "provider": { "kind": "exec", "command": "git", "args": ["status", "--short"] } }
+```
+
+There is no separate script file to register — the provider spec is the script,
+and `<repo>/.clobber/seeds/` is the one place it lives. The seed must exist in
+the catalog before you `add` a ref to it.
+
+### `roles wake-programs <name|id> [show|add|edit|remove <name> ...]`
+
+A wake-program is a role's **opening move**: layer-C system addon (`--system`,
+"regardless of the first message, do X first") plus the opening user-message
+kick (`--user`, or `--no-user` for none). `idle` is the universal built-in —
+no addon, no kick — shown in the list but not authored (it's reserved). All
+changes route through the versioned edit path.
+
+```
+clobber roles wake-programs my-worker                         # list (idle + role programs)
+clobber roles wake-programs my-worker show triage             # see one program's channels
+clobber roles wake-programs my-worker add triage \
+    --system-file ./triage-c.md --user "Triage the inbound queue now."
+clobber roles wake-programs my-worker add watch \
+    --system "Watch CI and report." --no-user
+clobber roles wake-programs my-worker edit triage --user "Triage and escalate."
+clobber roles wake-programs my-worker remove watch
+```
+
+`add` requires both a `--system`/`--system-file` source and a kick decision
+(`--user` or `--no-user`). `edit` changes only the channels you pass, leaving
+the rest intact.
 
 ### `roles ceiling <name|id> <max>`
 
