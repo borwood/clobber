@@ -86,8 +86,16 @@ export function registerSessionRoutes(
         reply.code(404);
         return { error: "session not found" };
       }
-      if (session.transcript_path === undefined) return [];
-      return readTranscript(session.transcript_path);
+      // The clobber-composed prompt rides as a leading pseudo-line ahead of
+      // claude's own emissions, so the audit view shows what the agent was told
+      // on this wake (#253). The web classifier renders it as a showSystem-gated
+      // entry; it never reaches the agent's actual transcript file.
+      const prefix =
+        session.composed_system_prompt === undefined
+          ? []
+          : [{ type: "system-prompt", prompt: session.composed_system_prompt }];
+      if (session.transcript_path === undefined) return prefix;
+      return [...prefix, ...(await readTranscript(session.transcript_path))];
     },
   );
 

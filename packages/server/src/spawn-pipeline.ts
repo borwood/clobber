@@ -156,6 +156,9 @@ export async function attachSessionToAgent(
     // Derive from the resolved cwd, not repo_path: with spawn_worktree on the
     // session runs in a worktree, and the transcript lands under that slug.
     transcript_path: deps.runtimeProvider.transcriptPath(ctx.spawnOptions.cwd, sessionId),
+    // Capture the rendered prompt this wake was spawned with so the transcript
+    // can surface exactly what the agent was told (#253).
+    composed_system_prompt: ctx.spawnOptions.systemPrompt,
   });
   bindLiveSession(deps, sessionId, ctx, spawned);
 

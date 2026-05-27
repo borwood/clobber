@@ -6,6 +6,7 @@ import { migrateSessionRuntime } from "./session-runtime-migration.ts";
 import { migrateAgentQuestions } from "./agent-question-migration.ts";
 import { migrateRoleEffort } from "./role-effort-migration.ts";
 import { migrateSessionWasLive } from "./session-was-live-migration.ts";
+import { migrateSessionComposedPrompt } from "./session-composed-prompt-migration.ts";
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS events (
@@ -105,6 +106,7 @@ const SCHEMA = `
     ended_at        INTEGER,
     transcript_path TEXT,
     was_live_at_shutdown INTEGER NOT NULL DEFAULT 0,
+    composed_system_prompt TEXT,
     FOREIGN KEY (agent_id)        REFERENCES agents(id)        ON DELETE SET NULL,
     FOREIGN KEY (workspace_id)    REFERENCES workspaces(id)    ON DELETE CASCADE,
     FOREIGN KEY (role_id)         REFERENCES roles(id)         ON DELETE CASCADE,
@@ -205,6 +207,7 @@ export function createDatabase(path: string): Database {
   migrateAgentQuestions(db);
   migrateRoleEffort(db);
   migrateSessionWasLive(db);
+  migrateSessionComposedPrompt(db);
   return db;
 }
 
