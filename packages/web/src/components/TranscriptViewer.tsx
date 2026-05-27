@@ -1,6 +1,10 @@
 import { useLayoutEffect, useMemo, useRef, useState, type UIEvent } from "react";
 import type { TranscriptLine } from "../api.ts";
-import { classifyLine, shouldShowAssistantLabel } from "../transcript-types.ts";
+import {
+  classifyLine,
+  shouldShowAssistantLabel,
+  buildToolResultIndex,
+} from "../transcript-types.ts";
 import { deriveWorkingState } from "../working-state.ts";
 import { WorkingIndicator } from "./WorkingIndicator.tsx";
 import {
@@ -23,6 +27,7 @@ export function TranscriptViewer({ lines, showSystem, busy }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [pinned, setPinned] = useState(true);
   const classified = useMemo(() => lines.map(classifyLine), [lines]);
+  const toolResults = useMemo(() => buildToolResultIndex(lines), [lines]);
   const workingState = useMemo(() => deriveWorkingState(lines), [lines]);
 
   useLayoutEffect(() => {
@@ -73,6 +78,8 @@ export function TranscriptViewer({ lines, showSystem, busy }: Props) {
                     key={idx}
                     line={c.line}
                     showLabel={shouldShowAssistantLabel(classified, idx, { showSystem })}
+                    showDetails={showSystem}
+                    toolResults={toolResults}
                   />
                 );
               }

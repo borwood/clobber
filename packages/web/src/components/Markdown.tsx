@@ -1,6 +1,7 @@
 import { memo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeHighlight from "rehype-highlight";
 
 interface Props {
   readonly text: string;
@@ -19,6 +20,7 @@ export const Markdown = memo(function Markdown({ text }: Props) {
     <div className="markdown-body">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeHighlight]}
         components={{
           p: ({ children }) => <p className="text-sm text-zinc-100 leading-relaxed">{children}</p>,
           h1: ({ children }) => (
@@ -38,11 +40,13 @@ export const Markdown = memo(function Markdown({ text }: Props) {
           ),
           li: ({ children }) => <li className="leading-relaxed">{children}</li>,
           code: ({ className, children }) => {
-            const isBlock = className?.startsWith("language-") === true;
+            // rehype-highlight rewrites a fenced block's <code> className to
+            // include `hljs` + `language-x` and replaces children with token
+            // spans. Pass className through so the theme + token colors apply.
+            const isBlock =
+              className !== undefined && /\b(?:language-|hljs)\b/.test(className);
             if (isBlock) {
-              return (
-                <code className="font-mono text-xs text-zinc-200">{children}</code>
-              );
+              return <code className={`font-mono text-xs ${className}`}>{children}</code>;
             }
             return (
               <code className="font-mono text-[0.85em] bg-zinc-900 border border-zinc-800 px-1 py-0.5 rounded text-emerald-300">
