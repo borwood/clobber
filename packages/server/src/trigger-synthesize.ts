@@ -1,8 +1,8 @@
 import type { RoleTrigger } from "@clobber/shared";
 import {
-  renderSessionEndedWake,
-  type SessionEndedWakePayload,
-} from "./session-ended-wake.ts";
+  renderCompletionWake,
+  type CompletionWakePayload,
+} from "./completion-wake.ts";
 
 const PAYLOAD_MAX_CHARS = 2000;
 
@@ -30,6 +30,7 @@ export function defaultSynthesizePrompt(
     case "workspace-open":
       return renderWithPayload("the workspace was opened", payload);
     case "session-ended":
-      return renderSessionEndedWake(payload as SessionEndedWakePayload);
+    case "worker-done":
+      return renderCompletionWake(payload as CompletionWakePayload);
   }
 }

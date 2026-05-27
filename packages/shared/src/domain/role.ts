@@ -85,6 +85,15 @@ export const WorkspaceOpenTriggerSchema = z.object({
 export const SessionEndedTriggerSchema = z.object({
   kind: z.literal("session-ended"),
 });
+// Fires when a worker declares itself finished via `clobber status done` —
+// the worker's own terminal handoff. Unlike `session-ended` (process
+// termination), this fires on the happy path where a worker opens a PR and
+// idles without ending. A persistent role declaring it gets woken with the
+// finished worker's done-summary, subject to the same flush-on-idle busy
+// policy. See #240.
+export const WorkerDoneTriggerSchema = z.object({
+  kind: z.literal("worker-done"),
+});
 export const RoleTriggerSchema = z.discriminatedUnion("kind", [
   CronTriggerSchema,
   FileWatchTriggerSchema,
@@ -92,6 +101,7 @@ export const RoleTriggerSchema = z.discriminatedUnion("kind", [
   IssueAssignedTriggerSchema,
   WorkspaceOpenTriggerSchema,
   SessionEndedTriggerSchema,
+  WorkerDoneTriggerSchema,
 ]);
 export type RoleTrigger = z.infer<typeof RoleTriggerSchema>;
 
@@ -115,6 +125,8 @@ export function triggerId(trigger: RoleTrigger): string {
       return "workspace-open";
     case "session-ended":
       return "session-ended";
+    case "worker-done":
+      return "worker-done";
   }
 }
 

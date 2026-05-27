@@ -63,11 +63,14 @@ describe("examples/clobber-on-clobber — dogfood workspace config (#150)", () =
     expect(wake).toContain("/assignment");
   });
 
-  it("manager-triggers.json wires workspace-open (#149) + cron + session-ended (#171) onto the manager role-version", () => {
+  it("manager-triggers.json wires workspace-open (#149) + cron + worker-done (#240) + session-ended (#171) onto the manager role-version", () => {
     const triggers = z.array(RoleTriggerSchema).parse(readExampleJson("manager-triggers.json"));
     const ids = triggers.map(triggerId);
     expect(ids).toContain("workspace-open");
     expect(ids.some((id) => id.startsWith("cron:"))).toBe(true);
+    // The work-is-done wake (#240) keys on worker-done; session-ended coexists
+    // for crash/kill cleanup — neither supersedes the other.
+    expect(ids).toContain("worker-done");
     expect(ids).toContain("session-ended");
   });
 

@@ -45,6 +45,9 @@ export function createServer(opts: ServerOptions): FastifyInstance {
   const onSessionEnded = (workspaceId: string, finishedSessionId: string): void => {
     void scheduler.fireSessionEnded(workspaceId, finishedSessionId);
   };
+  const onWorkerDone = (workspaceId: string, finishedSessionId: string): void => {
+    void scheduler.fireWorkerDone(workspaceId, finishedSessionId);
+  };
 
   const spawnPipelineDeps: SpawnPipelineDeps = {
     workspaces: opts.workspaces,
@@ -177,6 +180,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     cliEntry: opts.cliEntry,
     runtimeProvider,
     onSessionEnded,
+    onWorkerDone,
     resumeEnded: (input) => resumeEndedSession(spawnPipelineDeps, input),
   });
   registerAgentRolesRoutes(app, {
