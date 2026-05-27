@@ -1,0 +1,112 @@
+import {
+  dispatchTrigger,
+  type AgentBinding,
+  type BusyPolicy,
+  type DispatchDeps,
+  type DispatchResult,
+} from "./trigger-dispatch.ts";
+import {
+  addToKeyedIndex,
+  clearAgentFromKeyedIndex,
+} from "./trigger-keyed-index.ts";
+import { createAgentWorkQueue } from "./agent-work-queue.ts";
+import type { CompletionWakeItem, CompletionWakePayload } from "./completion-wake.ts";
+
+// The trigger kinds that fire a completion wake: a worker finishing (`worker-done`)
+// or a session ending (`session-ended`). Both share this scheduler — keyed
+// index, busy-aware enqueue, and flush-on-idle coalescing — and differ only in
+// how the wake item is rebuilt from persistent state.
+export type CompletionWakeKind = "session-ended" | "worker-done";
+
+export interface ScheduledCompletionWake extends AgentBinding {
+  readonly trigger: { kind: CompletionWakeKind };
+}
+
+// Rebuilds a wake item from persistent state for the finished session, or null
+// when the session is gone. The ephemeral agent may already be reaped — the
+// session row and its log rows survive.
+export type BuildCompletionWakeItem = (sessionId: string) => CompletionWakeItem | null;
+
+export interface CompletionWakeScheduler {
+  register(entry: ScheduledCompletionWake): void;
+  clearAgent(agentId: string): void;
+  clearAll(): void;
+  // Fired when a session completes (ended, or a worker posted status=done).
+  // Wakes each persistent agent in the workspace declaring this kind.
+  fire(workspaceId: string, finishedSessionId: string): Promise<DispatchResult>;
+  // Called on an agent's Stop (busy→idle): delivers any completion wakes that
+  // were enqueued while it was busy, coalesced into one.
+  flushPendingWakes(agentId: string): Promise<void>;
+}
+
+export function createCompletionWakeScheduler(
+  kind: CompletionWakeKind,
+  buildItem: BuildCompletionWakeItem,
+  dispatchDeps: DispatchDeps,
+): CompletionWakeScheduler {
+  const byAgent = new Map<string, Set<ScheduledCompletionWake>>();
+  const byWorkspace = new Map<string, Set<ScheduledCompletionWake>>();
+  // Completion wakes that arrived while the target agent was busy, held per
+  // agent until its next idle (the Stop hook → flushPendingWakes).
+  const pendingWakes = createAgentWorkQueue<CompletionWakeItem>();
+  const enqueueWhileBusy: BusyPolicy = {
+    kind: "enqueue",
+    enqueue: (binding, _trigger, payload) => {
+      for (const item of (payload as CompletionWakePayload).ended) {
+        pendingWakes.enqueue(binding.agentId, item);
+      }
+    },
+  };
+
+  function register(entry: ScheduledCompletionWake): void {
+    addToKeyedIndex(entry, entry.agentId, entry.workspaceId, byAgent, byWorkspace);
+  }
+
+  function clearAgent(agentId: string): void {
+    clearAgentFromKeyedIndex<ScheduledCompletionWake>(
+      agentId,
+      (e) => e.workspaceId,
+      byAgent,
+      byWorkspace,
+    );
+    pendingWakes.clear(agentId);
+  }
+
+  function clearAll(): void {
+    byAgent.clear();
+    byWorkspace.clear();
+  }
+
+  async function fire(
+    workspaceId: string,
+    finishedSessionId: string,
+  ): Promise<DispatchResult> {
+    const set = byWorkspace.get(workspaceId);
+    if (set === undefined) return { dispatched: 0 };
+    const item = buildItem(finishedSessionId);
+    if (item === null) return { dispatched: 0 };
+    const payload: CompletionWakePayload = { ended: [item] };
+    let dispatched = 0;
+    for (const entry of set) {
+      if (
+        await dispatchTrigger(dispatchDeps, entry, entry.trigger, payload, enqueueWhileBusy)
+      ) {
+        dispatched += 1;
+      }
+    }
+    return { dispatched };
+  }
+
+  async function flushPendingWakes(agentId: string): Promise<void> {
+    const items = pendingWakes.drain(agentId);
+    if (items.length === 0) return;
+    const set = byAgent.get(agentId);
+    if (set === undefined) return;
+    const entry = set.values().next().value;
+    if (entry === undefined) return;
+    const payload: CompletionWakePayload = { ended: items };
+    await dispatchTrigger(dispatchDeps, entry, entry.trigger, payload, enqueueWhileBusy);
+  }
+
+  return { register, clearAgent, clearAll, fire, flushPendingWakes };
+}

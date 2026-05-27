@@ -46,6 +46,7 @@ export interface AgentRouteDeps {
   readonly cliEntry: string;
   readonly runtimeProvider: RuntimeProvider;
   readonly onSessionEnded: (workspaceId: string, finishedSessionId: string) => void;
+  readonly onWorkerDone: (workspaceId: string, finishedSessionId: string) => void;
   readonly resumeEnded: (input: {
     readonly sessionId: string;
     readonly prompt: string | undefined;
@@ -185,6 +186,12 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
         summary: parsed.data.summary,
         ...(parsed.data.details === undefined ? {} : { details: parsed.data.details }),
       });
+      // A worker's `clobber status done` is its terminal handoff — the manager's
+      // work-is-done wake keys on this transition (the worker idles after a PR
+      // rather than ending, so session-ended never fires on the happy path). See #240.
+      if (parsed.data.state === "done") {
+        deps.onWorkerDone(session.workspace_id, session.id);
+      }
       return { ok: true };
     }),
   );

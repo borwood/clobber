@@ -4,9 +4,7 @@ import {
   RoleTriggerSchema,
   triggerId,
   type Agent,
-  type Role,
   type RoleTrigger,
-  type Workspace,
 } from "@clobber/shared";
 import type { Clock } from "./clock.ts";
 import type { WorkspaceStore } from "./workspace-store.ts";
@@ -16,7 +14,6 @@ import type { AgentStore } from "./agent-store.ts";
 import type { SessionStore } from "./session-store.ts";
 import type { AgentRegistry } from "./agent-registry.ts";
 import type { TriggerDispatchStore } from "./trigger-dispatch-store.ts";
-import type { SpawnPipelineSuccess, SpawnPipelineNoBundleError } from "./spawn-pipeline.ts";
 import {
   dispatchTrigger,
   recordDisabledTrigger,
@@ -25,22 +22,15 @@ import {
   type DispatchDeps,
   type DispatchResult,
 } from "./trigger-dispatch.ts";
+import type { AttachSessionFn } from "./trigger-attach.ts";
 import { defaultSynthesizePrompt } from "./trigger-synthesize.ts";
 import { createCronScheduler } from "./trigger-cron-scheduler.ts";
-import { createSessionEndedScheduler } from "./trigger-session-ended.ts";
+import { createCompletionWakeSchedulers } from "./completion-wake-schedulers.ts";
 import {
   addToKeyedIndex,
   clearAgentFromKeyedIndex,
 } from "./trigger-keyed-index.ts";
 import type { AgentStatusLogStore } from "./agent-status-log-store.ts";
-
-export type AttachOutcome = SpawnPipelineSuccess | SpawnPipelineNoBundleError;
-export type AttachSessionFn = (input: {
-  readonly workspace: Workspace;
-  readonly role: Role;
-  readonly agent: Agent;
-  readonly prompt: string;
-}) => Promise<AttachOutcome>;
 
 export interface TriggerSchedulerDeps {
   readonly db: Database;
@@ -65,12 +55,17 @@ export interface TriggerScheduler {
   reloadAgent(agentId: string): void;
   fireWebhook(path: string, payload: unknown): Promise<DispatchResult>;
   fireWorkspaceOpen(workspaceId: string, payload: unknown): Promise<DispatchResult>;
-  fireSessionEnded(
-    workspaceId: string,
-    finishedSessionId: string,
-  ): Promise<DispatchResult>;
+  fireSessionEnded: FireCompletionWake;
+  fireWorkerDone: FireCompletionWake;
   flushPendingWakes(agentId: string): Promise<void>;
 }
+
+// A completion-wake fire entry point: wakes persistent agents in the workspace
+// declaring the corresponding kind for the finished session.
+export type FireCompletionWake = (
+  workspaceId: string,
+  finishedSessionId: string,
+) => Promise<DispatchResult>;
 
 interface ScheduledWebhook extends AgentBinding {
   readonly trigger: { kind: "webhook"; path: string };
@@ -114,7 +109,7 @@ export function createTriggerScheduler(
   const workspaceOpensByWorkspace = new Map<string, Set<ScheduledWorkspaceOpen>>();
   let started = false;
   const cronScheduler = createCronScheduler(deps.clock, dispatchDeps, () => started);
-  const sessionEndedScheduler = createSessionEndedScheduler(
+  const completionWakes = createCompletionWakeSchedulers(
     { sessions: deps.sessions, agentStatusLog: deps.agentStatusLog },
     dispatchDeps,
   );
@@ -153,7 +148,7 @@ export function createTriggerScheduler(
       workspaceOpensByAgent,
       workspaceOpensByWorkspace,
     );
-    sessionEndedScheduler.clearAgent(agentId);
+    completionWakes.clearAgent(agentId);
   }
 
   function registerAgent(agentId: string): void {
@@ -204,7 +199,11 @@ export function createTriggerScheduler(
         continue;
       }
       if (trigger.kind === "session-ended") {
-        sessionEndedScheduler.register({ ...binding, trigger });
+        completionWakes.registerSessionEnded({ ...binding, trigger });
+        continue;
+      }
+      if (trigger.kind === "worker-done") {
+        completionWakes.registerWorkerDone({ ...binding, trigger });
         continue;
       }
       if (UNSUPPORTED_KINDS.has(trigger.kind)) {
@@ -234,7 +233,7 @@ export function createTriggerScheduler(
     webhooksByPath.clear();
     workspaceOpensByAgent.clear();
     workspaceOpensByWorkspace.clear();
-    sessionEndedScheduler.clearAll();
+    completionWakes.clearAll();
   }
 
   function reloadAgent(agentId: string): void {
@@ -294,7 +293,8 @@ export function createTriggerScheduler(
     reloadAgent,
     fireWebhook,
     fireWorkspaceOpen,
-    fireSessionEnded: sessionEndedScheduler.fireSessionEnded,
-    flushPendingWakes: sessionEndedScheduler.flushPendingWakes,
+    fireSessionEnded: completionWakes.fireSessionEnded,
+    fireWorkerDone: completionWakes.fireWorkerDone,
+    flushPendingWakes: completionWakes.flushPendingWakes,
   };
 }

@@ -21,9 +21,12 @@ clobber reports show <session-id>     # the full well/badly/useful for one
 Workspace-scoped: you only see reports from your own workspace, and they
 survive the reaper deleting the ephemeral worker that wrote them.
 
-You are usually woken **with** a report at session-end (the session-ended
-trigger, #171). Use `reports show <session-id>` to read its full body, and
-`reports list` to see it in the context of recent finishes.
+You are usually woken **with** a worker's done-summary when it declares
+`status done` (the worker-done trigger, #240) — workers idle after opening a PR
+rather than ending, so this is the happy-path wake. The wake carries the
+one-line summary; use `reports show <session-id>` to read the worker's full
+final-report body, and `reports list` to see it among recent finishes. A worker
+that crashes/kills instead wakes you via the session-ended trigger (#171).
 
 ## Triage: the only three outcomes
 

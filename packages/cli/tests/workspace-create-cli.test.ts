@@ -153,6 +153,7 @@ describe("clobber CLI — workspace create --config (#181)", () => {
     expect(after.triggers).toEqual([
       { kind: "workspace-open" },
       { kind: "cron", expr: "0 9 * * *" },
+      { kind: "worker-done" },
       { kind: "session-ended" },
     ]);
   });

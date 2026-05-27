@@ -10,7 +10,7 @@ import type {
   TriggerDispatchStore,
   DispatchOutcome,
 } from "./trigger-dispatch-store.ts";
-import type { AttachOutcome, AttachSessionFn } from "./trigger-scheduler.ts";
+import type { AttachOutcome, AttachSessionFn } from "./trigger-attach.ts";
 
 export interface AgentBinding {
   readonly agentId: string;
