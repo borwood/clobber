@@ -1,8 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import {
   AgentAskRequestSchema,
-  AgentAnswerRequestSchema,
-  decodePanelAnswer,
   normalizeAskOptions,
   type AskQuestion,
 } from "@clobber/shared";
@@ -60,50 +58,5 @@ export function registerAgentAskRoutes(
       }
       return { resolution: resolution.status };
     }),
-  );
-
-  app.post<{ Params: { id: string } }>(
-    "/sessions/:id/answer",
-    async (request, reply) => {
-      const session = deps.sessions.get(request.params.id);
-      if (session === null) {
-        reply.code(404);
-        return { error: "session not found" };
-      }
-
-      const parsed = AgentAnswerRequestSchema.safeParse(request.body);
-      if (!parsed.success) {
-        reply.code(400);
-        return { error: "invalid answer", issues: parsed.error.issues };
-      }
-
-      const question = deps.agentQuestions.get(parsed.data.question_id);
-      if (question === null || question.session_id !== session.id) {
-        reply.code(404);
-        return { error: "question not found for session" };
-      }
-      if (question.status !== "pending") {
-        reply.code(409);
-        return { error: "question already resolved", status: question.status };
-      }
-
-      // Reject a partial answer before it is recorded, so a short envelope
-      // can't strand the ask in `answered` with nothing for the bridge to read.
-      try {
-        decodePanelAnswer(parsed.data.answer, question.questions.length);
-      } catch {
-        reply.code(400);
-        return {
-          error: "answer must cover every question",
-          question_count: question.questions.length,
-        };
-      }
-
-      deps.agentQuestions.answer(question.id, parsed.data.answer);
-      const resolved = deps.agentQuestions.get(question.id);
-      if (resolved !== null) deps.agentQuestionWaiter.notify(resolved);
-
-      return { ok: true };
-    },
   );
 }

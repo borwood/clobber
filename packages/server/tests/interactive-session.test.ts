@@ -79,6 +79,7 @@ interface Harness {
   workspaceRoles: ReturnType<typeof createWorkspaceRoleStore>;
   agents: ReturnType<typeof createAgentStore>;
   sessions: ReturnType<typeof createSessionStore>;
+  agentQuestions: ReturnType<typeof createAgentQuestionStore>;
   control: SpawnControl;
   repoPaths: string[];
 }
@@ -92,6 +93,7 @@ const roleVersions = createRoleVersionStore(db);
   const workspaceRoles = createWorkspaceRoleStore(db);
   const agentsStore = createAgentStore(db);
   const sessions = createSessionStore(db);
+  const agentQuestions = createAgentQuestionStore(db);
   const control = controlledSpawner();
   const server = createServer({
     db,
@@ -107,7 +109,7 @@ const roleVersions = createRoleVersionStore(db);
     sessionTokens: createSessionTokenStore(db),
     agentStatuses: createAgentStatusStore(db),
     agentStatusLog: createAgentStatusLogStore(db),
-    agentQuestions: createAgentQuestionStore(db),
+    agentQuestions,
     agentQuestionWaiter: createAgentQuestionWaiter(),
     spawner: control.spawner,
     hookUrl: "http://test.invalid/hook",
@@ -125,6 +127,7 @@ const roleVersions = createRoleVersionStore(db);
     workspaceRoles,
     agents: agentsStore,
     sessions,
+    agentQuestions,
     control,
     repoPaths: [],
   };
@@ -322,6 +325,113 @@ describe("POST /sessions/:id/prompt — interactive sessions (issue #8)", () => 
 
     const stub = h.control.agents.find((a) => a.sessionId === spawned.session_id);
     expect(stub!.writes.join("")).toBe(serializeUserMessage(multiline));
+    await teardown(h);
+  });
+});
+
+describe("POST /sessions/:id/answer — late answer to a timed-out ask routes back (issue #183)", () => {
+  function askQuestion(h: Harness, sessionId: string) {
+    return h.agentQuestions.create({
+      session_id: sessionId,
+      questions: [
+        {
+          question: "Roll the milestone forward?",
+          multi_select: false,
+          options: [{ label: "Roll forward" }, { label: "Hold" }],
+        },
+      ],
+    });
+  }
+
+  it("a timed-out question is still surfaced as open (so the widget stays actionable)", async () => {
+    const h = buildHarness();
+    const spawned = await seedAndSpawn(h);
+    const q = askQuestion(h, spawned.session_id);
+    h.agentQuestions.timeout(q.id);
+
+    const ws = h.sessions.get(spawned.session_id)!.workspace_id;
+    const res = await h.server.inject({
+      method: "GET",
+      url: `/sessions?workspace_id=${ws}`,
+    });
+    expect(res.statusCode).toBe(200);
+    const summary = (res.json() as { session_id: string; open_question?: { id: string; status: string } }[]).find(
+      (s) => s.session_id === spawned.session_id,
+    );
+    expect(summary!.open_question).toBeDefined();
+    expect(summary!.open_question!.id).toBe(q.id);
+    expect(summary!.open_question!.status).toBe("timed_out");
+
+    await teardown(h);
+  });
+
+  it("injects a late answer into the live session and flips the question to answered", async () => {
+    const h = buildHarness();
+    const spawned = await seedAndSpawn(h);
+    const q = askQuestion(h, spawned.session_id);
+    h.agentQuestions.timeout(q.id);
+
+    const res = await h.server.inject({
+      method: "POST",
+      url: `/sessions/${spawned.session_id}/answer`,
+      payload: { question_id: q.id, answer: "Roll forward" },
+    });
+    expect(res.statusCode).toBe(200);
+
+    // The late answer reaches the live child's stdin (the #252 delivery path),
+    // carrying both the original question and the chosen answer so the agent
+    // can pick the thread back up.
+    const stub = h.control.agents.find((a) => a.sessionId === spawned.session_id);
+    const written = stub!.writes.join("");
+    expect(written).toContain("Roll the milestone forward?");
+    expect(written).toContain("Roll forward");
+
+    // The row no longer presents as open — it is now answered, with the answer
+    // recorded, so the widget stops surfacing on the next poll.
+    const after = h.agentQuestions.get(q.id);
+    expect(after!.status).toBe("answered");
+    expect(after!.answer).toBe("Roll forward");
+
+    await teardown(h);
+  });
+
+  it("a pending question answers via the waiter, not via injection", async () => {
+    const h = buildHarness();
+    const spawned = await seedAndSpawn(h);
+    const q = askQuestion(h, spawned.session_id);
+
+    const res = await h.server.inject({
+      method: "POST",
+      url: `/sessions/${spawned.session_id}/answer`,
+      payload: { question_id: q.id, answer: "Hold" },
+    });
+    expect(res.statusCode).toBe(200);
+
+    // A still-pending ask resolves through the blocking waiter — nothing is
+    // injected to stdin (the blocked agent reads the answer on its return path).
+    const stub = h.control.agents.find((a) => a.sessionId === spawned.session_id);
+    expect(stub!.writes.join("")).toBe("");
+    const after = h.agentQuestions.get(q.id);
+    expect(after!.status).toBe("answered");
+
+    await teardown(h);
+  });
+
+  it("a late answer to an ended session reports the session is gone (no silent drop)", async () => {
+    const h = buildHarness();
+    const spawned = await seedAndSpawn(h);
+    const q = askQuestion(h, spawned.session_id);
+    h.agentQuestions.timeout(q.id);
+    const stub = h.control.agents.find((a) => a.sessionId === spawned.session_id)!;
+    await stub.exit(0);
+
+    const res = await h.server.inject({
+      method: "POST",
+      url: `/sessions/${spawned.session_id}/answer`,
+      payload: { question_id: q.id, answer: "Roll forward" },
+    });
+    expect(res.statusCode).toBe(410);
+
     await teardown(h);
   });
 });
