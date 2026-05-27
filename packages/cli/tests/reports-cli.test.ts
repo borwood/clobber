@@ -267,7 +267,7 @@ describe("clobber CLI — reports", () => {
     expect(s.err()).toMatch(/not found/i);
   });
 
-  it("exits 2 with usage when no subcommand is given", async () => {
+  it("prints help and exits 0 when no subcommand is given", async () => {
     const s = captureStreams();
     const code = await run({
       argv: ["reports"],
@@ -275,8 +275,9 @@ describe("clobber CLI — reports", () => {
       stdout: s.stdout,
       stderr: s.stderr,
     });
-    expect(code).toBe(2);
-    expect(s.err()).toMatch(/list|show/i);
+    expect(code).toBe(0);
+    expect(s.out()).toMatch(/usage:/i);
+    expect(s.out()).toMatch(/list|show/i);
   });
 
   it("show exits 2 with usage when no session id is given", async () => {

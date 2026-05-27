@@ -144,6 +144,7 @@ export const workspaceCommand: Command = {
   name: "workspace",
   summary: "Load a workspace from a config directory (create + apply triggers).",
   usage: WORKSPACE_USAGE,
+  subcommands: SUBCOMMANDS,
   async run(ctx) {
     const [sub, ...rest] = ctx.args;
     if (sub === undefined) {

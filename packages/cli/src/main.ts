@@ -87,7 +87,9 @@ export async function run(opts: RunOptions): Promise<number> {
     return 2;
   }
 
-  if (rest.some(isHelpFlag)) {
+  const bareSubcommandVerb =
+    rest.length === 0 && command.subcommands !== undefined;
+  if (rest.some(isHelpFlag) || bareSubcommandVerb) {
     printCommandHelp(command, opts.stdout);
     return 0;
   }

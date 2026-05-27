@@ -284,6 +284,7 @@ export const rolesCommand: Command = {
     "  clobber roles fork worker my-worker\n" +
     "  clobber roles edit my-worker --description \"My experimental worker\"\n\n" +
     "Skill: see manager:roles for fork/edit/version patterns.\n",
+  subcommands: SUBCOMMANDS,
   async run(ctx) {
     const [sub, ...rest] = ctx.args;
     if (sub === undefined) {

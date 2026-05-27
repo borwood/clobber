@@ -163,7 +163,7 @@ describe("clobber CLI — agents", () => {
     expect(caller!.is_caller).toBe(true);
   });
 
-  it("exits 2 with usage when no subcommand is given", async () => {
+  it("prints help and exits 0 when no subcommand is given", async () => {
     const s = captureStreams();
     const code = await run({
       argv: ["agents"],
@@ -174,8 +174,8 @@ describe("clobber CLI — agents", () => {
       stdout: s.stdout,
       stderr: s.stderr,
     });
-    expect(code).toBe(2);
-    expect(s.err()).toMatch(/subcommand/i);
+    expect(code).toBe(0);
+    expect(s.out()).toMatch(/usage:/i);
   });
 
   it("exits 2 for an unknown subcommand", async () => {

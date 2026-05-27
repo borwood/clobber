@@ -43,6 +43,7 @@ export const agentsCommand: Command = {
   name: "agents",
   summary: "List or operate on live agents in the current workspace.",
   usage: AGENTS_USAGE,
+  subcommands: SUBCOMMANDS,
   async run(ctx) {
     const [sub, ...rest] = ctx.args;
     if (sub === undefined) {
