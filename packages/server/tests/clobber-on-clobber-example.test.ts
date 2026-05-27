@@ -8,7 +8,12 @@ import {
   triggerId,
   type CreateWorkspaceRequest,
 } from "@clobber/shared";
-import { workerRole, defaultSdlcProfile } from "@clobber/runtime";
+import {
+  workerRole,
+  managerRole,
+  defaultSdlcProfile,
+  enumerateDefaultSeeds,
+} from "@clobber/runtime";
 
 // examples/ lives at the repo root; this test file is packages/server/tests/.
 const EXAMPLE_DIR = join(import.meta.dir, "../../../examples/clobber-on-clobber");
@@ -37,14 +42,22 @@ describe("examples/clobber-on-clobber — dogfood workspace config (#150)", () =
     expect(cb?.kind).toBe("noop");
   });
 
-  it("boot_context_provider (#166) emits a POINTER to the wisdom log, not its body", () => {
-    const boot = loadConfig().boot_context_provider;
-    expect(boot?.kind).toBe("exec");
-    if (boot?.kind !== "exec") throw new Error("expected exec provider");
-    const emitted = (boot.args ?? []).join(" ");
-    expect(emitted).toContain("brennan-volter/tasks#20");
-    // A pointer is one short line surfacing that the log exists — never its contents.
-    expect(emitted.length).toBeLessThan(280);
+  it("the wisdom-pointer is now a role-scoped seed reaching the manager alone, not a workspace-global provider (#211)", () => {
+    // The boot_context_provider field is retired; the wisdom pointer migrated
+    // to the manager-role seed `wisdom-pointer`. The worker must not reference
+    // it — that global seeding was the #166 mis-shape this fixes.
+    expect(loadConfig()).not.toHaveProperty("boot_context_provider");
+
+    const managerRefs = managerRole.manifest.seedRefs ?? [];
+    const workerRefs = workerRole.manifest.seedRefs ?? [];
+    expect(managerRefs).toContainEqual({ name: "wisdom-pointer", enabled: true });
+    expect(workerRefs.some((r) => r.name === "wisdom-pointer")).toBe(false);
+
+    // The pointer is one short line surfacing that the log exists, never its body.
+    const seed = enumerateDefaultSeeds().find((s) => s.name === "wisdom-pointer")!;
+    if (seed.definition.kind !== "static") throw new Error("expected static seed");
+    expect(seed.definition.text).toContain("brennan-volter/tasks#20");
+    expect(seed.definition.text.length).toBeLessThan(280);
   });
 
   it("manager_skill_policy (#148) allows self-grant + lists clobber-pm", () => {

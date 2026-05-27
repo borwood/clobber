@@ -16,6 +16,7 @@ export function migrateRoleVersions(db: Database): void {
     "allowed_cli_commands_json",
     "TEXT NOT NULL DEFAULT '[]'",
   );
+  ensureColumn(db, "role_versions", "seed_refs_json", "TEXT NOT NULL DEFAULT '[]'");
   dropLegacyGlobalUniqueName(db);
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_roles_workspace ON roles(workspace_id);
@@ -24,6 +25,7 @@ export function migrateRoleVersions(db: Database): void {
   `);
   backfillRoleVersions(db);
   backfillCliAllowLists(db);
+  backfillSeedRefs(db);
   backfillUnseededWorkspaces(db);
 }
 
@@ -119,6 +121,33 @@ function backfillCliAllowLists(db: Database): void {
       JSON.stringify([...loaded.manifest.allowedCliCommands]),
       row.version_id,
     );
+  }
+}
+
+// Existing role_versions rows pre-date the seed_refs_json column; the default
+// is '[]'. For shipped roles we recover the intended refs from the matching
+// bundle's manifest so the live manager picks up its wisdom-pointer (and the
+// worker does not) without a re-edit. Forked or unknown roles stay at '[]' —
+// they declared no seeds before this column existed (same shape as the
+// cli-allow-list backfill).
+function backfillSeedRefs(db: Database): void {
+  const rows = db
+    .prepare(
+      `SELECT rv.id AS version_id, r.name AS role_name
+         FROM role_versions rv
+         JOIN roles r ON r.id = rv.role_id
+         WHERE rv.seed_refs_json = '[]'`,
+    )
+    .all() as CliAllowListBackfillRow[];
+  if (rows.length === 0) return;
+  const update = db.prepare(
+    "UPDATE role_versions SET seed_refs_json = ? WHERE id = ?",
+  );
+  for (const row of rows) {
+    const loaded = loadRoleBundle(row.role_name);
+    if (loaded === null) continue;
+    if (loaded.manifest.seedRefs === undefined) continue;
+    update.run(JSON.stringify(loaded.manifest.seedRefs), row.version_id);
   }
 }
 

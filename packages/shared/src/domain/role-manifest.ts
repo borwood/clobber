@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { PermissionModeSchema } from "../hooks/payloads.ts";
 import { EffortLevelSchema, SdlcProfileSchema } from "./role.ts";
+import { SeedRefSchema } from "./seed.ts";
 
 const RelativeBundlePath = z
   .string()
@@ -28,6 +29,10 @@ export const RoleManifestSchema = z
     allowedTools: z.array(z.string().min(1)).readonly().optional(),
     effort: EffortLevelSchema.optional(),
     sdlc: SdlcProfileSchema.optional(),
+    // Layer B — the role's default, ordered seed references. Each names a
+    // catalog seed and carries its enable toggle; snapshotted into the role
+    // version's seed_refs_json at seed time.
+    seedRefs: z.array(SeedRefSchema).readonly().optional(),
   })
   .refine(
     (m) =>

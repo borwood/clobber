@@ -24,7 +24,7 @@ These are **two artifacts, not one**, because clobber splits config across two s
 | Primitive | Field | Value here | Issue |
 |---|---|---|---|
 | Final-report callback | `final_report_callback` | `exec` → `gh issue create` into `brennan-volter/clobber` | #147 |
-| Boot-context provider | `boot_context_provider` | `exec` → `echo` a **pointer** to the wisdom log | #166 |
+| Context seeds | *(on the role)* | the manager refs the `wisdom-pointer` seed; the worker does not | #211 |
 | Trigger overrides | `trigger_overrides` | `{}` — nothing disabled; the manager's triggers stay live | #146 |
 | Manager skill policy | `manager_skill_policy` | `allow_self_grant: true`, `allowed_skills: ["clobber-pm"]` | #148 |
 | Worker SDLC profile | *(on the worker role)* | the shipped `research → failing-test → implement → open-pr → watch-ci` default | #124 |
@@ -36,11 +36,14 @@ A few deliberate choices:
   in `--body-file -`: `gh` reads the issue body from stdin. The new issue's body is the raw
   final-report JSON. (To label these tickets, add `"--label", "internal"` to the args once that
   label exists in the repo.)
-- **`boot_context_provider` is a pointer, not a payload.** It echoes a single line telling the
-  manager that a behavioral-wisdom log exists at `brennan-volter/tasks#20` and when to reach for
-  it — never the log's contents. Always-on full injection was rejected: it taxes every wake.
-  Scenario-triggered *consult/capture* skills (the actual log usage) are tracked separately in
-  **#178**; when built, those two skills join `allowed_skills`.
+- **The wisdom pointer is a role-scoped seed, not a workspace-global provider (#211).** The old
+  workspace-global `boot_context_provider` ran for *every* spawn and seeded the manager's
+  wisdom-log pointer to every worker too — the #166 mis-shape. It is retired. The pointer is now
+  the shipped `wisdom-pointer` seed, referenced by the **manager** role alone (see the role
+  manifests); the worker references only `repo-sdlc`. A seed is a pointer, not a payload — it
+  surfaces that a behavioral-wisdom log exists at `brennan-volter/tasks#20`, never the log's
+  contents. Scenario-triggered *consult/capture* skills (the actual log usage) are tracked in
+  **#178**; when built, those join `allowed_skills`.
 - **`trigger_overrides` is empty on purpose.** It is a *disable* map keyed by role-instance id —
   it cannot *enable* anything. The manager's `workspace-open` + `cron` + `worker-done` +
   `session-ended` triggers live in `manager-triggers.json`; leaving `trigger_overrides` empty

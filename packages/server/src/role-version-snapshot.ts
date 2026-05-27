@@ -11,6 +11,7 @@ export interface RoleVersionSnapshot {
   readonly allowed_cli_commands_json: string;
   readonly hooks_json: string;
   readonly triggers_json: string;
+  readonly seed_refs_json: string;
 }
 
 export interface SnapshotInputs {
@@ -36,6 +37,7 @@ export function snapshotShippedBundle(inputs: SnapshotInputs): RoleVersionSnapsh
     ]),
     hooks_json,
     triggers_json: "[]",
+    seed_refs_json: JSON.stringify(loaded.manifest.seedRefs ?? []),
   };
 }
 

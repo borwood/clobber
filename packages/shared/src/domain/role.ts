@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { PermissionModeSchema } from "../hooks/payloads.ts";
+import { SeedRefSchema } from "./seed.ts";
 
 // Reasoning depth knob exposed by `claude --effort <level>`. Mirrors the
 // upstream CLI's enum — kept in lockstep with what the runtime can pass through.
@@ -141,6 +142,7 @@ export const RoleVersionSchema = z.object({
   allowed_cli_commands_json: z.string(),
   hooks_json: z.string(),
   triggers_json: z.string(),
+  seed_refs_json: z.string(),
   created_at: z.number().int().nonnegative(),
 });
 export type RoleVersion = z.infer<typeof RoleVersionSchema>;
@@ -208,6 +210,7 @@ export const RoleDetailVersionSchema = z.object({
   allowed_tools: z.array(z.string().min(1)),
   hooks: z.unknown(),
   triggers: z.array(RoleTriggerSchema),
+  seed_refs: z.array(SeedRefSchema),
   created_at: z.number().int().nonnegative(),
 });
 export type RoleDetailVersion = z.infer<typeof RoleDetailVersionSchema>;

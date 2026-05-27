@@ -26,7 +26,6 @@ const SCHEMA = `
     role_edit_policy      TEXT    NOT NULL DEFAULT '{"forbidden_keys":["hooks","permission_mode"]}',
     trigger_overrides     TEXT    NOT NULL DEFAULT '{}',
     final_report_callback TEXT    NOT NULL DEFAULT '{"kind":"noop"}',
-    boot_context_provider TEXT    NOT NULL DEFAULT '{"kind":"noop"}',
     spawn_worktree        TEXT    NOT NULL DEFAULT '{"kind":"off"}',
     file_size_policy      TEXT    NOT NULL DEFAULT '{"kind":"on","max_lines":300}',
     manager_skill_policy  TEXT    NOT NULL DEFAULT '{"allow_self_grant":false,"allowed_skills":[]}',
@@ -61,6 +60,7 @@ const SCHEMA = `
     allowed_cli_commands_json TEXT    NOT NULL DEFAULT '[]',
     hooks_json                TEXT    NOT NULL,
     triggers_json             TEXT    NOT NULL DEFAULT '[]',
+    seed_refs_json            TEXT    NOT NULL DEFAULT '[]',
     created_at                INTEGER NOT NULL,
     UNIQUE (role_id, version),
     FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
