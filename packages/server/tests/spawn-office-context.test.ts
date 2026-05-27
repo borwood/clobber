@@ -177,7 +177,9 @@ describe("spawn — office continuity at spawn (#55)", () => {
 
     expect(h.calls).toHaveLength(1);
     const prompt = h.calls[0]!.prompt;
-    expect(prompt).toBe("task body");
+    // The worker's `task` default supplies the opening kick (#213); either way
+    // no office continuity rides an ephemeral spawn.
+    expect(prompt).toContain("run your desk protocol");
     expect(prompt).not.toContain("[Previously in this office]");
 
     await teardown(h);

@@ -60,25 +60,39 @@ export const RoleSkillSchema = z.object({
 });
 export type RoleSkill = z.infer<typeof RoleSkillSchema>;
 
+// The role-authored default wake-program for a trigger — the opening move the
+// fired wake composes, mirroring how a trigger's enabled-by-default state is the
+// role default for enable/disable. A workspace can override it per trigger via
+// `trigger_overrides[roleId].wake_programs` (see workspace.ts). Absent both, the
+// wake keeps the legacy synthesized-prompt-as-kick. Shared across kinds so any
+// trigger can carry a mapping; `triggerId()` ignores it (the id stays keyed on
+// the trigger's identity, so an override keyed by id survives a remap).
+const wakeProgramField = { wake_program: z.string().min(1).optional() };
+
 export const CronTriggerSchema = z.object({
   kind: z.literal("cron"),
   expr: z.string().min(1),
+  ...wakeProgramField,
 });
 export const FileWatchTriggerSchema = z.object({
   kind: z.literal("file-watch"),
   glob: z.string().min(1),
+  ...wakeProgramField,
 });
 export const WebhookTriggerSchema = z.object({
   kind: z.literal("webhook"),
   path: z.string().min(1).startsWith("/"),
+  ...wakeProgramField,
 });
 export const IssueAssignedTriggerSchema = z.object({
   kind: z.literal("issue-assigned"),
   repo: z.string().min(1).optional(),
+  ...wakeProgramField,
 });
 export const WorkspaceOpenTriggerSchema = z.object({
   kind: z.literal("workspace-open"),
   debounce_ms: z.number().int().nonnegative().optional(),
+  ...wakeProgramField,
 });
 // Fires when any session in the workspace ends (clean exit, crash, or kill),
 // sourced from the reaper's callers — the cross-agent "a worker finished" wake.
@@ -86,6 +100,7 @@ export const WorkspaceOpenTriggerSchema = z.object({
 // session's outcome rebuilt from persistent state. See #171.
 export const SessionEndedTriggerSchema = z.object({
   kind: z.literal("session-ended"),
+  ...wakeProgramField,
 });
 // Fires when a worker declares itself finished via `clobber status done` —
 // the worker's own terminal handoff. Unlike `session-ended` (process
@@ -95,6 +110,7 @@ export const SessionEndedTriggerSchema = z.object({
 // policy. See #240.
 export const WorkerDoneTriggerSchema = z.object({
   kind: z.literal("worker-done"),
+  ...wakeProgramField,
 });
 export const RoleTriggerSchema = z.discriminatedUnion("kind", [
   CronTriggerSchema,
@@ -145,6 +161,10 @@ export const RoleVersionSchema = z.object({
   triggers_json: z.string(),
   seed_refs_json: z.string(),
   wake_programs_json: z.string(),
+  // The role's default opening move for a fresh spawn that selects no
+  // wake-program (#213). Null = no default → idle. References a program by name
+  // in wake_programs_json (or the `idle` built-in).
+  default_wake_program: z.string().min(1).nullable(),
   created_at: z.number().int().nonnegative(),
 });
 export type RoleVersion = z.infer<typeof RoleVersionSchema>;

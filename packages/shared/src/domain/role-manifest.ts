@@ -38,6 +38,10 @@ export const RoleManifestSchema = z
     // user-message kick; snapshotted into the role version's wake_programs_json
     // at seed time. `idle` is the universal built-in and is never listed here.
     wakePrograms: z.array(WakeProgramSchema).readonly().optional(),
+    // The opening move a fresh spawn selects when it names none (#213). A
+    // program name from `wakePrograms` (or `idle`). Omitted → idle. The worker
+    // sets `task`; the manager omits it so spawns default to idle.
+    defaultWakeProgram: z.string().min(1).optional(),
   })
   .refine(
     (m) =>

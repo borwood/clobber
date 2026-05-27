@@ -1,5 +1,5 @@
 import type { RuntimeProvider } from "@clobber/runtime";
-import type { Agent, Role, RoleTrigger, Workspace } from "@clobber/shared";
+import { triggerId, type Agent, type Role, type RoleTrigger, type Workspace } from "@clobber/shared";
 import type { AgentStore } from "./agent-store.ts";
 import type { RoleStore } from "./role-store.ts";
 import type { WorkspaceStore } from "./workspace-store.ts";
@@ -87,7 +87,14 @@ export async function dispatchTrigger(
     // non-ok result produces) rather than crashing the cron timer. This is
     // not a Rule-3 swallow: the failure is recorded loudly in the dispatch
     // log with its message, not discarded. Trigger-path semantics per #166.
-    const attached = await attachOutcome(deps, { workspace, role, agent, prompt });
+    const wakeProgram = resolveTriggerWakeProgram(workspace, binding.roleId, trigger);
+    const attached = await attachOutcome(deps, {
+      workspace,
+      role,
+      agent,
+      prompt,
+      ...(wakeProgram === undefined ? {} : { wakeProgram }),
+    });
     deps.dispatches.append({
       workspace_id: binding.workspaceId,
       role_id: binding.roleId,
@@ -165,9 +172,23 @@ interface AttachOutcomeResult {
   readonly error?: string;
 }
 
+// Resolves a fired trigger to its wake-program: a workspace per-trigger override
+// (trigger_overrides[roleId].wake_programs) layered over the role-authored
+// default on the trigger. Undefined when neither maps — the synthesized prompt
+// stays the opening kick (the legacy seam). Mirrors how trigger enable/disable
+// resolves a workspace override over the role's enabled-by-default state. (#213)
+function resolveTriggerWakeProgram(
+  workspace: Workspace,
+  roleId: string,
+  trigger: RoleTrigger,
+): string | undefined {
+  const override = workspace.trigger_overrides[roleId]?.wake_programs?.[triggerId(trigger)];
+  return override === undefined ? trigger.wake_program : override;
+}
+
 async function attachOutcome(
   deps: Pick<DispatchDeps, "attachSession">,
-  input: { workspace: Workspace; role: Role; agent: Agent; prompt: string },
+  input: { workspace: Workspace; role: Role; agent: Agent; prompt: string; wakeProgram?: string },
 ): Promise<AttachOutcomeResult> {
   let result: AttachOutcome;
   try {

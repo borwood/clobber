@@ -21,7 +21,7 @@ import { seedWorkspaceRoles } from "../src/seed-workspace-roles.ts";
 import { attachSessionToAgent, type SpawnPipelineDeps } from "../src/spawn-pipeline.ts";
 import { claudeRuntimeProvider, serializeUserMessage } from "@clobber/runtime";
 import type { AgentSpawner, SpawnedAgentInfo } from "../src/types.ts";
-import type { RoleVersion, Role } from "@clobber/shared";
+import { triggerId, type RoleVersion, type Role, type WakeProgram } from "@clobber/shared";
 
 interface Harness {
   db: ReturnType<typeof createDatabase>;
@@ -396,6 +396,7 @@ describe("TriggerScheduler — cron firing", () => {
       triggers_json: JSON.stringify([{ kind: "cron", expr: "0 9 * * *" }]),
       seed_refs_json: cur.seed_refs_json,
       wake_programs_json: cur.wake_programs_json,
+      default_wake_program: cur.default_wake_program,
     });
     h.db
       .prepare("UPDATE roles SET current_version_id = ? WHERE id = ?")
@@ -989,6 +990,7 @@ describe("TriggerScheduler — workspace-open firing", () => {
       triggers_json: JSON.stringify([{ kind: "workspace-open" }]),
       seed_refs_json: cur.seed_refs_json,
       wake_programs_json: cur.wake_programs_json,
+      default_wake_program: cur.default_wake_program,
     });
     h.db
       .prepare("UPDATE roles SET current_version_id = ? WHERE id = ?")
@@ -1040,6 +1042,83 @@ describe("TriggerScheduler — workspace-open firing", () => {
     h.scheduler.reloadAgent(h.managerAgentId);
 
     expect((await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined)).dispatched).toBe(1);
+
+    h.scheduler.stop();
+    h.db.close();
+  });
+});
+
+function setManagerWakePrograms(h: Harness, programs: readonly WakeProgram[]): void {
+  const role = h.roles.get(h.managerRoleId) as Role;
+  const cur = getCurrentVersion(h, h.managerRoleId);
+  editRole(h.db, role, cur, { wakePrograms: programs });
+}
+
+function setManagerCronWithProgram(h: Harness, expr: string, wakeProgram: string): void {
+  const role = h.roles.get(h.managerRoleId) as Role;
+  const cur = getCurrentVersion(h, h.managerRoleId);
+  editRole(h.db, role, cur, { triggers: [{ kind: "cron", expr, wake_program: wakeProgram }] });
+}
+
+describe("TriggerScheduler — wake-program mapping (#213)", () => {
+  it("a trigger resolves its role-default wake-program — the resolved program's layer C + kick compose", async () => {
+    const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
+    setManagerWakePrograms(h, [
+      { name: "orient", system: "LAYER-C-ORIENT", user: "Scan issues for readiness." },
+    ]);
+    setManagerCronWithProgram(h, "0 9 * * *", "orient");
+    h.scheduler.start();
+
+    await flushAfter(h.clock, 60_000); // arrive at 9:00:00
+    expect(h.spawnCalls.length).toBe(1);
+    // Layer C from the resolved program rides the system prompt...
+    expect(h.spawnCalls[0]!.appendSystemPrompt).toContain("LAYER-C-ORIENT");
+    // ...and the program's kick is the opening move, not the synthesized
+    // "a cron fired" prompt.
+    expect(h.spawnCalls[0]!.prompt).toBe("Scan issues for readiness.");
+    expect(h.spawnCalls[0]!.prompt).not.toContain("0 9 * * *");
+
+    h.scheduler.stop();
+    h.db.close();
+  });
+
+  it("a workspace override beats the trigger's role-default wake-program", async () => {
+    const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
+    setManagerWakePrograms(h, [
+      { name: "orient", system: "LAYER-C-ORIENT", user: "Scan issues for readiness." },
+      { name: "triage", system: "LAYER-C-TRIAGE", user: "Triage the queue." },
+    ]);
+    setManagerCronWithProgram(h, "0 9 * * *", "orient");
+    // Workspace overlays a different program for this trigger on this role.
+    h.workspaces.updateConfig(h.workspaceId, {
+      trigger_overrides: {
+        [h.managerRoleId]: {
+          disabled_trigger_ids: [],
+          wake_programs: { [triggerId({ kind: "cron", expr: "0 9 * * *" })]: "triage" },
+        },
+      },
+    });
+    h.scheduler.start();
+
+    await flushAfter(h.clock, 60_000);
+    expect(h.spawnCalls.length).toBe(1);
+    expect(h.spawnCalls[0]!.appendSystemPrompt).toContain("LAYER-C-TRIAGE");
+    expect(h.spawnCalls[0]!.appendSystemPrompt).not.toContain("LAYER-C-ORIENT");
+    expect(h.spawnCalls[0]!.prompt).toBe("Triage the queue.");
+
+    h.scheduler.stop();
+    h.db.close();
+  });
+
+  it("a trigger with neither a role-default nor a workspace override keeps the legacy synthesized kick", async () => {
+    const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
+    setManagerCron(h, "0 9 * * *");
+    h.scheduler.start();
+
+    await flushAfter(h.clock, 60_000);
+    expect(h.spawnCalls.length).toBe(1);
+    // No mapping → the synthesized prompt remains the opening message.
+    expect(h.spawnCalls[0]!.prompt).toContain("0 9 * * *");
 
     h.scheduler.stop();
     h.db.close();

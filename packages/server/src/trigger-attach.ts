@@ -10,4 +10,8 @@ export type AttachSessionFn = (input: {
   readonly role: Role;
   readonly agent: Agent;
   readonly prompt: string;
+  // The wake-program resolved from the trigger→program mapping (#213). Absent
+  // when neither a workspace override nor a role-default maps this trigger —
+  // then the synthesized prompt stays the opening kick.
+  readonly wakeProgram?: string;
 }) => Promise<AttachOutcome>;

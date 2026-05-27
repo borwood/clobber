@@ -1,8 +1,9 @@
 import type { FastifyInstance } from "fastify";
-import type { LatestAgentStatus } from "@clobber/shared";
+import { IDLE_WAKE_PROGRAM_NAME, type LatestAgentStatus } from "@clobber/shared";
 import type { WorkspaceStore } from "../workspace-store.ts";
 import type { AgentStore } from "../agent-store.ts";
 import type { RoleStore } from "../role-store.ts";
+import type { RoleVersionStore } from "../role-version-store.ts";
 import type { SessionStore } from "../session-store.ts";
 import type { AgentRegistry } from "../agent-registry.ts";
 import type { AgentStatusStore } from "../agent-status-store.ts";
@@ -27,6 +28,9 @@ interface OfficeCard {
   active_session: SessionView | null;
   last_started_at: number | null;
   office: OfficePeek;
+  // The wake-programs the office affordance can offer: the built-in `idle`
+  // first, then the role's declared programs (#213).
+  wake_programs: string[];
 }
 
 interface DeskCard {
@@ -40,6 +44,7 @@ export interface WhiteboardRouteDeps {
   readonly workspaces: WorkspaceStore;
   readonly agents: AgentStore;
   readonly roles: RoleStore;
+  readonly roleVersions: RoleVersionStore;
   readonly sessions: SessionStore;
   readonly registry: AgentRegistry;
   readonly agentStatuses: AgentStatusStore;
@@ -49,7 +54,7 @@ export function registerWhiteboardRoutes(
   app: FastifyInstance,
   deps: WhiteboardRouteDeps,
 ): void {
-  const { workspaces, agents, roles, sessions, registry, agentStatuses } = deps;
+  const { workspaces, agents, roles, roleVersions, sessions, registry, agentStatuses } = deps;
 
   app.get<{ Params: IdParam }>(
     "/workspaces/:id/whiteboard",
@@ -85,6 +90,7 @@ export function registerWhiteboardRoutes(
             agent_id: agent.id,
             label: agent.label === undefined ? null : agent.label,
             role: { id: role.id, name: role.name },
+            wake_programs: wakeProgramNamesFor(roleVersions, role.current_version_id),
             active_session:
               active === undefined
                 ? null
@@ -117,4 +123,18 @@ export function registerWhiteboardRoutes(
       return { offices, desks };
     },
   );
+}
+
+// `idle` (the universal built-in) followed by the role's declared wake-programs,
+// in order. The office affordance offers exactly these as the human's choices.
+function wakeProgramNamesFor(
+  roleVersions: RoleVersionStore,
+  versionId: string | undefined,
+): string[] {
+  const names = [IDLE_WAKE_PROGRAM_NAME];
+  if (versionId === undefined) return names;
+  const bundle = roleVersions.loadAsBundle(versionId);
+  if (bundle === null) return names;
+  for (const program of bundle.wakePrograms) names.push(program.name);
+  return names;
 }

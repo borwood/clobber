@@ -107,6 +107,34 @@ describe("wake-programs (#212)", () => {
     await teardown(h);
   });
 
+  it("a spawn with no wake-program selected defaults to the role's first declared program (#213)", async () => {
+    // Surface 1 — the manager→worker spawn arg is a selector with a default:
+    // omit it and the role's first declared wake-program (its natural opening
+    // move) composes, rather than falling through to idle.
+    const h = buildHarness(turnProvider());
+    const role = h.roles.create({ name: "worker", persistent: false });
+    setWakePrograms(h, role.id, [
+      { name: "task", system: "LAYER-C-TASK-ADDON", user: "Read your desk and begin." },
+      { name: "triage", system: "C-FOR-TRIAGE", user: "go-triage" },
+    ]);
+    const ws = h.workspaces.create({ name: "ws-default", repo_path: h.repoPath });
+    h.workspaceRoles.setCeiling(ws.id, role.id, 1);
+
+    const res = await h.server.inject({
+      method: "POST",
+      url: "/spawn",
+      // No wake_program — the role default (its first program) should apply.
+      payload: { workspace_id: ws.id, role_id: role.id, prompt: "manager free text", label: "task" },
+    });
+    expect(res.statusCode).toBe(200);
+    const rec = h.records[h.records.length - 1]!;
+    expect(rec.req.appendSystemPrompt).toContain("LAYER-C-TASK-ADDON");
+    expect(rec.req.appendSystemPrompt).not.toContain("C-FOR-TRIAGE");
+    expect(rec.req.prompt).toBe("Read your desk and begin.");
+    expect(rec.req.prompt).not.toBe("manager free text");
+    await teardown(h);
+  });
+
   it("on resume the kick is suppressed while layer C still composes", async () => {
     const h = buildHarness(turnProvider());
     const role = h.roles.create({ name: "worker", persistent: false });

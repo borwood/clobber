@@ -80,10 +80,17 @@ export async function executeSpawn(
   deps: SpawnPipelineDeps,
   input: SpawnPipelineInput,
 ): Promise<SpawnPipelineResult> {
-  const { workspace, role, prompt, label, wakeProgram, briefing, effortOverride } = input;
+  const { workspace, role, prompt, label, briefing, effortOverride } = input;
 
   const capacity = checkCapacity(deps, workspace, role);
   if (capacity !== null) return capacity;
+
+  // Surface 1 (#213): the spawn wake-program is a selector with a default. When
+  // the caller selects nothing, the role's declared `default_wake_program` is
+  // its opening move (the worker's `task`); a role that declares none falls
+  // through to idle (the manager — so #215's idle-default is already in place
+  // for spawns, and only the trigger/office surfaces remain for it to flip).
+  const wakeProgram = input.wakeProgram ?? defaultWakeProgramFor(deps, role);
 
   const agent = deps.agents.create({
     workspace_id: workspace.id,
@@ -99,6 +106,15 @@ export async function executeSpawn(
     ...(briefing === undefined ? {} : { briefing }),
     ...(effortOverride === undefined ? {} : { effortOverride }),
   });
+}
+
+// A role's declared default opening move for a fresh spawn, or undefined (→
+// idle) when it declares none.
+function defaultWakeProgramFor(deps: SpawnPipelineDeps, role: Role): string | undefined {
+  if (role.current_version_id === undefined) return undefined;
+  const bundle = deps.roleVersions.loadAsBundle(role.current_version_id);
+  if (bundle === null) return undefined;
+  return bundle.defaultWakeProgram;
 }
 
 export interface AttachSessionInput {

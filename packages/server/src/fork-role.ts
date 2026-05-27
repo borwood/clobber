@@ -61,6 +61,7 @@ export function forkRole(
     triggers_json: sourceVersion.triggers_json,
     seed_refs_json: sourceVersion.seed_refs_json,
     wake_programs_json: sourceVersion.wake_programs_json,
+    default_wake_program: sourceVersion.default_wake_program,
   });
   setCurrentVersion.run(newVersion.id, id);
 

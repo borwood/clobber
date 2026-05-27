@@ -41,5 +41,9 @@ export const workerRole = defineRole({
           "then walk the SDLC to a merge-ready PR.",
       },
     ],
+    // A worker spawned without an explicit selection opens on `task` — read the
+    // desk, start the SDLC (#213). The manager omits this, so its spawns default
+    // to idle.
+    defaultWakeProgram: "task",
   },
 });

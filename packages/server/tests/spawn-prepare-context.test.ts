@@ -99,7 +99,9 @@ describe("prepareSpawnContext (#125) is the shared spawn/attach/resume seam", ()
     expect(env!["CLOBBER_OFFICE_DIR"]).toBeUndefined();
     expect(env!["CLOBBER_DESK_DIR"]).toBeDefined();
     expect(env!["CLOBBER_ROLE"]).toBe("worker");
-    expect(h.records[0]!.req.prompt).toBe("do work");
+    // The worker's `task` default is its opening move (#213) — the spawn prompt
+    // is superseded by the program's desk-protocol kick.
+    expect(h.records[0]!.req.prompt).toContain("run your desk protocol");
 
     await teardown(h);
   });
