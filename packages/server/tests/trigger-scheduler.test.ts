@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { PassThrough } from "node:stream";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { makeRepoFixture, type RepoFixture } from "./repo-fixture.ts";
 import { createDatabase } from "../src/db.ts";
 import { createWorkspaceStore } from "../src/workspace-store.ts";
@@ -21,7 +23,14 @@ import { seedWorkspaceRoles } from "../src/seed-workspace-roles.ts";
 import { attachSessionToAgent, type SpawnPipelineDeps } from "../src/spawn-pipeline.ts";
 import { claudeRuntimeProvider, serializeUserMessage } from "@clobber/runtime";
 import type { AgentSpawner, SpawnedAgentInfo } from "../src/types.ts";
-import { triggerId, type RoleVersion, type Role, type WakeProgram } from "@clobber/shared";
+import { z } from "zod";
+import {
+  triggerId,
+  RoleTriggerSchema,
+  type RoleVersion,
+  type Role,
+  type WakeProgram,
+} from "@clobber/shared";
 
 interface Harness {
   db: ReturnType<typeof createDatabase>;
@@ -1105,6 +1114,41 @@ describe("TriggerScheduler — wake-program mapping (#213)", () => {
     expect(h.spawnCalls[0]!.appendSystemPrompt).toContain("LAYER-C-TRIAGE");
     expect(h.spawnCalls[0]!.appendSystemPrompt).not.toContain("LAYER-C-ORIENT");
     expect(h.spawnCalls[0]!.prompt).toBe("Triage the queue.");
+
+    h.scheduler.stop();
+    h.db.close();
+  });
+
+  // #215 — the headline UX win. The dogfood config wakes the manager on
+  // `workspace-open`; tapping the office to *talk* must yield a composed, SILENT,
+  // idle session, not a fabricated turn. Drive the assertion off the shipped
+  // example config so the flip (adding `wake_program: idle` to that trigger) is
+  // what makes this pass — a bare workspace-open trigger still fabricates the
+  // synthesized "the workspace was opened" kick (the legacy seam).
+  it("the shipped workspace-open trigger wakes the manager silent + idle (composed, no kick)", async () => {
+    const exampleTriggers = z.array(RoleTriggerSchema).parse(
+      JSON.parse(
+        readFileSync(
+          join(import.meta.dir, "../../../examples/clobber-on-clobber/manager-triggers.json"),
+          "utf8",
+        ),
+      ),
+    );
+    const workspaceOpen = exampleTriggers.find((t) => t.kind === "workspace-open");
+    if (workspaceOpen === undefined) throw new Error("example config lost its workspace-open trigger");
+
+    const h = makeHarness(new Date("2026-05-05T09:00:00.000Z"));
+    const role = h.roles.get(h.managerRoleId) as Role;
+    editRole(h.db, role, getCurrentVersion(h, h.managerRoleId), { triggers: [workspaceOpen] });
+    h.scheduler.start();
+
+    const result = await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined);
+    expect(result.dispatched).toBe(1);
+    expect(h.spawnCalls.length).toBe(1);
+    // No opening user message — the manager waits for the human on their turn.
+    expect(h.spawnCalls[0]!.prompt).toBeUndefined();
+    // idle carries no layer C → no synthesized "workspace was opened" framing.
+    expect(h.spawnCalls[0]!.appendSystemPrompt).not.toContain("the workspace was opened");
 
     h.scheduler.stop();
     h.db.close();
