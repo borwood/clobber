@@ -1,9 +1,11 @@
 import type { TranscriptLine } from "../api.ts";
 import {
   previewToolInput,
+  toolStatus,
   type AssistantLine,
   type UserLine,
   type ContentBlock,
+  type ToolStatus,
 } from "../transcript-types.ts";
 import { Markdown } from "./Markdown.tsx";
 
@@ -53,20 +55,37 @@ function UserContentBlock({ block }: { block: ContentBlock }) {
 export function AssistantBubble({
   line,
   showLabel,
+  showDetails,
+  toolResults,
 }: {
   line: AssistantLine;
   showLabel: boolean;
+  showDetails: boolean;
+  toolResults: Map<string, boolean>;
 }) {
   return (
     <Bubble label={showLabel ? "assistant" : null} tone="emerald">
       {line.message.content.map((block, i) => (
-        <AssistantContentBlock key={i} block={block} />
+        <AssistantContentBlock
+          key={i}
+          block={block}
+          showDetails={showDetails}
+          toolResults={toolResults}
+        />
       ))}
     </Bubble>
   );
 }
 
-function AssistantContentBlock({ block }: { block: ContentBlock }) {
+function AssistantContentBlock({
+  block,
+  showDetails,
+  toolResults,
+}: {
+  block: ContentBlock;
+  showDetails: boolean;
+  toolResults: Map<string, boolean>;
+}) {
   if (block.type === "text") {
     return (
       <div className={ASSISTANT_TEXT_BG}>
@@ -84,25 +103,64 @@ function AssistantContentBlock({ block }: { block: ContentBlock }) {
     );
   }
   if (block.type === "tool_use") {
-    const preview = previewToolInput(block.input);
     return (
-      <details className="text-xs group">
-        <summary className="cursor-pointer list-none flex items-baseline gap-2 hover:bg-zinc-900/40 rounded px-1 py-0.5 -mx-1">
-          <span className="text-zinc-600 group-open:rotate-90 transition-transform inline-block w-2 select-none">
-            ▸
-          </span>
-          <span className="text-emerald-400 font-mono shrink-0">{block.name}</span>
-          {preview !== null && (
-            <span className="text-zinc-400 truncate font-mono">{preview}</span>
-          )}
-        </summary>
-        <pre className="whitespace-pre-wrap text-zinc-300 bg-zinc-950 p-2 mt-1 rounded border border-zinc-800 overflow-x-auto">
-          {JSON.stringify(block.input, null, 2)}
-        </pre>
-      </details>
+      <ToolCallCard
+        name={block.name}
+        input={block.input}
+        status={toolStatus(toolResults, block.id)}
+        showDetails={showDetails}
+      />
     );
   }
   return <RawBlock block={block} />;
+}
+
+// Generic tool-call summary card (#40). By construction it needs no per-tool
+// rendering code: the badge is the tool name, the one-line summary comes from
+// previewToolInput's generic field-priority scan, and the status dot is
+// correlated by tool_use_id. A new tool renders correctly with zero changes.
+// With show-details on, the full input payload is revealed verbatim (no
+// markdown), mirroring the task-notification card's raw-behind-toggle pattern.
+function ToolCallCard({
+  name,
+  input,
+  status,
+  showDetails,
+}: {
+  name: string;
+  input: unknown;
+  status: ToolStatus;
+  showDetails: boolean;
+}) {
+  const preview = previewToolInput(input);
+  const dot =
+    status === "error"
+      ? "bg-red-500"
+      : status === "ok"
+        ? "bg-emerald-500"
+        : "bg-amber-500";
+  return (
+    <div className="flex items-start gap-2 text-xs">
+      <span
+        data-status={status}
+        aria-label={status}
+        className={`mt-1 inline-block w-1.5 h-1.5 rounded-full shrink-0 ${dot}`}
+      />
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex items-baseline gap-2">
+          <span className="text-emerald-400 font-mono shrink-0">{name}</span>
+          {preview !== null && (
+            <span className="text-zinc-400 truncate font-mono">{preview}</span>
+          )}
+        </div>
+        {showDetails && (
+          <pre className="whitespace-pre-wrap text-zinc-300 bg-zinc-950 p-2 rounded border border-zinc-800 overflow-x-auto">
+            {JSON.stringify(input, null, 2)}
+          </pre>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function RawBlock({ block }: { block: ContentBlock }) {

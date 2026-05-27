@@ -13,6 +13,7 @@ export type ContentBlock =
       readonly type: "tool_result";
       readonly tool_use_id: string;
       readonly content: unknown;
+      readonly is_error?: boolean;
     };
 
 export interface UserLine {
@@ -83,6 +84,38 @@ export function previewToolInput(input: unknown): string | null {
     }
   }
   return null;
+}
+
+export type ToolStatus = "running" | "ok" | "error";
+
+// Correlates tool calls to their results by tool_use_id so a tool-call card can
+// show running / ok / error without per-tool rendering code. A tool_use with no
+// matching tool_result is still running; a matching result is error if flagged,
+// otherwise ok. Built once per transcript and memoized by the viewer.
+export function buildToolResultIndex(
+  lines: readonly TranscriptLine[],
+): Map<string, boolean> {
+  const index = new Map<string, boolean>();
+  for (const line of lines) {
+    const message = line["message"];
+    if (!isUserMessage(message)) continue;
+    const content = message.content;
+    if (typeof content === "string") continue;
+    for (const block of content) {
+      if (block.type === "tool_result") {
+        index.set(block.tool_use_id, block.is_error === true);
+      }
+    }
+  }
+  return index;
+}
+
+export function toolStatus(
+  index: Map<string, boolean>,
+  toolUseId: string,
+): ToolStatus {
+  if (!index.has(toolUseId)) return "running";
+  return index.get(toolUseId) === true ? "error" : "ok";
 }
 
 function truncatePreview(value: string): string {

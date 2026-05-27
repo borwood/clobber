@@ -1,4 +1,7 @@
 @import "tailwindcss";
+/* Syntax-highlight theme for transcript code blocks (#43). rehype-highlight
+   emits .hljs-* token classes; this theme paints them. */
+@import "highlight.js/styles/github-dark.css";
 
 /* Dark-theme scrollbars (#41). Applied globally so transcript, sidebar,
    modals, and any future scrollable panel match the zinc/black UI without
