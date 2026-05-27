@@ -72,7 +72,9 @@ the manager.
 
 With the spawning session out of the loop after manager-wake, you should observe:
 
-1. **Manager wakes on workspace-open** (and thereafter on the daily `cron`).
+1. **Manager wakes on workspace-open** — composed (A+B) but **silent and idle** (the
+   `workspace-open` trigger maps to `idle`, #215): it waits for you on your turn rather than
+   fabricating an orient turn. The daily `cron` thereafter still carries its own kick.
 2. Manager **scans the assigned issues**, picks one, and **briefs you in its office card**.
 3. You approve; the manager **forks a `worker`** with the clobber SDLC profile and dispatches it
    via `/assignment <issue numbers>`.

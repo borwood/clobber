@@ -1,5 +1,5 @@
 [
-  { "kind": "workspace-open" },
+  { "kind": "workspace-open", "wake_program": "idle" },
   { "kind": "cron", "expr": "0 9 * * *" },
   { "kind": "worker-done" },
   { "kind": "session-ended" }

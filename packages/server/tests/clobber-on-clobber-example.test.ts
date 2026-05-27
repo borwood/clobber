@@ -81,6 +81,15 @@ describe("examples/clobber-on-clobber — dogfood workspace config (#150)", () =
     expect(ids).toContain("session-ended");
   });
 
+  it("the manager's workspace-open trigger maps to idle (#215) — opening the room is a silent, composed wake, not a fabricated turn", () => {
+    const triggers = z.array(RoleTriggerSchema).parse(readExampleJson("manager-triggers.json"));
+    const workspaceOpen = triggers.find((t) => t.kind === "workspace-open");
+    expect(workspaceOpen?.wake_program).toBe("idle");
+    // The orient routine stays reachable — as a declared, non-default
+    // wake-program selectable via the office affordance, never the human-tap default.
+    expect((managerRole.manifest.wakePrograms ?? []).map((p) => p.name)).toContain("orient");
+  });
+
   it("worker SDLC profile (#124) is the shipped research→…→watch-ci default", () => {
     expect(workerRole.manifest.sdlc).toEqual(defaultSdlcProfile);
     expect(defaultSdlcProfile.phases.map((p) => p.id)).toEqual([

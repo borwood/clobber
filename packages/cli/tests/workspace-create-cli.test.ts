@@ -151,7 +151,7 @@ describe("clobber CLI — workspace create --config (#181)", () => {
     const after = managerTriggers();
     expect(after.version).toBe(2);
     expect(after.triggers).toEqual([
-      { kind: "workspace-open" },
+      { kind: "workspace-open", wake_program: "idle" },
       { kind: "cron", expr: "0 9 * * *" },
       { kind: "worker-done" },
       { kind: "session-ended" },
