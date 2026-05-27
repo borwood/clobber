@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import type { Database } from "bun:sqlite";
 import {
   DEFAULT_SETTING_SOURCES,
-  DEFAULT_WAKE_PROMPT,
   DEFAULT_ROLE_EDIT_FORBIDDEN_KEYS,
   DEFAULT_TRIGGER_OVERRIDES,
   DEFAULT_FINAL_REPORT_CALLBACK,
@@ -24,7 +23,6 @@ import {
 
 export interface WorkspaceConfigPatch {
   readonly setting_sources?: readonly SettingSource[];
-  readonly wake_prompt?: string;
   readonly role_edit_policy?: RoleEditPolicy;
   readonly trigger_overrides?: TriggerOverrides;
   readonly final_report_callback?: FinalReportCallback;
@@ -49,7 +47,6 @@ interface Row {
   name: string;
   repo_path: string;
   setting_sources: string;
-  wake_prompt: string;
   role_edit_policy: string;
   trigger_overrides: string;
   final_report_callback: string;
@@ -65,7 +62,6 @@ function rowToWorkspace(row: Row): Workspace {
     name: row.name,
     repo_path: row.repo_path,
     setting_sources: JSON.parse(row.setting_sources),
-    wake_prompt: row.wake_prompt,
     role_edit_policy: JSON.parse(row.role_edit_policy),
     trigger_overrides: JSON.parse(row.trigger_overrides),
     final_report_callback: JSON.parse(row.final_report_callback),
@@ -79,8 +75,8 @@ function rowToWorkspace(row: Row): Workspace {
 export function createWorkspaceStore(db: Database): WorkspaceStore {
   const insertStmt = db.prepare(
     `INSERT INTO workspaces
-       (id, name, repo_path, setting_sources, wake_prompt, role_edit_policy, trigger_overrides, final_report_callback, spawn_worktree, file_size_policy, manager_skill_policy, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, name, repo_path, setting_sources, role_edit_policy, trigger_overrides, final_report_callback, spawn_worktree, file_size_policy, manager_skill_policy, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const getStmt = db.prepare("SELECT * FROM workspaces WHERE id = ?");
   const listStmt = db.prepare(
@@ -93,7 +89,6 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
       const id = randomUUID();
       const created_at = Date.now();
       const sources = req.setting_sources ?? DEFAULT_SETTING_SOURCES;
-      const wakePrompt = req.wake_prompt ?? DEFAULT_WAKE_PROMPT;
       const policy: RoleEditPolicy = req.role_edit_policy ?? {
         forbidden_keys: [...DEFAULT_ROLE_EDIT_FORBIDDEN_KEYS],
       };
@@ -114,7 +109,6 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
         req.name,
         req.repo_path,
         JSON.stringify(sources),
-        wakePrompt,
         JSON.stringify(policy),
         JSON.stringify(overrides),
         JSON.stringify(callback),
@@ -128,7 +122,6 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
         name: req.name,
         repo_path: req.repo_path,
         setting_sources: [...sources],
-        wake_prompt: wakePrompt,
         role_edit_policy: { forbidden_keys: [...policy.forbidden_keys] },
         trigger_overrides: overrides,
         final_report_callback: callback,
@@ -164,10 +157,6 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
       if (config.setting_sources !== undefined) {
         fragments.push("setting_sources = ?");
         values.push(JSON.stringify(config.setting_sources));
-      }
-      if (config.wake_prompt !== undefined) {
-        fragments.push("wake_prompt = ?");
-        values.push(config.wake_prompt);
       }
       if (config.role_edit_policy !== undefined) {
         fragments.push("role_edit_policy = ?");

@@ -22,9 +22,6 @@ export const DEFAULT_SETTING_SOURCES: readonly SettingSource[] = [
   "local",
 ];
 
-export const DEFAULT_WAKE_PROMPT =
-  "You have been woken without a specific task. Review your office notes, then summarise where you left off and what (if anything) needs your attention next.";
-
 export const DEFAULT_ROLE_EDIT_FORBIDDEN_KEYS: readonly string[] = [
   "hooks",
   "permission_mode",
@@ -76,7 +73,6 @@ export const WorkspaceSchema = z.object({
   name: z.string().min(1),
   repo_path: z.string().min(1),
   setting_sources: SettingSourcesSchema,
-  wake_prompt: z.string().min(1),
   role_edit_policy: RoleEditPolicySchema,
   trigger_overrides: TriggerOverridesSchema,
   final_report_callback: FinalReportCallbackSchema,
@@ -91,7 +87,6 @@ export const CreateWorkspaceRequestSchema = z.object({
   name: z.string().min(1),
   repo_path: z.string().min(1),
   setting_sources: SettingSourcesSchema.optional(),
-  wake_prompt: z.string().min(1).optional(),
   role_edit_policy: RoleEditPolicySchema.optional(),
   trigger_overrides: TriggerOverridesSchema.optional(),
   final_report_callback: FinalReportCallbackSchema.optional(),
@@ -104,7 +99,6 @@ export type CreateWorkspaceRequest = z.infer<typeof CreateWorkspaceRequestSchema
 export const UpdateWorkspaceConfigRequestSchema = z
   .object({
     setting_sources: SettingSourcesSchema.optional(),
-    wake_prompt: z.string().min(1).optional(),
     role_edit_policy: RoleEditPolicySchema.optional(),
     trigger_overrides: TriggerOverridesSchema.optional(),
     final_report_callback: FinalReportCallbackSchema.optional(),
@@ -115,7 +109,6 @@ export const UpdateWorkspaceConfigRequestSchema = z
   .refine(
     (v) =>
       v.setting_sources !== undefined ||
-      v.wake_prompt !== undefined ||
       v.role_edit_policy !== undefined ||
       v.trigger_overrides !== undefined ||
       v.final_report_callback !== undefined ||
@@ -124,7 +117,7 @@ export const UpdateWorkspaceConfigRequestSchema = z
       v.manager_skill_policy !== undefined,
     {
       message:
-        "must include at least one of setting_sources, wake_prompt, role_edit_policy, trigger_overrides, final_report_callback, spawn_worktree, file_size_policy, manager_skill_policy",
+        "must include at least one of setting_sources, role_edit_policy, trigger_overrides, final_report_callback, spawn_worktree, file_size_policy, manager_skill_policy",
     },
   );
 export type UpdateWorkspaceConfigRequest = z.infer<

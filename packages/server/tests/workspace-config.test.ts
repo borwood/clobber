@@ -9,7 +9,6 @@ import { registerWorkspaceRoutes } from "../src/routes/workspaces.ts";
 import type { TriggerScheduler } from "../src/trigger-scheduler.ts";
 import {
   DEFAULT_SETTING_SOURCES,
-  DEFAULT_WAKE_PROMPT,
   DEFAULT_ROLE_EDIT_FORBIDDEN_KEYS,
   DEFAULT_TRIGGER_OVERRIDES,
   DEFAULT_FINAL_REPORT_CALLBACK,
@@ -88,27 +87,6 @@ describe("workspace setting_sources — defaults + creation", () => {
   });
 });
 
-describe("workspace wake_prompt — defaults + creation", () => {
-  it("new workspaces default to the canonical wake prompt", async () => {
-    const ws = await createWorkspace({});
-    expect(ws.wake_prompt).toBe(DEFAULT_WAKE_PROMPT);
-  });
-
-  it("accepts a custom wake_prompt on creation", async () => {
-    const ws = await createWorkspace({ wake_prompt: "wake up, neo" });
-    expect(ws.wake_prompt).toBe("wake up, neo");
-  });
-
-  it("rejects empty wake_prompt", async () => {
-    const res = await app.inject({
-      method: "POST",
-      url: "/workspaces",
-      payload: { name: "ws", repo_path: repoPath, wake_prompt: "" },
-    });
-    expect(res.statusCode).toBe(400);
-  });
-});
-
 describe("workspace role_edit_policy — defaults + creation", () => {
   it("new workspaces default to forbidden_keys=[hooks, permission_mode]", async () => {
     const ws = await createWorkspace({});
@@ -132,20 +110,7 @@ describe("workspace role_edit_policy — defaults + creation", () => {
   });
 });
 
-describe("PATCH /workspaces/:id — updating wake_prompt and role_edit_policy", () => {
-  it("PATCH wake_prompt updates the workspace", async () => {
-    const ws = await createWorkspace({});
-    const res = await app.inject({
-      method: "PATCH",
-      url: `/workspaces/${ws.id}`,
-      payload: { wake_prompt: "new wake prompt" },
-    });
-    expect(res.statusCode).toBe(200);
-    const updated = res.json() as Workspace;
-    expect(updated.wake_prompt).toBe("new wake prompt");
-    expect(updated.setting_sources).toEqual([...DEFAULT_SETTING_SOURCES]);
-  });
-
+describe("PATCH /workspaces/:id — updating role_edit_policy", () => {
   it("PATCH role_edit_policy updates the workspace", async () => {
     const ws = await createWorkspace({});
     const res = await app.inject({
@@ -313,13 +278,13 @@ describe("PATCH /workspaces/:id — updating trigger_overrides", () => {
     expect(reloadedRoles.sort()).toEqual([roleA, roleB].sort());
   });
 
-  it("PATCH wake_prompt alone does not reload the scheduler", async () => {
+  it("PATCH setting_sources alone does not reload the scheduler", async () => {
     const ws = await createWorkspace({});
     reloadedRoles.length = 0;
     await app.inject({
       method: "PATCH",
       url: `/workspaces/${ws.id}`,
-      payload: { wake_prompt: "new prompt" },
+      payload: { setting_sources: ["user"] },
     });
     expect(reloadedRoles).toEqual([]);
   });
@@ -336,7 +301,6 @@ describe("PATCH /workspaces/:id — updating trigger_overrides", () => {
     });
     expect(res.statusCode).toBe(200);
     const updated = res.json() as Workspace;
-    expect(updated.wake_prompt).toBe(DEFAULT_WAKE_PROMPT);
     expect(updated.role_edit_policy).toEqual({
       forbidden_keys: [...DEFAULT_ROLE_EDIT_FORBIDDEN_KEYS],
     });
@@ -470,7 +434,6 @@ describe("PATCH /workspaces/:id — updating final_report_callback", () => {
     expect(res.statusCode).toBe(200);
     const updated = res.json() as Workspace;
     expect(updated.setting_sources).toEqual([...DEFAULT_SETTING_SOURCES]);
-    expect(updated.wake_prompt).toBe(DEFAULT_WAKE_PROMPT);
     expect(updated.role_edit_policy).toEqual({
       forbidden_keys: [...DEFAULT_ROLE_EDIT_FORBIDDEN_KEYS],
     });
@@ -579,7 +542,6 @@ describe("PATCH /workspaces/:id — updating manager_skill_policy", () => {
     expect(res.statusCode).toBe(200);
     const updated = res.json() as Workspace;
     expect(updated.setting_sources).toEqual([...DEFAULT_SETTING_SOURCES]);
-    expect(updated.wake_prompt).toBe(DEFAULT_WAKE_PROMPT);
     expect(updated.role_edit_policy).toEqual({
       forbidden_keys: [...DEFAULT_ROLE_EDIT_FORBIDDEN_KEYS],
     });

@@ -5,6 +5,7 @@ import type {
   RuntimeSpawnOptions,
 } from "@clobber/runtime";
 import type { Agent, BootContext, BriefingPacket, EffortLevel, Role, Workspace } from "@clobber/shared";
+import { resolveWakeProgram } from "@clobber/shared";
 import { ensureOffice } from "./office-store.ts";
 import { composeOfficeContext } from "./office-context.ts";
 import { composeSystemPrompt } from "./compose-system-prompt.ts";
@@ -27,6 +28,12 @@ export interface PrepareSpawnContextInput {
   readonly versionId: string | undefined;
   // Absent on a bare resume — no task turn to compose.
   readonly prompt: string | undefined;
+  // The selected opening move. Resolved against the role's wake-programs with
+  // `idle` as the built-in; undefined selects `idle`. On a fresh attach a named
+  // program supplies layer C + the opening kick; on resume only layer C is
+  // re-composed (the kick is suppressed). The full selection surfaces — spawn
+  // arg / trigger map / office UI — are #213; this is the minimal by-name seam.
+  readonly wakeProgram?: string;
   readonly briefing?: BriefingPacket;
   // Per-spawn override of the role's default effort. When supplied, beats
   // role.effort. When omitted, role.effort applies (or claude's default if
@@ -65,6 +72,7 @@ export async function prepareSpawnContext(
     sessionId,
     versionId,
     prompt,
+    wakeProgram,
     briefing,
     effortOverride,
   } = input;
@@ -123,11 +131,26 @@ export async function prepareSpawnContext(
   if (officeDir !== null) {
     seeds.push(composeOfficeContext(officeDir));
   }
+
+  // Layer C — the selected wake-program's system addon. Composed on every
+  // embodiment, including resume. The opening user-message kick the program
+  // owns fires only on a fresh attach; on resume it is suppressed (the session
+  // already carries its history) so the turn is just the resume prompt. When no
+  // program is selected the caller's prompt remains the opening message — the
+  // legacy seam until #213 routes selection through every spawn surface.
+  const program = resolveWakeProgram(effectiveBundle.wakePrograms, wakeProgram);
+  const kick =
+    mode === "resume" || wakeProgram === undefined
+      ? prompt
+      : program.user === null
+        ? undefined
+        : program.user;
+
   const systemPrompt = composeSystemPrompt({
     framing: effectiveBundle.framing,
     rolePrompt: effectiveBundle.systemPrompt,
     seeds,
-    wakeProgramAddon: "",
+    wakeProgramAddon: program.system,
   });
 
   const materialized = deps.runtimeProvider.prepareBundle({
@@ -161,7 +184,7 @@ export async function prepareSpawnContext(
   const cwd = resolveSpawnCwd(workspace, agent, mode, agentHasSession);
   const spawnOptions: RuntimeSpawnOptions = {
     hookUrl: deps.hookUrl,
-    prompt,
+    prompt: kick,
     cwd,
     sessionId,
     ...(role.permission_mode === undefined ? {} : { permissionMode: role.permission_mode }),

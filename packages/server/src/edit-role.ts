@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import type { Role, RoleSkill, RoleTrigger, RoleVersion, SeedRef } from "@clobber/shared";
+import type { Role, RoleSkill, RoleTrigger, RoleVersion, SeedRef, WakeProgram } from "@clobber/shared";
 import { createRoleVersionStore } from "./role-version-store.ts";
 
 export interface RoleEditPatch {
@@ -8,6 +8,7 @@ export interface RoleEditPatch {
   readonly allowed_tools?: readonly string[];
   readonly triggers?: readonly RoleTrigger[];
   readonly seedRefs?: readonly SeedRef[];
+  readonly wakePrograms?: readonly WakeProgram[];
 }
 
 export interface EditRoleResult {
@@ -58,6 +59,11 @@ export function editRole(
       ? currentVersion.seed_refs_json
       : JSON.stringify(patch.seedRefs);
 
+  const newWakeProgramsJson =
+    patch.wakePrograms === undefined
+      ? currentVersion.wake_programs_json
+      : JSON.stringify(patch.wakePrograms);
+
   const created = versions.create({
     role_id: role.id,
     version: nextVersion,
@@ -69,6 +75,7 @@ export function editRole(
     hooks_json: currentVersion.hooks_json,
     triggers_json: newTriggersJson,
     seed_refs_json: newSeedRefsJson,
+    wake_programs_json: newWakeProgramsJson,
   });
 
   setCurrentVersion.run(created.id, role.id);

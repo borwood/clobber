@@ -395,6 +395,7 @@ describe("TriggerScheduler — cron firing", () => {
       hooks_json: cur.hooks_json,
       triggers_json: JSON.stringify([{ kind: "cron", expr: "0 9 * * *" }]),
       seed_refs_json: cur.seed_refs_json,
+      wake_programs_json: cur.wake_programs_json,
     });
     h.db
       .prepare("UPDATE roles SET current_version_id = ? WHERE id = ?")
@@ -987,6 +988,7 @@ describe("TriggerScheduler — workspace-open firing", () => {
       hooks_json: cur.hooks_json,
       triggers_json: JSON.stringify([{ kind: "workspace-open" }]),
       seed_refs_json: cur.seed_refs_json,
+      wake_programs_json: cur.wake_programs_json,
     });
     h.db
       .prepare("UPDATE roles SET current_version_id = ? WHERE id = ?")

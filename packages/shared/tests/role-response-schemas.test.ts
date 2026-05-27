@@ -73,6 +73,7 @@ describe("RoleDetailResponseSchema", () => {
       hooks: {},
       triggers: [],
       seed_refs: [{ name: "repo-sdlc", enabled: true }],
+      wake_programs: [{ name: "task", system: "Read your desk.", user: "go" }],
       created_at: 1700000000000,
     },
     version_history: [

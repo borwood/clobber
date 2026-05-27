@@ -8,6 +8,9 @@ export const SessionSchema = z.object({
   role_version_id: z.string().uuid().optional(),
   runtime_provider: z.string().min(1),
   provider_thread_id: z.string().min(1).optional(),
+  // The wake-program this session was embodied with. Persisted so resume
+  // re-composes the same layer-C addon (the kick is still suppressed on resume).
+  wake_program: z.string().min(1).optional(),
   label: z.string().min(1).optional(),
   pid: z.number().int().positive(),
   started_at: z.number().int().nonnegative(),
@@ -28,6 +31,7 @@ export const CreateSessionRequestSchema = z.object({
   role_version_id: z.string().uuid().optional(),
   runtime_provider: z.string().min(1).optional(),
   provider_thread_id: z.string().min(1).optional(),
+  wake_program: z.string().min(1).optional(),
   label: z.string().min(1).optional(),
   pid: z.number().int().positive(),
   transcript_path: z.string().min(1).optional(),

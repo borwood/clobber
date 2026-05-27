@@ -5,14 +5,18 @@ description: Start another claude agent in this workspace to do delegated work.
 
 # spawn
 
-Run `clobber spawn <role> --prompt "<task>" --label "<verb-noun>"` to launch a
-worker agent in the same workspace you're in. The worker is a separate claude
-session with its own transcript; you do not see its turns inline. You'll see
+Run `clobber spawn <role> --wake-program task --prompt "<task>" --label "<verb-noun>"`
+to launch a worker agent in the same workspace you're in. The worker is a separate
+claude session with its own transcript; you do not see its turns inline. You'll see
 lifecycle events (started, finished, failed) reflected in the workspace.
 
 ```
-clobber spawn worker --prompt "audit auth.ts for missing error cases and report findings" --label audit-auth
+clobber spawn worker --wake-program task --prompt "audit auth.ts for missing error cases and report findings" --label audit-auth
 ```
+
+`--wake-program task` is the worker's opening move — it composes the "read your
+desk, start the SDLC" protocol and fires the kick. Omit it (or pass
+`--wake-program idle`) only when you want a worker that boots oriented and waits.
 
 ## `--label` is required
 

@@ -22,7 +22,6 @@ const SCHEMA = `
     name                  TEXT    NOT NULL UNIQUE,
     repo_path             TEXT    NOT NULL,
     setting_sources       TEXT    NOT NULL DEFAULT '["user","project","local"]',
-    wake_prompt           TEXT    NOT NULL DEFAULT 'You have been woken without a specific task. Review your office notes, then summarise where you left off and what (if anything) needs your attention next.',
     role_edit_policy      TEXT    NOT NULL DEFAULT '{"forbidden_keys":["hooks","permission_mode"]}',
     trigger_overrides     TEXT    NOT NULL DEFAULT '{}',
     final_report_callback TEXT    NOT NULL DEFAULT '{"kind":"noop"}',
@@ -61,6 +60,7 @@ const SCHEMA = `
     hooks_json                TEXT    NOT NULL,
     triggers_json             TEXT    NOT NULL DEFAULT '[]',
     seed_refs_json            TEXT    NOT NULL DEFAULT '[]',
+    wake_programs_json        TEXT    NOT NULL DEFAULT '[]',
     created_at                INTEGER NOT NULL,
     UNIQUE (role_id, version),
     FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
@@ -98,6 +98,7 @@ const SCHEMA = `
     role_version_id TEXT,
     runtime_provider  TEXT NOT NULL DEFAULT 'claude',
     provider_thread_id TEXT,
+    wake_program    TEXT,
     label           TEXT,
     pid             INTEGER NOT NULL,
     started_at      INTEGER NOT NULL,

@@ -73,9 +73,6 @@ export function registerWorkspaceRoutes(
         ...(parsed.data.setting_sources === undefined
           ? {}
           : { setting_sources: parsed.data.setting_sources }),
-        ...(parsed.data.wake_prompt === undefined
-          ? {}
-          : { wake_prompt: parsed.data.wake_prompt }),
         ...(parsed.data.role_edit_policy === undefined
           ? {}
           : { role_edit_policy: parsed.data.role_edit_policy }),

@@ -18,6 +18,7 @@ interface ParsedArgs {
   readonly briefingDir?: string;
   readonly briefingPairs: readonly { readonly name: string; readonly path: string }[];
   readonly effort?: EffortLevel;
+  readonly wakeProgram?: string;
 }
 
 function takeValue(
@@ -48,6 +49,7 @@ export function parseSpawnArgs(args: readonly string[]): ParsedArgs {
   let label: string | undefined;
   let briefingDir: string | undefined;
   let effort: EffortLevel | undefined;
+  let wakeProgram: string | undefined;
   const briefingPairs: { name: string; path: string }[] = [];
 
   for (let i = 0; i < args.length; i++) {
@@ -73,6 +75,9 @@ export function parseSpawnArgs(args: readonly string[]): ParsedArgs {
         );
       }
       effort = parsed.data;
+      i++;
+    } else if (tok === "--wake-program") {
+      wakeProgram = takeValue(args, i, "--wake-program");
       i++;
     } else if (tok.startsWith("--") || (tok.startsWith("-") && tok.length > 1)) {
       throw new CliUsageError(`unknown flag: ${tok}`);
@@ -104,6 +109,7 @@ export function parseSpawnArgs(args: readonly string[]): ParsedArgs {
     ...(briefingDir === undefined ? {} : { briefingDir }),
     briefingPairs,
     ...(effort === undefined ? {} : { effort }),
+    ...(wakeProgram === undefined ? {} : { wakeProgram }),
   };
 }
 
@@ -138,7 +144,7 @@ function walkDir(root: string, dir: string, out: BriefingFile[]): void {
   }
 }
 
-const SPAWN_USAGE = `usage: clobber spawn <role> --prompt <text> --label <slug> [--briefing-dir <path>] [--briefing <name:path>...] [--effort <level>]
+const SPAWN_USAGE = `usage: clobber spawn <role> --prompt <text> --label <slug> [--briefing-dir <path>] [--briefing <name:path>...] [--effort <level>] [--wake-program <name>]
 
 Spawn a worker agent into the current workspace. The role must already
 exist in this workspace (see \`clobber roles list\`). Prints the new
@@ -158,6 +164,11 @@ Flags:
       --effort <level>           Reasoning depth: low|medium|high|xhigh|max.
                                  Overrides the role's default for this spawn.
                                  Omit to use the role default.
+      --wake-program <name>      The opening move: composes that program's
+                                 layer-C system addon and fires its kick. Use
+                                 \`task\` for a worker that should read its desk
+                                 and start the SDLC; \`idle\` to boot oriented
+                                 and wait. Omit for the legacy prompt-as-kick.
 
 Briefing files land at .clobber/agents/<agent-id>/desk/, which the worker
 sees via $CLOBBER_DESK_DIR. The worker role's first action is to read that
@@ -188,6 +199,9 @@ export const spawnCommand: Command = {
     }
     if (parsed.effort !== undefined) {
       body["effort"] = parsed.effort;
+    }
+    if (parsed.wakeProgram !== undefined) {
+      body["wake_program"] = parsed.wakeProgram;
     }
     const result = await request<SpawnResponse>(ctx.env, {
       method: "POST",

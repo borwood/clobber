@@ -34,6 +34,7 @@ const sampleBundle: RoleBundleData = {
     { name: "status", body: "# status\n\nReport status." },
   ],
   seedRefs: [],
+  wakePrograms: [],
   hooksJson: HOOKS_TEMPLATE,
 };
 
