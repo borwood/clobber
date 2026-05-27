@@ -160,6 +160,7 @@ export const selfSkillsCommand: Command = {
 
 Workspace catalog lives at <repo>/.clobber/skills/<name>/SKILL.md. Grants
 are gated by the workspace's manager_skill_policy (PATCH /workspaces/:id).`,
+  subcommands: SUBCOMMANDS,
   async run(ctx) {
     const { json, rest } = takeJsonFlag(ctx.args);
     const [sub, ...subRest] = rest;

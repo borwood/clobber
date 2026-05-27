@@ -12,6 +12,12 @@ export interface Command {
   readonly name: string;
   readonly summary: string;
   readonly usage?: string;
+  /**
+   * Declared when the verb dispatches on a subcommand (e.g. `roles list`).
+   * Bare invocation of such a verb prints its help and exits 0 instead of
+   * erroring — mirroring git/gh/kubectl discovery ergonomics.
+   */
+  readonly subcommands?: readonly string[];
   run(ctx: CommandContext): Promise<number>;
 }
 

@@ -201,7 +201,7 @@ describe("clobber CLI — roles list", () => {
     expect(manager!.version).toBe(1);
   });
 
-  it("exits 2 with a usage error when no subcommand is given", async () => {
+  it("prints help and exits 0 when no subcommand is given", async () => {
     const s = captureStreams();
     const code = await run({
       argv: ["roles"],
@@ -209,8 +209,8 @@ describe("clobber CLI — roles list", () => {
       stdout: s.stdout,
       stderr: s.stderr,
     });
-    expect(code).toBe(2);
-    expect(s.err()).toMatch(/subcommand/i);
+    expect(code).toBe(0);
+    expect(s.out()).toMatch(/usage: clobber roles/);
   });
 
   it("exits 2 for an unknown subcommand", async () => {

@@ -127,6 +127,7 @@ export const reportsCommand: Command = {
   name: "reports",
   summary: "Read worker final reports for this workspace (manager triage interface).",
   usage: REPORTS_USAGE,
+  subcommands: ["list", "show"],
   async run(ctx) {
     const [verb, ...rest] = ctx.args;
     if (verb === "list") return runList(ctx, rest);
