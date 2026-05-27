@@ -72,11 +72,21 @@ export function AskWidget({ question, onAnswer }: Props) {
     }
   }
 
-  const label =
-    questions.length === 1 ? "Send" : `Send ${questions.length} answers`;
+  const timedOut = question.status === "timed_out";
+  const label = timedOut
+    ? "Send anyway"
+    : questions.length === 1
+      ? "Send"
+      : `Send ${questions.length} answers`;
 
   return (
     <div className="border-t border-amber-700/50 bg-amber-950/40 px-3 py-2.5 space-y-3">
+      {timedOut && (
+        <p className="text-xs text-amber-300/90">
+          This ask timed out — your answer will be sent to the agent as a new
+          message.
+        </p>
+      )}
       {questions.map((q, i) => (
         <QuestionPanel
           key={i}

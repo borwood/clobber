@@ -26,6 +26,9 @@ export interface OpenQuestion {
   readonly id: string;
   readonly questions: readonly AskQuestion[];
   readonly asked_at: number;
+  // `timed_out` keeps the widget actionable but flags that a selection arrives
+  // as a fresh injected message rather than the agent's parked wait (#183).
+  readonly status: "pending" | "timed_out";
 }
 
 export interface SessionSummary {

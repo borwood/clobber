@@ -56,6 +56,7 @@ describe("AskWidget panel", () => {
     const question: OpenQuestion = {
       id: "q-multi",
       asked_at: 1,
+      status: "pending",
       questions: [
         {
           question: "Which datastore?",
@@ -108,6 +109,7 @@ describe("AskWidget panel", () => {
     const question: OpenQuestion = {
       id: "q-single",
       asked_at: 1,
+      status: "pending",
       questions: [
         {
           question: "Ship it?",
@@ -123,6 +125,37 @@ describe("AskWidget panel", () => {
 
     expect(sendButton().disabled).toBe(true);
     await click("Yes");
+    await act(async () => {
+      sendButton().click();
+    });
+
+    expect(answers).toEqual(["Yes"]);
+  });
+
+  it("a timed-out ask stays actionable and annotates that the answer is sent as a new message (#183)", async () => {
+    const answers: string[] = [];
+    const question: OpenQuestion = {
+      id: "q-timed-out",
+      asked_at: 1,
+      status: "timed_out",
+      questions: [
+        {
+          question: "Ship it?",
+          header: "Ship",
+          multi_select: false,
+          options: [{ label: "Yes" }, { label: "No" }],
+        },
+      ],
+    };
+    await render(question, async (a) => {
+      answers.push(a);
+    });
+
+    // The widget tells the user a late answer routes as a new message, and the
+    // control still submits (never silently inert).
+    expect(container.textContent).toContain("timed out");
+    await click("Yes");
+    expect(sendButton().disabled).toBe(false);
     await act(async () => {
       sendButton().click();
     });

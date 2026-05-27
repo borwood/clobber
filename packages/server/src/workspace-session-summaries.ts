@@ -3,6 +3,7 @@ import type {
   AgentState,
   AskQuestion,
   LatestAgentStatus,
+  QuestionStatus,
   RoleVersionRef,
 } from "@clobber/shared";
 
@@ -10,6 +11,10 @@ export interface OpenSessionQuestion {
   readonly id: string;
   readonly questions: readonly AskQuestion[];
   readonly asked_at: number;
+  // `pending` while the asking agent is parked on it; `timed_out` once the wait
+  // window lapsed but the widget stays actionable, since a late answer still
+  // routes back into the session (#183).
+  readonly status: Extract<QuestionStatus, "pending" | "timed_out">;
 }
 
 export interface SessionSummary {
@@ -48,6 +53,7 @@ interface Row {
   question_id: string | null;
   question_questions_json: string | null;
   question_asked_at: number | null;
+  question_status: string | null;
   pinned_version_id: string | null;
   pinned_version_number: number | null;
   current_version_id: string | null;
@@ -77,10 +83,12 @@ function pickOpenQuestion(row: Row): OpenSessionQuestion | undefined {
   if (row.question_id === null) return undefined;
   if (row.question_questions_json === null) return undefined;
   if (row.question_asked_at === null) return undefined;
+  if (row.question_status === null) return undefined;
   return {
     id: row.question_id,
     questions: JSON.parse(row.question_questions_json) as readonly AskQuestion[],
     asked_at: row.question_asked_at,
+    status: row.question_status as Extract<QuestionStatus, "pending" | "timed_out">,
   };
 }
 
@@ -112,6 +120,7 @@ export function createWorkspaceSessionSummaries(db: Database): WorkspaceSessionS
       q.id             AS question_id,
       q.questions_json AS question_questions_json,
       q.asked_at       AS question_asked_at,
+      q.status         AS question_status,
       pv.id         AS pinned_version_id,
       pv.version    AS pinned_version_number,
       cv.id         AS current_version_id,
@@ -126,7 +135,7 @@ export function createWorkspaceSessionSummaries(db: Database): WorkspaceSessionS
     LEFT JOIN agent_questions q
       ON q.id = (
         SELECT id FROM agent_questions
-         WHERE session_id = s.id AND status = 'pending'
+         WHERE session_id = s.id AND status IN ('pending', 'timed_out')
          ORDER BY asked_at DESC, id DESC
          LIMIT 1
       )

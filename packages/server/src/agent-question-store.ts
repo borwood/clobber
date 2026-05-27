@@ -17,6 +17,7 @@ export interface AgentQuestionStore {
   get(id: string): AgentQuestion | null;
   getOpenForSession(sessionId: string): AgentQuestion | null;
   answer(id: string, answer: string): boolean;
+  answerLate(id: string, answer: string): boolean;
   timeout(id: string): boolean;
   cancelAllForSession(sessionId: string): string[];
 }
@@ -62,6 +63,14 @@ export function createAgentQuestionStore(db: Database): AgentQuestionStore {
        SET status = 'answered', answer = ?, answered_at = ?
      WHERE id = ? AND status = 'pending'
   `);
+  // The late-answer return path (#183): a timed-out ask is answered after the
+  // fact, so it moves timed_out → answered (the pending → answered guard would
+  // never match here).
+  const answerLateStmt = db.prepare(`
+    UPDATE agent_questions
+       SET status = 'answered', answer = ?, answered_at = ?
+     WHERE id = ? AND status = 'timed_out'
+  `);
   const timeoutStmt = db.prepare(`
     UPDATE agent_questions
        SET status = 'timed_out', answered_at = ?
@@ -105,6 +114,11 @@ export function createAgentQuestionStore(db: Database): AgentQuestionStore {
 
     answer(id, answer) {
       const result = answerStmt.run(answer, Date.now(), id);
+      return result.changes > 0;
+    },
+
+    answerLate(id, answer) {
+      const result = answerLateStmt.run(answer, Date.now(), id);
       return result.changes > 0;
     },
 
