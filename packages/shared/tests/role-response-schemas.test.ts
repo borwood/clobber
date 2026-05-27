@@ -72,6 +72,7 @@ describe("RoleDetailResponseSchema", () => {
       allowed_tools: ["Bash"],
       hooks: {},
       triggers: [],
+      seed_refs: [{ name: "repo-sdlc", enabled: true }],
       created_at: 1700000000000,
     },
     version_history: [

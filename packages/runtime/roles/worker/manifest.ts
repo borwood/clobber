@@ -21,5 +21,8 @@ export const workerRole = defineRole({
     allowedTools: ["Bash", "Read", "Edit", "Write", "Glob", "Grep"],
     effort: "high",
     sdlc: defaultSdlcProfile,
+    // No wisdom-pointer: that pointer is the manager's, and seeding it to every
+    // worker was the original #166 mis-shape this issue fixes.
+    seedRefs: [{ name: "repo-sdlc", enabled: true }],
   },
 });

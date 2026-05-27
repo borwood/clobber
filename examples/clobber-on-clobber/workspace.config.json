@@ -7,13 +7,6 @@
   "final_report_callback": {
     "kind": "noop"
   },
-  "boot_context_provider": {
-    "kind": "exec",
-    "command": "echo",
-    "args": [
-      "Behavioral-wisdom log lives at brennan-volter/tasks#20 — consult it when orchestrating, and append to it when you learn something durable about agent behavior."
-    ]
-  },
   "manager_skill_policy": {
     "allow_self_grant": true,
     "allowed_skills": ["clobber-pm"]

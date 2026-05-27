@@ -8,7 +8,8 @@ import type { Agent, BootContext, BriefingPacket, EffortLevel, Role, Workspace }
 import { ensureOffice } from "./office-store.ts";
 import { composeOfficeContext } from "./office-context.ts";
 import { composeSystemPrompt } from "./compose-system-prompt.ts";
-import { runBootContextProvider } from "./boot-context-provider.ts";
+import { resolveSeedCatalog } from "./workspace-seed-catalog.ts";
+import { composeSeeds } from "./compose-seeds.ts";
 import { OFFICE_NOTES_SKILL } from "./office-notes-skill.ts";
 import { deskDirFor, writeBriefingPacket } from "./desk-store.ts";
 import { generateTokenValue } from "./session-token-store.ts";
@@ -90,9 +91,11 @@ export async function prepareSpawnContext(
     ? bundle
     : injectOfficeNotesSkill(bundle);
 
-  // Boot-context provider runs for every spawn (not gated to persistent like
-  // office-context); the provider script branches on role_name itself if it
-  // wants audience-specific behaviour. noop returns "" → nothing injected.
+  // Layer B — the role's seeds (#211). The role declares an ordered, toggleable
+  // list of refs; each resolves against the workspace catalog (shipped defaults
+  // overlaid by <repo>/.clobber/seeds/) and composes its static text or its
+  // dynamic provider's stdout. Dynamic seeds get the spawn env below so a script
+  // can read its actual office/desk paths instead of reconstructing them.
   const bootContext: BootContext = {
     workspace_id: workspace.id,
     agent_id: agent.id,
@@ -100,18 +103,23 @@ export async function prepareSpawnContext(
     role_name: role.name,
     persistent: role.persistent,
   };
-  const workspaceContext = await runBootContextProvider(
-    workspace.boot_context_provider,
+  const seedEnv: Record<string, string> = {
+    CLOBBER_ROLE: role.name,
+    CLOBBER_AGENT_ID: agent.id,
+    CLOBBER_REPO_PATH: workspace.repo_path,
+    ...(officeDir === null ? {} : { CLOBBER_OFFICE_DIR: officeDir }),
+    ...(deskDir === null ? {} : { CLOBBER_DESK_DIR: deskDir }),
+  };
+  const seeds = await composeSeeds(
+    effectiveBundle.seedRefs,
+    resolveSeedCatalog(workspace.repo_path),
     bootContext,
+    seedEnv,
   );
 
-  // Durable framing rides the system prompt (layer B seeds): workspace
-  // context first, instance-specific office continuity next. The opening
-  // user message carries only the task kick — absent on a no-task wake.
-  const seeds: string[] = [];
-  if (workspaceContext !== "") {
-    seeds.push(`[Workspace context]\n${workspaceContext}\n[End of workspace context]`);
-  }
+  // Instance-specific office continuity rides after the seeds — it is this
+  // agent's office state, not a shareable seed. The opening user message
+  // carries only the task kick (absent on a no-task wake).
   if (officeDir !== null) {
     seeds.push(composeOfficeContext(officeDir));
   }

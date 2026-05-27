@@ -59,6 +59,7 @@ export function forkRole(
     allowed_cli_commands_json: sourceVersion.allowed_cli_commands_json,
     hooks_json: sourceVersion.hooks_json,
     triggers_json: sourceVersion.triggers_json,
+    seed_refs_json: sourceVersion.seed_refs_json,
   });
   setCurrentVersion.run(newVersion.id, id);
 

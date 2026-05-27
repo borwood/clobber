@@ -50,6 +50,7 @@ export function buildDetail(
       allowed_tools: JSON.parse(version.allowed_tools_json),
       hooks: JSON.parse(version.hooks_json),
       triggers: JSON.parse(version.triggers_json),
+      seed_refs: JSON.parse(version.seed_refs_json),
       created_at: version.created_at,
     },
     version_history: deps.roleVersions.listForRole(role.id),

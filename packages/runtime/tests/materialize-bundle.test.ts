@@ -33,6 +33,7 @@ const sampleBundle: RoleBundleData = {
     { name: "ask", body: "# ask\n\nAsk the user." },
     { name: "status", body: "# status\n\nReport status." },
   ],
+  seedRefs: [],
   hooksJson: HOOKS_TEMPLATE,
 };
 

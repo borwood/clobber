@@ -85,9 +85,6 @@ export function registerWorkspaceRoutes(
         ...(parsed.data.final_report_callback === undefined
           ? {}
           : { final_report_callback: parsed.data.final_report_callback }),
-        ...(parsed.data.boot_context_provider === undefined
-          ? {}
-          : { boot_context_provider: parsed.data.boot_context_provider }),
         ...(parsed.data.spawn_worktree === undefined
           ? {}
           : { spawn_worktree: parsed.data.spawn_worktree }),
