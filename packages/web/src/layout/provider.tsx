@@ -13,7 +13,7 @@ import { defaultLayout } from "./default-layout.ts";
 import { loadLayout, pushClosedPane, saveLayout } from "./persistence.ts";
 import { closedRingCaptureFor } from "./closed-ring-capture.ts";
 import { viewLabel } from "./ViewHost.tsx";
-import { edgeFromEvent, paneIdFromEvent } from "./drop-target.ts";
+import { computeDropIndex, edgeFromEvent, paneIdFromEvent } from "./drop-target.ts";
 
 // Pending drop covers two cursor-following modes that both render through
 // <PaneDropZones>: a tab being dragged between panes (move) and a session
@@ -66,6 +66,15 @@ export function LayoutProvider({ workspaceSlug, deepLinkSessionId, children }: P
       if (paneId === null || edge === null) return;
       if (edge === "center") {
         rawDispatch({ kind: "open_view", pane: paneId, view: pendingView });
+        return;
+      }
+      if (edge === "tabs") {
+        rawDispatch({
+          kind: "open_view_at",
+          pane: paneId,
+          view: pendingView,
+          index: computeDropIndex(paneId, e.clientX),
+        });
         return;
       }
       rawDispatch({

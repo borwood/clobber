@@ -11,6 +11,7 @@ export type Action =
   | { kind: "select_tab"; pane: string; index: number }
   | { kind: "resize"; splitPath: readonly number[]; sizes: readonly number[]; containerPx: number }
   | { kind: "open_view"; pane: string; view: ViewId }
+  | { kind: "open_view_at"; pane: string; view: ViewId; index: number }
   | { kind: "pin_mailbox"; pane: string; sessionId: string }
   | { kind: "open_session_tab"; sessionId: string; originatingPaneId: string }
   | { kind: "close_tab"; pane: string; index: number }
@@ -44,6 +45,13 @@ export function layoutReducer(state: LayoutNode, action: Action): LayoutNode {
         views: [...p.views, action.view],
         activeIndex: p.views.length,
       }));
+    case "open_view_at":
+      return mapPane(state, action.pane, (p) => {
+        const views = [...p.views];
+        const clamped = Math.max(0, Math.min(action.index, views.length));
+        views.splice(clamped, 0, action.view);
+        return { ...p, views, activeIndex: clamped };
+      });
     case "pin_mailbox":
       return mapPane(state, action.pane, (p) => ({
         ...p,
