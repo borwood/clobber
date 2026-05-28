@@ -1,19 +1,55 @@
+import { useRef } from "react";
 import type { PaneNode } from "./types.ts";
 import { Tabs } from "./Tabs.tsx";
 import { ViewHost, viewLabel } from "./ViewHost.tsx";
 import { useLayout } from "./provider.tsx";
+import { useWorkspace } from "./WorkspaceContext.tsx";
+import { usePointerDrag } from "./usePointerDrag.ts";
 
-// Container chrome: a pane is a column with a tab strip on top and a body
-// that owns its own scroll. `flex-1 min-h-0 overflow-hidden` keeps the body
-// constrained to the pane's slot inside the split — without min-h-0, flex
-// children expand to content and break the layout.
 const PANE_CLASS = "flex flex-col min-h-0 min-w-0 overflow-hidden";
 const BODY_CLASS = "flex-1 min-h-0 overflow-hidden flex flex-col";
 
 export function Pane(props: { readonly node: PaneNode }) {
   const { node } = props;
-  const { dispatch } = useLayout();
+  const { dispatch, setTabDrag } = useLayout();
+  const { configOpen } = useWorkspace();
   const active = node.activeIndex === null ? null : node.views[node.activeIndex]!;
+
+  // Refs survive across pointer events without re-rendering or being captured
+  // stale by hook closures.
+  const pendingIndexRef = useRef<number | null>(null);
+  const activeIndexRef = useRef<number | null>(null);
+
+  const drag = usePointerDrag({
+    disabled: configOpen,
+    onStart: (e) => {
+      const idx = pendingIndexRef.current;
+      pendingIndexRef.current = null;
+      if (idx === null) return false;
+      activeIndexRef.current = idx;
+      setTabDrag({ fromPaneId: node.id, tabIndex: idx, x: e.clientX, y: e.clientY });
+    },
+    onMove: (_dx, _dy, e) => {
+      const idx = activeIndexRef.current;
+      if (idx === null) return;
+      setTabDrag({ fromPaneId: node.id, tabIndex: idx, x: e.clientX, y: e.clientY });
+    },
+    onEnd: (_dx, _dy, e) => {
+      const fromIndex = activeIndexRef.current;
+      activeIndexRef.current = null;
+      setTabDrag(null);
+      if (fromIndex === null) return;
+      const toPaneId = paneIdFromEvent(e);
+      if (toPaneId === null) return;
+      dispatch({
+        kind: "move_tab",
+        from: node.id,
+        to: toPaneId,
+        tabIndex: fromIndex,
+        dropIndex: computeDropIndex(toPaneId, e.clientX),
+      });
+    },
+  });
 
   const tabs = node.views.map((v, i) => ({
     id: String(i),
@@ -29,6 +65,14 @@ export function Pane(props: { readonly node: PaneNode }) {
           onSelect={(id) =>
             dispatch({ kind: "select_tab", pane: node.id, index: Number(id) })
           }
+          onTabPointerDown={
+            configOpen
+              ? undefined
+              : (i, e) => {
+                  pendingIndexRef.current = i;
+                  drag.onPointerDown(e);
+                }
+          }
           ariaLabel={`pane ${node.id}`}
         />
       )}
@@ -43,4 +87,29 @@ export function Pane(props: { readonly node: PaneNode }) {
       </div>
     </div>
   );
+}
+
+function paneIdFromEvent(e: PointerEvent): string | null {
+  const target = e.target;
+  if (target instanceof Element) {
+    const pane = target.closest<HTMLElement>('[data-pane="true"]');
+    if (pane !== null) return pane.dataset.paneId ?? null;
+  }
+  if (typeof document === "undefined") return null;
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  return el instanceof Element
+    ? el.closest<HTMLElement>('[data-pane="true"]')?.dataset.paneId ?? null
+    : null;
+}
+
+function computeDropIndex(paneId: string, clientX: number): number {
+  if (typeof document === "undefined") return 0;
+  const tabs = document.querySelectorAll<HTMLElement>(
+    `[data-pane-id="${paneId}"] [role="tab"]`,
+  );
+  for (let i = 0; i < tabs.length; i++) {
+    const r = tabs[i]!.getBoundingClientRect();
+    if (clientX < r.left + r.width / 2) return i;
+  }
+  return tabs.length;
 }

@@ -4,11 +4,15 @@ import { Pane } from "./Pane.tsx";
 import { Gutter } from "./Gutter.tsx";
 import { useLayout } from "./provider.tsx";
 import { useWorkspace } from "./WorkspaceContext.tsx";
+import { DragGhost } from "./DragGhost.tsx";
 
 export function LayoutTree() {
   const { layout } = useLayout();
   return (
-    <div className="flex-1 min-h-0 overflow-hidden">{render(layout, [])}</div>
+    <div className="flex-1 min-h-0 overflow-hidden">
+      {render(layout, [])}
+      <DragGhost />
+    </div>
   );
 }
 

@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef } from "react";
 
-// Shared pointer-capture mechanism. Used in this step by <Gutter> for split
-// resize; step 4 (#280) will reuse it for tab drag. Generic on purpose — do
-// not bake gutter-specific math into here.
+// Shared pointer-capture mechanism. <Gutter> uses it for split resize;
+// <Pane> uses it for tab drag (#280). Generic on purpose — do not bake
+// consumer-specific math into here. onStart may return `false` to abort
+// (e.g. pointer-down happened on a non-tab element inside the captured area).
 export interface PointerDragHandlers {
+  readonly onStart?: (e: React.PointerEvent) => boolean | void;
   readonly onMove: (dx: number, dy: number, e: PointerEvent) => void;
   readonly onEnd?: (dx: number, dy: number, e: PointerEvent) => void;
 }
@@ -50,6 +52,7 @@ export function usePointerDrag(opts: PointerDragOptions): PointerDragApi {
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (opts.disabled) return;
+      if (handlersRef.current.onStart?.(e) === false) return;
       e.preventDefault();
       startRef.current = { x: e.clientX, y: e.clientY };
       activeRef.current = true;
