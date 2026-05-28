@@ -24,12 +24,12 @@ interface JoinedRow extends CeilingRow {
   role_name: string;
   role_description: string | null;
   role_permission_mode: string | null;
-  role_allowed_tools: string | null;
   role_persistent: number;
   role_workspace_id: string | null;
   role_current_version_id: string | null;
   role_created_at: number;
   current_version_number: number | null;
+  current_version_allowed_tools_json: string | null;
 }
 
 function rowToCeiling(row: CeilingRow): WorkspaceRoleCeiling {
@@ -45,7 +45,10 @@ function joinedRowToAssignment(row: JoinedRow): WorkspaceRoleAssignment {
   };
   if (row.role_description !== null) roleInput["description"] = row.role_description;
   if (row.role_permission_mode !== null) roleInput["permission_mode"] = row.role_permission_mode;
-  if (row.role_allowed_tools !== null) roleInput["allowed_tools"] = JSON.parse(row.role_allowed_tools);
+  if (row.current_version_allowed_tools_json !== null) {
+    const tools = JSON.parse(row.current_version_allowed_tools_json) as readonly string[];
+    if (tools.length > 0) roleInput["allowed_tools"] = tools;
+  }
   if (row.role_workspace_id !== null) roleInput["workspace_id"] = row.role_workspace_id;
   if (row.role_current_version_id !== null) roleInput["current_version_id"] = row.role_current_version_id;
   const role: Role = RoleSchema.parse(roleInput);
@@ -81,12 +84,12 @@ export function createWorkspaceRoleStore(db: Database): WorkspaceRoleStore {
       r.name              AS role_name,
       r.description       AS role_description,
       r.permission_mode   AS role_permission_mode,
-      r.allowed_tools     AS role_allowed_tools,
       r.persistent        AS role_persistent,
       r.workspace_id      AS role_workspace_id,
       r.current_version_id AS role_current_version_id,
       r.created_at        AS role_created_at,
-      cv.version          AS current_version_number
+      cv.version          AS current_version_number,
+      cv.allowed_tools_json AS current_version_allowed_tools_json
     FROM workspace_role_ceilings wrc
     JOIN roles r ON r.id = wrc.role_id
     LEFT JOIN role_versions cv ON cv.id = r.current_version_id

@@ -7,6 +7,7 @@ export interface RoleBundleData {
   readonly description?: string;
   readonly framing: string;
   readonly systemPrompt: string;
+  readonly allowedTools: readonly string[];
   readonly skills: readonly RoleSkill[];
   readonly seedRefs: readonly SeedRef[];
   readonly wakePrograms: readonly WakeProgram[];

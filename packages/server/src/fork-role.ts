@@ -19,8 +19,8 @@ export function forkRole(
   const versions = createRoleVersionStore(db);
 
   const insertRole = db.prepare(
-    `INSERT INTO roles (id, name, description, permission_mode, allowed_tools, effort, persistent, workspace_id, current_version_id, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO roles (id, name, description, permission_mode, effort, persistent, workspace_id, current_version_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const setCurrentVersion = db.prepare(
     "UPDATE roles SET current_version_id = ? WHERE id = ?",
@@ -30,10 +30,6 @@ export function forkRole(
   const createdAt = Date.now();
   const description = source.description ?? null;
   const permissionMode = source.permission_mode ?? null;
-  const allowedToolsJson =
-    source.allowed_tools === undefined
-      ? null
-      : JSON.stringify(source.allowed_tools);
   const effort = source.effort ?? null;
 
   insertRole.run(
@@ -41,7 +37,6 @@ export function forkRole(
     newName,
     description,
     permissionMode,
-    allowedToolsJson,
     effort,
     source.persistent ? 1 : 0,
     workspaceId,

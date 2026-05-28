@@ -27,6 +27,7 @@ const sampleBundle: RoleBundleData = {
   description: "Permanent inhabitant of a workspace.",
   framing: "You are the **Manager**.",
   systemPrompt: "You are the manager.",
+  allowedTools: [],
   skills: [
     { name: "whoami", body: "# whoami\n\nRun `clobber whoami`." },
     { name: "spawn", body: "# spawn\n\nUse to start workers." },
