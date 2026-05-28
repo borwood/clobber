@@ -1,6 +1,8 @@
-import type { LayoutNode, PaneNode, SplitNode, ViewId } from "./types.ts";
+import type { LayoutNode, PaneNode, ViewId } from "./types.ts";
 import { defaultLayout } from "./default-layout.ts";
 import { closePane } from "./close-pane.ts";
+import { openSessionTab } from "./open-session-tab.ts";
+import { applyResize } from "./resize.ts";
 
 export const MIN_PANE_PX = 160;
 
@@ -10,6 +12,7 @@ export type Action =
   | { kind: "resize"; splitPath: readonly number[]; sizes: readonly number[]; containerPx: number }
   | { kind: "open_view"; pane: string; view: ViewId }
   | { kind: "pin_mailbox"; pane: string; sessionId: string }
+  | { kind: "open_session_tab"; sessionId: string; originatingPaneId: string }
   | { kind: "close_tab"; pane: string; index: number }
   | { kind: "close_pane"; pane: string }
   | {
@@ -26,14 +29,6 @@ export type Action =
   | { kind: "reopen_pane"; pane: PaneNode }
   | { kind: "reset" };
 
-// The URL-focused mailbox singleton — `{ kind: "mailbox" }` with no
-// sessionId — is uncloseable. Closing it would orphan URL focus, so close_tab
-// is a no-op on this exact shape and Tabs hides the × on it.
-export function isCloseable(view: ViewId): boolean {
-  if (view.kind !== "mailbox") return true;
-  return view.sessionId !== undefined;
-}
-
 export function layoutReducer(state: LayoutNode, action: Action): LayoutNode {
   switch (action.kind) {
     case "move_tab":
@@ -41,7 +36,7 @@ export function layoutReducer(state: LayoutNode, action: Action): LayoutNode {
     case "select_tab":
       return mapPane(state, action.pane, (p) => ({ ...p, activeIndex: action.index }));
     case "resize":
-      return applyResize(state, action.splitPath, action.sizes, action.containerPx);
+      return applyResize(state, action.splitPath, action.sizes, action.containerPx, MIN_PANE_PX);
     case "open_view":
       return mapPane(state, action.pane, (p) => ({
         ...p,
@@ -54,10 +49,11 @@ export function layoutReducer(state: LayoutNode, action: Action): LayoutNode {
         views: [...p.views, { kind: "mailbox", sessionId: action.sessionId }],
         activeIndex: p.views.length,
       }));
+    case "open_session_tab":
+      return openSessionTab(state, action.sessionId, action.originatingPaneId);
     case "close_tab":
       return mapPane(state, action.pane, (p) => {
-        const target = p.views[action.index];
-        if (target === undefined || !isCloseable(target)) return p;
+        if (p.views[action.index] === undefined) return p;
         const views = p.views.filter((_, i) => i !== action.index);
         const activeIndex =
           views.length === 0
@@ -225,62 +221,4 @@ function splitPane(
     const children = before ? [created, existing] : [existing, created];
     return { kind: "split", direction, children, sizes: [0.5, 0.5] };
   });
-}
-
-function applyResize(
-  state: LayoutNode,
-  path: readonly number[],
-  sizes: readonly number[],
-  containerPx: number,
-): LayoutNode {
-  return updateSplit(state, path, 0, (split) => {
-    if (sizes.length !== split.children.length) {
-      throw new Error(
-        `resize: size count ${sizes.length} ≠ children count ${split.children.length}`,
-      );
-    }
-    return { ...split, sizes: clampSizes(sizes, MIN_PANE_PX / containerPx) };
-  });
-}
-
-function updateSplit(
-  node: LayoutNode,
-  path: readonly number[],
-  depth: number,
-  fn: (s: SplitNode) => SplitNode,
-): LayoutNode {
-  if (depth === path.length) {
-    if (node.kind !== "split") throw new Error("resize: path does not point to a split");
-    return fn(node);
-  }
-  if (node.kind !== "split") throw new Error("resize: path descends through a pane");
-  const idx = path[depth]!;
-  return {
-    ...node,
-    children: node.children.map((c, i) =>
-      i === idx ? updateSplit(c, path, depth + 1, fn) : c,
-    ),
-  };
-}
-
-function clampSizes(input: readonly number[], minFrac: number): number[] {
-  if (input.length * minFrac > 1 + 1e-9) {
-    return input.map(() => 1 / input.length);
-  }
-  let out = input.slice();
-  for (let iter = 0; iter < 16; iter++) {
-    const below = out.map((s) => s < minFrac - 1e-12);
-    if (!below.some(Boolean)) break;
-    const deficit = out.reduce((d, s, i) => (below[i] ? d + (minFrac - s) : d), 0);
-    const headroom = out.reduce(
-      (t, s, i) => (!below[i] ? t + (s - minFrac) : t),
-      0,
-    );
-    if (headroom <= 0) return input.map(() => 1 / input.length);
-    out = out.map((s, i) =>
-      below[i] ? minFrac : s - (s - minFrac) * (deficit / headroom),
-    );
-  }
-  const sum = out.reduce((a, b) => a + b, 0);
-  return out.map((s) => s / sum);
 }

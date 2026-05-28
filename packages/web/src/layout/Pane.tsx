@@ -4,9 +4,10 @@ import { Tabs } from "./Tabs.tsx";
 import { ViewHost, viewLabel } from "./ViewHost.tsx";
 import { useLayout } from "./provider.tsx";
 import { useWorkspace } from "./WorkspaceContext.tsx";
-import { isCloseable } from "./reducer.ts";
 import { usePointerDrag } from "./usePointerDrag.ts";
 import { PaneDropZones, type DropEdge } from "./PaneDropZones.tsx";
+import { PaneIdProvider } from "./PaneIdContext.tsx";
+import { EmptyRootPanePlaceholder } from "./EmptyRootPanePlaceholder.tsx";
 
 const PANE_CLASS =
   "relative flex flex-col min-h-0 min-w-0 h-full w-full overflow-hidden";
@@ -69,7 +70,7 @@ export function Pane(props: { readonly node: PaneNode }) {
   const tabs = node.views.map((v, i) => ({
     id: String(i),
     label: viewLabel(v, sessions),
-    closable: isCloseable(v),
+    closable: true,
   }));
 
   return (
@@ -124,30 +125,34 @@ export function Pane(props: { readonly node: PaneNode }) {
         />
       )}
       <div className={BODY_CLASS}>
-        {active === null ? (
-          <div className="relative flex-1 flex items-center justify-center text-xs text-zinc-600">
-            drop a tab here
-            {layout.kind === "split" && (
-              <span
-                role="button"
-                aria-label="Close pane"
-                title="Close pane"
-                data-pane-close="true"
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  dispatch({ kind: "close_pane", pane: node.id });
-                }}
-                className="absolute top-2 right-2 w-5 h-5 inline-flex items-center justify-center rounded text-zinc-500 hover:text-zinc-100 hover:bg-zinc-700 cursor-pointer"
-              >
-                ×
-              </span>
-            )}
-          </div>
-        ) : (
-          <ViewHost view={active} />
-        )}
+        <PaneIdProvider value={node.id}>
+          {active === null ? (
+            layout.kind === "pane" ? (
+              <EmptyRootPanePlaceholder paneId={node.id} />
+            ) : (
+              <div className="relative flex-1 flex items-center justify-center text-xs text-zinc-600">
+                drop a tab here
+                <span
+                  role="button"
+                  aria-label="Close pane"
+                  title="Close pane"
+                  data-pane-close="true"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dispatch({ kind: "close_pane", pane: node.id });
+                  }}
+                  className="absolute top-2 right-2 w-5 h-5 inline-flex items-center justify-center rounded text-zinc-500 hover:text-zinc-100 hover:bg-zinc-700 cursor-pointer"
+                >
+                  ×
+                </span>
+              </div>
+            )
+          ) : (
+            <ViewHost view={active} />
+          )}
+        </PaneIdProvider>
       </div>
       {tabDrag !== null && <PaneDropZones />}
     </div>

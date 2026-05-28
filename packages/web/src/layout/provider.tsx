@@ -33,10 +33,11 @@ const Ctx = createContext<LayoutContextValue | null>(null);
 
 interface Props {
   readonly workspaceSlug: string | null;
+  readonly deepLinkSessionId: string | null;
   readonly children: ReactNode;
 }
 
-export function LayoutProvider({ workspaceSlug, children }: Props) {
+export function LayoutProvider({ workspaceSlug, deepLinkSessionId, children }: Props) {
   const [layout, rawDispatch] = useReducer(layoutReducer, workspaceSlug, init);
   const [tabDrag, setTabDrag] = useState<TabDragState | null>(null);
 
@@ -44,6 +45,24 @@ export function LayoutProvider({ workspaceSlug, children }: Props) {
     if (workspaceSlug === null) return;
     saveLayout(workspaceSlug, layout);
   }, [workspaceSlug, layout]);
+
+  // Deep-link cold-load auto-pin (#309): when arriving with /s/:sid in the URL
+  // and no tab for that session exists yet, pin one via the 4-step routing
+  // rule. The root pane is used as the originating-pane proxy on cold load.
+  useEffect(() => {
+    if (deepLinkSessionId === null) return;
+    if (hasMailboxFor(layout, deepLinkSessionId)) return;
+    const root = firstPaneId(layout);
+    if (root === null) return;
+    rawDispatch({
+      kind: "open_session_tab",
+      sessionId: deepLinkSessionId,
+      originatingPaneId: root,
+    });
+    // Run once per session-id change; auto-pinning depends on the URL, not on
+    // subsequent layout edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkSessionId, workspaceSlug]);
 
   const dispatch = useCallback(
     (a: Action) => {
@@ -80,6 +99,22 @@ function init(workspaceSlug: string | null): LayoutNode {
   if (typeof localStorage === "undefined") return defaultLayout();
   const stored = loadLayout(workspaceSlug);
   return stored ?? defaultLayout();
+}
+
+function hasMailboxFor(node: LayoutNode, sessionId: string): boolean {
+  if (node.kind === "pane") {
+    return node.views.some((v) => v.kind === "mailbox" && v.sessionId === sessionId);
+  }
+  return node.children.some((c) => hasMailboxFor(c, sessionId));
+}
+
+function firstPaneId(node: LayoutNode): string | null {
+  if (node.kind === "pane") return node.id;
+  for (const c of node.children) {
+    const hit = firstPaneId(c);
+    if (hit !== null) return hit;
+  }
+  return null;
 }
 
 function findPaneById(node: LayoutNode, id: string): PaneNode | null {

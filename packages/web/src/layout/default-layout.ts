@@ -14,7 +14,7 @@ export function defaultLayout(): LayoutNode {
     sizes: [0.2, 0.55, 0.25],
     children: [
       pane("pane-sessions", [{ kind: "sessions" }]),
-      pane("pane-center", [{ kind: "mailbox" }, { kind: "whiteboard" }]),
+      pane("pane-center", [{ kind: "whiteboard" }]),
       pane("pane-spawn", [{ kind: "spawn" }]),
     ],
   };

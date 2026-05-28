@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { layoutReducer, isCloseable } from "../src/layout/reducer.ts";
+import { layoutReducer } from "../src/layout/reducer.ts";
 import { defaultLayout } from "../src/layout/default-layout.ts";
 import type { LayoutNode, PaneNode, SplitNode } from "../src/layout/types.ts";
 
@@ -11,16 +11,6 @@ function asPane(n: LayoutNode | undefined): PaneNode {
   if (!n || n.kind !== "pane") throw new Error("expected pane");
   return n;
 }
-
-describe("isCloseable", () => {
-  it("returns false only for URL-focused mailbox singleton (no sessionId)", () => {
-    expect(isCloseable({ kind: "mailbox" })).toBe(false);
-    expect(isCloseable({ kind: "mailbox", sessionId: "s1" })).toBe(true);
-    expect(isCloseable({ kind: "sessions" })).toBe(true);
-    expect(isCloseable({ kind: "spawn" })).toBe(true);
-    expect(isCloseable({ kind: "whiteboard" })).toBe(true);
-  });
-});
 
 describe("layoutReducer close_pane", () => {
   it("removes one child of a 3-child split, leaving the split with 2 children", () => {
@@ -40,7 +30,12 @@ describe("layoutReducer close_pane", () => {
     // should collapse, leaving a single pane in that branch.
     const root = asSplit(defaultLayout());
     const mid = asPane(root.children[1]!);
-    const withInner = layoutReducer(defaultLayout(), {
+    const seeded = layoutReducer(defaultLayout(), {
+      kind: "pin_mailbox",
+      pane: mid.id,
+      sessionId: "sess-1",
+    });
+    const withInner = layoutReducer(seeded, {
       kind: "split_pane",
       pane: mid.id,
       direction: "v",
@@ -66,7 +61,12 @@ describe("layoutReducer close_pane", () => {
     const root = asSplit(defaultLayout());
     const mid = asPane(root.children[1]!);
     // Split mid vertically (creates a new sibling next to mid)
-    const s1 = layoutReducer(defaultLayout(), {
+    const seeded = layoutReducer(defaultLayout(), {
+      kind: "pin_mailbox",
+      pane: mid.id,
+      sessionId: "sess-1",
+    });
+    const s1 = layoutReducer(seeded, {
       kind: "split_pane",
       pane: mid.id,
       direction: "v",

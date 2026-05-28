@@ -78,11 +78,12 @@ describe("App layout migration (#278)", () => {
     expect(panes.length).toBe(3);
   });
 
-  it("center pane has mailbox + whiteboard tabs — the old ViewSwitcher behavior", async () => {
+  it("default layout: sessions / whiteboard / spawn — one tab per pane", async () => {
     await renderAt("/w/workspace-a");
     const labels = paneTabs().map((t) => (t.textContent ?? "").toLowerCase());
-    expect(labels.some((l) => l.includes("mailbox"))).toBe(true);
+    expect(labels.some((l) => l.includes("sessions"))).toBe(true);
     expect(labels.some((l) => l.includes("whiteboard"))).toBe(true);
+    expect(labels.some((l) => l.includes("spawn"))).toBe(true);
   });
 
   it("clicking the whiteboard tab swaps the active view in its pane", async () => {
