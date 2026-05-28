@@ -40,6 +40,7 @@ interface CommonProps<T extends string> {
   readonly onClose?: ((index: number) => void) | undefined;
   readonly ariaLabel?: string;
   readonly variant?: TabsVariant;
+  readonly trailing?: ReactNode;
 }
 
 interface ButtonTabsProps<T extends string> extends CommonProps<T> {
@@ -58,7 +59,7 @@ interface AnchorTabsProps<T extends string> extends CommonProps<T> {
 type TabsProps<T extends string> = ButtonTabsProps<T> | AnchorTabsProps<T>;
 
 export function Tabs<T extends string>(props: TabsProps<T>) {
-  const { tabs, activeId, onTabPointerDown, onClose, ariaLabel, variant = "pane" } = props;
+  const { tabs, activeId, onTabPointerDown, onClose, ariaLabel, variant = "pane", trailing } = props;
   const cls = VARIANTS[variant];
 
   return (
@@ -146,6 +147,9 @@ export function Tabs<T extends string>(props: TabsProps<T>) {
           </button>
         );
       })}
+      {trailing !== undefined && (
+        <div className="ml-auto flex items-stretch">{trailing}</div>
+      )}
     </div>
   );
 }
