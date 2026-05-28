@@ -20,9 +20,10 @@ export type Action =
       pane: string;
       direction: "h" | "v";
       before: boolean;
-      // Drag-driven splits move a tab into the new pane. Button-driven splits
-      // (per-pane split controls) omit `tab` to create an empty new pane.
-      tab?: { from: string; index: number };
+      // Drag-driven splits migrate a tab from a source pane; insert-mode
+      // (#316) drops a fresh view into the new pane; button-driven splits
+      // omit `tab` entirely.
+      tab?: { from: string; index: number } | { view: ViewId };
     }
   | { kind: "add_pane" }
   | { kind: "load_layout"; tree: LayoutNode }
@@ -186,10 +187,23 @@ function splitPane(
   targetId: string,
   direction: "h" | "v",
   before: boolean,
-  tab: { from: string; index: number } | undefined,
+  tab: { from: string; index: number } | { view: ViewId } | undefined,
 ): LayoutNode {
   if (tab === undefined) {
     const created = emptyPane();
+    return replacePane(state, targetId, (existing) => {
+      const children = before ? [created, existing] : [existing, created];
+      return { kind: "split", direction, children, sizes: [0.5, 0.5] };
+    });
+  }
+
+  if ("view" in tab) {
+    const created: PaneNode = {
+      kind: "pane",
+      id: newPaneId(),
+      views: [tab.view],
+      activeIndex: 0,
+    };
     return replacePane(state, targetId, (existing) => {
       const children = before ? [created, existing] : [existing, created];
       return { kind: "split", direction, children, sizes: [0.5, 0.5] };

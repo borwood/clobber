@@ -8,7 +8,7 @@ import { viewLabel } from "./ViewHost.tsx";
 // being moved (mirror-presentation discipline).
 export function DragGhost() {
   const { layout, tabDrag } = useLayout();
-  if (tabDrag === null) return null;
+  if (tabDrag === null || tabDrag.kind !== "move") return null;
   const pane = findPaneById(layout, tabDrag.fromPaneId);
   const view = pane?.views[tabDrag.tabIndex];
   if (!view) return null;

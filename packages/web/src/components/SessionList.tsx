@@ -14,7 +14,7 @@ interface Props {
   readonly onSelect: (id: string) => void;
   readonly onEnd: (id: string) => Promise<void>;
   readonly onResume: (id: string) => Promise<void>;
-  readonly onPin?: ((id: string) => void) | undefined;
+  readonly onOpenInPane?: ((id: string, x: number, y: number) => void) | undefined;
 }
 
 function relativeTime(ts: number): string {
@@ -25,7 +25,7 @@ function relativeTime(ts: number): string {
   return `${Math.floor(delta / 3_600_000)}h ago`;
 }
 
-export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume, onPin }: Props) {
+export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume, onOpenInPane }: Props) {
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [endingId, setEndingId] = useState<string | null>(null);
   const [resumingId, setResumingId] = useState<string | null>(null);
@@ -53,7 +53,7 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume, o
 
   return (
     <>
-    {menu !== null && onPin !== undefined && (
+    {menu !== null && onOpenInPane !== undefined && (
       <div
         role="menu"
         className="fixed z-50 min-w-[14rem] rounded border border-zinc-700 bg-zinc-900 shadow-lg text-sm text-zinc-100"
@@ -65,11 +65,11 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume, o
           role="menuitem"
           className="w-full text-left px-3 py-2 hover:bg-zinc-800"
           onClick={() => {
-            onPin(menu.sessionId);
+            onOpenInPane(menu.sessionId, menu.x, menu.y);
             setMenu(null);
           }}
         >
-          Pin mailbox
+          Open in pane…
         </button>
       </div>
     )}
@@ -88,7 +88,7 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume, o
             key={s.session_id}
             className="relative"
             onContextMenu={
-              onPin === undefined
+              onOpenInPane === undefined
                 ? undefined
                 : (e) => {
                     e.preventDefault();

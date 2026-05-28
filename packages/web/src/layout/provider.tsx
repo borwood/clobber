@@ -13,21 +13,33 @@ import { defaultLayout } from "./default-layout.ts";
 import { loadLayout, pushClosedPane, saveLayout } from "./persistence.ts";
 import { closedRingCaptureFor } from "./closed-ring-capture.ts";
 import { viewLabel } from "./ViewHost.tsx";
+import { edgeFromEvent, paneIdFromEvent } from "./drop-target.ts";
 
-export interface TabDragState {
-  readonly fromPaneId: string;
-  readonly tabIndex: number;
-  readonly x: number;
-  readonly y: number;
-}
+// Pending drop covers two cursor-following modes that both render through
+// <PaneDropZones>: a tab being dragged between panes (move) and a session
+// being placed via the SessionList right-click menu (insert, #316).
+export type PendingDrop =
+  | {
+      readonly kind: "move";
+      readonly fromPaneId: string;
+      readonly tabIndex: number;
+      readonly x: number;
+      readonly y: number;
+    }
+  | {
+      readonly kind: "insert";
+      readonly view: ViewId;
+      readonly x: number;
+      readonly y: number;
+    };
 
 interface LayoutContextValue {
   readonly workspaceSlug: string | null;
   readonly layout: LayoutNode;
   readonly dispatch: (a: Action) => void;
   readonly focusView: (kind: ViewId["kind"]) => void;
-  readonly tabDrag: TabDragState | null;
-  readonly setTabDrag: (state: TabDragState | null) => void;
+  readonly tabDrag: PendingDrop | null;
+  readonly setTabDrag: (state: PendingDrop | null) => void;
 }
 
 const Ctx = createContext<LayoutContextValue | null>(null);
@@ -40,7 +52,40 @@ interface Props {
 
 export function LayoutProvider({ workspaceSlug, deepLinkSessionId, children }: Props) {
   const [layout, rawDispatch] = useReducer(layoutReducer, workspaceSlug, init);
-  const [tabDrag, setTabDrag] = useState<TabDragState | null>(null);
+  const [tabDrag, setTabDrag] = useState<PendingDrop | null>(null);
+
+  // Insert-mode (#316): the next click on any drop-zone within a pane lands
+  // the pending view there. Escape (or a click outside the overlay) cancels.
+  useEffect(() => {
+    if (tabDrag === null || tabDrag.kind !== "insert") return;
+    const pendingView = tabDrag.view;
+    function onClick(e: MouseEvent) {
+      const paneId = paneIdFromEvent(e);
+      const edge = edgeFromEvent(e);
+      setTabDrag(null);
+      if (paneId === null || edge === null) return;
+      if (edge === "center") {
+        rawDispatch({ kind: "open_view", pane: paneId, view: pendingView });
+        return;
+      }
+      rawDispatch({
+        kind: "split_pane",
+        pane: paneId,
+        direction: edge === "top" || edge === "bottom" ? "v" : "h",
+        before: edge === "top" || edge === "left",
+        tab: { view: pendingView },
+      });
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setTabDrag(null);
+    }
+    window.addEventListener("click", onClick, true);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("click", onClick, true);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [tabDrag]);
 
   useEffect(() => {
     if (workspaceSlug === null) return;
