@@ -17,6 +17,8 @@ import { useLocation } from "./hooks/useLocation.ts";
 import { buildPath, parseLocation } from "./router.ts";
 import { LayoutProvider, useLayout } from "./layout/provider.tsx";
 import { LayoutTree } from "./layout/LayoutTree.tsx";
+import { HintBanner } from "./layout/HintBanner.tsx";
+import { defaultLayout } from "./layout/default-layout.ts";
 import {
   WorkspaceProvider,
   type WorkspaceContextValue,
@@ -245,6 +247,7 @@ export function App() {
       <LayoutProvider workspaceSlug={workspaceSlug}>
         <WorkspaceProvider value={workspaceValue}>
           <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            <HintBanner />
             <LayoutTree />
           </main>
           <ResetLayoutAffordance />
@@ -270,14 +273,24 @@ export function App() {
 // layout menu (add pane / saved layouts) lands. Floats top-right so it
 // remains discoverable without competing with workspace tabs for header room.
 function ResetLayoutAffordance() {
-  const { dispatch } = useLayout();
+  const { layout, dispatch } = useLayout();
   return (
     <button
       type="button"
       aria-label="Reset layout"
       title="Reset layout"
-      onClick={() => dispatch({ kind: "reset" })}
-      className="fixed top-3 right-6 z-10 px-2 py-1 rounded text-zinc-400 hover:text-zinc-200 border border-zinc-800 hover:border-zinc-700 text-sm leading-none"
+      onClick={() => {
+        const isDefault =
+          JSON.stringify(layout) === JSON.stringify(defaultLayout());
+        if (
+          !isDefault &&
+          !confirm("Reset layout? Your current arrangement will be lost.")
+        ) {
+          return;
+        }
+        dispatch({ kind: "reset" });
+      }}
+      className="fixed top-3 right-6 z-10 px-2 py-1 rounded text-zinc-400 hover:text-zinc-200 border border-zinc-800 hover:border-zinc-700 text-sm leading-none focus-visible:outline focus-visible:outline-1 focus-visible:outline-zinc-500"
     >
       ↺
     </button>
