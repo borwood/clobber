@@ -14,10 +14,10 @@ import { slugify } from "@clobber/shared";
 import { usePolledResource } from "./hooks/usePolledResource.ts";
 import { useLocation } from "./hooks/useLocation.ts";
 import { buildPath, parseLocation } from "./router.ts";
-import { LayoutProvider, useLayout } from "./layout/provider.tsx";
+import { LayoutProvider } from "./layout/provider.tsx";
 import { LayoutTree } from "./layout/LayoutTree.tsx";
 import { HintBanner } from "./layout/HintBanner.tsx";
-import { defaultLayout } from "./layout/default-layout.ts";
+import { LayoutMenu } from "./layout/LayoutMenu.tsx";
 import {
   WorkspaceProvider,
   type WorkspaceContextValue,
@@ -234,7 +234,11 @@ export function App() {
             <HintBanner />
             <LayoutTree />
           </main>
-          <ResetLayoutAffordance />
+          {activeWorkspaceId !== null && (
+            <div className="fixed top-3 right-6 z-10">
+              <LayoutMenu />
+            </div>
+          )}
         </WorkspaceProvider>
       </LayoutProvider>
 
@@ -253,30 +257,3 @@ export function App() {
   );
 }
 
-// v1 escape hatch for "I painted myself into an empty pane" until the v2
-// layout menu (add pane / saved layouts) lands. Floats top-right so it
-// remains discoverable without competing with workspace tabs for header room.
-function ResetLayoutAffordance() {
-  const { layout, dispatch } = useLayout();
-  return (
-    <button
-      type="button"
-      aria-label="Reset layout"
-      title="Reset layout"
-      onClick={() => {
-        const isDefault =
-          JSON.stringify(layout) === JSON.stringify(defaultLayout());
-        if (
-          !isDefault &&
-          !confirm("Reset layout? Your current arrangement will be lost.")
-        ) {
-          return;
-        }
-        dispatch({ kind: "reset" });
-      }}
-      className="fixed top-3 right-6 z-10 px-2 py-1 rounded text-zinc-400 hover:text-zinc-200 border border-zinc-800 hover:border-zinc-700 text-sm leading-none focus-visible:outline focus-visible:outline-1 focus-visible:outline-zinc-500"
-    >
-      ↺
-    </button>
-  );
-}
