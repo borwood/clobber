@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import type { PaneNode } from "./types.ts";
 import { Tabs } from "./Tabs.tsx";
 import { ViewHost, viewLabel } from "./ViewHost.tsx";
@@ -8,6 +8,7 @@ import { usePointerDrag } from "./usePointerDrag.ts";
 import { PaneDropZones, type DropEdge } from "./PaneDropZones.tsx";
 import { PaneIdProvider } from "./PaneIdContext.tsx";
 import { EmptyRootPanePlaceholder } from "./EmptyRootPanePlaceholder.tsx";
+import { EmptyPaneContextMenu } from "./EmptyPaneContextMenu.tsx";
 
 const PANE_CLASS =
   "relative flex flex-col min-h-0 min-w-0 h-full w-full overflow-hidden";
@@ -23,6 +24,13 @@ export function Pane(props: { readonly node: PaneNode }) {
   // stale by hook closures.
   const pendingIndexRef = useRef<number | null>(null);
   const activeIndexRef = useRef<number | null>(null);
+
+  const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
+
+  function openMenu(e: React.MouseEvent) {
+    e.preventDefault();
+    setMenuPos({ x: e.clientX, y: e.clientY });
+  }
 
   const drag = usePointerDrag({
     disabled: configOpen,
@@ -128,9 +136,14 @@ export function Pane(props: { readonly node: PaneNode }) {
         <PaneIdProvider value={node.id}>
           {active === null ? (
             layout.kind === "pane" ? (
-              <EmptyRootPanePlaceholder paneId={node.id} />
+              <div className="flex-1 flex flex-col" onContextMenu={openMenu}>
+                <EmptyRootPanePlaceholder paneId={node.id} />
+              </div>
             ) : (
-              <div className="relative flex-1 flex items-center justify-center text-xs text-zinc-600">
+              <div
+                className="relative flex-1 flex items-center justify-center text-xs text-zinc-600"
+                onContextMenu={openMenu}
+              >
                 drop a tab here
                 <span
                   role="button"
@@ -155,6 +168,14 @@ export function Pane(props: { readonly node: PaneNode }) {
         </PaneIdProvider>
       </div>
       {tabDrag !== null && <PaneDropZones />}
+      {menuPos !== null && (
+        <EmptyPaneContextMenu
+          paneId={node.id}
+          x={menuPos.x}
+          y={menuPos.y}
+          onClose={() => setMenuPos(null)}
+        />
+      )}
     </div>
   );
 }

@@ -1,15 +1,9 @@
 import { useLayout } from "./provider.tsx";
-import type { ViewId } from "./types.ts";
+import { QUICK_ADDS } from "./empty-pane-quick-adds.ts";
 
 interface Props {
   readonly paneId: string;
 }
-
-const QUICK_ADDS: readonly { readonly view: ViewId; readonly label: string }[] = [
-  { view: { kind: "sessions" }, label: "Sessions" },
-  { view: { kind: "whiteboard" }, label: "Whiteboard" },
-  { view: { kind: "spawn" }, label: "Spawn" },
-];
 
 export function EmptyRootPanePlaceholder({ paneId }: Props) {
   const { dispatch } = useLayout();
