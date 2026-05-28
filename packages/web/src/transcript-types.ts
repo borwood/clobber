@@ -32,8 +32,19 @@ export interface AssistantLine {
   };
 }
 
+export interface ClobberTurnTag {
+  readonly type: string;
+  readonly attrs: Readonly<Record<string, string>>;
+  readonly inner: string;
+}
+
 export type Classified =
   | { readonly kind: "user"; readonly line: UserLine }
+  | {
+      readonly kind: "clobber-turn";
+      readonly tag: ClobberTurnTag;
+      readonly line: UserLine;
+    }
   | { readonly kind: "assistant"; readonly line: AssistantLine }
   | {
       readonly kind: "thinking-pulse";
@@ -168,6 +179,14 @@ export function classifyLine(line: TranscriptLine): Classified {
       if (isInterruptMarker(content)) {
         return { kind: "filtered", raw: line };
       }
+      const clobberTag = detectClobberTurn(content);
+      if (clobberTag !== null) {
+        return {
+          kind: "clobber-turn",
+          tag: clobberTag,
+          line: { type: "user", message },
+        };
+      }
       const notification = detectTaskNotification(content);
       if (notification !== null) {
         return { kind: "notification", ...notification, raw: line };
@@ -257,6 +276,28 @@ function isInterruptMarker(content: string | readonly ContentBlock[]): boolean {
 //    directly with `<task-notification>` (no header).
 const NOTIFICATION_PREFIX = "[SYSTEM NOTIFICATION";
 const TASK_NOTIFICATION_TAG = "<task-notification>";
+
+// Matches a leading `<clobber type="X" k="v">…</clobber>` block — the
+// provenance tag clobber wraps every synthesized user turn in. Structural
+// (regex over the tag shape), never substring-sniffed.
+const CLOBBER_TAG_RE =
+  /^\s*<clobber\s+type="([^"]+)"((?:\s+[a-zA-Z_-]+="[^"]*")*)\s*>([\s\S]*)<\/clobber>\s*$/;
+
+function detectClobberTurn(
+  content: string | readonly ContentBlock[],
+): ClobberTurnTag | null {
+  const text = extractLeadingText(content);
+  if (text === null) return null;
+  const m = text.match(CLOBBER_TAG_RE);
+  if (m === null) return null;
+  const attrs: Record<string, string> = {};
+  const attrRe = /([a-zA-Z_-]+)="([^"]*)"/g;
+  let am: RegExpExecArray | null;
+  while ((am = attrRe.exec(m[2] ?? "")) !== null) {
+    attrs[am[1]!] = am[2]!;
+  }
+  return { type: m[1]!, attrs, inner: m[3] ?? "" };
+}
 
 function detectTaskNotification(
   content: string | readonly ContentBlock[],

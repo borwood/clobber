@@ -3,6 +3,7 @@ import {
   previewToolInput,
   toolStatus,
   type AssistantLine,
+  type ClobberTurnTag,
   type UserLine,
   type ContentBlock,
   type ToolStatus,
@@ -26,6 +27,29 @@ export function UserBubble({ line }: { line: UserLine }) {
         <UserContentBlock key={i} block={block} />
       ))}
     </Bubble>
+  );
+}
+
+// A user-turn that clobber synthesized (wake-kick / trigger / ask-answer /
+// spawn-prompt / live-inject / interrupt-notice). Rendered with a distinct
+// amber-tinted column + provenance badge so a scroll-back makes "what I typed"
+// versus "what clobber injected" obvious at a glance. Composer turns stay
+// untagged and render through the plain `UserBubble` above.
+export function ClobberTurnBubble({ tag }: { tag: ClobberTurnTag }) {
+  const via = tag.attrs["via"];
+  const label = via === undefined ? tag.type : `${tag.type} · ${via}`;
+  return (
+    <div
+      data-clobber-turn-type={tag.type}
+      className="border-l-2 border-amber-900 pl-3 space-y-2"
+    >
+      <div className="text-xs uppercase tracking-wider text-amber-500">
+        clobber · {label}
+      </div>
+      <div className="bg-amber-950/30 border border-amber-900/40 rounded px-3 py-2">
+        <Markdown text={tag.inner} />
+      </div>
+    </div>
   );
 }
 

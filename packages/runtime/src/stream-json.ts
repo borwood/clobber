@@ -1,12 +1,24 @@
+import { wrapClobberTag, type ClobberPromptTag } from "@clobber/shared";
+
 /**
  * Wire format for `claude -p --input-format stream-json`. Each user turn is a
  * single JSON object on its own line written to the child's stdin. claude
  * keeps the child alive across turns and exits when stdin closes.
+ *
+ * `tag` marks the turn as clobber-synthesized (wake-kick, trigger, ask-answer,
+ * spawn-prompt, live-inject); the content is wrapped in `<clobber type=…>` so
+ * the receiving agent and the web transcript can both tell it apart from a
+ * bare human-composer turn. Composer paths omit `tag` — bareness is the
+ * positive presence signal.
  */
-export function serializeUserMessage(content: string): string {
+export function serializeUserMessage(
+  content: string,
+  tag?: ClobberPromptTag,
+): string {
+  const wrapped = tag === undefined ? content : wrapClobberTag(content, tag);
   return JSON.stringify({
     type: "user",
-    message: { role: "user", content },
+    message: { role: "user", content: wrapped },
   }) + "\n";
 }
 

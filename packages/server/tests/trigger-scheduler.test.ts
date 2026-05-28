@@ -271,8 +271,15 @@ describe("TriggerScheduler — cron firing", () => {
     // Live-agent injection does NOT get the office-context prefix — the agent is
     // already in-flight and has its own context. Only fresh spawns get the prefix.
     expect(text).not.toContain("[Previously in this office]");
+    // A trigger-fired live inject is wrapped at the serialize chokepoint with
+    // the provenance tag — `<clobber type="trigger" via="cron">…</clobber>` —
+    // so the receiving agent and the web transcript both see the turn as
+    // system-origin, not a typed-by-human prompt. (#261)
     expect(text).toBe(
-      serializeUserMessage("a cron fired: 0 9 * * *"),
+      serializeUserMessage("a cron fired: 0 9 * * *", {
+        kind: "trigger",
+        attrs: { via: "cron" },
+      }),
     );
 
     const audit = h.dispatches.listForAgent(h.managerAgentId);
@@ -662,7 +669,12 @@ describe("TriggerScheduler — webhook firing", () => {
 
     const text = Buffer.concat(writes).toString("utf8");
     expect(text).toContain("/hooks/x");
-    expect(text).toBe(serializeUserMessage("a webhook fired: /hooks/x"));
+    expect(text).toBe(
+      serializeUserMessage("a webhook fired: /hooks/x", {
+        kind: "trigger",
+        attrs: { via: "webhook" },
+      }),
+    );
 
     const audit = h.dispatches.listForAgent(h.managerAgentId);
     expect(audit.length).toBe(1);

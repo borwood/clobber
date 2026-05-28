@@ -33,8 +33,22 @@ interface SessionsQuery {
   workspace_id?: string;
 }
 
+const UserTurnKindSchema = z.enum([
+  "wake-kick",
+  "trigger",
+  "ask-answer",
+  "spawn-prompt",
+  "live-inject",
+  "interrupt-notice",
+]);
+
+// The composer (web `sendPrompt`) omits `kind` so its turn lands bare —
+// bareness is the positive signal of a human-typed turn. Programmatic callers
+// (CLI live-inject, internal forwarders) pass `kind` to mark the provenance.
 const PromptBodySchema = z.object({
   prompt: z.string().min(1),
+  kind: UserTurnKindSchema.optional(),
+  attrs: z.record(z.string(), z.string()).optional(),
 });
 
 const ResumeBodySchema = z.object({
@@ -113,7 +127,14 @@ export function registerSessionRoutes(
         reply.code(400);
         return { error: "invalid prompt", issues: parsed.error.issues };
       }
-      const result = await injectPrompt(request.params.id, parsed.data.prompt, deps);
+      const tag =
+        parsed.data.kind === undefined
+          ? undefined
+          : {
+              kind: parsed.data.kind,
+              ...(parsed.data.attrs === undefined ? {} : { attrs: parsed.data.attrs }),
+            };
+      const result = await injectPrompt(request.params.id, parsed.data.prompt, deps, tag);
       if (!result.ok) {
         reply.code(result.status);
         return result.detail === undefined
@@ -175,6 +196,7 @@ export function registerSessionRoutes(
           session.id,
           formatLateAnswer(question, parsed.data.answer),
           deps,
+          { kind: "ask-answer" },
         );
         if (!injected.ok) {
           reply.code(injected.status);

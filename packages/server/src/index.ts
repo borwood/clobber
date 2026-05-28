@@ -40,6 +40,7 @@ const spawner: AgentSpawner = (req) => {
   const agent = spawnAgent({
     hookUrl: req.hookUrl,
     prompt: req.prompt,
+    ...(req.promptTag === undefined ? {} : { promptTag: req.promptTag }),
     cwd: req.cwd,
     ...(req.sessionId === undefined ? {} : { sessionId: req.sessionId }),
     ...(req.resume === true && req.providerThreadId !== undefined

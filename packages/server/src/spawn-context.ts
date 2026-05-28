@@ -4,7 +4,7 @@ import type {
   RoleBundleData,
   RuntimeSpawnOptions,
 } from "@clobber/runtime";
-import type { Agent, BootContext, BriefingPacket, EffortLevel, Role, Workspace } from "@clobber/shared";
+import type { Agent, BootContext, BriefingPacket, ClobberPromptTag, EffortLevel, Role, Workspace } from "@clobber/shared";
 import { resolveWakeProgram } from "@clobber/shared";
 import { ensureOffice } from "./office-store.ts";
 import { composeOfficeContext } from "./office-context.ts";
@@ -28,6 +28,11 @@ export interface PrepareSpawnContextInput {
   readonly versionId: string | undefined;
   // Absent on a bare resume — no task turn to compose.
   readonly prompt: string | undefined;
+  // Provenance for the prompt the caller passed. When a wake-program supplies
+  // the opening kick, this is overridden to `wake-kick` (the kick content is
+  // the program's, not the caller's). Bare (undefined) is reserved for the
+  // human composer path — never produced on a spawn path.
+  readonly promptTag?: ClobberPromptTag;
   // The selected opening move. Resolved against the role's wake-programs with
   // `idle` as the built-in; undefined selects `idle`. On a fresh attach a named
   // program supplies layer C + the opening kick; on resume only layer C is
@@ -72,6 +77,7 @@ export async function prepareSpawnContext(
     sessionId,
     versionId,
     prompt,
+    promptTag,
     wakeProgram,
     briefing,
     effortOverride,
@@ -139,12 +145,24 @@ export async function prepareSpawnContext(
   // program is selected the caller's prompt remains the opening message — the
   // legacy seam until #213 routes selection through every spawn surface.
   const program = resolveWakeProgram(effectiveBundle.wakePrograms, wakeProgram);
-  const kick =
-    mode === "resume" || wakeProgram === undefined
-      ? prompt
-      : program.user === null
-        ? undefined
-        : program.user;
+  const wakeProgramSuppliesKick =
+    mode !== "resume" && wakeProgram !== undefined;
+  const kick = wakeProgramSuppliesKick
+    ? program.user === null
+      ? undefined
+      : program.user
+    : prompt;
+  // When a wake-program supplied the kick, its content is the program's — not
+  // the caller's — so the tag is `wake-kick` regardless of what the caller
+  // passed. Otherwise the caller's tag rides through. A resume reuses the
+  // caller's tag too (the resume prompt's provenance — ask-answer / live-
+  // inject — is what the agent sees).
+  const kickTag: ClobberPromptTag | undefined =
+    kick === undefined
+      ? undefined
+      : wakeProgramSuppliesKick
+        ? { kind: "wake-kick" }
+        : promptTag;
 
   const systemPrompt = composeSystemPrompt({
     framing: effectiveBundle.framing,
@@ -185,6 +203,7 @@ export async function prepareSpawnContext(
   const spawnOptions: RuntimeSpawnOptions = {
     hookUrl: deps.hookUrl,
     prompt: kick,
+    ...(kickTag === undefined ? {} : { promptTag: kickTag }),
     cwd,
     sessionId,
     ...(role.permission_mode === undefined ? {} : { permissionMode: role.permission_mode }),

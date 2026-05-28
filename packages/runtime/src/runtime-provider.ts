@@ -1,4 +1,4 @@
-import type { EffortLevel, PermissionMode } from "@clobber/shared";
+import type { ClobberPromptTag, EffortLevel, PermissionMode } from "@clobber/shared";
 import {
   buildClaudeArgs,
   type HookSettings,
@@ -43,6 +43,7 @@ export interface RuntimeSpawnOptions {
   // Absent on a bare resume: no user turn to inject. A fresh spawn always
   // carries one.
   readonly prompt: string | undefined;
+  readonly promptTag?: ClobberPromptTag;
   readonly cwd: string;
   readonly sessionId: string;
   readonly permissionMode?: PermissionMode;
@@ -62,6 +63,7 @@ export interface RuntimeResumeOptions extends RuntimeSpawnOptions {
 export interface RuntimeSpawnRequest {
   readonly hookUrl: string;
   readonly prompt?: string;
+  readonly promptTag?: ClobberPromptTag;
   readonly cwd: string;
   readonly sessionId: string;
   readonly providerThreadId?: string;
@@ -88,7 +90,7 @@ export interface RuntimeProvider {
   buildSpawnRequest(opts: RuntimeSpawnOptions): RuntimeSpawnRequest;
   buildResumeRequest?(opts: RuntimeResumeOptions): RuntimeSpawnRequest;
   initialProviderThreadId(sessionId: string): string | undefined;
-  serializeUserPrompt(prompt: string): string;
+  serializeUserPrompt(prompt: string, tag?: ClobberPromptTag): string;
   serializeInterrupt(requestId: string): string;
   transcriptPath(cwd: string, sessionId: string): string;
 }
@@ -108,6 +110,7 @@ export const claudeRuntimeProvider: RuntimeProvider = {
     return {
       hookUrl: opts.hookUrl,
       ...(opts.prompt === undefined ? {} : { prompt: opts.prompt }),
+      ...(opts.promptTag === undefined ? {} : { promptTag: opts.promptTag }),
       cwd: opts.cwd,
       sessionId: opts.sessionId,
       ...(opts.permissionMode === undefined

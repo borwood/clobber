@@ -41,6 +41,10 @@ describe("prepareSpawnContext (#125) is the shared spawn/attach/resume seam", ()
 
     expect(attachReq.appendSystemPrompt).toContain("[Previously in this office]");
     expect(attachReq.prompt).toBe("first turn");
+    // The /spawn route is a programmatic injection path — its opening turn is
+    // provenance-tagged as `spawn-prompt`. Bareness is reserved for the human
+    // composer path. (#261)
+    expect(attachReq.promptTag).toEqual({ kind: "spawn-prompt" });
     expect(attachReq.resume).toBeUndefined();
     expect(attachReq.providerThreadId).toBeUndefined();
 
@@ -74,6 +78,9 @@ describe("prepareSpawnContext (#125) is the shared spawn/attach/resume seam", ()
 
     expect(resumeReq.appendSystemPrompt).toContain("[Previously in this office]");
     expect(resumeReq.prompt).toBe("second turn");
+    // The composer's resume turn arrives bare — bareness is the positive
+    // presence signal for a human-typed turn. (#261)
+    expect(resumeReq.promptTag).toBeUndefined();
     expect(resumeReq.resume).toBe(true);
     expect(resumeReq.providerThreadId).toBe(`thread-${spawnBody.session_id}`);
 

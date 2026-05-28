@@ -1,10 +1,13 @@
 import { appendFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { wrapClobberTag } from "@clobber/shared";
 
 /**
  * Append a synthetic notification line to a session's transcript JSONL file.
- * Mirrors the shape claude itself uses for `<task-notification>` events so
- * the web viewer's classifier renders it as a `NotificationCard`.
+ * Wraps a `<task-notification>` block in `<clobber type="interrupt-notice">`
+ * so the receiving agent and the web transcript can both recognize it as
+ * clobber-synthesized (subsumes the legacy `[SYSTEM NOTIFICATION - NOT USER
+ * INPUT]` string-header).
  *
  * Safety: a single full-line `appendFileSync` opens with `a` (O_APPEND) and
  * issues one `write()` syscall — atomic against claude's concurrent appends
@@ -19,15 +22,13 @@ export function appendTranscriptNotification(
   status: string,
   summary: string,
 ): void {
-  const content = [
-    "[SYSTEM NOTIFICATION - NOT USER INPUT]",
-    "This is an automated event, not a message from the user.",
-    "",
+  const inner = [
     "<task-notification>",
     `<status>${status}</status>`,
     `<summary>${summary}</summary>`,
     "</task-notification>",
   ].join("\n");
+  const content = wrapClobberTag(inner, { kind: "interrupt-notice" });
   const line = JSON.stringify({
     type: "user",
     message: { role: "user", content },

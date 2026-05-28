@@ -1,4 +1,4 @@
-import type { Agent, Role, Workspace } from "@clobber/shared";
+import type { Agent, ClobberPromptTag, Role, Workspace } from "@clobber/shared";
 import type { SpawnPipelineSuccess, SpawnPipelineNoBundleError } from "./spawn-pipeline.ts";
 
 // The contract a trigger fire uses to materialize a session for an idle agent.
@@ -10,6 +10,7 @@ export type AttachSessionFn = (input: {
   readonly role: Role;
   readonly agent: Agent;
   readonly prompt: string;
+  readonly promptTag?: ClobberPromptTag;
   // The wake-program resolved from the trigger→program mapping (#213). Absent
   // when neither a workspace override nor a role-default maps this trigger —
   // then the synthesized prompt stays the opening kick.
