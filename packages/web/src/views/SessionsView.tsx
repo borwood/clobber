@@ -5,10 +5,12 @@ import { usePaneId } from "../layout/PaneIdContext.tsx";
 
 export function SessionsView() {
   const w = useWorkspace();
-  const { dispatch } = useLayout();
+  const { dispatch, setTabDrag } = useLayout();
   const paneId = usePaneId();
   const open = (sessionId: string) =>
     dispatch({ kind: "open_session_tab", sessionId, originatingPaneId: paneId });
+  const openInPane = (sessionId: string, x: number, y: number) =>
+    setTabDrag({ kind: "insert", view: { kind: "mailbox", sessionId }, x, y });
   return (
     <div className="flex-1 min-h-0 overflow-y-auto">
       <SessionList
@@ -17,7 +19,7 @@ export function SessionsView() {
         onSelect={open}
         onEnd={w.endSession}
         onResume={w.resumeSession}
-        onPin={open}
+        onOpenInPane={openInPane}
       />
     </div>
   );
