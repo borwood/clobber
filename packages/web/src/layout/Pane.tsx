@@ -6,7 +6,7 @@ import { useLayout } from "./provider.tsx";
 import { useWorkspace } from "./WorkspaceContext.tsx";
 import { usePointerDrag } from "./usePointerDrag.ts";
 
-const PANE_CLASS = "flex flex-col min-h-0 min-w-0 overflow-hidden";
+const PANE_CLASS = "flex flex-col min-h-0 min-w-0 h-full w-full overflow-hidden";
 const BODY_CLASS = "flex-1 min-h-0 overflow-hidden flex flex-col";
 
 export function Pane(props: { readonly node: PaneNode }) {
