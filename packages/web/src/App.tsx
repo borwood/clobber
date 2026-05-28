@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   api,
   type DeskCard,
@@ -6,24 +6,23 @@ import {
   type SessionSummary,
   type TranscriptLine,
   type Whiteboard,
-  type Workspace,
   type WorkspaceRoleAssignment,
+  type Workspace,
 } from "./api.ts";
-import { SpawnPanel } from "./components/SpawnPanel.tsx";
-import { SessionList } from "./components/SessionList.tsx";
 import { WorkspaceTabs } from "./components/WorkspaceTabs.tsx";
 import { WorkspaceConfigModal } from "./components/WorkspaceConfigModal.tsx";
-import { RolePicker } from "./components/RolePicker.tsx";
-import { WhiteboardView } from "./components/WhiteboardView.tsx";
-import { ViewSwitcher, type WorkspaceView } from "./components/ViewSwitcher.tsx";
-import { MailboxContent } from "./components/MailboxContent.tsx";
 import { slugify } from "@clobber/shared";
 import { usePolledResource } from "./hooks/usePolledResource.ts";
 import { useLocation } from "./hooks/useLocation.ts";
 import { buildPath, parseLocation } from "./router.ts";
+import { LayoutProvider, useLayout } from "./layout/provider.tsx";
+import { LayoutTree } from "./layout/LayoutTree.tsx";
+import {
+  WorkspaceProvider,
+  type WorkspaceContextValue,
+} from "./layout/WorkspaceContext.tsx";
 
 const POLL_MS = 1000;
-const VIEW_STORAGE_KEY = "clobber:workspace-view";
 
 const EMPTY_WORKSPACES: readonly Workspace[] = [];
 const EMPTY_LIVE_IDS: readonly string[] = [];
@@ -34,12 +33,6 @@ const EMPTY_DESKS: readonly DeskCard[] = [];
 const EMPTY_TRANSCRIPT: readonly TranscriptLine[] = [];
 const EMPTY_WHITEBOARD: Whiteboard = { offices: EMPTY_OFFICES, desks: EMPTY_DESKS };
 
-function readStoredView(): WorkspaceView {
-  if (typeof localStorage === "undefined") return "mailbox";
-  const raw = localStorage.getItem(VIEW_STORAGE_KEY);
-  return raw === "whiteboard" ? "whiteboard" : "mailbox";
-}
-
 export function App() {
   const { pathname, navigate } = useLocation();
   const { workspaceSlug, sessionId } = parseLocation(pathname);
@@ -48,26 +41,15 @@ export function App() {
   const [roleId, setRoleId] = useState<string | null>(null);
   const [showSystem, setShowSystem] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<WorkspaceView>(() => readStoredView());
   const [wakingAgents, setWakingAgents] = useState<ReadonlySet<string>>(() => new Set());
 
-  const workspacesPoll = usePolledResource(
-    () => api.listWorkspaces(),
-    [],
-    POLL_MS,
-  );
+  const workspacesPoll = usePolledResource(() => api.listWorkspaces(), [], POLL_MS);
   const workspaces = workspacesPoll.data ?? EMPTY_WORKSPACES;
   const workspacesLoaded = workspacesPoll.data !== undefined;
 
-  const liveIdsPoll = usePolledResource(
-    () => api.liveWorkspaceIds(),
-    [],
-    POLL_MS,
-  );
+  const liveIdsPoll = usePolledResource(() => api.liveWorkspaceIds(), [], POLL_MS);
   const liveWorkspaceIds = new Set(liveIdsPoll.data ?? EMPTY_LIVE_IDS);
 
-  // The URL carries a human-readable name slug, resolved back to a workspace via
-  // deterministic slugify(name). `/w/<unknown-slug>` → empty state once loaded.
   const activeWorkspace =
     workspaceSlug === null
       ? undefined
@@ -97,22 +79,21 @@ export function App() {
   );
   const sessions = sessionsPoll.data ?? EMPTY_SESSIONS;
 
+  // With panes, mailbox and whiteboard can both be visible at once, so the
+  // whiteboard poll runs whenever a workspace is active rather than gating on
+  // the (now-removed) global view selector.
   const whiteboardPoll = usePolledResource<Whiteboard>(
     () =>
-      activeWorkspaceId === null || view !== "whiteboard"
+      activeWorkspaceId === null
         ? Promise.resolve(EMPTY_WHITEBOARD)
         : api.getWhiteboard(activeWorkspaceId),
-    [activeWorkspaceId, view],
+    [activeWorkspaceId],
     POLL_MS,
   );
   const offices = whiteboardPoll.data?.offices ?? EMPTY_OFFICES;
   const desks = whiteboardPoll.data?.desks ?? EMPTY_DESKS;
 
-  const nowPoll = usePolledResource(
-    () => Promise.resolve(Date.now()),
-    [view],
-    POLL_MS,
-  );
+  const nowPoll = usePolledResource(() => Promise.resolve(Date.now()), [], POLL_MS);
   const now = nowPoll.data ?? Date.now();
 
   const transcriptPoll = usePolledResource(
@@ -157,14 +138,75 @@ export function App() {
     void api.notifyWorkspaceOpen(activeWorkspaceId);
   }, [activeWorkspaceId]);
 
-  function persistView(next: WorkspaceView): void {
-    setView(next);
-    if (typeof localStorage !== "undefined") localStorage.setItem(VIEW_STORAGE_KEY, next);
-  }
-
   function focusSession(id: string): void {
     navigate(buildPath(workspaceSlug, id));
   }
+
+  const workspaceValue: WorkspaceContextValue = useMemo(
+    () => ({
+      activeWorkspaceId,
+      invalidWorkspace,
+      sessions,
+      selectedSession,
+      transcript,
+      assignments,
+      roleId,
+      setRoleId,
+      offices,
+      desks,
+      now,
+      wakingAgents,
+      showSystem,
+      setShowSystem,
+      focusSession,
+      endSession: async (id) => {
+        try {
+          await api.endSession(id);
+        } catch (e) {
+          setError(e instanceof Error ? e.message : String(e));
+        }
+      },
+      resumeSession: async (id) => {
+        try {
+          await api.resumeSession(id);
+          focusSession(id);
+        } catch (e) {
+          setError(e instanceof Error ? e.message : String(e));
+        }
+      },
+      wakeAgent: async (agentId, wakeProgram) => {
+        setWakingAgents((prev) => new Set(prev).add(agentId));
+        try {
+          const result = await api.wakePersistentAgent(agentId, wakeProgram);
+          focusSession(result.session_id);
+        } catch (e) {
+          setError(e instanceof Error ? e.message : String(e));
+        } finally {
+          setWakingAgents((prev) => {
+            const next = new Set(prev);
+            next.delete(agentId);
+            return next;
+          });
+        }
+      },
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      activeWorkspaceId,
+      invalidWorkspace,
+      sessions,
+      selectedSession,
+      transcript,
+      assignments,
+      roleId,
+      offices,
+      desks,
+      now,
+      wakingAgents,
+      showSystem,
+      workspaceSlug,
+    ],
+  );
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
@@ -192,106 +234,21 @@ export function App() {
           {sessions.length} session{sessions.length === 1 ? "" : "s"}
         </span>
         <div className="ml-auto flex items-center gap-3">
-          <ViewSwitcher value={view} onChange={persistView} />
           {error !== null && (
             <span className="text-red-400 text-xs font-mono">{error}</span>
           )}
         </div>
       </header>
 
-      <main className="flex-1 grid grid-cols-[18rem_minmax(0,1fr)_22rem] gap-0 overflow-hidden">
-        <aside className="border-r border-zinc-800 overflow-y-auto">
-          <SessionList
-            sessions={sessions}
-            selectedId={selectedSession}
-            onSelect={focusSession}
-            onEnd={async (id) => {
-              try {
-                await api.endSession(id);
-              } catch (e) {
-                setError(e instanceof Error ? e.message : String(e));
-              }
-            }}
-            onResume={async (id) => {
-              try {
-                await api.resumeSession(id);
-                focusSession(id);
-              } catch (e) {
-                setError(e instanceof Error ? e.message : String(e));
-              }
-            }}
-          />
-        </aside>
+      <LayoutProvider workspaceSlug={workspaceSlug}>
+        <WorkspaceProvider value={workspaceValue}>
+          <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            <LayoutTree />
+          </main>
+          <ResetLayoutAffordance />
+        </WorkspaceProvider>
+      </LayoutProvider>
 
-        <section className="flex flex-col overflow-hidden">
-          {invalidWorkspace ? (
-            <p className="text-sm text-zinc-500 p-4">
-              Workspace not found. Pick one above or create a new workspace.
-            </p>
-          ) : view === "whiteboard" ? (
-            <WhiteboardView
-              offices={offices}
-              desks={desks}
-              now={now}
-              wakingAgentIds={wakingAgents}
-              onOpenSession={(focusId) => {
-                persistView("mailbox");
-                focusSession(focusId);
-              }}
-              onWake={async (agentId, wakeProgram) => {
-                setWakingAgents((prev) => new Set(prev).add(agentId));
-                try {
-                  const result = await api.wakePersistentAgent(agentId, wakeProgram);
-                  persistView("mailbox");
-                  focusSession(result.session_id);
-                } catch (e) {
-                  setError(e instanceof Error ? e.message : String(e));
-                } finally {
-                  setWakingAgents((prev) => {
-                    const next = new Set(prev);
-                    next.delete(agentId);
-                    return next;
-                  });
-                }
-              }}
-            />
-          ) : (
-            <MailboxContent
-              sessions={sessions}
-              selectedSession={selectedSession}
-              transcript={transcript}
-              showSystem={showSystem}
-              setShowSystem={setShowSystem}
-            />
-          )}
-        </section>
-
-        <aside className="border-l border-zinc-800 flex flex-col overflow-hidden">
-          {activeWorkspaceId === null ? (
-            <p className="text-sm text-zinc-500 p-4">
-              Create or select a workspace to spawn agents.
-            </p>
-          ) : (
-            <>
-              <div className="flex flex-col min-h-0 flex-1 p-4 pb-2 gap-2">
-                <h2 className="text-sm uppercase tracking-wider text-zinc-500 shrink-0">role</h2>
-                <RolePicker
-                  assignments={assignments}
-                  selectedRoleId={roleId}
-                  onSelect={setRoleId}
-                />
-              </div>
-              <div className="border-t border-zinc-800 p-4 shrink-0 max-h-[60vh] overflow-y-auto">
-                <SpawnPanel
-                  workspaceId={activeWorkspaceId}
-                  roleId={roleId}
-                  onSpawned={(s) => focusSession(s.session_id)}
-                />
-              </div>
-            </>
-          )}
-        </aside>
-      </main>
       {configOpen && activeWorkspaceId !== null && (() => {
         const ws = workspaces.find((w) => w.id === activeWorkspaceId);
         if (ws === undefined) return null;
@@ -304,5 +261,23 @@ export function App() {
         );
       })()}
     </div>
+  );
+}
+
+// v1 escape hatch for "I painted myself into an empty pane" until the v2
+// layout menu (add pane / saved layouts) lands. Floats top-right so it
+// remains discoverable without competing with workspace tabs for header room.
+function ResetLayoutAffordance() {
+  const { dispatch } = useLayout();
+  return (
+    <button
+      type="button"
+      aria-label="Reset layout"
+      title="Reset layout"
+      onClick={() => dispatch({ kind: "reset" })}
+      className="fixed top-3 right-6 z-10 px-2 py-1 rounded text-zinc-400 hover:text-zinc-200 border border-zinc-800 hover:border-zinc-700 text-sm leading-none"
+    >
+      ↺
+    </button>
   );
 }
