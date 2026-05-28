@@ -120,6 +120,104 @@ describe("layoutReducer resize", () => {
   });
 });
 
+describe("layoutReducer split_pane", () => {
+  it("splits the target pane vertically and places the dragged tab in a new sibling after the original", () => {
+    const root = asSplit(defaultLayout());
+    const mid = asPane(root.children[1]!);
+    const next = asSplit(
+      layoutReducer(defaultLayout(), {
+        kind: "split_pane",
+        pane: mid.id,
+        direction: "v",
+        before: false,
+        tab: { from: mid.id, index: 1 },
+      }),
+    );
+    const inner = asSplit(next.children[1]!);
+    expect(inner.direction).toBe("v");
+    expect(inner.children).toHaveLength(2);
+    expect(inner.sizes).toEqual([0.5, 0.5]);
+    const original = asPane(inner.children[0]!);
+    const created = asPane(inner.children[1]!);
+    expect(original.id).toBe(mid.id);
+    expect(original.views.map((v) => v.kind)).toEqual(["mailbox"]);
+    expect(created.views.map((v) => v.kind)).toEqual(["whiteboard"]);
+    expect(created.activeIndex).toBe(0);
+    expect(created.id).not.toBe(mid.id);
+  });
+
+  it("with before:true places the new pane before the original (horizontal)", () => {
+    const root = asSplit(defaultLayout());
+    const mid = asPane(root.children[1]!);
+    const next = asSplit(
+      layoutReducer(defaultLayout(), {
+        kind: "split_pane",
+        pane: mid.id,
+        direction: "h",
+        before: true,
+        tab: { from: mid.id, index: 0 },
+      }),
+    );
+    const inner = asSplit(next.children[1]!);
+    expect(inner.direction).toBe("h");
+    const first = asPane(inner.children[0]!);
+    const second = asPane(inner.children[1]!);
+    expect(first.views.map((v) => v.kind)).toEqual(["mailbox"]);
+    expect(second.id).toBe(mid.id);
+    expect(second.views.map((v) => v.kind)).toEqual(["whiteboard"]);
+  });
+
+  it("moves the tab from a different source pane into a new split sibling of the target", () => {
+    const root = asSplit(defaultLayout());
+    const src = asPane(root.children[0]!);
+    const tgt = asPane(root.children[2]!);
+    const next = asSplit(
+      layoutReducer(defaultLayout(), {
+        kind: "split_pane",
+        pane: tgt.id,
+        direction: "v",
+        before: false,
+        tab: { from: src.id, index: 0 },
+      }),
+    );
+    const nSrc = asPane(next.children[0]!);
+    expect(nSrc.views).toHaveLength(0);
+    expect(nSrc.activeIndex).toBeNull();
+    const inner = asSplit(next.children[2]!);
+    expect(inner.direction).toBe("v");
+    const created = asPane(inner.children[1]!);
+    expect(created.views.map((v) => v.kind)).toEqual(["sessions"]);
+  });
+});
+
+describe("layoutReducer resize on vertical split", () => {
+  it("clamps below-MIN heights up to MIN_PANE_PX on a vertical split", () => {
+    const mid = asPane(asSplit(defaultLayout()).children[1]!);
+    const withSplit = layoutReducer(defaultLayout(), {
+      kind: "split_pane",
+      pane: mid.id,
+      direction: "v",
+      before: false,
+      tab: { from: mid.id, index: 1 },
+    });
+    const containerPx = 1000;
+    const next = asSplit(
+      layoutReducer(withSplit, {
+        kind: "resize",
+        splitPath: [1],
+        sizes: [0.05, 0.95],
+        containerPx,
+      }),
+    );
+    const inner = asSplit(next.children[1]!);
+    for (const s of inner.sizes) {
+      expect(s * containerPx).toBeGreaterThanOrEqual(MIN_PANE_PX - 1e-6);
+    }
+    expect(inner.sizes.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 5);
+    expect(inner.sizes[0]! * containerPx).toBeCloseTo(MIN_PANE_PX, 5);
+  });
+});
+
 describe("layoutReducer reset", () => {
   it("returns the default layout shape", () => {
     const mutated = layoutReducer(defaultLayout(), {
