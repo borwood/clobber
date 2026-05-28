@@ -129,7 +129,7 @@ describe("reset-layout confirmation (#281)", () => {
       "Reset layout? Your current arrangement will be lost.",
     );
     const restored = JSON.parse(
-      localStorage.getItem("clobber:layout:v1:workspace-a") ?? "null",
+      localStorage.getItem("clobber:layout:v2:workspace-a") ?? "null",
     );
     expect(restored).toEqual(defaultLayout());
   });
@@ -149,7 +149,7 @@ describe("reset-layout confirmation (#281)", () => {
     await flush();
     expect(confirmCalls.length).toBe(1);
     const stored = JSON.parse(
-      localStorage.getItem("clobber:layout:v1:workspace-a") ?? "null",
+      localStorage.getItem("clobber:layout:v2:workspace-a") ?? "null",
     );
     expect(stored).toEqual(customized);
   });
