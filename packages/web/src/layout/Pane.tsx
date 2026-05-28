@@ -24,6 +24,7 @@ export function Pane(props: { readonly node: PaneNode }) {
 
   const drag = usePointerDrag({
     disabled: configOpen,
+    threshold: 4,
     onStart: (e) => {
       const idx = pendingIndexRef.current;
       pendingIndexRef.current = null;
