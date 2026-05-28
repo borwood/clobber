@@ -20,14 +20,15 @@ interface TabsProps<T extends string> {
   readonly tabs: readonly TabDescriptor<T>[];
   readonly activeId: T | null;
   readonly onSelect: (id: T) => void;
+  readonly onTabPointerDown?: ((index: number, e: React.PointerEvent) => void) | undefined;
   readonly ariaLabel?: string;
 }
 
 export function Tabs<T extends string>(props: TabsProps<T>) {
-  const { tabs, activeId, onSelect, ariaLabel } = props;
+  const { tabs, activeId, onSelect, onTabPointerDown, ariaLabel } = props;
   return (
     <div role="tablist" aria-label={ariaLabel} className={TAB_STRIP_CLASS}>
-      {tabs.map((t) => {
+      {tabs.map((t, i) => {
         const active = t.id === activeId;
         return (
           <button
@@ -35,8 +36,12 @@ export function Tabs<T extends string>(props: TabsProps<T>) {
             type="button"
             role="tab"
             data-pane-tab="true"
+            data-tab-index={i}
             aria-selected={active}
             onClick={() => onSelect(t.id)}
+            onPointerDown={
+              onTabPointerDown && ((e) => onTabPointerDown(i, e))
+            }
             className={`${TAB_BASE_CLASS} ${active ? TAB_ACTIVE_CLASS : TAB_IDLE_CLASS}`}
           >
             {t.label}

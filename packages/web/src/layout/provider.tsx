@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useReducer,
+  useState,
   type ReactNode,
 } from "react";
 import { layoutReducer, type Action } from "./reducer.ts";
@@ -11,10 +12,19 @@ import type { LayoutNode, PaneNode, ViewId } from "./types.ts";
 import { defaultLayout } from "./default-layout.ts";
 import { loadLayout, saveLayout } from "./persistence.ts";
 
+export interface TabDragState {
+  readonly fromPaneId: string;
+  readonly tabIndex: number;
+  readonly x: number;
+  readonly y: number;
+}
+
 interface LayoutContextValue {
   readonly layout: LayoutNode;
   readonly dispatch: (a: Action) => void;
   readonly focusView: (kind: ViewId["kind"]) => void;
+  readonly tabDrag: TabDragState | null;
+  readonly setTabDrag: (state: TabDragState | null) => void;
 }
 
 const Ctx = createContext<LayoutContextValue | null>(null);
@@ -26,6 +36,7 @@ interface Props {
 
 export function LayoutProvider({ workspaceSlug, children }: Props) {
   const [layout, dispatch] = useReducer(layoutReducer, workspaceSlug, init);
+  const [tabDrag, setTabDrag] = useState<TabDragState | null>(null);
 
   useEffect(() => {
     if (workspaceSlug === null) return;
@@ -42,7 +53,9 @@ export function LayoutProvider({ workspaceSlug, children }: Props) {
   }, [layout]);
 
   return (
-    <Ctx.Provider value={{ layout, dispatch, focusView }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ layout, dispatch, focusView, tabDrag, setTabDrag }}>
+      {children}
+    </Ctx.Provider>
   );
 }
 
