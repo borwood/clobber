@@ -1,6 +1,7 @@
 import { useState, type MouseEvent } from "react";
 import { slugify, type Workspace } from "@clobber/shared";
 import { buildPath } from "../router.ts";
+import { Tabs } from "../layout/Tabs.tsx";
 import { WorkspaceCreateForm } from "./WorkspaceCreateForm.tsx";
 
 interface Props {
@@ -15,9 +16,10 @@ interface Props {
 // A workspace earns a *tab* when it has a live session OR is the one the URL
 // currently points at. The rest are reachable through the `[+]` dropdown, which
 // lists every workspace and carries the create form as its sticky bottom item
-// (#243) — so `/` with nothing live is never a dead-end. Modified clicks
-// (middle/cmd/ctrl) and right-click fall through to the native anchor so the
-// browser opens the workspace in a new window/tab on the right URL.
+// (#243) — so `/` with nothing live is never a dead-end. The visible tabs are
+// rendered through the shared <Tabs> primitive in its `workspace` variant
+// (anchor strip with native middle/cmd-click). The `+` button and dropdown
+// menu items remain bespoke — they aren't tabs.
 export function WorkspaceTabs({
   workspaces,
   liveWorkspaceIds,
@@ -31,35 +33,31 @@ export function WorkspaceTabs({
   const visible = workspaces.filter(
     (w) => liveWorkspaceIds.has(w.id) || w.id === selectedId,
   );
+  const slugById = new Map(workspaces.map((w) => [w.id, slugify(w.name)]));
+  const visibleTabs = visible.map((w) => ({ id: w.id, label: w.name }));
 
-  function navigateTo(e: MouseEvent<HTMLAnchorElement>, slug: string): void {
-    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-    e.preventDefault();
+  function navigateToSlug(slug: string): void {
     onSelect(slug);
     setMenuOpen(false);
   }
 
+  function navigateMenu(e: MouseEvent<HTMLAnchorElement>, slug: string): void {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    navigateToSlug(slug);
+  }
+
   return (
     <div className="flex items-center gap-1 relative">
-      {visible.map((w) => {
-        const active = w.id === selectedId;
-        const slug = slugify(w.name);
-        return (
-          <a
-            key={w.id}
-            href={buildPath(slug, null)}
-            aria-current={active ? "page" : undefined}
-            onClick={(e) => navigateTo(e, slug)}
-            className={`px-3 py-1 rounded-t text-sm font-mono border-b-2 focus-visible:outline focus-visible:outline-1 focus-visible:outline-zinc-500 ${
-              active
-                ? "text-zinc-100 border-emerald-500"
-                : "text-zinc-400 border-transparent hover:text-zinc-200 hover:border-zinc-700"
-            }`}
-          >
-            {w.name}
-          </a>
-        );
-      })}
+      <Tabs
+        as="a"
+        variant="workspace"
+        ariaLabel="workspaces"
+        tabs={visibleTabs}
+        activeId={selectedId}
+        hrefFor={(id) => buildPath(slugById.get(id)!, null)}
+        onNavigate={(id) => navigateToSlug(slugById.get(id)!)}
+      />
 
       <button
         type="button"
@@ -82,12 +80,12 @@ export function WorkspaceTabs({
           >
             <div className="max-h-72 overflow-y-auto py-1">
               {workspaces.map((w) => {
-                const slug = slugify(w.name);
+                const slug = slugById.get(w.id)!;
                 return (
                   <a
                     key={w.id}
                     href={buildPath(slug, null)}
-                    onClick={(e) => navigateTo(e, slug)}
+                    onClick={(e) => navigateMenu(e, slug)}
                     className={`block px-3 py-1.5 text-sm font-mono hover:bg-zinc-800 focus-visible:outline focus-visible:outline-1 focus-visible:outline-zinc-500 ${
                       w.id === selectedId ? "text-zinc-100" : "text-zinc-300"
                     }`}

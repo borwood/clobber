@@ -1,14 +1,30 @@
-import type { ReactNode } from "react";
+import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 
-// CSS grammar lifted verbatim from the late ViewSwitcher.tsx so every pane,
-// and any future tab strip, looks identical. Pane authors get all of this for
-// free; per-pane re-implementation is structurally impossible.
-export const TAB_STRIP_CLASS =
-  "flex items-stretch border-b border-zinc-800 h-9 shrink-0";
-export const TAB_BASE_CLASS =
-  "px-3 py-1 text-xs uppercase tracking-wider transition-colors cursor-grab focus-visible:outline focus-visible:outline-1 focus-visible:outline-zinc-500";
-export const TAB_ACTIVE_CLASS = "bg-zinc-800 text-zinc-100";
-export const TAB_IDLE_CLASS = "bg-transparent text-zinc-400 hover:bg-zinc-900";
+// CSS grammar grouped by *variant* so every consumer's chrome is frozen at the
+// primitive boundary. `pane` is the panel-chrome strip (uppercase tiny on dark,
+// h-9, draggable). `workspace` is the page-header strip (font-mono sm, emerald
+// accent, navigational). Future strips earn their classes here — consumers
+// compose the primitive rather than hand-rolling their own.
+const VARIANTS = {
+  pane: {
+    strip: "flex items-stretch border-b border-zinc-800 h-9 shrink-0",
+    base: "px-3 py-1 text-xs uppercase tracking-wider transition-colors cursor-grab focus-visible:outline focus-visible:outline-1 focus-visible:outline-zinc-500",
+    active: "bg-zinc-800 text-zinc-100",
+    idle: "bg-transparent text-zinc-400 hover:bg-zinc-900",
+  },
+  workspace: {
+    strip: "flex items-stretch gap-1",
+    base: "px-3 py-1 rounded-t text-sm font-mono border-b-2 focus-visible:outline focus-visible:outline-1 focus-visible:outline-zinc-500",
+    active: "text-zinc-100 border-emerald-500",
+    idle: "text-zinc-400 border-transparent hover:text-zinc-200 hover:border-zinc-700",
+  },
+} as const;
+
+type TabsVariant = keyof typeof VARIANTS;
+
+// DragGhost mirrors a pane tab mid-drag, so it needs the pane skin's leaf classes.
+export const TAB_BASE_CLASS = VARIANTS.pane.base;
+export const TAB_ACTIVE_CLASS = VARIANTS.pane.active;
 
 interface TabDescriptor<T extends string> {
   readonly id: T;
@@ -16,20 +32,80 @@ interface TabDescriptor<T extends string> {
   readonly badge?: ReactNode;
 }
 
-interface TabsProps<T extends string> {
+interface CommonProps<T extends string> {
   readonly tabs: readonly TabDescriptor<T>[];
   readonly activeId: T | null;
-  readonly onSelect: (id: T) => void;
-  readonly onTabPointerDown?: ((index: number, e: React.PointerEvent) => void) | undefined;
+  readonly onTabPointerDown?: ((index: number, e: ReactPointerEvent) => void) | undefined;
   readonly ariaLabel?: string;
+  readonly variant?: TabsVariant;
 }
 
+interface ButtonTabsProps<T extends string> extends CommonProps<T> {
+  readonly as?: "button";
+  readonly onSelect: (id: T) => void;
+}
+
+interface AnchorTabsProps<T extends string> extends CommonProps<T> {
+  readonly as: "a";
+  readonly hrefFor: (id: T) => string;
+  // Called only on unmodified left-click. Modified/middle/right clicks fall
+  // through to the native anchor so the browser opens a new tab/window.
+  readonly onNavigate: (id: T) => void;
+}
+
+type TabsProps<T extends string> = ButtonTabsProps<T> | AnchorTabsProps<T>;
+
 export function Tabs<T extends string>(props: TabsProps<T>) {
-  const { tabs, activeId, onSelect, onTabPointerDown, ariaLabel } = props;
+  const { tabs, activeId, onTabPointerDown, ariaLabel, variant = "pane" } = props;
+  const cls = VARIANTS[variant];
+
   return (
-    <div role="tablist" aria-label={ariaLabel} className={TAB_STRIP_CLASS}>
+    <div role="tablist" aria-label={ariaLabel} className={cls.strip}>
       {tabs.map((t, i) => {
         const active = t.id === activeId;
+        const className = `${cls.base} ${active ? cls.active : cls.idle}`;
+        const pointerDown = onTabPointerDown
+          ? (e: ReactPointerEvent) => onTabPointerDown(i, e)
+          : undefined;
+        const content = (
+          <>
+            {t.label}
+            {t.badge !== undefined && (
+              <span className="text-zinc-500 text-xs ml-2">{t.badge}</span>
+            )}
+          </>
+        );
+
+        if (props.as === "a") {
+          const { hrefFor, onNavigate } = props;
+          return (
+            <a
+              key={t.id}
+              role="tab"
+              data-tab-index={i}
+              className={className}
+              href={hrefFor(t.id)}
+              aria-current={active ? "page" : undefined}
+              onPointerDown={pointerDown}
+              onClick={(e) => {
+                if (
+                  e.button !== 0 ||
+                  e.metaKey ||
+                  e.ctrlKey ||
+                  e.shiftKey ||
+                  e.altKey
+                )
+                  return;
+                e.preventDefault();
+                onNavigate(t.id);
+              }}
+            >
+              {content}
+            </a>
+          );
+        }
+
+        const { onSelect } = props;
         return (
           <button
             key={t.id}
@@ -37,17 +113,12 @@ export function Tabs<T extends string>(props: TabsProps<T>) {
             role="tab"
             data-pane-tab="true"
             data-tab-index={i}
+            className={className}
             aria-selected={active}
+            onPointerDown={pointerDown}
             onClick={() => onSelect(t.id)}
-            onPointerDown={
-              onTabPointerDown && ((e) => onTabPointerDown(i, e))
-            }
-            className={`${TAB_BASE_CLASS} ${active ? TAB_ACTIVE_CLASS : TAB_IDLE_CLASS}`}
           >
-            {t.label}
-            {t.badge !== undefined && (
-              <span className="text-zinc-500 text-xs ml-2">{t.badge}</span>
-            )}
+            {content}
           </button>
         );
       })}

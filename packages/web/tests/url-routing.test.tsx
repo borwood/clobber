@@ -153,6 +153,31 @@ describe("URL-driven workspace selection + tab bar (#6, slug URLs #243)", () => 
     expect(tabB.getAttribute("href")).toBe("/w/workspace-b");
   });
 
+  it("cmd/ctrl/middle-click does NOT preventDefault — the browser opens the URL natively", async () => {
+    await renderAt("/w/workspace-a");
+    const tabB = tabLinks().find((a) => a.getAttribute("href") === "/w/workspace-b")!;
+
+    // The contract: modified clicks must reach the browser unmolested so the
+    // native anchor opens a new tab/window. happy-dom can't model real
+    // navigation outcomes, so we pin the only side of the contract React owns
+    // — that defaultPrevented stays false on modified left-click and middle-click.
+    for (const init of [
+      { button: 0, metaKey: true },
+      { button: 0, ctrlKey: true },
+      { button: 1 },
+    ] as const) {
+      const ev = new MouseEvent("click", {
+        bubbles: true,
+        cancelable: true,
+        ...init,
+      });
+      await act(async () => {
+        tabB.dispatchEvent(ev);
+      });
+      expect(ev.defaultPrevented).toBe(false);
+    }
+  });
+
   it("/w/:slug/s/:sid focuses the session (deep link fetches its transcript)", async () => {
     await renderAt("/w/workspace-a/s/sess-1");
     expect(fetchCalls.some((c) => c.includes("/sessions/sess-1/transcript"))).toBe(true);
