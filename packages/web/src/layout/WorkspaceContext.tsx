@@ -3,7 +3,6 @@ import type {
   DeskCard,
   OfficeCard,
   SessionSummary,
-  TranscriptLine,
   WorkspaceRoleAssignment,
 } from "../api.ts";
 
@@ -12,7 +11,6 @@ export interface WorkspaceContextValue {
   readonly invalidWorkspace: boolean;
   readonly sessions: readonly SessionSummary[];
   readonly selectedSession: string | null;
-  readonly transcript: readonly TranscriptLine[];
   readonly assignments: readonly WorkspaceRoleAssignment[];
   readonly roleId: string | null;
   readonly setRoleId: (id: string) => void;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { OpenQuestion, SessionSummary } from "../api.ts";
 import { STATE_DOT, pickTone } from "./state-tones.ts";
 
@@ -14,6 +14,7 @@ interface Props {
   readonly onSelect: (id: string) => void;
   readonly onEnd: (id: string) => Promise<void>;
   readonly onResume: (id: string) => Promise<void>;
+  readonly onPin?: ((id: string) => void) | undefined;
 }
 
 function relativeTime(ts: number): string {
@@ -24,10 +25,23 @@ function relativeTime(ts: number): string {
   return `${Math.floor(delta / 3_600_000)}h ago`;
 }
 
-export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume }: Props) {
+export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume, onPin }: Props) {
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [endingId, setEndingId] = useState<string | null>(null);
   const [resumingId, setResumingId] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; sessionId: string } | null>(null);
+
+  useEffect(() => {
+    if (menu === null) return;
+    const dismiss = () => setMenu(null);
+    window.addEventListener("click", dismiss);
+    window.addEventListener("contextmenu", dismiss, { capture: true });
+    window.addEventListener("keydown", (e) => e.key === "Escape" && setMenu(null));
+    return () => {
+      window.removeEventListener("click", dismiss);
+      window.removeEventListener("contextmenu", dismiss, { capture: true } as EventListenerOptions);
+    };
+  }, [menu]);
 
   if (sessions.length === 0) {
     return (
@@ -38,6 +52,27 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume }:
   }
 
   return (
+    <>
+    {menu !== null && onPin !== undefined && (
+      <div
+        role="menu"
+        className="fixed z-50 min-w-[14rem] rounded border border-zinc-700 bg-zinc-900 shadow-lg text-sm text-zinc-100"
+        style={{ left: menu.x, top: menu.y }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          role="menuitem"
+          className="w-full text-left px-3 py-2 hover:bg-zinc-800"
+          onClick={() => {
+            onPin(menu.sessionId);
+            setMenu(null);
+          }}
+        >
+          Pin mailbox
+        </button>
+      </div>
+    )}
     <ul className="divide-y divide-zinc-800">
       {sessions.map((s) => {
         const isSelected = s.session_id === selectedId;
@@ -49,7 +84,18 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume }:
         const tone = pickTone(s, isEnded);
         const primary = s.label ?? s.session_id;
         return (
-          <li key={s.session_id} className="relative">
+          <li
+            key={s.session_id}
+            className="relative"
+            onContextMenu={
+              onPin === undefined
+                ? undefined
+                : (e) => {
+                    e.preventDefault();
+                    setMenu({ x: e.clientX, y: e.clientY, sessionId: s.session_id });
+                  }
+            }
+          >
             <button
               type="button"
               onClick={() => onSelect(s.session_id)}
@@ -193,5 +239,6 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume }:
         );
       })}
     </ul>
+    </>
   );
 }
