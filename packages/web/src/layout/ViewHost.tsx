@@ -9,7 +9,7 @@ import { WhiteboardView } from "../views/WhiteboardView.tsx";
 const REGISTRY: { [K in ViewId["kind"]]: (view: Extract<ViewId, { kind: K }>) => ReactNode } = {
   sessions: () => <SessionsView />,
   spawn: () => <SpawnView />,
-  mailbox: (view) => <MailboxView pinnedSessionId={view.sessionId} />,
+  mailbox: (view) => <MailboxView sessionId={view.sessionId} />,
   whiteboard: () => <WhiteboardView />,
 };
 
@@ -19,10 +19,10 @@ export function viewLabel(view: ViewId, sessions?: readonly SessionSummary[]): s
       return "Sessions";
     case "spawn":
       return "Spawn";
-    case "mailbox":
-      if (view.sessionId === undefined) return "Mailbox";
+    case "mailbox": {
       const s = sessions?.find((x) => x.session_id === view.sessionId);
       return s?.label ?? view.sessionId.slice(0, 8);
+    }
     case "whiteboard":
       return "Whiteboard";
   }

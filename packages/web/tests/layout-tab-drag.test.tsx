@@ -116,7 +116,7 @@ describe("tab drag between panes (#280)", () => {
 
   it("pointer-up over another pane moves the tab there and leaves source pane empty", async () => {
     await renderAt("/w/workspace-a");
-    const sourceTab = tabsInPane("pane-center")[0]!; // mailbox tab
+    const sourceTab = tabsInPane("pane-center")[0]!; // whiteboard tab
     const sr = sourceTab.getBoundingClientRect();
     const targetPane = paneEl("pane-spawn");
     const tr = targetPane.getBoundingClientRect();
@@ -126,10 +126,10 @@ describe("tab drag between panes (#280)", () => {
     await dispatchPointer(targetPane, "pointerup", tr.left + 10, tr.top + 10);
     await flush();
 
-    const centerLabels = tabsInPane("pane-center").map((t) => t.textContent);
-    expect(centerLabels).not.toContain("Mailbox");
-    const spawnLabels = tabsInPane("pane-spawn").map((t) => t.textContent);
-    expect(spawnLabels).toContain("Mailbox");
+    const centerLabels = tabsInPane("pane-center").map((t) => t.textContent ?? "");
+    expect(centerLabels.some((l) => l.includes("Whiteboard"))).toBe(false);
+    const spawnLabels = tabsInPane("pane-spawn").map((t) => t.textContent ?? "");
+    expect(spawnLabels.some((l) => l.includes("Whiteboard"))).toBe(true);
     expect(ghost()).toBeNull();
   });
 });

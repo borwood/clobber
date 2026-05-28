@@ -3,12 +3,10 @@ import { useWorkspace } from "../layout/WorkspaceContext.tsx";
 import { useTranscript } from "../hooks/useTranscript.ts";
 
 interface Props {
-  // Defined when this is a pinned mailbox bound to a specific session;
-  // undefined for the URL-focused singleton that tracks the location bar.
-  readonly pinnedSessionId?: string | undefined;
+  readonly sessionId: string;
 }
 
-export function MailboxView({ pinnedSessionId }: Props = {}) {
+export function MailboxView({ sessionId }: Props) {
   const w = useWorkspace();
   if (w.invalidWorkspace) {
     return (
@@ -17,7 +15,6 @@ export function MailboxView({ pinnedSessionId }: Props = {}) {
       </p>
     );
   }
-  const sessionId = pinnedSessionId ?? w.selectedSession;
   const transcript = useTranscript(sessionId);
   return (
     <MailboxContent

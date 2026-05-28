@@ -22,19 +22,32 @@ describe("defaultLayout", () => {
     const b = asPane(root.children[1]);
     const c = asPane(root.children[2]);
     expect(a.views[0]?.kind).toBe("sessions");
-    expect(b.views.map((v) => v.kind)).toEqual(["mailbox", "whiteboard"]);
+    expect(b.views.map((v) => v.kind)).toEqual(["whiteboard"]);
     expect(c.views[0]?.kind).toBe("spawn");
     expect(a.activeIndex).toBe(0);
   });
 });
 
+// Several tests want a center pane with two tabs (mid was [mailbox, whiteboard]
+// pre-#309). Build one by pinning a session into the default layout, yielding
+// [whiteboard, mailbox#sess-1] in mid.
+function withCenterPin(): LayoutNode {
+  const mid = asPane(asSplit(defaultLayout()).children[1]!);
+  return layoutReducer(defaultLayout(), {
+    kind: "pin_mailbox",
+    pane: mid.id,
+    sessionId: "sess-1",
+  });
+}
+
 describe("layoutReducer move_tab", () => {
   it("moves a tab across panes, removes from source, inserts at dropIndex in dest, and makes it active in dest", () => {
-    const root = asSplit(defaultLayout());
+    const start = withCenterPin();
+    const root = asSplit(start);
     const src = asPane(root.children[0]);
     const mid = asPane(root.children[1]);
     const next = asSplit(
-      layoutReducer(defaultLayout(), {
+      layoutReducer(start, {
         kind: "move_tab",
         from: src.id,
         to: mid.id,
@@ -48,17 +61,18 @@ describe("layoutReducer move_tab", () => {
     expect(nSrc.activeIndex).toBeNull();
     expect(nMid.views.map((v) => v.kind)).toEqual([
       "sessions",
-      "mailbox",
       "whiteboard",
+      "mailbox",
     ]);
     expect(nMid.activeIndex).toBe(0);
   });
 
   it("reorders within the same pane", () => {
-    const root = asSplit(defaultLayout());
+    const start = withCenterPin();
+    const root = asSplit(start);
     const mid = asPane(root.children[1]!);
     const next = asSplit(
-      layoutReducer(defaultLayout(), {
+      layoutReducer(start, {
         kind: "move_tab",
         from: mid.id,
         to: mid.id,
@@ -67,7 +81,7 @@ describe("layoutReducer move_tab", () => {
       }),
     );
     const nMid = asPane(next.children[1]!);
-    expect(nMid.views.map((v) => v.kind)).toEqual(["whiteboard", "mailbox"]);
+    expect(nMid.views.map((v) => v.kind)).toEqual(["mailbox", "whiteboard"]);
   });
 });
 
@@ -122,10 +136,11 @@ describe("layoutReducer resize", () => {
 
 describe("layoutReducer split_pane", () => {
   it("splits the target pane vertically and places the dragged tab in a new sibling after the original", () => {
-    const root = asSplit(defaultLayout());
+    const start = withCenterPin();
+    const root = asSplit(start);
     const mid = asPane(root.children[1]!);
     const next = asSplit(
-      layoutReducer(defaultLayout(), {
+      layoutReducer(start, {
         kind: "split_pane",
         pane: mid.id,
         direction: "v",
@@ -140,17 +155,18 @@ describe("layoutReducer split_pane", () => {
     const original = asPane(inner.children[0]!);
     const created = asPane(inner.children[1]!);
     expect(original.id).toBe(mid.id);
-    expect(original.views.map((v) => v.kind)).toEqual(["mailbox"]);
-    expect(created.views.map((v) => v.kind)).toEqual(["whiteboard"]);
+    expect(original.views.map((v) => v.kind)).toEqual(["whiteboard"]);
+    expect(created.views.map((v) => v.kind)).toEqual(["mailbox"]);
     expect(created.activeIndex).toBe(0);
     expect(created.id).not.toBe(mid.id);
   });
 
   it("with before:true places the new pane before the original (horizontal)", () => {
-    const root = asSplit(defaultLayout());
+    const start = withCenterPin();
+    const root = asSplit(start);
     const mid = asPane(root.children[1]!);
     const next = asSplit(
-      layoutReducer(defaultLayout(), {
+      layoutReducer(start, {
         kind: "split_pane",
         pane: mid.id,
         direction: "h",
@@ -162,9 +178,9 @@ describe("layoutReducer split_pane", () => {
     expect(inner.direction).toBe("h");
     const first = asPane(inner.children[0]!);
     const second = asPane(inner.children[1]!);
-    expect(first.views.map((v) => v.kind)).toEqual(["mailbox"]);
+    expect(first.views.map((v) => v.kind)).toEqual(["whiteboard"]);
     expect(second.id).toBe(mid.id);
-    expect(second.views.map((v) => v.kind)).toEqual(["whiteboard"]);
+    expect(second.views.map((v) => v.kind)).toEqual(["mailbox"]);
   });
 
   it("moves the tab from a different source pane into a new split sibling of the target", () => {
@@ -192,8 +208,9 @@ describe("layoutReducer split_pane", () => {
 
 describe("layoutReducer resize on vertical split", () => {
   it("clamps below-MIN heights up to MIN_PANE_PX on a vertical split", () => {
-    const mid = asPane(asSplit(defaultLayout()).children[1]!);
-    const withSplit = layoutReducer(defaultLayout(), {
+    const start = withCenterPin();
+    const mid = asPane(asSplit(start).children[1]!);
+    const withSplit = layoutReducer(start, {
       kind: "split_pane",
       pane: mid.id,
       direction: "v",
