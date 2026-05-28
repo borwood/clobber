@@ -109,14 +109,14 @@ describe("first-load layout hint (#281)", () => {
 describe("workspace-scoped layout key (#281)", () => {
   it("uses independent localStorage keys for two distinct workspaces", async () => {
     await renderAt("/w/workspace-a");
-    expect(localStorage.getItem("clobber:layout:v1:workspace-a")).not.toBeNull();
-    expect(localStorage.getItem("clobber:layout:v1:workspace-b")).toBeNull();
+    expect(localStorage.getItem("clobber:layout:v2:workspace-a")).not.toBeNull();
+    expect(localStorage.getItem("clobber:layout:v2:workspace-b")).toBeNull();
 
     await act(async () => {
       root.unmount();
     });
     root = createRoot(container);
     await renderAt("/w/workspace-b");
-    expect(localStorage.getItem("clobber:layout:v1:workspace-b")).not.toBeNull();
+    expect(localStorage.getItem("clobber:layout:v2:workspace-b")).not.toBeNull();
   });
 });

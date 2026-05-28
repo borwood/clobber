@@ -3,7 +3,7 @@ import type { LayoutNode, PaneNode } from "./types.ts";
 export const CLOSED_RING_SIZE = 10;
 
 export function layoutStorageKey(workspaceSlug: string): string {
-  return `clobber:layout:v1:${workspaceSlug}`;
+  return `clobber:layout:v2:${workspaceSlug}`;
 }
 
 export function loadLayout(workspaceSlug: string): LayoutNode | null {

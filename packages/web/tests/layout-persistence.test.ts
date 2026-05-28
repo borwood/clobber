@@ -18,8 +18,8 @@ describe("layout persistence", () => {
     await GlobalRegistrator.unregister();
   });
 
-  it("storage key shape is clobber:layout:v1:<slug>", () => {
-    expect(layoutStorageKey("acme")).toBe("clobber:layout:v1:acme");
+  it("storage key shape is clobber:layout:v2:<slug>", () => {
+    expect(layoutStorageKey("acme")).toBe("clobber:layout:v2:acme");
   });
 
   it("returns null when no layout is stored for the workspace", () => {

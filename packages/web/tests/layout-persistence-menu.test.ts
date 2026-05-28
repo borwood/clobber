@@ -31,8 +31,8 @@ describe("saved layouts persistence", () => {
     localStorage.clear();
   });
 
-  it("key shape is clobber:layout:v1:<slug>:saved:<name>", () => {
-    expect(savedLayoutKey("acme", "A")).toBe("clobber:layout:v1:acme:saved:A");
+  it("key shape is clobber:layout:v2:<slug>:saved:<name>", () => {
+    expect(savedLayoutKey("acme", "A")).toBe("clobber:layout:v2:acme:saved:A");
   });
 
   it("save + load round-trips a named layout", () => {
@@ -57,8 +57,8 @@ describe("closed-pane ring buffer", () => {
     localStorage.clear();
   });
 
-  it("key shape is clobber:layout:v1:<slug>:closed-ring", () => {
-    expect(closedRingKey("acme")).toBe("clobber:layout:v1:acme:closed-ring");
+  it("key shape is clobber:layout:v2:<slug>:closed-ring", () => {
+    expect(closedRingKey("acme")).toBe("clobber:layout:v2:acme:closed-ring");
   });
 
   it("pushes entries newest-first and stores label + timestamp", () => {
