@@ -11,6 +11,7 @@ import { layoutReducer, type Action } from "./reducer.ts";
 import type { LayoutNode, PaneNode, ViewId } from "./types.ts";
 import { defaultLayout } from "./default-layout.ts";
 import { loadLayout, pushClosedPane, saveLayout } from "./persistence.ts";
+import { closedRingCaptureFor } from "./closed-ring-capture.ts";
 import { viewLabel } from "./ViewHost.tsx";
 
 export interface TabDragState {
@@ -66,11 +67,10 @@ export function LayoutProvider({ workspaceSlug, deepLinkSessionId, children }: P
 
   const dispatch = useCallback(
     (a: Action) => {
-      if (a.kind === "close_pane" && workspaceSlug !== null) {
-        const pane = findPaneById(layout, a.pane);
-        if (pane !== null && pane.views.length > 0) {
-          const active = pane.views[pane.activeIndex ?? 0] ?? pane.views[0]!;
-          pushClosedPane(workspaceSlug, pane, viewLabel(active), Date.now());
+      if (workspaceSlug !== null) {
+        const cap = closedRingCaptureFor(layout, a);
+        if (cap !== null) {
+          pushClosedPane(workspaceSlug, cap.pane, viewLabel(cap.view), Date.now());
         }
       }
       rawDispatch(a);
@@ -112,15 +112,6 @@ function firstPaneId(node: LayoutNode): string | null {
   if (node.kind === "pane") return node.id;
   for (const c of node.children) {
     const hit = firstPaneId(c);
-    if (hit !== null) return hit;
-  }
-  return null;
-}
-
-function findPaneById(node: LayoutNode, id: string): PaneNode | null {
-  if (node.kind === "pane") return node.id === id ? node : null;
-  for (const c of node.children) {
-    const hit = findPaneById(c, id);
     if (hit !== null) return hit;
   }
   return null;
