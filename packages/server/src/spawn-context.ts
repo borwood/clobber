@@ -188,7 +188,9 @@ export async function prepareSpawnContext(
     cwd,
     sessionId,
     ...(role.permission_mode === undefined ? {} : { permissionMode: role.permission_mode }),
-    ...(role.allowed_tools === undefined ? {} : { allowedTools: role.allowed_tools }),
+    ...(effectiveBundle.allowedTools.length === 0
+      ? {}
+      : { allowedTools: effectiveBundle.allowedTools }),
     ...(effectiveEffort === undefined ? {} : { effort: effectiveEffort }),
     env,
     materialized,

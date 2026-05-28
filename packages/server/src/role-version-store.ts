@@ -139,6 +139,9 @@ export function createRoleVersionStore(db: Database): RoleVersionStore {
       const skills = SkillsArraySchema.parse(JSON.parse(row.skills_json));
       const seedRefs = SeedRefsSchema.parse(JSON.parse(row.seed_refs_json));
       const wakePrograms = WakeProgramsSchema.parse(JSON.parse(row.wake_programs_json));
+      const allowedTools = z
+        .array(z.string().min(1))
+        .parse(JSON.parse(row.allowed_tools_json));
       const data: RoleBundleData = {
         pluginName: roleRow.name,
         ...(roleRow.description === null
@@ -146,6 +149,7 @@ export function createRoleVersionStore(db: Database): RoleVersionStore {
           : { description: roleRow.description }),
         framing: row.framing,
         systemPrompt: row.system_prompt,
+        allowedTools,
         skills,
         seedRefs,
         wakePrograms,

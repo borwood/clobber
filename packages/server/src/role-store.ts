@@ -21,12 +21,12 @@ interface Row {
   name: string;
   description: string | null;
   permission_mode: string | null;
-  allowed_tools: string | null;
   effort: string | null;
   persistent: number;
   workspace_id: string | null;
   current_version_id: string | null;
   created_at: number;
+  current_version_allowed_tools_json: string | null;
 }
 
 function rowToRole(row: Row): Role {
@@ -38,34 +38,46 @@ function rowToRole(row: Row): Role {
   };
   if (row.description !== null) parsed["description"] = row.description;
   if (row.permission_mode !== null) parsed["permission_mode"] = row.permission_mode;
-  if (row.allowed_tools !== null) parsed["allowed_tools"] = JSON.parse(row.allowed_tools);
+  if (row.current_version_allowed_tools_json !== null) {
+    const tools = JSON.parse(row.current_version_allowed_tools_json) as readonly string[];
+    if (tools.length > 0) parsed["allowed_tools"] = tools;
+  }
   if (row.effort !== null) parsed["effort"] = row.effort;
   if (row.workspace_id !== null) parsed["workspace_id"] = row.workspace_id;
   if (row.current_version_id !== null) parsed["current_version_id"] = row.current_version_id;
   return RoleSchema.parse(parsed);
 }
 
+const ROLE_SELECT = `
+  SELECT
+    r.id, r.name, r.description, r.permission_mode, r.effort,
+    r.persistent, r.workspace_id, r.current_version_id, r.created_at,
+    v.allowed_tools_json AS current_version_allowed_tools_json
+  FROM roles r
+  LEFT JOIN role_versions v ON v.id = r.current_version_id
+`;
+
 export function createRoleStore(db: Database): RoleStore {
   const versions = createRoleVersionStore(db);
 
   const insertStmt = db.prepare(
-    "INSERT INTO roles (id, name, description, permission_mode, allowed_tools, effort, persistent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO roles (id, name, description, permission_mode, effort, persistent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
   );
   const setVersionStmt = db.prepare(
     "UPDATE roles SET current_version_id = ? WHERE id = ?",
   );
-  const getStmt = db.prepare("SELECT * FROM roles WHERE id = ?");
+  const getStmt = db.prepare(`${ROLE_SELECT} WHERE r.id = ?`);
   const findByNameStmt = db.prepare(
-    "SELECT * FROM roles WHERE name = ? AND workspace_id IS NULL",
+    `${ROLE_SELECT} WHERE r.name = ? AND r.workspace_id IS NULL`,
   );
   const findInWorkspaceStmt = db.prepare(
-    "SELECT * FROM roles WHERE name = ? AND workspace_id = ?",
+    `${ROLE_SELECT} WHERE r.name = ? AND r.workspace_id = ?`,
   );
   const listStmt = db.prepare(
-    "SELECT * FROM roles ORDER BY created_at DESC, id DESC",
+    `${ROLE_SELECT} ORDER BY r.created_at DESC, r.id DESC`,
   );
   const listForWorkspaceStmt = db.prepare(
-    "SELECT * FROM roles WHERE workspace_id = ? ORDER BY name ASC",
+    `${ROLE_SELECT} WHERE r.workspace_id = ? ORDER BY r.name ASC`,
   );
   const deleteStmt = db.prepare("DELETE FROM roles WHERE id = ?");
   const updateDescriptionStmt = db.prepare(
@@ -78,15 +90,12 @@ export function createRoleStore(db: Database): RoleStore {
       const created_at = Date.now();
       const description = req.description === undefined ? null : req.description;
       const permission_mode = req.permission_mode === undefined ? null : req.permission_mode;
-      const allowed_tools =
-        req.allowed_tools === undefined ? null : JSON.stringify(req.allowed_tools);
       const effort = req.effort === undefined ? null : req.effort;
       insertStmt.run(
         id,
         req.name,
         description,
         permission_mode,
-        allowed_tools,
         effort,
         req.persistent ? 1 : 0,
         created_at,

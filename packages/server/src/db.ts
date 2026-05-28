@@ -7,6 +7,7 @@ import { migrateAgentQuestions } from "./agent-question-migration.ts";
 import { migrateRoleEffort } from "./role-effort-migration.ts";
 import { migrateSessionWasLive } from "./session-was-live-migration.ts";
 import { migrateSessionComposedPrompt } from "./session-composed-prompt-migration.ts";
+import { migrateRoleAllowedToolsColumnDrop } from "./role-allowed-tools-column-drop-migration.ts";
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS events (
@@ -38,7 +39,6 @@ const SCHEMA = `
     name               TEXT    NOT NULL,
     description        TEXT,
     permission_mode    TEXT,
-    allowed_tools      TEXT,
     effort             TEXT,
     persistent         INTEGER NOT NULL,
     workspace_id       TEXT,
@@ -209,6 +209,7 @@ export function createDatabase(path: string): Database {
   migrateRoleEffort(db);
   migrateSessionWasLive(db);
   migrateSessionComposedPrompt(db);
+  migrateRoleAllowedToolsColumnDrop(db);
   return db;
 }
 

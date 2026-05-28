@@ -40,11 +40,15 @@ function ensureColumn(
   column: string,
   type: string,
 ): void {
+  if (hasColumn(db, table, column)) return;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+}
+
+function hasColumn(db: Database, table: string, column: string): boolean {
   const cols = (
     db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
   ).map((r) => r.name);
-  if (cols.includes(column)) return;
-  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  return cols.includes(column);
 }
 
 function dropLegacyGlobalUniqueName(db: Database): void {
@@ -208,12 +212,17 @@ function backfillDefaultWakeProgram(db: Database): void {
 }
 
 function backfillRoleVersions(db: Database): void {
+  // Pre-migrateRoleAllowedToolsColumnDrop databases have an `allowed_tools`
+  // column on `roles`; post-drop (and fresh) databases do not. The select
+  // adapts so the backfill still runs for the (rare) case of an unversioned
+  // legacy row that survived past the column drop — it just falls back to the
+  // shipped bundle's manifest defaults instead of the legacy column.
   const versions = createRoleVersionStore(db);
-  const rows = db
-    .prepare(
-      "SELECT id, name, allowed_tools FROM roles WHERE current_version_id IS NULL",
-    )
-    .all() as UnversionedRow[];
+  const hasLegacyTools = hasColumn(db, "roles", "allowed_tools");
+  const sql = hasLegacyTools
+    ? "SELECT id, name, allowed_tools FROM roles WHERE current_version_id IS NULL"
+    : "SELECT id, name, NULL AS allowed_tools FROM roles WHERE current_version_id IS NULL";
+  const rows = db.prepare(sql).all() as UnversionedRow[];
   if (rows.length === 0) return;
 
   const setVersion = db.prepare(
@@ -229,7 +238,7 @@ function backfillRoleVersions(db: Database): void {
     }
     const allowedTools =
       row.allowed_tools === null
-        ? []
+        ? (loaded.manifest.allowedTools ?? [])
         : (JSON.parse(row.allowed_tools) as readonly string[]);
     const snapshot = snapshotShippedBundle({ loaded, allowedTools });
     const version = versions.create({

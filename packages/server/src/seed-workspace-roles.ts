@@ -16,8 +16,8 @@ export function seedWorkspaceRoles(
   const versions = createRoleVersionStore(db);
 
   const insertRole = db.prepare(
-    `INSERT INTO roles (id, name, description, permission_mode, allowed_tools, effort, persistent, workspace_id, current_version_id, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO roles (id, name, description, permission_mode, effort, persistent, workspace_id, current_version_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const setVersion = db.prepare("UPDATE roles SET current_version_id = ? WHERE id = ?");
   const upsertCeiling = db.prepare(
@@ -71,10 +71,6 @@ function seedSingleRole(
   const allowedTools = shipped.manifest.allowedTools ?? [];
   const description = shipped.manifest.description;
   const permissionMode = shipped.manifest.permissionMode ?? null;
-  const allowedToolsJson =
-    shipped.manifest.allowedTools === undefined
-      ? null
-      : JSON.stringify(allowedTools);
   const effort = shipped.manifest.effort ?? null;
 
   deps.insertRole.run(
@@ -82,7 +78,6 @@ function seedSingleRole(
     shipped.manifest.name,
     description,
     permissionMode,
-    allowedToolsJson,
     effort,
     shipped.manifest.persistent ? 1 : 0,
     workspaceId,
