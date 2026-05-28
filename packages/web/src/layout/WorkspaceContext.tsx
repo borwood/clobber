@@ -22,6 +22,7 @@ export interface WorkspaceContextValue {
   readonly wakingAgents: ReadonlySet<string>;
   readonly showSystem: boolean;
   readonly setShowSystem: (b: boolean) => void;
+  readonly configOpen: boolean;
   readonly focusSession: (id: string) => void;
   readonly endSession: (id: string) => Promise<void>;
   readonly resumeSession: (id: string) => Promise<void>;

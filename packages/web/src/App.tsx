@@ -158,6 +158,7 @@ export function App() {
       wakingAgents,
       showSystem,
       setShowSystem,
+      configOpen,
       focusSession,
       endSession: async (id) => {
         try {
@@ -204,6 +205,7 @@ export function App() {
       now,
       wakingAgents,
       showSystem,
+      configOpen,
       workspaceSlug,
     ],
   );
