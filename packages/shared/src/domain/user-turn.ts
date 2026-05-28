@@ -31,3 +31,20 @@ export function wrapClobberTag(content: string, tag: ClobberPromptTag): string {
 function escapeAttr(v: string): string {
   return v.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 }
+
+/**
+ * Standing guidance composed into every clobber session's system prompt so the
+ * agent reads `<clobber type="…">` wrappers as system-origin / possibly-
+ * unattended context, and a bare user turn as live human presence. Generic
+ * over the `UserTurnKind` enum — meaning, not per-kind policy.
+ */
+export const CLOBBER_TAG_INTERPRETATION_GUIDANCE = [
+  "**Reading user turns.** Clobber wraps any user turn it injects on your",
+  "behalf in `<clobber type=\"…\">…</clobber>` (with an optional `via` attribute",
+  "carrying further provenance). A wrapped turn is system-origin — clobber",
+  "machinery, a trigger, or a relayed answer — and may arrive while no human",
+  "is actively watching, so treat it as authoritative context but don't",
+  "assume someone is on the other end. A bare user turn (no wrapper) is a",
+  "human typing live at the composer. The wrapper is for your interpretation",
+  "of incoming turns only; never emit it in your own output.",
+].join(" ");

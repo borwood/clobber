@@ -1,5 +1,9 @@
+import { CLOBBER_TAG_INTERPRETATION_GUIDANCE } from "@clobber/shared";
+
 // The session-start system prompt is composed in three layers (epic #209):
-//   A — role-unique framing (identity header)
+//   A — role-unique framing (identity header), preceded by standing clobber
+//       runtime guidance that every session needs (e.g. how to read
+//       `<clobber type=…>` user-turn wrappers, #262)
 //   B — seeds: instance-specific context relocated off the opening user
 //       message (workspace context, office continuity)
 //   C — wake-program addon (empty until the wake-programs child #212 lands)
@@ -13,7 +17,13 @@ export interface SystemPromptLayers {
 }
 
 export function composeSystemPrompt(layers: SystemPromptLayers): string {
-  return [layers.framing, layers.rolePrompt, ...layers.seeds, layers.wakeProgramAddon]
+  return [
+    CLOBBER_TAG_INTERPRETATION_GUIDANCE,
+    layers.framing,
+    layers.rolePrompt,
+    ...layers.seeds,
+    layers.wakeProgramAddon,
+  ]
     .filter((segment) => segment !== "")
     .join("\n\n");
 }
