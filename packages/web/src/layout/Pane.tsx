@@ -5,13 +5,15 @@ import { ViewHost, viewLabel } from "./ViewHost.tsx";
 import { useLayout } from "./provider.tsx";
 import { useWorkspace } from "./WorkspaceContext.tsx";
 import { usePointerDrag } from "./usePointerDrag.ts";
+import { PaneDropZones, type DropEdge } from "./PaneDropZones.tsx";
 
-const PANE_CLASS = "flex flex-col min-h-0 min-w-0 h-full w-full overflow-hidden";
+const PANE_CLASS =
+  "relative flex flex-col min-h-0 min-w-0 h-full w-full overflow-hidden";
 const BODY_CLASS = "flex-1 min-h-0 overflow-hidden flex flex-col";
 
 export function Pane(props: { readonly node: PaneNode }) {
   const { node } = props;
-  const { dispatch, setTabDrag } = useLayout();
+  const { dispatch, setTabDrag, tabDrag } = useLayout();
   const { configOpen } = useWorkspace();
   const active = node.activeIndex === null ? null : node.views[node.activeIndex]!;
 
@@ -41,6 +43,17 @@ export function Pane(props: { readonly node: PaneNode }) {
       if (fromIndex === null) return;
       const toPaneId = paneIdFromEvent(e);
       if (toPaneId === null) return;
+      const edge = edgeFromEvent(e);
+      if (edge === "top" || edge === "bottom" || edge === "left" || edge === "right") {
+        dispatch({
+          kind: "split_pane",
+          pane: toPaneId,
+          direction: edge === "top" || edge === "bottom" ? "v" : "h",
+          before: edge === "top" || edge === "left",
+          tab: { from: node.id, index: fromIndex },
+        });
+        return;
+      }
       dispatch({
         kind: "move_tab",
         from: node.id,
@@ -85,6 +98,7 @@ export function Pane(props: { readonly node: PaneNode }) {
           <ViewHost view={active} />
         )}
       </div>
+      {tabDrag !== null && <PaneDropZones />}
     </div>
   );
 }
@@ -100,6 +114,22 @@ function paneIdFromEvent(e: PointerEvent): string | null {
   return el instanceof Element
     ? el.closest<HTMLElement>('[data-pane="true"]')?.dataset.paneId ?? null
     : null;
+}
+
+function edgeFromEvent(e: PointerEvent): DropEdge | null {
+  const target = e.target;
+  const fromTarget =
+    target instanceof Element
+      ? target.closest<HTMLElement>("[data-drop-edge]")
+      : null;
+  if (fromTarget !== null) {
+    return (fromTarget.dataset.dropEdge as DropEdge) ?? null;
+  }
+  if (typeof document === "undefined") return null;
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  if (!(el instanceof Element)) return null;
+  const zone = el.closest<HTMLElement>("[data-drop-edge]");
+  return zone === null ? null : (zone.dataset.dropEdge as DropEdge) ?? null;
 }
 
 function computeDropIndex(paneId: string, clientX: number): number {

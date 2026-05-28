@@ -8,6 +8,13 @@ export type Action =
   | { kind: "select_tab"; pane: string; index: number }
   | { kind: "resize"; splitPath: readonly number[]; sizes: readonly number[]; containerPx: number }
   | { kind: "open_view"; pane: string; view: ViewId }
+  | {
+      kind: "split_pane";
+      pane: string;
+      direction: "h" | "v";
+      before: boolean;
+      tab: { from: string; index: number };
+    }
   | { kind: "reset" };
 
 export function layoutReducer(state: LayoutNode, action: Action): LayoutNode {
@@ -24,6 +31,8 @@ export function layoutReducer(state: LayoutNode, action: Action): LayoutNode {
         views: [...p.views, action.view],
         activeIndex: p.views.length,
       }));
+    case "split_pane":
+      return splitPane(state, action.pane, action.direction, action.before, action.tab);
     case "reset":
       return defaultLayout();
     default: {
@@ -91,6 +100,59 @@ function moveTab(
     const clamped = Math.max(0, Math.min(dropIndex, views.length));
     views.splice(clamped, 0, view);
     return { ...p, views, activeIndex: clamped };
+  });
+}
+
+function replacePane(
+  node: LayoutNode,
+  id: string,
+  fn: (p: PaneNode) => LayoutNode,
+): LayoutNode {
+  if (node.kind === "pane") return node.id === id ? fn(node) : node;
+  return {
+    ...node,
+    children: node.children.map((c) => replacePane(c, id, fn)),
+  };
+}
+
+function newPaneId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `pane-${crypto.randomUUID().slice(0, 8)}`;
+  }
+  return `pane-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function splitPane(
+  state: LayoutNode,
+  targetId: string,
+  direction: "h" | "v",
+  before: boolean,
+  tab: { from: string; index: number },
+): LayoutNode {
+  const sourcePane = findPane(state, tab.from);
+  if (!sourcePane) throw new Error(`split_pane: source pane ${tab.from} not found`);
+  const view = sourcePane.views[tab.index];
+  if (!view) throw new Error(`split_pane: tabIndex ${tab.index} out of range`);
+
+  const withoutSource = mapPane(state, tab.from, (p) => {
+    const views = p.views.filter((_, i) => i !== tab.index);
+    const activeIndex =
+      views.length === 0
+        ? null
+        : Math.max(0, Math.min(p.activeIndex ?? 0, views.length - 1));
+    return { ...p, views, activeIndex };
+  });
+
+  const created: PaneNode = {
+    kind: "pane",
+    id: newPaneId(),
+    views: [view],
+    activeIndex: 0,
+  };
+
+  return replacePane(withoutSource, targetId, (existing) => {
+    const children = before ? [created, existing] : [existing, created];
+    return { kind: "split", direction, children, sizes: [0.5, 0.5] };
   });
 }
 
