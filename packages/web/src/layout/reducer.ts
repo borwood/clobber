@@ -10,6 +10,7 @@ export type Action =
   | { kind: "open_view"; pane: string; view: ViewId }
   | { kind: "pin_mailbox"; pane: string; sessionId: string }
   | { kind: "close_tab"; pane: string; index: number }
+  | { kind: "close_pane"; pane: string }
   | {
       kind: "split_pane";
       pane: string;
@@ -58,6 +59,8 @@ export function layoutReducer(state: LayoutNode, action: Action): LayoutNode {
             : Math.max(0, Math.min(p.activeIndex ?? 0, views.length - 1));
         return { ...p, views, activeIndex };
       });
+    case "close_pane":
+      return closePane(state, action.pane);
     case "split_pane":
       return splitPane(state, action.pane, action.direction, action.before, action.tab);
     case "reset":
@@ -181,6 +184,43 @@ function splitPane(
     const children = before ? [created, existing] : [existing, created];
     return { kind: "split", direction, children, sizes: [0.5, 0.5] };
   });
+}
+
+// Remove the named pane. If its parent split is left with one child, the split
+// unwraps to that child — recursively, so chains of single-child splits
+// collapse in one pass. If the pane is the tree's only PaneNode, no-op (we
+// never end up with zero panes). Sizes are dropped on unwrap; the surviving
+// split keeps its sizes prorated to the remaining children.
+function closePane(state: LayoutNode, id: string): LayoutNode {
+  if (state.kind === "pane") return state; // root pane: no-op
+  if (!hasPane(state, id)) return state;
+  const next = removePane(state, id);
+  if (next === null) return state; // pane was the only one — no-op
+  return next;
+}
+
+function hasPane(node: LayoutNode, id: string): boolean {
+  if (node.kind === "pane") return node.id === id;
+  return node.children.some((c) => hasPane(c, id));
+}
+
+// Returns null if removal would empty the tree (caller should no-op).
+function removePane(node: LayoutNode, id: string): LayoutNode | null {
+  if (node.kind === "pane") return node.id === id ? null : node;
+  const kept: LayoutNode[] = [];
+  const keptSizes: number[] = [];
+  for (let i = 0; i < node.children.length; i++) {
+    const child = node.children[i]!;
+    const replaced = removePane(child, id);
+    if (replaced === null) continue;
+    kept.push(replaced);
+    keptSizes.push(node.sizes[i] ?? 1 / node.children.length);
+  }
+  if (kept.length === 0) return null;
+  if (kept.length === 1) return kept[0]!;
+  const sum = keptSizes.reduce((a, b) => a + b, 0);
+  const sizes = sum > 0 ? keptSizes.map((s) => s / sum) : kept.map(() => 1 / kept.length);
+  return { ...node, children: kept, sizes };
 }
 
 function applyResize(

@@ -14,7 +14,7 @@ const BODY_CLASS = "flex-1 min-h-0 overflow-hidden flex flex-col";
 
 export function Pane(props: { readonly node: PaneNode }) {
   const { node } = props;
-  const { dispatch, setTabDrag, tabDrag } = useLayout();
+  const { dispatch, setTabDrag, tabDrag, layout } = useLayout();
   const { configOpen, sessions } = useWorkspace();
   const active = node.activeIndex === null ? null : node.views[node.activeIndex]!;
 
@@ -95,8 +95,25 @@ export function Pane(props: { readonly node: PaneNode }) {
       )}
       <div className={BODY_CLASS}>
         {active === null ? (
-          <div className="flex-1 flex items-center justify-center text-xs text-zinc-600">
+          <div className="relative flex-1 flex items-center justify-center text-xs text-zinc-600">
             drop a tab here
+            {layout.kind === "split" && (
+              <span
+                role="button"
+                aria-label="Close pane"
+                title="Close pane"
+                data-pane-close="true"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  dispatch({ kind: "close_pane", pane: node.id });
+                }}
+                className="absolute top-2 right-2 w-5 h-5 inline-flex items-center justify-center rounded text-zinc-500 hover:text-zinc-100 hover:bg-zinc-700 cursor-pointer"
+              >
+                ×
+              </span>
+            )}
           </div>
         ) : (
           <ViewHost view={active} />
