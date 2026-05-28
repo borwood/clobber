@@ -50,7 +50,7 @@ export function WorkspaceTabs({
             href={buildPath(slug, null)}
             aria-current={active ? "page" : undefined}
             onClick={(e) => navigateTo(e, slug)}
-            className={`px-3 py-1 rounded-t text-sm font-mono border-b-2 ${
+            className={`px-3 py-1 rounded-t text-sm font-mono border-b-2 focus-visible:outline focus-visible:outline-1 focus-visible:outline-zinc-500 ${
               active
                 ? "text-zinc-100 border-emerald-500"
                 : "text-zinc-400 border-transparent hover:text-zinc-200 hover:border-zinc-700"
@@ -88,7 +88,7 @@ export function WorkspaceTabs({
                     key={w.id}
                     href={buildPath(slug, null)}
                     onClick={(e) => navigateTo(e, slug)}
-                    className={`block px-3 py-1.5 text-sm font-mono hover:bg-zinc-800 ${
+                    className={`block px-3 py-1.5 text-sm font-mono hover:bg-zinc-800 focus-visible:outline focus-visible:outline-1 focus-visible:outline-zinc-500 ${
                       w.id === selectedId ? "text-zinc-100" : "text-zinc-300"
                     }`}
                   >
