@@ -6,7 +6,7 @@ import { useLayout } from "./provider.tsx";
 import { useWorkspace } from "./WorkspaceContext.tsx";
 import { usePointerDrag } from "./usePointerDrag.ts";
 import { PaneDropZones } from "./PaneDropZones.tsx";
-import { edgeFromEvent, paneIdFromEvent } from "./drop-target.ts";
+import { computeDropIndex, edgeFromEvent, paneIdFromEvent } from "./drop-target.ts";
 import { PaneIdProvider } from "./PaneIdContext.tsx";
 import { EmptyRootPanePlaceholder } from "./EmptyRootPanePlaceholder.tsx";
 import { EmptyPaneContextMenu } from "./EmptyPaneContextMenu.tsx";
@@ -168,7 +168,9 @@ export function Pane(props: { readonly node: PaneNode }) {
           )}
         </PaneIdProvider>
       </div>
-      {tabDrag !== null && <PaneDropZones />}
+      {tabDrag !== null && (
+        <PaneDropZones paneId={node.id} hasTabs={tabs.length > 0} />
+      )}
       {menuPos !== null && (
         <EmptyPaneContextMenu
           paneId={node.id}
@@ -202,16 +204,4 @@ function SplitButton(props: {
       {props.children}
     </button>
   );
-}
-
-function computeDropIndex(paneId: string, clientX: number): number {
-  if (typeof document === "undefined") return 0;
-  const tabs = document.querySelectorAll<HTMLElement>(
-    `[data-pane-id="${paneId}"] [role="tab"]`,
-  );
-  for (let i = 0; i < tabs.length; i++) {
-    const r = tabs[i]!.getBoundingClientRect();
-    if (clientX < r.left + r.width / 2) return i;
-  }
-  return tabs.length;
 }
