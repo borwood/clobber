@@ -9,6 +9,7 @@ import { deriveWorkingState } from "../working-state.ts";
 import { WorkingIndicator } from "./WorkingIndicator.tsx";
 import {
   UserBubble,
+  ClobberTurnBubble,
   AssistantBubble,
   NotificationCard,
   SystemLine,
@@ -71,6 +72,9 @@ export function TranscriptViewer({ lines, showSystem, busy }: Props) {
               }
               if (c.kind === "user") {
                 return <UserBubble key={idx} line={c.line} />;
+              }
+              if (c.kind === "clobber-turn") {
+                return <ClobberTurnBubble key={idx} tag={c.tag} />;
               }
               if (c.kind === "assistant") {
                 return (

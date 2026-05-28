@@ -245,6 +245,46 @@ describe("POST /sessions/:id/prompt — interactive sessions (issue #8)", () => 
     await teardown(h);
   });
 
+  it("wraps the live-inject prompt in <clobber type=\"live-inject\"> when caller passes kind (#261)", async () => {
+    // The composer (web `sendPrompt`) sends no `kind` so its turn lands bare —
+    // the positive presence signal for a human-typed turn. A programmatic
+    // caller (CLI, internal forwarder) passes `kind: "live-inject"` and the
+    // serialize chokepoint wraps the content. Same /prompt endpoint, both
+    // paths covered by the body schema's optional kind.
+    const h = buildHarness();
+    const spawned = await seedAndSpawn(h);
+    await fireStop(h, spawned.session_id);
+
+    const res = await h.server.inject({
+      method: "POST",
+      url: `/sessions/${spawned.session_id}/prompt`,
+      payload: { prompt: "do the thing", kind: "live-inject" },
+    });
+    expect(res.statusCode).toBe(200);
+
+    const stub = h.control.agents.find((a) => a.sessionId === spawned.session_id)!;
+    expect(stub.writes.join("")).toBe(
+      serializeUserMessage("do the thing", { kind: "live-inject" }),
+    );
+
+    await teardown(h);
+  });
+
+  it("rejects an unknown kind value (positive-invariant — enum-checked at the route)", async () => {
+    const h = buildHarness();
+    const spawned = await seedAndSpawn(h);
+    await fireStop(h, spawned.session_id);
+
+    const res = await h.server.inject({
+      method: "POST",
+      url: `/sessions/${spawned.session_id}/prompt`,
+      payload: { prompt: "x", kind: "human" },
+    });
+    expect(res.statusCode).toBe(400);
+
+    await teardown(h);
+  });
+
   it("returns 404 for an unknown session id", async () => {
     const h = buildHarness();
     const res = await h.server.inject({
@@ -385,6 +425,13 @@ describe("POST /sessions/:id/answer — late answer to a timed-out ask routes ba
     const written = stub!.writes.join("");
     expect(written).toContain("Roll the milestone forward?");
     expect(written).toContain("Roll forward");
+    // The late-answer injection is provenance-tagged at the serialize chokepoint
+    // so the agent (and the web transcript) read it as system-origin, not a
+    // typed-by-human turn. (#261)
+    const parsed = JSON.parse(written.trim()) as {
+      message: { content: string };
+    };
+    expect(parsed.message.content).toContain(`<clobber type="ask-answer">`);
 
     // The row no longer presents as open — it is now answered, with the answer
     // recorded, so the widget stops surfacing on the next poll.

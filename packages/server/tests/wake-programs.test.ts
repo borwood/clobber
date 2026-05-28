@@ -21,7 +21,12 @@ async function spawnWith(
   h: Harness,
   roleId: string,
   wakeProgram: string,
-): Promise<{ session: string; system: string; prompt: string | undefined }> {
+): Promise<{
+  session: string;
+  system: string;
+  prompt: string | undefined;
+  promptTag: { kind: string; attrs?: Record<string, string> } | undefined;
+}> {
   const ws = h.workspaces.create({
     name: `ws-${roleId.slice(0, 8)}-${h.records.length}`,
     repo_path: h.repoPath,
@@ -35,7 +40,12 @@ async function spawnWith(
   expect(res.statusCode).toBe(200);
   const body = res.json() as { session_id: string };
   const rec = h.records[h.records.length - 1]!;
-  return { session: body.session_id, system: rec.req.appendSystemPrompt!, prompt: rec.req.prompt };
+  return {
+    session: body.session_id,
+    system: rec.req.appendSystemPrompt!,
+    prompt: rec.req.prompt,
+    promptTag: rec.req.promptTag,
+  };
 }
 
 describe("wake-programs (#212)", () => {
@@ -46,12 +56,17 @@ describe("wake-programs (#212)", () => {
       { name: "task", system: "LAYER-C-TASK-ADDON", user: "Read your desk and begin." },
     ]);
 
-    const { system, prompt } = await spawnWith(h, role.id, "task");
+    const { system, prompt, promptTag } = await spawnWith(h, role.id, "task");
     // Layer C — the wake-program's system addon rides the system prompt.
     expect(system).toContain("LAYER-C-TASK-ADDON");
     // The opening user message is the wake-program's kick, not the caller's text.
     expect(prompt).toBe("Read your desk and begin.");
     expect(prompt).not.toContain("manager free text");
+    // The kick is provenance-tagged as `wake-kick` so the agent and the web
+    // transcript both read it as clobber-injected, not human-composed. The tag
+    // is the wake-program's by construction — caller's `spawn-prompt` tag is
+    // overridden because the kick content is the program's, not the caller's. (#261)
+    expect(promptTag).toEqual({ kind: "wake-kick" });
     await teardown(h);
   });
 

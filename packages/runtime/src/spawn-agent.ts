@@ -7,7 +7,7 @@ import {
   type HookSettings,
 } from "./spawn-config.ts";
 import { serializeUserMessage } from "./stream-json.ts";
-import type { EffortLevel, PermissionMode } from "@clobber/shared";
+import type { ClobberPromptTag, EffortLevel, PermissionMode } from "@clobber/shared";
 import type { RuntimeCommand } from "./runtime-provider.ts";
 import type { RuntimeEvent, RuntimeStartupResult } from "./runtime-events.ts";
 import { normalizeCodexExecEvent } from "./codex-jsonl.ts";
@@ -17,6 +17,7 @@ export interface SpawnAgentOptions {
   // Absent on a bare resume: nothing is written to the child's stdin, so the
   // resumed thread idles instead of burning a turn on an empty user message.
   readonly prompt: string | undefined;
+  readonly promptTag?: ClobberPromptTag;
   readonly cwd: string;
   readonly sessionId?: string;
   // Resume an existing claude conversation thread instead of starting fresh.
@@ -68,7 +69,7 @@ export function spawnAgent(opts: SpawnAgentOptions): SpawnedAgent {
   const stdin = child.stdin;
   if (opts.command === undefined) {
     if (opts.prompt !== undefined) {
-      stdin.write(serializeUserMessage(opts.prompt));
+      stdin.write(serializeUserMessage(opts.prompt, opts.promptTag));
     }
   } else if (command.stdin !== undefined) {
     stdin.write(command.stdin);

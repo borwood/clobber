@@ -240,7 +240,10 @@ describe("POST /sessions/:id/interrupt", () => {
     };
     expect(parsed.type).toBe("user");
     expect(parsed.message.role).toBe("user");
-    expect(parsed.message.content).toContain("[SYSTEM NOTIFICATION");
+    // The legacy `[SYSTEM NOTIFICATION - NOT USER INPUT]` string-header was
+    // subsumed by the structured `<clobber type="interrupt-notice">` wrapper
+    // in #261 — same provenance, now parsed structurally by the web classifier.
+    expect(parsed.message.content).toContain(`<clobber type="interrupt-notice">`);
     expect(parsed.message.content).toContain("<status>interrupted</status>");
     expect(parsed.message.content).toContain("Interrupted by user");
 

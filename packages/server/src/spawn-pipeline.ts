@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { RuntimeProvider } from "@clobber/runtime";
-import type { Agent, BriefingPacket, EffortLevel, Role, Workspace } from "@clobber/shared";
+import type { Agent, BriefingPacket, ClobberPromptTag, EffortLevel, Role, Workspace } from "@clobber/shared";
 import type { WorkspaceRoleStore } from "./workspace-role-store.ts";
 import type { WorkspaceStore } from "./workspace-store.ts";
 import type { AgentStore } from "./agent-store.ts";
@@ -43,6 +43,10 @@ export interface SpawnPipelineInput {
   readonly workspace: Workspace;
   readonly role: Role;
   readonly prompt: string;
+  // Provenance for the caller's prompt. Defaults to `spawn-prompt` (the /spawn
+  // route, briefing/`--prompt` path); trigger fires override to `trigger` with
+  // the trigger-kind in `attrs.via`.
+  readonly promptTag?: ClobberPromptTag;
   readonly label: string;
   readonly wakeProgram?: string;
   readonly briefing?: BriefingPacket;
@@ -81,6 +85,7 @@ export async function executeSpawn(
   input: SpawnPipelineInput,
 ): Promise<SpawnPipelineResult> {
   const { workspace, role, prompt, label, briefing, effortOverride } = input;
+  const promptTag: ClobberPromptTag = input.promptTag ?? { kind: "spawn-prompt" };
 
   const capacity = checkCapacity(deps, workspace, role);
   if (capacity !== null) return capacity;
@@ -102,6 +107,7 @@ export async function executeSpawn(
     role,
     agent,
     prompt,
+    promptTag,
     ...(wakeProgram === undefined ? {} : { wakeProgram }),
     ...(briefing === undefined ? {} : { briefing }),
     ...(effortOverride === undefined ? {} : { effortOverride }),
@@ -123,6 +129,7 @@ export interface AttachSessionInput {
   readonly agent: Agent;
   // Absent on a no-task wake — no opening user message to compose.
   readonly prompt: string | undefined;
+  readonly promptTag?: ClobberPromptTag;
   readonly wakeProgram?: string;
   readonly briefing?: BriefingPacket;
   readonly effortOverride?: EffortLevel;
@@ -132,7 +139,7 @@ export async function attachSessionToAgent(
   deps: SpawnPipelineDeps,
   input: AttachSessionInput,
 ): Promise<SpawnPipelineSuccess | SpawnPipelineNoBundleError> {
-  const { workspace, role, agent, prompt, wakeProgram, briefing, effortOverride } = input;
+  const { workspace, role, agent, prompt, promptTag, wakeProgram, briefing, effortOverride } = input;
   const sessionId = randomUUID();
   const versionId = role.current_version_id;
 
@@ -144,6 +151,7 @@ export async function attachSessionToAgent(
     sessionId,
     versionId,
     prompt,
+    ...(promptTag === undefined ? {} : { promptTag }),
     ...(wakeProgram === undefined ? {} : { wakeProgram }),
     ...(briefing === undefined ? {} : { briefing }),
     ...(effortOverride === undefined ? {} : { effortOverride }),

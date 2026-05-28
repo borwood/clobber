@@ -1,5 +1,5 @@
 import type { RuntimeProvider } from "@clobber/runtime";
-import { triggerId, type Agent, type Role, type RoleTrigger, type Workspace } from "@clobber/shared";
+import { triggerId, type Agent, type ClobberPromptTag, type Role, type RoleTrigger, type Workspace } from "@clobber/shared";
 import type { AgentStore } from "./agent-store.ts";
 import type { RoleStore } from "./role-store.ts";
 import type { WorkspaceStore } from "./workspace-store.ts";
@@ -74,6 +74,10 @@ export async function dispatchTrigger(
   const workspace = deps.workspaces.get(binding.workspaceId);
   if (role === null || workspace === null) return false;
   const prompt = deps.synthesize(trigger, payload);
+  const promptTag: ClobberPromptTag = {
+    kind: "trigger",
+    attrs: { via: trigger.kind },
+  };
 
   const activeForAgent = deps.sessions
     .listActiveForWorkspace(binding.workspaceId)
@@ -93,6 +97,7 @@ export async function dispatchTrigger(
       role,
       agent,
       prompt,
+      promptTag,
       ...(wakeProgram === undefined ? {} : { wakeProgram }),
     });
     deps.dispatches.append({
@@ -151,7 +156,7 @@ export async function dispatchTrigger(
     return true;
   }
 
-  live.stdin.write(deps.runtimeProvider.serializeUserPrompt(prompt));
+  live.stdin.write(deps.runtimeProvider.serializeUserPrompt(prompt, promptTag));
   deps.registry.setBusy(live.sessionId, true);
   deps.dispatches.append({
     workspace_id: binding.workspaceId,
@@ -188,7 +193,7 @@ function resolveTriggerWakeProgram(
 
 async function attachOutcome(
   deps: Pick<DispatchDeps, "attachSession">,
-  input: { workspace: Workspace; role: Role; agent: Agent; prompt: string; wakeProgram?: string },
+  input: { workspace: Workspace; role: Role; agent: Agent; prompt: string; promptTag?: ClobberPromptTag; wakeProgram?: string },
 ): Promise<AttachOutcomeResult> {
   let result: AttachOutcome;
   try {

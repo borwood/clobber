@@ -1,4 +1,5 @@
 import type { RuntimeProvider } from "@clobber/runtime";
+import type { ClobberPromptTag } from "@clobber/shared";
 import type { SessionStore } from "./session-store.ts";
 import type { AgentRegistry } from "./agent-registry.ts";
 import { endSession, type SessionLifecycleDeps } from "./session-lifecycle.ts";
@@ -35,6 +36,7 @@ export async function injectPrompt(
   sessionId: string,
   prompt: string,
   deps: InjectPromptDeps,
+  tag?: ClobberPromptTag,
 ): Promise<InjectPromptResult> {
   const session = deps.sessions.get(sessionId);
   if (session === null) return { ok: false, status: 404, error: "session not found" };
@@ -65,7 +67,7 @@ export async function injectPrompt(
   if (!deps.runtimeProvider.capabilities.livePromptInjection) {
     return { ok: false, status: 409, error: "runtime does not support live prompt injection" };
   }
-  live.stdin.write(deps.runtimeProvider.serializeUserPrompt(prompt));
+  live.stdin.write(deps.runtimeProvider.serializeUserPrompt(prompt, tag));
   deps.registry.setBusy(sessionId, true);
   return { ok: true };
 }
