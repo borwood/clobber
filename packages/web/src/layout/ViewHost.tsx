@@ -1,34 +1,44 @@
 import type { ReactNode } from "react";
 import type { ViewId } from "./types.ts";
+import type { SessionSummary } from "../api.ts";
 import { SessionsView } from "../views/SessionsView.tsx";
 import { SpawnView } from "../views/SpawnView.tsx";
 import { MailboxView } from "../views/MailboxView.tsx";
 import { WhiteboardView } from "../views/WhiteboardView.tsx";
 
-// Registry maps ViewId.kind → renderer. Anti-prop-drilling seam: <Pane> never
-// touches view-specific props; view shells pull what they need from
-// WorkspaceContext. Keep panes location-agnostic so a tab dragged left in
-// step 4 looks identical to the same tab on the right by construction.
-const REGISTRY: Record<ViewId["kind"], () => ReactNode> = {
+const REGISTRY: { [K in ViewId["kind"]]: (view: Extract<ViewId, { kind: K }>) => ReactNode } = {
   sessions: () => <SessionsView />,
   spawn: () => <SpawnView />,
-  mailbox: () => <MailboxView />,
+  mailbox: (view) => <MailboxView pinnedSessionId={view.sessionId} />,
   whiteboard: () => <WhiteboardView />,
 };
 
-export function viewLabel(view: ViewId): string {
+export function viewLabel(view: ViewId, sessions?: readonly SessionSummary[]): string {
   switch (view.kind) {
     case "sessions":
       return "Sessions";
     case "spawn":
       return "Spawn";
     case "mailbox":
-      return "Mailbox";
+      if (view.sessionId === undefined) return "Mailbox";
+      const s = sessions?.find((x) => x.session_id === view.sessionId);
+      return s?.label ?? view.sessionId.slice(0, 8);
     case "whiteboard":
       return "Whiteboard";
   }
 }
 
 export function ViewHost(props: { readonly view: ViewId }) {
-  return <>{REGISTRY[props.view.kind]()}</>;
+  const view = props.view;
+  // Dispatch on kind so TS narrows `view` to the matching variant for the renderer.
+  switch (view.kind) {
+    case "sessions":
+      return <>{REGISTRY.sessions(view)}</>;
+    case "spawn":
+      return <>{REGISTRY.spawn(view)}</>;
+    case "mailbox":
+      return <>{REGISTRY.mailbox(view)}</>;
+    case "whiteboard":
+      return <>{REGISTRY.whiteboard(view)}</>;
+  }
 }

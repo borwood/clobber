@@ -4,7 +4,6 @@ import {
   type DeskCard,
   type OfficeCard,
   type SessionSummary,
-  type TranscriptLine,
   type Whiteboard,
   type WorkspaceRoleAssignment,
   type Workspace,
@@ -32,7 +31,6 @@ const EMPTY_ASSIGNMENTS: readonly WorkspaceRoleAssignment[] = [];
 const EMPTY_SESSIONS: readonly SessionSummary[] = [];
 const EMPTY_OFFICES: readonly OfficeCard[] = [];
 const EMPTY_DESKS: readonly DeskCard[] = [];
-const EMPTY_TRANSCRIPT: readonly TranscriptLine[] = [];
 const EMPTY_WHITEBOARD: Whiteboard = { offices: EMPTY_OFFICES, desks: EMPTY_DESKS };
 
 export function App() {
@@ -98,16 +96,6 @@ export function App() {
   const nowPoll = usePolledResource(() => Promise.resolve(Date.now()), [], POLL_MS);
   const now = nowPoll.data ?? Date.now();
 
-  const transcriptPoll = usePolledResource(
-    () =>
-      selectedSession === null
-        ? Promise.resolve(EMPTY_TRANSCRIPT)
-        : api.getTranscript(selectedSession),
-    [selectedSession],
-    POLL_MS,
-  );
-  const transcript = transcriptPoll.data ?? EMPTY_TRANSCRIPT;
-
   useEffect(() => {
     const firstErr = [
       workspacesPoll.error,
@@ -115,7 +103,6 @@ export function App() {
       rolesPoll.error,
       sessionsPoll.error,
       whiteboardPoll.error,
-      transcriptPoll.error,
     ].find((e) => e !== undefined);
     if (firstErr !== undefined) setError(firstErr.message);
   }, [
@@ -124,7 +111,6 @@ export function App() {
     rolesPoll.error,
     sessionsPoll.error,
     whiteboardPoll.error,
-    transcriptPoll.error,
   ]);
 
   useEffect(() => {
@@ -150,7 +136,6 @@ export function App() {
       invalidWorkspace,
       sessions,
       selectedSession,
-      transcript,
       assignments,
       roleId,
       setRoleId,
@@ -199,7 +184,6 @@ export function App() {
       invalidWorkspace,
       sessions,
       selectedSession,
-      transcript,
       assignments,
       roleId,
       offices,

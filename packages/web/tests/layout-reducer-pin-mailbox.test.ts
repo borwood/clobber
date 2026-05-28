@@ -1,0 +1,132 @@
+import { describe, it, expect } from "bun:test";
+import { layoutReducer } from "../src/layout/reducer.ts";
+import { defaultLayout } from "../src/layout/default-layout.ts";
+import type { LayoutNode, PaneNode, SplitNode } from "../src/layout/types.ts";
+
+function asSplit(n: LayoutNode | undefined): SplitNode {
+  if (!n || n.kind !== "split") throw new Error("expected split");
+  return n;
+}
+function asPane(n: LayoutNode | undefined): PaneNode {
+  if (!n || n.kind !== "pane") throw new Error("expected pane");
+  return n;
+}
+
+describe("layoutReducer pin_mailbox", () => {
+  it("appends { kind:'mailbox', sessionId } to the target pane's views and makes it active", () => {
+    const mid = asPane(asSplit(defaultLayout()).children[1]!);
+    const next = asSplit(
+      layoutReducer(defaultLayout(), {
+        kind: "pin_mailbox",
+        pane: mid.id,
+        sessionId: "sess-abc",
+      }),
+    );
+    const nMid = asPane(next.children[1]!);
+    expect(nMid.views).toHaveLength(3);
+    expect(nMid.views[2]).toEqual({ kind: "mailbox", sessionId: "sess-abc" });
+    expect(nMid.activeIndex).toBe(2);
+  });
+
+  it("allows pinning the same session twice (each is its own tab)", () => {
+    const mid = asPane(asSplit(defaultLayout()).children[1]!);
+    const once = layoutReducer(defaultLayout(), {
+      kind: "pin_mailbox",
+      pane: mid.id,
+      sessionId: "sess-1",
+    });
+    const twice = asSplit(
+      layoutReducer(once, {
+        kind: "pin_mailbox",
+        pane: mid.id,
+        sessionId: "sess-1",
+      }),
+    );
+    const nMid = asPane(twice.children[1]!);
+    expect(nMid.views).toHaveLength(4);
+    expect(nMid.views[3]).toEqual({ kind: "mailbox", sessionId: "sess-1" });
+  });
+});
+
+describe("layoutReducer close_tab", () => {
+  it("removes the view at the given index and shifts activeIndex", () => {
+    const mid = asPane(asSplit(defaultLayout()).children[1]!);
+    // mid is [mailbox, whiteboard]; close the whiteboard at index 1
+    const next = asSplit(
+      layoutReducer(defaultLayout(), {
+        kind: "close_tab",
+        pane: mid.id,
+        index: 1,
+      }),
+    );
+    const nMid = asPane(next.children[1]!);
+    expect(nMid.views.map((v) => v.kind)).toEqual(["mailbox"]);
+    expect(nMid.activeIndex).toBe(0);
+  });
+
+  it("is a no-op on the URL-focused mailbox singleton ({ kind:'mailbox' } with no sessionId)", () => {
+    const mid = asPane(asSplit(defaultLayout()).children[1]!);
+    // mid[0] is the URL-focused mailbox singleton — must not be closable.
+    const next = asSplit(
+      layoutReducer(defaultLayout(), {
+        kind: "close_tab",
+        pane: mid.id,
+        index: 0,
+      }),
+    );
+    const nMid = asPane(next.children[1]!);
+    expect(nMid.views.map((v) => v.kind)).toEqual(["mailbox", "whiteboard"]);
+  });
+
+  it("closes a pinned mailbox tab (with sessionId) even though the singleton is uncloseable", () => {
+    const mid = asPane(asSplit(defaultLayout()).children[1]!);
+    const withPin = layoutReducer(defaultLayout(), {
+      kind: "pin_mailbox",
+      pane: mid.id,
+      sessionId: "sess-1",
+    });
+    // mid now is [mailbox-singleton, whiteboard, mailbox#sess-1]
+    const closed = asSplit(
+      layoutReducer(withPin, {
+        kind: "close_tab",
+        pane: mid.id,
+        index: 2,
+      }),
+    );
+    const nMid = asPane(closed.children[1]!);
+    expect(nMid.views).toHaveLength(2);
+    expect(nMid.views.map((v) => v.kind)).toEqual(["mailbox", "whiteboard"]);
+  });
+
+  it("leaves the pane open (activeIndex null) when the last closable view is removed", () => {
+    // Construct a pane that contains only a pinned mailbox, then close it.
+    const mid = asPane(asSplit(defaultLayout()).children[1]!);
+    const withPin = layoutReducer(defaultLayout(), {
+      kind: "pin_mailbox",
+      pane: mid.id,
+      sessionId: "sess-1",
+    });
+    // Close whiteboard (index 1) then close pin (now index 1).
+    const a = layoutReducer(withPin, { kind: "close_tab", pane: mid.id, index: 1 });
+    const b = asSplit(layoutReducer(a, { kind: "close_tab", pane: mid.id, index: 1 }));
+    const nMid = asPane(b.children[1]!);
+    // Singleton mailbox remains because it's uncloseable.
+    expect(nMid.views.map((v) => v.kind)).toEqual(["mailbox"]);
+    expect(nMid.activeIndex).toBe(0);
+  });
+
+  it("clamps activeIndex when removing the active tab at the end of the list", () => {
+    const mid = asPane(asSplit(defaultLayout()).children[1]!);
+    const withPin = layoutReducer(defaultLayout(), {
+      kind: "pin_mailbox",
+      pane: mid.id,
+      sessionId: "sess-1",
+    });
+    // After pin: activeIndex = 2. Close index 2.
+    const closed = asSplit(
+      layoutReducer(withPin, { kind: "close_tab", pane: mid.id, index: 2 }),
+    );
+    const nMid = asPane(closed.children[1]!);
+    expect(nMid.activeIndex).toBe(1);
+  });
+});

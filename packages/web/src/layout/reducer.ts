@@ -8,6 +8,8 @@ export type Action =
   | { kind: "select_tab"; pane: string; index: number }
   | { kind: "resize"; splitPath: readonly number[]; sizes: readonly number[]; containerPx: number }
   | { kind: "open_view"; pane: string; view: ViewId }
+  | { kind: "pin_mailbox"; pane: string; sessionId: string }
+  | { kind: "close_tab"; pane: string; index: number }
   | {
       kind: "split_pane";
       pane: string;
@@ -16,6 +18,14 @@ export type Action =
       tab: { from: string; index: number };
     }
   | { kind: "reset" };
+
+// The URL-focused mailbox singleton — `{ kind: "mailbox" }` with no
+// sessionId — is uncloseable. Closing it would orphan URL focus, so close_tab
+// is a no-op on this exact shape and Tabs hides the × on it.
+export function isCloseable(view: ViewId): boolean {
+  if (view.kind !== "mailbox") return true;
+  return view.sessionId !== undefined;
+}
 
 export function layoutReducer(state: LayoutNode, action: Action): LayoutNode {
   switch (action.kind) {
@@ -31,6 +41,23 @@ export function layoutReducer(state: LayoutNode, action: Action): LayoutNode {
         views: [...p.views, action.view],
         activeIndex: p.views.length,
       }));
+    case "pin_mailbox":
+      return mapPane(state, action.pane, (p) => ({
+        ...p,
+        views: [...p.views, { kind: "mailbox", sessionId: action.sessionId }],
+        activeIndex: p.views.length,
+      }));
+    case "close_tab":
+      return mapPane(state, action.pane, (p) => {
+        const target = p.views[action.index];
+        if (target === undefined || !isCloseable(target)) return p;
+        const views = p.views.filter((_, i) => i !== action.index);
+        const activeIndex =
+          views.length === 0
+            ? null
+            : Math.max(0, Math.min(p.activeIndex ?? 0, views.length - 1));
+        return { ...p, views, activeIndex };
+      });
     case "split_pane":
       return splitPane(state, action.pane, action.direction, action.before, action.tab);
     case "reset":

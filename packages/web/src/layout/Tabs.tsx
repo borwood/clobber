@@ -30,12 +30,14 @@ interface TabDescriptor<T extends string> {
   readonly id: T;
   readonly label: ReactNode;
   readonly badge?: ReactNode;
+  readonly closable?: boolean;
 }
 
 interface CommonProps<T extends string> {
   readonly tabs: readonly TabDescriptor<T>[];
   readonly activeId: T | null;
   readonly onTabPointerDown?: ((index: number, e: ReactPointerEvent) => void) | undefined;
+  readonly onClose?: ((index: number) => void) | undefined;
   readonly ariaLabel?: string;
   readonly variant?: TabsVariant;
 }
@@ -56,23 +58,45 @@ interface AnchorTabsProps<T extends string> extends CommonProps<T> {
 type TabsProps<T extends string> = ButtonTabsProps<T> | AnchorTabsProps<T>;
 
 export function Tabs<T extends string>(props: TabsProps<T>) {
-  const { tabs, activeId, onTabPointerDown, ariaLabel, variant = "pane" } = props;
+  const { tabs, activeId, onTabPointerDown, onClose, ariaLabel, variant = "pane" } = props;
   const cls = VARIANTS[variant];
 
   return (
     <div role="tablist" aria-label={ariaLabel} className={cls.strip}>
       {tabs.map((t, i) => {
         const active = t.id === activeId;
-        const className = `${cls.base} ${active ? cls.active : cls.idle}`;
+        const className = `${cls.base} ${active ? cls.active : cls.idle} group inline-flex items-center`;
         const pointerDown = onTabPointerDown
           ? (e: ReactPointerEvent) => onTabPointerDown(i, e)
           : undefined;
+        // Span (not button) to avoid nesting an interactive element inside the
+        // tab's <button>/<a>. stopPropagation keeps the parent tab from also
+        // receiving select/drag events on close-click.
+        const closeButton =
+          t.closable === true && onClose !== undefined ? (
+            <span
+              role="button"
+              aria-label="Close tab"
+              title="Close tab"
+              data-tab-close="true"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onClose(i);
+              }}
+              className="ml-2 w-4 h-4 inline-flex items-center justify-center rounded text-zinc-500 hover:text-zinc-100 hover:bg-zinc-700 opacity-0 group-hover:opacity-100 focus:opacity-100 cursor-pointer"
+            >
+              ×
+            </span>
+          ) : null;
         const content = (
           <>
             {t.label}
             {t.badge !== undefined && (
               <span className="text-zinc-500 text-xs ml-2">{t.badge}</span>
             )}
+            {closeButton}
           </>
         );
 

@@ -4,6 +4,7 @@ import { Tabs } from "./Tabs.tsx";
 import { ViewHost, viewLabel } from "./ViewHost.tsx";
 import { useLayout } from "./provider.tsx";
 import { useWorkspace } from "./WorkspaceContext.tsx";
+import { isCloseable } from "./reducer.ts";
 import { usePointerDrag } from "./usePointerDrag.ts";
 import { PaneDropZones, type DropEdge } from "./PaneDropZones.tsx";
 
@@ -14,7 +15,7 @@ const BODY_CLASS = "flex-1 min-h-0 overflow-hidden flex flex-col";
 export function Pane(props: { readonly node: PaneNode }) {
   const { node } = props;
   const { dispatch, setTabDrag, tabDrag } = useLayout();
-  const { configOpen } = useWorkspace();
+  const { configOpen, sessions } = useWorkspace();
   const active = node.activeIndex === null ? null : node.views[node.activeIndex]!;
 
   // Refs survive across pointer events without re-rendering or being captured
@@ -67,7 +68,8 @@ export function Pane(props: { readonly node: PaneNode }) {
 
   const tabs = node.views.map((v, i) => ({
     id: String(i),
-    label: viewLabel(v),
+    label: viewLabel(v, sessions),
+    closable: isCloseable(v),
   }));
 
   return (
@@ -79,6 +81,7 @@ export function Pane(props: { readonly node: PaneNode }) {
           onSelect={(id) =>
             dispatch({ kind: "select_tab", pane: node.id, index: Number(id) })
           }
+          onClose={(i) => dispatch({ kind: "close_tab", pane: node.id, index: i })}
           onTabPointerDown={
             configOpen
               ? undefined
