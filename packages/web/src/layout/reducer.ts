@@ -1,5 +1,6 @@
 import type { LayoutNode, PaneNode, SplitNode, ViewId } from "./types.ts";
 import { defaultLayout } from "./default-layout.ts";
+import { closePane } from "./close-pane.ts";
 
 export const MIN_PANE_PX = 160;
 
@@ -18,6 +19,9 @@ export type Action =
       before: boolean;
       tab: { from: string; index: number };
     }
+  | { kind: "add_pane" }
+  | { kind: "load_layout"; tree: LayoutNode }
+  | { kind: "reopen_pane"; pane: PaneNode }
   | { kind: "reset" };
 
 // The URL-focused mailbox singleton — `{ kind: "mailbox" }` with no
@@ -63,6 +67,12 @@ export function layoutReducer(state: LayoutNode, action: Action): LayoutNode {
       return closePane(state, action.pane);
     case "split_pane":
       return splitPane(state, action.pane, action.direction, action.before, action.tab);
+    case "add_pane":
+      return appendPane(state, emptyPane());
+    case "load_layout":
+      return action.tree;
+    case "reopen_pane":
+      return appendPane(state, action.pane);
     case "reset":
       return defaultLayout();
     default: {
@@ -152,6 +162,27 @@ function newPaneId(): string {
   return `pane-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function emptyPane(): PaneNode {
+  return { kind: "pane", id: newPaneId(), views: [], activeIndex: null };
+}
+
+function appendPane(state: LayoutNode, child: PaneNode): LayoutNode {
+  if (state.kind === "pane") {
+    return {
+      kind: "split",
+      direction: "h",
+      children: [state, child],
+      sizes: [0.5, 0.5],
+    };
+  }
+  const n = state.children.length + 1;
+  return {
+    ...state,
+    children: [...state.children, child],
+    sizes: Array.from({ length: n }, () => 1 / n),
+  };
+}
+
 function splitPane(
   state: LayoutNode,
   targetId: string,
@@ -184,43 +215,6 @@ function splitPane(
     const children = before ? [created, existing] : [existing, created];
     return { kind: "split", direction, children, sizes: [0.5, 0.5] };
   });
-}
-
-// Remove the named pane. If its parent split is left with one child, the split
-// unwraps to that child — recursively, so chains of single-child splits
-// collapse in one pass. If the pane is the tree's only PaneNode, no-op (we
-// never end up with zero panes). Sizes are dropped on unwrap; the surviving
-// split keeps its sizes prorated to the remaining children.
-function closePane(state: LayoutNode, id: string): LayoutNode {
-  if (state.kind === "pane") return state; // root pane: no-op
-  if (!hasPane(state, id)) return state;
-  const next = removePane(state, id);
-  if (next === null) return state; // pane was the only one — no-op
-  return next;
-}
-
-function hasPane(node: LayoutNode, id: string): boolean {
-  if (node.kind === "pane") return node.id === id;
-  return node.children.some((c) => hasPane(c, id));
-}
-
-// Returns null if removal would empty the tree (caller should no-op).
-function removePane(node: LayoutNode, id: string): LayoutNode | null {
-  if (node.kind === "pane") return node.id === id ? null : node;
-  const kept: LayoutNode[] = [];
-  const keptSizes: number[] = [];
-  for (let i = 0; i < node.children.length; i++) {
-    const child = node.children[i]!;
-    const replaced = removePane(child, id);
-    if (replaced === null) continue;
-    kept.push(replaced);
-    keptSizes.push(node.sizes[i] ?? 1 / node.children.length);
-  }
-  if (kept.length === 0) return null;
-  if (kept.length === 1) return kept[0]!;
-  const sum = keptSizes.reduce((a, b) => a + b, 0);
-  const sizes = sum > 0 ? keptSizes.map((s) => s / sum) : kept.map(() => 1 / kept.length);
-  return { ...node, children: kept, sizes };
 }
 
 function applyResize(

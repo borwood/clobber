@@ -109,9 +109,9 @@ describe("App layout migration (#278)", () => {
     }
   });
 
-  it("header has a reset-layout button", async () => {
+  it("header has a layout menu", async () => {
     await renderAt("/w/workspace-a");
-    const btn = container.querySelector('[aria-label="Reset layout"]');
+    const btn = container.querySelector('[aria-label="Layout menu"]');
     expect(btn).not.toBeNull();
   });
 

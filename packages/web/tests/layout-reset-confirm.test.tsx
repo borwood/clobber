@@ -81,13 +81,23 @@ async function renderAt(pathname: string) {
   await flush();
 }
 
-function clickReset() {
-  const btn = container.querySelector<HTMLButtonElement>(
-    '[aria-label="Reset layout"]',
+async function clickReset() {
+  const menuBtn = container.querySelector<HTMLButtonElement>(
+    '[aria-label="Layout menu"]',
   );
-  if (btn === null) throw new Error("reset-layout button missing");
-  return act(async () => {
-    btn.dispatchEvent(
+  if (menuBtn === null) throw new Error("layout menu button missing");
+  await act(async () => {
+    menuBtn.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }),
+    );
+  });
+  const items = Array.from(
+    container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'),
+  );
+  const reset = items.find((b) => b.textContent?.trim() === "Reset layout");
+  if (reset === undefined) throw new Error("Reset layout menu item missing");
+  await act(async () => {
+    reset.dispatchEvent(
       new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }),
     );
   });
