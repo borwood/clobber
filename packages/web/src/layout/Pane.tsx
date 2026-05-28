@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import React, { useRef } from "react";
 import type { PaneNode } from "./types.ts";
 import { Tabs } from "./Tabs.tsx";
 import { ViewHost, viewLabel } from "./ViewHost.tsx";
@@ -91,6 +91,36 @@ export function Pane(props: { readonly node: PaneNode }) {
                 }
           }
           ariaLabel={`pane ${node.id}`}
+          trailing={
+            <>
+              <SplitButton
+                label="Split right"
+                onClick={() =>
+                  dispatch({
+                    kind: "split_pane",
+                    pane: node.id,
+                    direction: "h",
+                    before: false,
+                  })
+                }
+              >
+                <span aria-hidden="true" className="inline-block w-3 h-3 border border-current border-l-2" />
+              </SplitButton>
+              <SplitButton
+                label="Split down"
+                onClick={() =>
+                  dispatch({
+                    kind: "split_pane",
+                    pane: node.id,
+                    direction: "v",
+                    before: false,
+                  })
+                }
+              >
+                <span aria-hidden="true" className="inline-block w-3 h-3 border border-current border-t-2" />
+              </SplitButton>
+            </>
+          }
         />
       )}
       <div className={BODY_CLASS}>
@@ -121,6 +151,29 @@ export function Pane(props: { readonly node: PaneNode }) {
       </div>
       {tabDrag !== null && <PaneDropZones />}
     </div>
+  );
+}
+
+function SplitButton(props: {
+  readonly label: string;
+  readonly onClick: () => void;
+  readonly children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={props.label}
+      title={props.label}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        props.onClick();
+      }}
+      className="px-2 inline-flex items-center text-zinc-500 hover:text-zinc-100 hover:bg-zinc-900 focus-visible:outline focus-visible:outline-1 focus-visible:outline-zinc-500"
+    >
+      {props.children}
+    </button>
   );
 }
 

@@ -17,7 +17,9 @@ export type Action =
       pane: string;
       direction: "h" | "v";
       before: boolean;
-      tab: { from: string; index: number };
+      // Drag-driven splits move a tab into the new pane. Button-driven splits
+      // (per-pane split controls) omit `tab` to create an empty new pane.
+      tab?: { from: string; index: number };
     }
   | { kind: "add_pane" }
   | { kind: "load_layout"; tree: LayoutNode }
@@ -188,8 +190,16 @@ function splitPane(
   targetId: string,
   direction: "h" | "v",
   before: boolean,
-  tab: { from: string; index: number },
+  tab: { from: string; index: number } | undefined,
 ): LayoutNode {
+  if (tab === undefined) {
+    const created = emptyPane();
+    return replacePane(state, targetId, (existing) => {
+      const children = before ? [created, existing] : [existing, created];
+      return { kind: "split", direction, children, sizes: [0.5, 0.5] };
+    });
+  }
+
   const sourcePane = findPane(state, tab.from);
   if (!sourcePane) throw new Error(`split_pane: source pane ${tab.from} not found`);
   const view = sourcePane.views[tab.index];

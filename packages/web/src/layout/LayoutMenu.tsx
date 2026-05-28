@@ -8,16 +8,7 @@ import {
   saveSavedLayout,
   type ClosedPaneEntry,
 } from "./persistence.ts";
-import type { LayoutNode, PaneNode } from "./types.ts";
-
-function firstPaneId(node: LayoutNode): string | null {
-  if (node.kind === "pane") return node.id;
-  for (const c of node.children) {
-    const hit = firstPaneId(c);
-    if (hit !== null) return hit;
-  }
-  return null;
-}
+import type { PaneNode } from "./types.ts";
 
 export function LayoutMenu() {
   const { workspaceSlug, layout, dispatch } = useLayout();
@@ -63,19 +54,6 @@ export function LayoutMenu() {
 
   function onAddPane() {
     dispatch({ kind: "add_pane" });
-    close();
-  }
-
-  function onSplitVertical() {
-    const id = firstPaneId(layout);
-    if (id === null) return;
-    dispatch({
-      kind: "split_pane",
-      pane: id,
-      direction: "v",
-      before: false,
-      tab: { from: id, index: 0 },
-    });
     close();
   }
 
@@ -133,7 +111,6 @@ export function LayoutMenu() {
           className="absolute right-0 top-full mt-1 z-20 w-60 rounded border border-zinc-800 bg-zinc-950 shadow-lg py-1 text-sm"
         >
           <MenuItem onClick={onAddPane}>Add pane</MenuItem>
-          <MenuItem onClick={onSplitVertical}>Split current pane vertically</MenuItem>
           {renaming ? (
             <div className="px-3 py-1.5 flex items-center gap-2">
               <input
