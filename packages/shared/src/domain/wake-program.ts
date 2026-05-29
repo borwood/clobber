@@ -29,15 +29,45 @@ export const IDLE_WAKE_PROGRAM: WakeProgram = {
   user: null,
 };
 
+// Sentinel `user` value meaning "the opening kick is supplied by the caller at
+// invocation, not baked into the program". It is the third kick mode (alongside
+// a fixed string and `null` for no kick): a program that carries it contributes
+// only its layer-C `system`, and the kick falls through to the caller's prompt
+// (see `spawn-context.ts`). The only program that uses it is the engine-reserved
+// `cycle` program; authored programs (human prose) never carry the sentinel.
+export const CALLER_SUPPLIED_KICK = "<<caller-supplied-kick>>";
+
+// `cycle` is the second universal built-in (#320), reserved the same way as
+// `idle`: resolved by name as an engine constant, never stored per-role, and
+// un-authorable. It re-seats an agent into a fresh session — same identity, no
+// prior conversation. Its layer-C `system` tells the freshly-cycled embodiment
+// it has shed its working context deliberately and that continuity lives in its
+// office notes + the handoff kick; its kick is caller-supplied (the cycling
+// agent's `--prompt` handoff brief), the first wake-program to take a parameter.
+export const CYCLE_WAKE_PROGRAM_NAME = "cycle";
+export const CYCLE_WAKE_PROGRAM: WakeProgram = {
+  name: CYCLE_WAKE_PROGRAM_NAME,
+  system: [
+    "You are a freshly-cycled embodiment of this agent. You have NO prior",
+    "conversation — your predecessor shed its working context deliberately so",
+    "that you start clean. Your continuity does not live in this session's",
+    "history; it lives in your office notes and in the handoff brief that",
+    "follows as your opening turn. Read your office notes first, then act on the",
+    "handoff.",
+  ].join("\n"),
+  user: CALLER_SUPPLIED_KICK,
+};
+
 // Resolves a selected wake-program by name against a role's program list, with
-// `idle` overlaid as the universal built-in. Selecting nothing yields `idle`. A
-// name that matches neither the built-in nor a role program is unexpected data
-// → throw (no defensive default).
+// `idle` and `cycle` overlaid as the universal built-ins. Selecting nothing
+// yields `idle`. A name that matches neither a built-in nor a role program is
+// unexpected data → throw (no defensive default).
 export function resolveWakeProgram(
   programs: readonly WakeProgram[],
   name: string | undefined,
 ): WakeProgram {
   if (name === undefined || name === IDLE_WAKE_PROGRAM_NAME) return IDLE_WAKE_PROGRAM;
+  if (name === CYCLE_WAKE_PROGRAM_NAME) return CYCLE_WAKE_PROGRAM;
   const program = programs.find((p) => p.name === name);
   if (program === undefined) {
     throw new Error(`role has no wake-program named: ${name}`);
