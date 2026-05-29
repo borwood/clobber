@@ -74,4 +74,8 @@ export interface ServerOptions {
   // inside the server by future consumers (#320 cycle, #246 sticky tabs).
   readonly layoutEvents?: LayoutEventStore;
   readonly clock?: Clock;
+  // #349 git-as-truth — the directory the upstream role repo is materialized
+  // into. Optional: when set, the server boots the commit-pinned read path
+  // (materialize + content cache); when absent, embodiment stays row-backed.
+  readonly roleRepoDir?: string;
 }

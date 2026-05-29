@@ -2,6 +2,7 @@ import type { Session } from "@clobber/shared";
 import type { SpawnedAgentInfo } from "./types.ts";
 import { endSession } from "./session-lifecycle.ts";
 import { prepareSpawnContext } from "./spawn-context.ts";
+import { sessionPin } from "./embody-role.ts";
 import { isProviderThreadMissing, waitForRuntimeStartup } from "./runtime-startup.ts";
 import {
   bindLiveSession,
@@ -121,7 +122,7 @@ async function performResume(
     role,
     agent,
     sessionId: session.id,
-    versionId: session.role_version_id ?? role.current_version_id,
+    pin: sessionPin(session, role),
     prompt,
     // Re-compose the original opening move's layer C; the kick stays suppressed
     // because prepareSpawnContext gates it on mode === "resume".

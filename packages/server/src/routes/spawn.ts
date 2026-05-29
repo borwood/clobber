@@ -14,6 +14,7 @@ import type { AgentQuestionStore } from "../agent-question-store.ts";
 import type { AgentQuestionWaiter } from "../agent-question-waiter.ts";
 import type { RoleContractMigrator } from "../role-contract-compat.ts";
 import type { RoleContractRefusalStore } from "../role-contract-refusal-store.ts";
+import type { RoleContentCache } from "../role-content-cache.ts";
 import type { TriggerScheduler } from "../trigger-scheduler.ts";
 import { EffortLevelSchema } from "@clobber/shared";
 import { executeSpawn } from "../spawn-pipeline.ts";
@@ -48,6 +49,10 @@ export interface SpawnRouteDeps {
   readonly agentQuestionWaiter: AgentQuestionWaiter;
   readonly roleContractRefusals: RoleContractRefusalStore;
   readonly roleContractMigrator: RoleContractMigrator;
+  // #349 — git-as-truth read path, spread from the server boot config. Present
+  // when configured; embodiment of a commit-pinned role reads through the cache.
+  readonly roleContentCache?: RoleContentCache;
+  readonly roleRepoDir?: string;
   readonly scheduler: Pick<TriggerScheduler, "reloadAgent">;
   readonly onSessionEnded: (workspaceId: string, finishedSessionId: string) => void;
 }

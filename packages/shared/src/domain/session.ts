@@ -1,11 +1,16 @@
 import { z } from "zod";
+import { CommitRefSchema } from "./role.ts";
 
 export const SessionSchema = z.object({
   id: z.string().min(1),
   agent_id: z.string().uuid().optional(),
   workspace_id: z.string().uuid(),
   role_id: z.string().uuid(),
+  // The embodied pin, mirroring the role's two pin kinds (#349): a `role_versions`
+  // row id, OR a commit into the upstream role repo. Spawn captures whichever the
+  // role used so resume re-resolves the SAME content even if the role advances.
   role_version_id: z.string().uuid().optional(),
+  role_commit: CommitRefSchema.optional(),
   runtime_provider: z.string().min(1),
   provider_thread_id: z.string().min(1).optional(),
   // The wake-program this session was embodied with. Persisted so resume
@@ -33,6 +38,7 @@ export const CreateSessionRequestSchema = z.object({
   workspace_id: z.string().uuid(),
   role_id: z.string().uuid(),
   role_version_id: z.string().uuid().optional(),
+  role_commit: CommitRefSchema.optional(),
   runtime_provider: z.string().min(1).optional(),
   provider_thread_id: z.string().min(1).optional(),
   wake_program: z.string().min(1).optional(),

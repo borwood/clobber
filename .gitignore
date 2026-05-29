@@ -14,6 +14,7 @@ build/
 # clobber runtime data
 .clobber/
 data/
+clobber-role-repo/
 *.sqlite
 *.sqlite-journal
 *.db

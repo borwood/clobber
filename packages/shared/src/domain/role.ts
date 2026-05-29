@@ -40,6 +40,15 @@ export const SdlcProfileSchema = z
   );
 export type SdlcProfile = z.infer<typeof SdlcProfileSchema>;
 
+// #349 git-as-truth — a pin into the upstream role git repo: the fork branch
+// plus the exact tip sha embodiment reads its content back from. A git-backed
+// role carries `current_commit` instead of a `current_version_id` row pointer.
+export const CommitRefSchema = z.object({
+  branch: z.string().min(1),
+  sha: z.string().min(1),
+});
+export type CommitRef = z.infer<typeof CommitRefSchema>;
+
 export const RoleSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1),
@@ -49,7 +58,11 @@ export const RoleSchema = z.object({
   effort: EffortLevelSchema.optional(),
   persistent: z.boolean(),
   workspace_id: z.string().uuid().optional(),
+  // A role is pinned EITHER by a `role_versions` row (current_version_id, the
+  // pre-#349 store) OR by a commit into the upstream role repo (current_commit,
+  // git-as-truth). Embodiment dispatches on which is present.
   current_version_id: z.string().uuid().optional(),
+  current_commit: CommitRefSchema.optional(),
   created_at: z.number().int().nonnegative(),
 });
 export type Role = z.infer<typeof RoleSchema>;

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Database } from "bun:sqlite";
 import { loadRoleBundle } from "@clobber/runtime";
-import { RoleSchema, type Role, type CreateRoleRequest } from "@clobber/shared";
+import { RoleSchema, type CommitRef, type Role, type CreateRoleRequest } from "@clobber/shared";
 import { snapshotShippedBundle } from "./role-version-snapshot.ts";
 import { createRoleVersionStore } from "./role-version-store.ts";
 
@@ -14,6 +14,9 @@ export interface RoleStore {
   listForWorkspace(workspaceId: string): Role[];
   delete(id: string): boolean;
   updateDescription(id: string, description: string): void;
+  // #349 — pin a role to a commit in the upstream role repo (git-backed),
+  // clearing any row pointer. Embodiment then reads content from the tree at sha.
+  pinCommit(id: string, commit: CommitRef): void;
 }
 
 interface Row {
@@ -25,6 +28,8 @@ interface Row {
   persistent: number;
   workspace_id: string | null;
   current_version_id: string | null;
+  current_commit_branch: string | null;
+  current_commit_sha: string | null;
   created_at: number;
   current_version_allowed_tools_json: string | null;
 }
@@ -45,13 +50,20 @@ function rowToRole(row: Row): Role {
   if (row.effort !== null) parsed["effort"] = row.effort;
   if (row.workspace_id !== null) parsed["workspace_id"] = row.workspace_id;
   if (row.current_version_id !== null) parsed["current_version_id"] = row.current_version_id;
+  if (row.current_commit_branch !== null && row.current_commit_sha !== null) {
+    parsed["current_commit"] = {
+      branch: row.current_commit_branch,
+      sha: row.current_commit_sha,
+    };
+  }
   return RoleSchema.parse(parsed);
 }
 
 const ROLE_SELECT = `
   SELECT
     r.id, r.name, r.description, r.permission_mode, r.effort,
-    r.persistent, r.workspace_id, r.current_version_id, r.created_at,
+    r.persistent, r.workspace_id, r.current_version_id,
+    r.current_commit_branch, r.current_commit_sha, r.created_at,
     v.allowed_tools_json AS current_version_allowed_tools_json
   FROM roles r
   LEFT JOIN role_versions v ON v.id = r.current_version_id
@@ -65,6 +77,9 @@ export function createRoleStore(db: Database): RoleStore {
   );
   const setVersionStmt = db.prepare(
     "UPDATE roles SET current_version_id = ? WHERE id = ?",
+  );
+  const pinCommitStmt = db.prepare(
+    "UPDATE roles SET current_commit_branch = ?, current_commit_sha = ?, current_version_id = NULL WHERE id = ?",
   );
   const getStmt = db.prepare(`${ROLE_SELECT} WHERE r.id = ?`);
   const findByNameStmt = db.prepare(
@@ -150,6 +165,10 @@ export function createRoleStore(db: Database): RoleStore {
 
     updateDescription(id, description) {
       updateDescriptionStmt.run(description, id);
+    },
+
+    pinCommit(id, commit) {
+      pinCommitStmt.run(commit.branch, commit.sha, id);
     },
   };
 }
