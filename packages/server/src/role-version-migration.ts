@@ -238,7 +238,7 @@ function backfillRoleVersions(db: Database): void {
     }
     const allowedTools =
       row.allowed_tools === null
-        ? (loaded.manifest.allowedTools ?? [])
+        ? loaded.allowedTools
         : (JSON.parse(row.allowed_tools) as readonly string[]);
     const snapshot = snapshotShippedBundle({ loaded, allowedTools });
     const version = versions.create({

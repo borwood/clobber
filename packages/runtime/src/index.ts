@@ -10,5 +10,6 @@ export * from "./materialize-bundle.ts";
 export * from "./sdlc-profiles.ts";
 export { loadRoleBundle, enumerateShippedRoles } from "./role-bundles.ts";
 export { enumerateDefaultSeeds } from "./default-seeds.ts";
+export { baseRole } from "../roles/base/manifest.ts";
 export { managerRole } from "../roles/manager/manifest.ts";
 export { workerRole } from "../roles/worker/manifest.ts";

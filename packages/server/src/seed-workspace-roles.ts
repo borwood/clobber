@@ -68,9 +68,9 @@ function seedSingleRole(
 ): string {
   const id = randomUUID();
   const created_at = Date.now();
-  const allowedTools = shipped.manifest.allowedTools ?? [];
+  const allowedTools = shipped.allowedTools;
   const description = shipped.manifest.description;
-  const permissionMode = shipped.manifest.permissionMode ?? null;
+  const permissionMode = shipped.permissionMode ?? null;
   const effort = shipped.manifest.effort ?? null;
 
   deps.insertRole.run(

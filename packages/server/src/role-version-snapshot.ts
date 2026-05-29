@@ -1,7 +1,4 @@
-import { readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
-import { PLUGIN_HOOKS_REL, type LoadedRole } from "@clobber/runtime";
-import type { RoleSkill } from "@clobber/shared";
+import type { LoadedRole } from "@clobber/runtime";
 
 export interface RoleVersionSnapshot {
   readonly framing: string;
@@ -21,37 +18,23 @@ export interface SnapshotInputs {
   readonly allowedTools: readonly string[];
 }
 
+// Project a resolved (base ⊕ fork) role into a role-version field set. The
+// effective skills and hooks already live on the LoadedRole — composition
+// happened at load time — so this is a pure projection, no bundle re-reads.
+// `allowedTools` stays a caller input: a forked or edited role may embody a
+// narrower set than the bundle's effective tools.
 export function snapshotShippedBundle(inputs: SnapshotInputs): RoleVersionSnapshot {
   const { loaded, allowedTools } = inputs;
-  const pluginRoot = join(loaded.bundleRoot, loaded.manifest.pluginTemplatePath);
-
-  const skills = readSkills(join(pluginRoot, "skills"));
-  const hooksAbs = join(pluginRoot, PLUGIN_HOOKS_REL);
-  const hooks_json = readFileSync(hooksAbs, "utf8");
-
   return {
     framing: loaded.framing,
     system_prompt: loaded.systemPrompt,
-    skills_json: JSON.stringify(skills),
+    skills_json: JSON.stringify(loaded.skills),
     allowed_tools_json: JSON.stringify(allowedTools),
-    allowed_cli_commands_json: JSON.stringify([
-      ...loaded.manifest.allowedCliCommands,
-    ]),
-    hooks_json,
+    allowed_cli_commands_json: JSON.stringify([...loaded.manifest.allowedCliCommands]),
+    hooks_json: loaded.hooksJson,
     triggers_json: "[]",
     seed_refs_json: JSON.stringify(loaded.manifest.seedRefs ?? []),
     wake_programs_json: JSON.stringify(loaded.manifest.wakePrograms ?? []),
     default_wake_program: loaded.manifest.defaultWakeProgram ?? null,
   };
-}
-
-function readSkills(skillsDir: string): readonly RoleSkill[] {
-  const out: RoleSkill[] = [];
-  for (const entry of readdirSync(skillsDir, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    const skillFile = join(skillsDir, entry.name, "SKILL.md");
-    out.push({ name: entry.name, body: readFileSync(skillFile, "utf8") });
-  }
-  out.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-  return out;
 }

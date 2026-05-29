@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineRole } from "../../src/role-manifest/index.ts";
+import { baseRole } from "../base/manifest.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -13,6 +14,7 @@ const orientProgramSystem = readFileSync(join(HERE, "wake-programs/orient.md"), 
 
 export const managerRole = defineRole({
   root: HERE,
+  base: baseRole,
   manifest: {
     name: "manager",
     description:
@@ -23,8 +25,7 @@ export const managerRole = defineRole({
     allowedCliCommands: ["*"],
     persistent: true,
     defaultCeiling: 1,
-    permissionMode: "bypassPermissions",
-    allowedTools: ["Bash", "Read", "Edit", "Write", "Glob", "Grep"],
+    // permissionMode + allowedTools are inherited from `base` (#355).
     effort: "xhigh",
     // The manager alone receives the wisdom-pointer (the #166 boot-context
     // pointer, now a role-scoped seed): orchestration wisdom is a manager

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineRole } from "../../src/role-manifest/index.ts";
+import { baseRole } from "../base/manifest.ts";
 import { defaultSdlcProfile } from "../../src/sdlc-profiles.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -14,6 +15,7 @@ const taskProgramSystem = readFileSync(join(HERE, "wake-programs/task.md"), "utf
 
 export const workerRole = defineRole({
   root: HERE,
+  base: baseRole,
   manifest: {
     name: "worker",
     description:
@@ -24,8 +26,7 @@ export const workerRole = defineRole({
     allowedCliCommands: ["whoami", "ask", "status", "report"],
     persistent: false,
     defaultCeiling: 3,
-    permissionMode: "bypassPermissions",
-    allowedTools: ["Bash", "Read", "Edit", "Write", "Glob", "Grep"],
+    // permissionMode + allowedTools are inherited from `base` (#355).
     effort: "high",
     sdlc: defaultSdlcProfile,
     // No wisdom-pointer: that pointer is the manager's, and seeding it to every

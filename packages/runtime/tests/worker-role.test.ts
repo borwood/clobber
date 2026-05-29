@@ -6,7 +6,9 @@ import { workerRole, defaultSdlcProfile } from "../src/index.ts";
 describe("workerRole", () => {
   it("is ephemeral and runs in bypassPermissions for autonomy", () => {
     expect(workerRole.manifest.persistent).toBe(false);
-    expect(workerRole.manifest.permissionMode).toBe("bypassPermissions");
+    // permissionMode is inherited from base (#355) — assert the effective value.
+    expect(workerRole.manifest.permissionMode).toBeUndefined();
+    expect(workerRole.permissionMode).toBe("bypassPermissions");
   });
 
   it("defaults to high effort — execution still needs depth, but less than the manager's planning", () => {
@@ -20,7 +22,9 @@ describe("workerRole", () => {
   });
 
   it("exposes the standard SDLC toolset", () => {
-    const tools = new Set(workerRole.manifest.allowedTools ?? []);
+    // allowedTools is inherited from base (#355) — assert the effective value.
+    expect(workerRole.manifest.allowedTools).toBeUndefined();
+    const tools = new Set(workerRole.allowedTools);
     for (const t of ["Bash", "Read", "Edit", "Write", "Glob", "Grep"]) {
       expect(tools.has(t)).toBe(true);
     }
@@ -84,14 +88,14 @@ describe("workerRole", () => {
     }
   });
 
-  it("ships hooks/hooks.json with the __CLOBBER_HOOK_URL__ placeholder", () => {
+  it("inherits the hooks mechanism from base (#355) — no own copy on disk", () => {
     const pluginRoot = join(
       workerRole.bundleRoot,
       workerRole.manifest.pluginTemplatePath,
     );
-    const hooksPath = join(pluginRoot, "hooks", "hooks.json");
-    expect(existsSync(hooksPath)).toBe(true);
-    const raw = readFileSync(hooksPath, "utf8");
+    // The fork no longer ships its own hooks file; it inherits base's.
+    expect(existsSync(join(pluginRoot, "hooks", "hooks.json"))).toBe(false);
+    const raw = workerRole.hooksJson;
     expect(raw).toContain("__CLOBBER_HOOK_URL__");
     const parsed = JSON.parse(raw) as { hooks?: Record<string, unknown> };
     expect(parsed.hooks).toBeDefined();
