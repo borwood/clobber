@@ -15,6 +15,7 @@ import { createWorkspaceSessionSummaries } from "./workspace-session-summaries.t
 import { createSessionTokenStore } from "./session-token-store.ts";
 import { createAgentStatusStore } from "./agent-status-store.ts";
 import { createAgentStatusLogStore } from "./agent-status-log-store.ts";
+import { createRoleContractRefusalStore } from "./role-contract-refusal-store.ts";
 import { createAgentQuestionStore } from "./agent-question-store.ts";
 import { createAgentQuestionWaiter } from "./agent-question-waiter.ts";
 import { createTriggerDispatchStore } from "./trigger-dispatch-store.ts";
@@ -84,6 +85,7 @@ const sessionSummaries = createWorkspaceSessionSummaries(db);
 const sessionTokens = createSessionTokenStore(db);
 const agentStatuses = createAgentStatusStore(db);
 const agentStatusLog = createAgentStatusLogStore(db);
+const roleContractRefusals = createRoleContractRefusalStore(db);
 const agentQuestions = createAgentQuestionStore(db);
 const agentQuestionWaiter = createAgentQuestionWaiter();
 const dispatches = createTriggerDispatchStore(db);
@@ -110,6 +112,7 @@ const app = createServer({
   sessionTokens,
   agentStatuses,
   agentStatusLog,
+  roleContractRefusals,
   agentQuestions,
   agentQuestionWaiter,
   dispatches,

@@ -201,6 +201,21 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_trigger_dispatches_workspace
     ON trigger_dispatches(workspace_id, fired_at DESC);
 
+  CREATE TABLE IF NOT EXISTS role_contract_refusals (
+    id                        INTEGER PRIMARY KEY AUTOINCREMENT,
+    workspace_id              TEXT    NOT NULL,
+    agent_id                  TEXT,
+    role_id                   TEXT    NOT NULL,
+    role_name                 TEXT    NOT NULL,
+    role_version_id           TEXT    NOT NULL,
+    authored_contract_version INTEGER NOT NULL,
+    engine_contract_version   INTEGER NOT NULL,
+    created_at                INTEGER NOT NULL,
+    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_role_contract_refusals_workspace
+    ON role_contract_refusals(workspace_id, created_at DESC);
+
   CREATE TABLE IF NOT EXISTS final_report_consumer_state (
     workspace_id     TEXT    PRIMARY KEY,
     last_consumed_id INTEGER NOT NULL DEFAULT 0,

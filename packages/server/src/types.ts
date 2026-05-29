@@ -16,6 +16,8 @@ import type { WorkspaceSessionSummaries } from "./workspace-session-summaries.ts
 import type { SessionTokenStore } from "./session-token-store.ts";
 import type { AgentStatusStore } from "./agent-status-store.ts";
 import type { AgentStatusLogStore } from "./agent-status-log-store.ts";
+import type { RoleContractMigrator } from "./role-contract-compat.ts";
+import type { RoleContractRefusalStore } from "./role-contract-refusal-store.ts";
 import type { AgentQuestionStore } from "./agent-question-store.ts";
 import type { AgentQuestionWaiter } from "./agent-question-waiter.ts";
 import type { TriggerDispatchStore } from "./trigger-dispatch-store.ts";
@@ -50,9 +52,16 @@ export interface ServerOptions {
   readonly sessionTokens: SessionTokenStore;
   readonly agentStatuses: AgentStatusStore;
   readonly agentStatusLog: AgentStatusLogStore;
+  // The #237 contract-gate refusal sink. Optional with an internal default
+  // (constructed from `db`) so existing callers are untouched.
+  readonly roleContractRefusals?: RoleContractRefusalStore;
   readonly agentQuestions: AgentQuestionStore;
   readonly agentQuestionWaiter: AgentQuestionWaiter;
   readonly askTimeoutMs?: number;
+  // The #237 contract-gate migration seam. Optional with an internal default
+  // (the empty migrator) so existing callers are untouched; #238 / a fork can
+  // inject a populated one.
+  readonly roleContractMigrator?: RoleContractMigrator;
   readonly runtimeProvider?: RuntimeProvider;
   readonly spawner: AgentSpawner;
   readonly hookUrl: string;

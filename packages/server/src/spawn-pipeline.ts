@@ -12,6 +12,9 @@ import type { RoleStore } from "./role-store.ts";
 import type { RoleVersionStore } from "./role-version-store.ts";
 import type { AgentQuestionStore } from "./agent-question-store.ts";
 import type { AgentQuestionWaiter } from "./agent-question-waiter.ts";
+import type { RoleContractMigrator } from "./role-contract-compat.ts";
+import type { RoleContractRefusalStore } from "./role-contract-refusal-store.ts";
+import { gateRoleContract } from "./spawn-contract-gate.ts";
 import { endSession } from "./session-lifecycle.ts";
 import { prepareSpawnContext, type SpawnContext } from "./spawn-context.ts";
 import { bindRuntimeEvents } from "./runtime-event-binder.ts";
@@ -32,6 +35,10 @@ export interface SpawnPipelineDeps {
   readonly runtimeProvider: RuntimeProvider;
   readonly agentQuestions: AgentQuestionStore;
   readonly agentQuestionWaiter: AgentQuestionWaiter;
+  // The #237 contract gate's durable refusal sink + the injected #238 migration
+  // seam (v1 empty). The gate fires on the fresh-attach path.
+  readonly roleContractRefusals: RoleContractRefusalStore;
+  readonly roleContractMigrator: RoleContractMigrator;
   // Fired once, on the reaper call that actually transitions a session to
   // ended, so a crash / non-zero exit (where no SessionEnd hook arrives) still
   // wakes a manager declaring a `session-ended` trigger. Injected late by the
@@ -75,10 +82,25 @@ export interface SpawnPipelineNoBundleError {
   readonly role: string;
 }
 
+// #237 — the contract gate refused: the pinned role version was authored under a
+// contract version the engine does not match and no migration bridges it. The
+// cause travels back to the caller (the manager, when it spawns) and is mirrored
+// in a `role-contract-incompatible` audit row.
+export interface SpawnPipelineRoleContractError {
+  readonly ok: false;
+  readonly status: 409;
+  readonly error: "role-contract-incompatible";
+  readonly role: string;
+  readonly role_version_id: string;
+  readonly authored_contract_version: number;
+  readonly engine_contract_version: number;
+}
+
 export type SpawnPipelineResult =
   | SpawnPipelineSuccess
   | SpawnPipelineCapacityError
-  | SpawnPipelineNoBundleError;
+  | SpawnPipelineNoBundleError
+  | SpawnPipelineRoleContractError;
 
 export async function executeSpawn(
   deps: SpawnPipelineDeps,
@@ -138,10 +160,17 @@ export interface AttachSessionInput {
 export async function attachSessionToAgent(
   deps: SpawnPipelineDeps,
   input: AttachSessionInput,
-): Promise<SpawnPipelineSuccess | SpawnPipelineNoBundleError> {
+): Promise<
+  SpawnPipelineSuccess | SpawnPipelineNoBundleError | SpawnPipelineRoleContractError
+> {
   const { workspace, role, agent, prompt, promptTag, wakeProgram, briefing, effortOverride } = input;
   const sessionId = randomUUID();
   const versionId = role.current_version_id;
+
+  // #237 — gate the contract before embodying (refuse-with-signal lives in the
+  // gate module). The fresh-attach path is the spawn boundary.
+  const refusal = gateRoleContract(deps, { workspace, role, agent, versionId });
+  if (refusal !== null) return refusal;
 
   const prepared = await prepareSpawnContext(deps, {
     mode: "attach",

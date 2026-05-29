@@ -20,6 +20,7 @@ import { createWorkspaceSessionSummaries } from "../src/workspace-session-summar
 import { createSessionTokenStore } from "../src/session-token-store.ts";
 import { createAgentStatusStore } from "../src/agent-status-store.ts";
 import { createAgentStatusLogStore } from "../src/agent-status-log-store.ts";
+import { createRoleContractRefusalStore } from "../src/role-contract-refusal-store.ts";
 import { createAgentQuestionStore } from "../src/agent-question-store.ts";
 import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
@@ -114,6 +115,7 @@ export function buildHarness(runtimeProvider: RuntimeProvider): Harness {
     sessionTokens,
     agentStatuses: createAgentStatusStore(db),
     agentStatusLog: createAgentStatusLogStore(db),
+    roleContractRefusals: createRoleContractRefusalStore(db),
     agentQuestions: createAgentQuestionStore(db),
     agentQuestionWaiter: createAgentQuestionWaiter(),
     runtimeProvider,
