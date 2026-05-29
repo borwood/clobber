@@ -13,6 +13,7 @@ import { askCommand } from "./commands/ask.ts";
 import { rolesCommand } from "./commands/roles.ts";
 import { workspaceCommand } from "./commands/workspace.ts";
 import { selfSkillsCommand } from "./commands/self-skills.ts";
+import { dbDryRunCommand } from "./commands/db-dryrun.ts";
 import { readEnv, CliEnvError } from "./env.ts";
 import { CliHttpError } from "./http.ts";
 import { CliUsageError } from "./usage-error.ts";
@@ -42,6 +43,7 @@ function buildRegistry(): CommandRegistry {
   registry.register(rolesCommand);
   registry.register(workspaceCommand);
   registry.register(selfSkillsCommand);
+  registry.register(dbDryRunCommand);
   return registry;
 }
 
@@ -96,10 +98,21 @@ export async function run(opts: RunOptions): Promise<number> {
     return 0;
   }
 
-  const env = readEnv(opts.env);
+  // Server commands resolve the agent env eagerly so a missing token fails fast
+  // (and, for direct-arg verbs, before any command logic runs). Local dev
+  // commands never reach the server, so they skip it; the getter throws loudly
+  // if such a command mistakenly reads `ctx.env`.
+  const env = command.local === true ? null : readEnv(opts.env);
   try {
     return await command.run({
-      env,
+      get env() {
+        if (env === null) {
+          throw new CliUsageError(
+            `${command.name} is a local command and does not use the agent API`,
+          );
+        }
+        return env;
+      },
       args: rest,
       stdout: opts.stdout,
       stderr: opts.stderr,

@@ -21,3 +21,19 @@ export function resolveDatabasePath(input: ResolveDatabasePathInput): string {
   const repoRoot = resolve(serverIndexDir, "../../..");
   return resolve(repoRoot, "clobber.db");
 }
+
+// Resolves the live database path the way the server boot does, but anchored on
+// this module so callers outside the server (e.g. the `clobber` CLI) get the
+// same `<repo-root>/clobber.db` default without knowing the server entrypoint's
+// location. `db-path.ts` sits beside `index.ts`, so the `../../..` hop lands on
+// the same repo root.
+export function resolveDefaultDatabasePath(
+  env: NodeJS.ProcessEnv,
+  cwd: string,
+): string {
+  return resolveDatabasePath({
+    envValue: env["CLOBBER_DB"],
+    serverIndexUrl: import.meta.url,
+    cwd,
+  });
+}

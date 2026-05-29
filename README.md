@@ -39,4 +39,27 @@ packages/
   cli/      # `clobber` binary agents shell out to
 ```
 
+## Rehearsing a DB migration
+
+`createDatabase` runs an ordered set of schema migrations on boot. Fresh databases get every
+column from the `CREATE TABLE` schema, so the suite's `:memory:` migration tests never exercise the
+*existing-DB upgrade path* — the gap that let #339 ship green and crash on the first real boot.
+
+Two guards close it:
+
+- **Existing-DB harness** — `packages/server/src/migration-harness.ts` exposes `buildAndRegress`
+  (build a populated current-schema DB → surgically downgrade it → close, so a test can reopen
+  through the real `createDatabase`) plus `captureShape`/`diffShapes`. Add a "migrate a DB shaped
+  like X" case in `packages/server/tests/migration-harness.test.ts`.
+- **One-command dry-run against real data** — rehearse the current code's migrations on a *copy* of
+  the live database before they touch the original:
+
+  ```
+  bun packages/cli/src/index.ts db-dryrun        # or: clobber db-dryrun
+  ```
+
+  It opens the live `clobber.db` **read-only**, snapshots it to a temp copy via `VACUUM INTO`, runs
+  the full migration sequence on the copy, and prints the schema diff. The live file is never
+  written. `--db <path>` targets another database; `--keep` retains the migrated copy for inspection.
+
 See `CLAUDE.md` for engineering rules and `docs/architecture/agent-model.md` for the design north-star (vocabulary in depth, IPC directions, session lifecycle, manager-as-workspace-shell, roles-as-data v2 scope).
