@@ -56,6 +56,7 @@ describe("clobber tag-interpretation guidance (#262)", () => {
       "spawn-prompt",
       "live-inject",
       "interrupt-notice",
+      "tool-token",
     ];
     for (const member of perKindMembers) {
       expect(CLOBBER_TAG_INTERPRETATION_GUIDANCE).not.toContain(`type="${member}"`);

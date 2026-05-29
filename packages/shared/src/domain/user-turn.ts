@@ -12,7 +12,8 @@ export type UserTurnKind =
   | "ask-answer"
   | "spawn-prompt"
   | "live-inject"
-  | "interrupt-notice";
+  | "interrupt-notice"
+  | "tool-token";
 
 export interface ClobberPromptTag {
   readonly kind: UserTurnKind;

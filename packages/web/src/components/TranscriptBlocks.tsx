@@ -31,7 +31,7 @@ export function UserBubble({ line }: { line: UserLine }) {
 }
 
 // A user-turn that clobber synthesized (wake-kick / trigger / ask-answer /
-// spawn-prompt / live-inject / interrupt-notice). Rendered with a distinct
+// spawn-prompt / live-inject / interrupt-notice / tool-token). Rendered with a distinct
 // amber-tinted column + provenance badge so a scroll-back makes "what I typed"
 // versus "what clobber injected" obvious at a glance. Composer turns stay
 // untagged and render through the plain `UserBubble` above.
