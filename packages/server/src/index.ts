@@ -30,6 +30,10 @@ const DB_PATH = resolveDatabasePath({
   serverIndexUrl: import.meta.url,
   cwd: process.cwd(),
 });
+// #349 — the upstream role repo lives in the data dir beside the database. An
+// in-memory database has no data dir, so git-as-truth stays off there.
+const ROLE_REPO_DIR =
+  DB_PATH === ":memory:" ? undefined : resolve(dirname(DB_PATH), "clobber-role-repo");
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI_ENTRY = resolve(HERE, "../../cli/src/index.ts");
@@ -122,6 +126,7 @@ const app = createServer({
   hookUrl: HOOK_URL,
   apiBase: API_BASE,
   cliEntry: CLI_ENTRY,
+  ...(ROLE_REPO_DIR === undefined ? {} : { roleRepoDir: ROLE_REPO_DIR }),
 });
 await app.listen({ port: PORT, host: "127.0.0.1" });
 console.log(`clobber-server listening on ${API_BASE} (db: ${DB_PATH})`);

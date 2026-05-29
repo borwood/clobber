@@ -26,8 +26,8 @@ import { createFinalReportConsumer } from "./final-report-consumer.ts";
 import { attachSessionToAgent, type SpawnPipelineDeps } from "./spawn-pipeline.ts";
 import { ROLE_CONTRACT_MIGRATOR } from "./role-contract-migration.ts";
 import { createRoleContractRefusalStore } from "./role-contract-refusal-store.ts";
-import { runBootRoleContractSweep } from "./role-contract-sweep.ts";
 import { resumeSessionTurn, resumeEndedSession } from "./resume-pipeline.ts";
+import { bootServerRoles } from "./boot-server-roles.ts";
 import { createSystemClock } from "./clock.ts";
 
 export type {
@@ -50,8 +50,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     opts.runtimeProvider === undefined ? claudeRuntimeProvider : opts.runtimeProvider;
   // The #237 contract gate's migration seam, filled by the #238 framework.
   // Defaults to the real forward-only migrator (zero real steps at contract v1,
-  // so it still declines every mismatch today); a fork can inject its own
-  // migrator without touching the spawn boundary.
+  // so it still declines every mismatch today); a fork can inject its own.
   const roleContractMigrator =
     opts.roleContractMigrator === undefined
       ? ROLE_CONTRACT_MIGRATOR
@@ -61,11 +60,10 @@ export function createServer(opts: ServerOptions): FastifyInstance {
       ? createRoleContractRefusalStore(opts.db)
       : opts.roleContractRefusals;
 
-  // #239 — the engine-adopt sweep: at boot re-check every adopted role version
-  // against the engine's contract through the SHARED migrator (same instance the
-  // spawn pipeline uses below). Incompatible → quarantined as a refusal row;
-  // boot is never wedged. Runs before routes so the audit is current at go-live.
-  runBootRoleContractSweep({
+  // Boot-time role wiring (before routes): #239 contract sweep + #349 git-as-truth.
+  const roleEmbodiment = bootServerRoles({
+    db: opts.db,
+    roleRepoDir: opts.roleRepoDir,
     workspaces: opts.workspaces,
     workspaceRoles: opts.workspaceRoles,
     roleVersions: opts.roleVersions,
@@ -73,9 +71,8 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     migrator: roleContractMigrator,
   });
 
-  // Declared before construction so the spawn-pipeline's onSessionEnded can
-  // reference it without a circular dependency — the scheduler in turn closes
-  // over spawnPipelineDeps for attachSession. Both resolve by call time.
+  // Declared before construction so onSessionEnded can reference it without a
+  // circular dependency — the scheduler closes over spawnPipelineDeps in turn.
   let scheduler: ReturnType<typeof createTriggerScheduler>;
   const onSessionEnded = (workspaceId: string, finishedSessionId: string): void => {
     void scheduler.fireSessionEnded(workspaceId, finishedSessionId);
@@ -97,6 +94,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     registry,
     roles: opts.roles,
     roleVersions: opts.roleVersions,
+    ...roleEmbodiment,
     runtimeProvider,
     agentQuestions: opts.agentQuestions,
     agentQuestionWaiter: opts.agentQuestionWaiter,
@@ -185,6 +183,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     agentQuestionWaiter: opts.agentQuestionWaiter,
     roleContractRefusals: roleContractRefusals,
     roleContractMigrator,
+    ...roleEmbodiment,
     runtimeProvider,
     scheduler,
     onSessionEnded,
@@ -212,6 +211,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     sessions: opts.sessions,
     registry,
     agentStatuses: opts.agentStatuses,
+    ...roleEmbodiment,
   });
   registerRoleRoutes(app, { roles: opts.roles });
   registerWorkspaceRoleRoutes(app, {

@@ -28,6 +28,8 @@ interface Row {
   workspace_id: string;
   role_id: string;
   role_version_id: string | null;
+  role_commit_branch: string | null;
+  role_commit_sha: string | null;
   runtime_provider: string;
   provider_thread_id: string | null;
   wake_program: string | null;
@@ -51,6 +53,9 @@ function rowToSession(row: Row): Session {
   };
   if (row.agent_id !== null) input["agent_id"] = row.agent_id;
   if (row.role_version_id !== null) input["role_version_id"] = row.role_version_id;
+  if (row.role_commit_branch !== null && row.role_commit_sha !== null) {
+    input["role_commit"] = { branch: row.role_commit_branch, sha: row.role_commit_sha };
+  }
   if (row.provider_thread_id !== null) {
     input["provider_thread_id"] = row.provider_thread_id;
   }
@@ -68,8 +73,8 @@ function rowToSession(row: Row): Session {
 export function createSessionStore(db: Database): SessionStore {
   const insertStmt = db.prepare(
     `INSERT INTO sessions
-       (id, agent_id, workspace_id, role_id, role_version_id, runtime_provider, provider_thread_id, wake_program, label, pid, started_at, ended_at, transcript_path, composed_system_prompt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+       (id, agent_id, workspace_id, role_id, role_version_id, role_commit_branch, role_commit_sha, runtime_provider, provider_thread_id, wake_program, label, pid, started_at, ended_at, transcript_path, composed_system_prompt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
   );
   const getStmt = db.prepare("SELECT * FROM sessions WHERE id = ?");
   const countActiveStmt = db.prepare(
@@ -111,6 +116,10 @@ export function createSessionStore(db: Database): SessionStore {
       const started_at = Date.now();
       const role_version_id =
         req.role_version_id === undefined ? null : req.role_version_id;
+      const role_commit_branch =
+        req.role_commit === undefined ? null : req.role_commit.branch;
+      const role_commit_sha =
+        req.role_commit === undefined ? null : req.role_commit.sha;
       const runtime_provider =
         req.runtime_provider === undefined ? "claude" : req.runtime_provider;
       const provider_thread_id =
@@ -127,6 +136,8 @@ export function createSessionStore(db: Database): SessionStore {
         req.workspace_id,
         req.role_id,
         role_version_id,
+        role_commit_branch,
+        role_commit_sha,
         runtime_provider,
         provider_thread_id,
         wake_program,
@@ -146,6 +157,7 @@ export function createSessionStore(db: Database): SessionStore {
         started_at,
       };
       if (req.role_version_id !== undefined) out["role_version_id"] = req.role_version_id;
+      if (req.role_commit !== undefined) out["role_commit"] = req.role_commit;
       if (req.provider_thread_id !== undefined) {
         out["provider_thread_id"] = req.provider_thread_id;
       }

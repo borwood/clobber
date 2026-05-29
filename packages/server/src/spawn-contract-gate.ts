@@ -1,15 +1,16 @@
 import { ENGINE_CONTRACT_VERSION, type Agent, type Role, type Workspace } from "@clobber/shared";
 import { checkRoleContractCompat } from "./role-contract-compat.ts";
+import type { RolePin } from "./embody-role.ts";
 import type { SpawnPipelineDeps, SpawnPipelineRoleContractError } from "./spawn-pipeline.ts";
 
 export interface GateRoleContractInput {
   readonly workspace: Workspace;
   readonly role: Role;
   readonly agent: Agent;
-  // The version about to be embodied. Undefined (role has no current version)
-  // falls through to prepareSpawnContext's no-bundle refusal — not this gate's
-  // concern.
-  readonly versionId: string | undefined;
+  // The pin about to be embodied. Null (no current version) falls through to
+  // prepareSpawnContext's no-bundle refusal. A commit pin (#349) is git-backed
+  // and current by construction, so only a `version` pin reaches the compat check.
+  readonly pin: RolePin | null;
 }
 
 // #237 — the contract gate on the fresh-attach (spawn) boundary. Reads the
@@ -22,9 +23,9 @@ export function gateRoleContract(
   deps: SpawnPipelineDeps,
   input: GateRoleContractInput,
 ): SpawnPipelineRoleContractError | null {
-  const { workspace, role, agent, versionId } = input;
-  if (versionId === undefined) return null;
-  const version = deps.roleVersions.get(versionId);
+  const { workspace, role, agent, pin } = input;
+  if (pin === null || pin.kind !== "version") return null;
+  const version = deps.roleVersions.get(pin.versionId);
   if (version === null) return null;
 
   const verdict = checkRoleContractCompat({

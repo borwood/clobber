@@ -9,6 +9,7 @@ import { migrateSessionWasLive } from "./session-was-live-migration.ts";
 import { migrateSessionComposedPrompt } from "./session-composed-prompt-migration.ts";
 import { migrateRoleAllowedToolsColumnDrop } from "./role-allowed-tools-column-drop-migration.ts";
 import { migrateRoleContractVersion } from "./role-contract-version-migration.ts";
+import { migrateRoleCommitPin } from "./role-commit-pin-migration.ts";
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS events (
@@ -44,6 +45,8 @@ const SCHEMA = `
     persistent         INTEGER NOT NULL,
     workspace_id       TEXT,
     current_version_id TEXT,
+    current_commit_branch TEXT,
+    current_commit_sha    TEXT,
     created_at         INTEGER NOT NULL,
     UNIQUE (workspace_id, name),
     FOREIGN KEY (workspace_id)       REFERENCES workspaces(id)     ON DELETE CASCADE
@@ -100,6 +103,8 @@ const SCHEMA = `
     workspace_id    TEXT    NOT NULL,
     role_id         TEXT    NOT NULL,
     role_version_id TEXT,
+    role_commit_branch TEXT,
+    role_commit_sha    TEXT,
     runtime_provider  TEXT NOT NULL DEFAULT 'claude',
     provider_thread_id TEXT,
     wake_program    TEXT,
@@ -221,6 +226,13 @@ const SCHEMA = `
     last_consumed_id INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS materialized_role_cache (
+    sha              TEXT    PRIMARY KEY,
+    contract_json    TEXT    NOT NULL,
+    contract_version INTEGER NOT NULL,
+    created_at       INTEGER NOT NULL
+  );
 `;
 
 export function createDatabase(path: string): Database {
@@ -242,6 +254,7 @@ export function createDatabase(path: string): Database {
   migrateSessionWasLive(db);
   migrateSessionComposedPrompt(db);
   migrateRoleAllowedToolsColumnDrop(db);
+  migrateRoleCommitPin(db);
   return db;
 }
 

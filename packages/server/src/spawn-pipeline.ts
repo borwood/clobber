@@ -18,6 +18,8 @@ import { gateRoleContract } from "./spawn-contract-gate.ts";
 import { endSession } from "./session-lifecycle.ts";
 import { prepareSpawnContext, type SpawnContext } from "./spawn-context.ts";
 import { bindRuntimeEvents } from "./runtime-event-binder.ts";
+import { embodyRole, rolePin } from "./embody-role.ts";
+import type { RoleContentCache } from "./role-content-cache.ts";
 
 export interface SpawnPipelineDeps {
   readonly workspaces: WorkspaceStore;
@@ -32,6 +34,11 @@ export interface SpawnPipelineDeps {
   readonly registry: AgentRegistry;
   readonly roles: RoleStore;
   readonly roleVersions: RoleVersionStore;
+  // #349 git-as-truth — present when the upstream role repo is materialized
+  // (boot wires it). Embodiment reads commit-pinned roles through the cache;
+  // a commit pin with these absent is a misconfiguration (embodyRole throws).
+  readonly roleContentCache?: RoleContentCache;
+  readonly roleRepoDir?: string;
   readonly runtimeProvider: RuntimeProvider;
   readonly agentQuestions: AgentQuestionStore;
   readonly agentQuestionWaiter: AgentQuestionWaiter;
@@ -139,8 +146,7 @@ export async function executeSpawn(
 // A role's declared default opening move for a fresh spawn, or undefined (→
 // idle) when it declares none.
 function defaultWakeProgramFor(deps: SpawnPipelineDeps, role: Role): string | undefined {
-  if (role.current_version_id === undefined) return undefined;
-  const bundle = deps.roleVersions.loadAsBundle(role.current_version_id);
+  const bundle = embodyRole(role, rolePin(role), deps);
   if (bundle === null) return undefined;
   return bundle.defaultWakeProgram;
 }
@@ -165,11 +171,13 @@ export async function attachSessionToAgent(
 > {
   const { workspace, role, agent, prompt, promptTag, wakeProgram, briefing, effortOverride } = input;
   const sessionId = randomUUID();
-  const versionId = role.current_version_id;
+  const pin = rolePin(role);
 
   // #237 — gate the contract before embodying (refuse-with-signal lives in the
-  // gate module). The fresh-attach path is the spawn boundary.
-  const refusal = gateRoleContract(deps, { workspace, role, agent, versionId });
+  // gate module). The fresh-attach path is the spawn boundary. A commit-pinned
+  // (git-backed) role is materialized by the current engine, so the gate only
+  // applies to row-pinned versions (#349).
+  const refusal = gateRoleContract(deps, { workspace, role, agent, pin });
   if (refusal !== null) return refusal;
 
   const prepared = await prepareSpawnContext(deps, {
@@ -178,7 +186,7 @@ export async function attachSessionToAgent(
     role,
     agent,
     sessionId,
-    versionId,
+    pin,
     prompt,
     ...(promptTag === undefined ? {} : { promptTag }),
     ...(wakeProgram === undefined ? {} : { wakeProgram }),
@@ -197,7 +205,11 @@ export async function attachSessionToAgent(
     agent_id: agent.id,
     workspace_id: workspace.id,
     role_id: role.id,
-    role_version_id: versionId,
+    // Capture the embodied pin so resume re-resolves the SAME content (#349).
+    ...(pin !== null && pin.kind === "version" ? { role_version_id: pin.versionId } : {}),
+    ...(pin !== null && pin.kind === "commit"
+      ? { role_commit: { branch: pin.branch, sha: pin.sha } }
+      : {}),
     runtime_provider: deps.runtimeProvider.id,
     ...(providerThreadId === undefined ? {} : { provider_thread_id: providerThreadId }),
     // Persist the opening move so resume re-composes the same layer-C addon.

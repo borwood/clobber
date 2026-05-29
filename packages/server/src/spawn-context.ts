@@ -15,6 +15,7 @@ import { OFFICE_NOTES_SKILL } from "./office-notes-skill.ts";
 import { deskDirFor, writeBriefingPacket } from "./desk-store.ts";
 import { generateTokenValue } from "./session-token-store.ts";
 import { resolveSpawnCwd } from "./spawn-worktree.ts";
+import { embodyRole, type RolePin } from "./embody-role.ts";
 import type { SpawnPipelineDeps } from "./spawn-pipeline.ts";
 
 export type SpawnMode = "attach" | "resume";
@@ -25,7 +26,9 @@ export interface PrepareSpawnContextInput {
   readonly role: Role;
   readonly agent: Agent;
   readonly sessionId: string;
-  readonly versionId: string | undefined;
+  // The role/session pin to embody (#349) — a role_versions row or a commit ref.
+  // Null when the role has no current version (→ the no-bundle refusal below).
+  readonly pin: RolePin | null;
   // Absent on a bare resume — no task turn to compose.
   readonly prompt: string | undefined;
   // Provenance for the prompt the caller passed. When a wake-program supplies
@@ -75,7 +78,7 @@ export async function prepareSpawnContext(
     role,
     agent,
     sessionId,
-    versionId,
+    pin,
     prompt,
     promptTag,
     wakeProgram,
@@ -83,7 +86,7 @@ export async function prepareSpawnContext(
     effortOverride,
   } = input;
 
-  const bundle = versionId === undefined ? null : deps.roleVersions.loadAsBundle(versionId);
+  const bundle = embodyRole(role, pin, deps);
   if (bundle === null) {
     return {
       ok: false,

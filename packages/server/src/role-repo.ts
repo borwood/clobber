@@ -1,4 +1,4 @@
-import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { baseRole, enumerateShippedRoles, type BaseLayer, type RoleBundleData } from "@clobber/runtime";
 import {
@@ -68,6 +68,23 @@ export function materializeUpstreamRoleRepo(dir: string): UpstreamRoleRepo {
   return { dir, baseBranch: BASE_BRANCH, baseSha, forks };
 }
 
+// Idempotent boot entrypoint: materialize the upstream repo into `dir` the first
+// time, and on subsequent boots re-open the existing repo and read its current
+// branch tips. The shipped-role set is the engine's, so the fork branches are
+// re-derived from it — opening never mutates the repo (advancing it on an engine
+// upgrade is the workspace's `git merge`, not boot's job).
+export function ensureUpstreamRoleRepo(dir: string): UpstreamRoleRepo {
+  if (!existsSync(join(dir, ".git"))) {
+    return materializeUpstreamRoleRepo(dir);
+  }
+  const forks = new Map<string, ForkRef>();
+  for (const loaded of enumerateShippedRoles()) {
+    const branch = `${loaded.manifest.name}-default`;
+    forks.set(loaded.manifest.name, { branch, sha: revParse(dir, branch) });
+  }
+  return { dir, baseBranch: BASE_BRANCH, baseSha: revParse(dir, BASE_BRANCH), forks };
+}
+
 // Embodiment-from-a-commit: read the tree at `ref` (a branch name or sha),
 // deserialize it through the #348 codec, and project it into the runtime bundle
 // the spawn path materializes.
@@ -76,8 +93,14 @@ export function loadRoleBundleAtCommit(
   ref: string,
   identity: BundleIdentity,
 ): RoleBundleData {
-  const contract = deserializeRoleTree(readTreeAtCommit(dir, ref));
-  return bundleFromContract(contract, identity);
+  return bundleFromContract(loadRoleContractAtCommit(dir, ref), identity);
+}
+
+// The identity-free half of embodiment-from-a-commit: the tree's contract, which
+// the sha-keyed content cache stores (identity is per-role, supplied when the
+// cached contract is projected into a bundle).
+export function loadRoleContractAtCommit(dir: string, ref: string): RoleTreeContract {
+  return deserializeRoleTree(readTreeAtCommit(dir, ref));
 }
 
 // Project a tree contract into the runtime bundle. The codec's contract is a
