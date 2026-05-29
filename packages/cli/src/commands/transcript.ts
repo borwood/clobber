@@ -1,5 +1,6 @@
 import type { Command } from "../commands.ts";
 import { request } from "../http.ts";
+import { resolveAgentTarget } from "../agent-target.ts";
 import { CliUsageError } from "../usage-error.ts";
 
 interface TranscriptEntry {
@@ -148,9 +149,11 @@ function renderText(t: TranscriptResponse): string {
   return lines.join("\n");
 }
 
-const TRANSCRIPT_USAGE = `usage: clobber transcript <session-id> [selector] [--detail <level>] [--limit <n>] [--format <text|json>]
+const TRANSCRIPT_USAGE = `usage: clobber transcript <agent> [selector] [--detail <level>] [--limit <n>] [--format <text|json>]
 
-Read a session transcript with selectors and detail levels.
+Read a session transcript with selectors and detail levels. <agent> may be a
+label, a full session-id, or a session-id prefix (≥4 chars), resolved against
+live or ended sessions; an ambiguous match is rejected.
 
 Selectors (mutually exclusive — pick at most one):
   --tail <n>, --last <n>, -n <n>   Show the last N entries.
@@ -185,7 +188,12 @@ export const transcriptCommand: Command = {
   usage: TRANSCRIPT_USAGE,
   async run(ctx) {
     const flags = parseTranscriptFlags(ctx.args);
-    const path = `/agent/sessions/${encodeURIComponent(flags.sessionId)}/transcript${
+    const sessionId = await resolveAgentTarget(ctx.env, flags.sessionId, [
+      "busy",
+      "idle",
+      "ended",
+    ]);
+    const path = `/agent/sessions/${encodeURIComponent(sessionId)}/transcript${
       flags.query.length === 0 ? "" : `?${flags.query}`
     }`;
     const result = await request<TranscriptResponse>(ctx.env, { method: "GET", path });

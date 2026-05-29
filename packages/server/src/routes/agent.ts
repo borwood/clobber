@@ -26,6 +26,7 @@ import type { ResumeEndedResult } from "../resume-pipeline.ts";
 import { withAgentAuth } from "./_with-agent-auth.ts";
 import { normalizeSpawnLabel } from "./_spawn-label.ts";
 import { registerAgentSessionRoutes } from "./agent-sessions.ts";
+import { listWorkspaceAgents, parseAgentStates } from "./_agents-listing.ts";
 
 export interface AgentRouteDeps {
   readonly sessionTokens: SessionTokenStore;
@@ -81,32 +82,25 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
     }),
   );
 
-  app.get(
+  app.get<{ Querystring: { states?: string } }>(
     "/agent/agents",
-    withAgentAuth("agents", deps, async (_request, _reply, { session }) => {
-      const sessions = deps.sessions.listActiveForWorkspace(session.workspace_id);
-      const agents = sessions.map((s) => {
-        const role = deps.roles.get(s.role_id);
-        if (role === null) throw new Error(`role missing for session ${s.id}`);
-        const agentRow = s.agent_id === undefined ? null : deps.agents.get(s.agent_id);
-        const live = deps.registry.get(s.id);
-        const state: "busy" | "idle" = live === null || live.busy ? "busy" : "idle";
-        const entry: Record<string, unknown> = {
-          session_id: s.id,
-          agent_id: s.agent_id,
-          role: { id: role.id, name: role.name },
-          pid: s.pid,
-          state,
-          started_at: s.started_at,
-          is_caller: s.id === session.id,
-        };
-        if (agentRow !== null && agentRow.label !== undefined) {
-          entry["label"] = agentRow.label;
+    withAgentAuth<{ Querystring: { states?: string } }>(
+      "agents",
+      deps,
+      async (request, reply, { session }) => {
+        const states = parseAgentStates(request.query.states);
+        if (states === "invalid") {
+          reply.code(400);
+          return { error: "invalid states query (expected busy,idle,ended)" };
         }
-        return entry;
-      });
-      return { agents };
-    }),
+        const agents = listWorkspaceAgents(deps, {
+          workspaceId: session.workspace_id,
+          callerSessionId: session.id,
+          states,
+        });
+        return { agents };
+      },
+    ),
   );
 
   app.post(
