@@ -165,6 +165,10 @@ export const RoleVersionSchema = z.object({
   // wake-program (#213). Null = no default → idle. References a program by name
   // in wake_programs_json (or the `idle` built-in).
   default_wake_program: z.string().min(1).nullable(),
+  // The engine contract version this row was authored against (#236). Stamped
+  // by the store at create time with the engine's current `ENGINE_CONTRACT_VERSION`;
+  // a frozen provenance marker the compat check and forward migrations read.
+  contract_version: z.number().int().positive(),
   created_at: z.number().int().nonnegative(),
 });
 export type RoleVersion = z.infer<typeof RoleVersionSchema>;

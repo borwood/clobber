@@ -8,6 +8,7 @@ import { migrateRoleEffort } from "./role-effort-migration.ts";
 import { migrateSessionWasLive } from "./session-was-live-migration.ts";
 import { migrateSessionComposedPrompt } from "./session-composed-prompt-migration.ts";
 import { migrateRoleAllowedToolsColumnDrop } from "./role-allowed-tools-column-drop-migration.ts";
+import { migrateRoleContractVersion } from "./role-contract-version-migration.ts";
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS events (
@@ -63,6 +64,7 @@ const SCHEMA = `
     seed_refs_json            TEXT    NOT NULL DEFAULT '[]',
     wake_programs_json        TEXT    NOT NULL DEFAULT '[]',
     default_wake_program      TEXT,
+    contract_version          INTEGER NOT NULL DEFAULT 1,
     created_at                INTEGER NOT NULL,
     UNIQUE (role_id, version),
     FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
@@ -220,6 +222,7 @@ export function createDatabase(path: string): Database {
   migrateSessionWasLive(db);
   migrateSessionComposedPrompt(db);
   migrateRoleAllowedToolsColumnDrop(db);
+  migrateRoleContractVersion(db);
   return db;
 }
 
