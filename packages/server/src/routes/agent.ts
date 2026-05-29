@@ -26,7 +26,10 @@ import type { ResumeEndedResult } from "../resume-pipeline.ts";
 import { withAgentAuth } from "./_with-agent-auth.ts";
 import { normalizeSpawnLabel } from "./_spawn-label.ts";
 import { registerAgentSessionRoutes } from "./agent-sessions.ts";
+import { registerAgentCycleRoutes } from "./agent-cycle.ts";
 import { listWorkspaceAgents, parseAgentStates } from "./_agents-listing.ts";
+import type { ToolTokenGateDeps } from "../tool-token-gate.ts";
+import type { LayoutEventStore } from "../layout-event-store.ts";
 
 export interface AgentRouteDeps {
   readonly sessionTokens: SessionTokenStore;
@@ -46,6 +49,10 @@ export interface AgentRouteDeps {
   readonly apiBase: string;
   readonly cliEntry: string;
   readonly runtimeProvider: RuntimeProvider;
+  // The shared tool-token gate (#321) and the layout-event bus (#326) — both
+  // consumed by `clobber cycle` (#320) via `registerAgentCycleRoutes`.
+  readonly gate: ToolTokenGateDeps;
+  readonly layoutEvents: LayoutEventStore;
   readonly onSessionEnded: (workspaceId: string, finishedSessionId: string) => void;
   readonly onWorkerDone: (workspaceId: string, finishedSessionId: string) => void;
   readonly resumeEnded: (input: {
@@ -288,4 +295,5 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
   );
 
   registerAgentSessionRoutes(app, deps);
+  registerAgentCycleRoutes(app, deps);
 }

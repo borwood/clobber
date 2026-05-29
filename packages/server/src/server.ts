@@ -209,6 +209,12 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     apiBase: opts.apiBase,
     cliEntry: opts.cliEntry,
     runtimeProvider,
+    gate: {
+      tokens: toolTokens,
+      inject: (sessionId, content, tag) =>
+        injectPrompt(sessionId, content, injectDeps, tag),
+    },
+    layoutEvents,
     onSessionEnded,
     onWorkerDone,
     resumeEnded: (input) => resumeEndedSession(spawnPipelineDeps, input),

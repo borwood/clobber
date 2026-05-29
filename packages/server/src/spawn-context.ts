@@ -5,7 +5,7 @@ import type {
   RuntimeSpawnOptions,
 } from "@clobber/runtime";
 import type { Agent, BootContext, BriefingPacket, ClobberPromptTag, EffortLevel, Role, Workspace } from "@clobber/shared";
-import { resolveWakeProgram } from "@clobber/shared";
+import { CALLER_SUPPLIED_KICK, resolveWakeProgram } from "@clobber/shared";
 import { ensureOffice } from "./office-store.ts";
 import { composeOfficeContext } from "./office-context.ts";
 import { composeSystemPrompt } from "./compose-system-prompt.ts";
@@ -145,18 +145,24 @@ export async function prepareSpawnContext(
   // program is selected the caller's prompt remains the opening message — the
   // legacy seam until #213 routes selection through every spawn surface.
   const program = resolveWakeProgram(effectiveBundle.wakePrograms, wakeProgram);
+  // A selected program declaring a caller-supplied kick (the `cycle` sentinel)
+  // contributes only its layer-C `system`; its opening turn falls through to the
+  // caller's prompt, the way `idle` does — the third kick mode the parameterized
+  // `cycle` program (#320) needs.
+  const callerSuppliedKick = program.user === CALLER_SUPPLIED_KICK;
   const wakeProgramSuppliesKick =
-    mode !== "resume" && wakeProgram !== undefined;
+    mode !== "resume" && wakeProgram !== undefined && !callerSuppliedKick;
   const kick = wakeProgramSuppliesKick
     ? program.user === null
       ? undefined
       : program.user
     : prompt;
-  // When a wake-program supplied the kick, its content is the program's — not
-  // the caller's — so the tag is `wake-kick` regardless of what the caller
-  // passed. Otherwise the caller's tag rides through. A resume reuses the
-  // caller's tag too (the resume prompt's provenance — ask-answer / live-
-  // inject — is what the agent sees).
+  // When a wake-program supplied a fixed kick, its content is the program's —
+  // not the caller's — so the tag is `wake-kick` regardless of what the caller
+  // passed. Otherwise the caller's tag rides through (a caller-supplied kick
+  // carries its own provenance; for cycle the orchestration tags it `wake-kick`).
+  // A resume reuses the caller's tag too (the resume prompt's provenance —
+  // ask-answer / live-inject — is what the agent sees).
   const kickTag: ClobberPromptTag | undefined =
     kick === undefined
       ? undefined
