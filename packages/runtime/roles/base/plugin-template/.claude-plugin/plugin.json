@@ -1,0 +1,5 @@
+{
+  "name": "base",
+  "description": "Abstract universal layer every clobber agent forks from. Never embodied.",
+  "version": "0.0.1"
+}

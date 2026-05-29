@@ -100,11 +100,11 @@ describe("managerRole", () => {
     }
   });
 
-  it("ships hooks/hooks.json wrapped in { hooks } and with the __CLOBBER_HOOK_URL__ placeholder", () => {
+  it("inherits the hooks mechanism from base (#355), wrapped in { hooks } with the __CLOBBER_HOOK_URL__ placeholder", () => {
     const pluginRoot = join(managerRole.bundleRoot, managerRole.manifest.pluginTemplatePath);
-    const hooksPath = join(pluginRoot, "hooks", "hooks.json");
-    expect(existsSync(hooksPath)).toBe(true);
-    const raw = readFileSync(hooksPath, "utf8");
+    // The fork no longer ships its own hooks file; it inherits base's.
+    expect(existsSync(join(pluginRoot, "hooks", "hooks.json"))).toBe(false);
+    const raw = managerRole.hooksJson;
     expect(raw).toContain("__CLOBBER_HOOK_URL__");
     const parsed = JSON.parse(raw) as { hooks?: Record<string, unknown> };
     expect(parsed.hooks).toBeDefined();
