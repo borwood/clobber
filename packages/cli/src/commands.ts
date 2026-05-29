@@ -18,6 +18,12 @@ export interface Command {
    * erroring — mirroring git/gh/kubectl discovery ergonomics.
    */
   readonly subcommands?: readonly string[];
+  /**
+   * Local dev commands operate on the filesystem (not the agent HTTP API) and
+   * therefore do not require CLOBBER_API_BASE/SESSION_TOKEN. Server commands
+   * (the default) resolve that env eagerly so a missing token fails fast.
+   */
+  readonly local?: boolean;
   run(ctx: CommandContext): Promise<number>;
 }
 

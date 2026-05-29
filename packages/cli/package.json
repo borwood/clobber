@@ -8,6 +8,7 @@
     "clobber": "./src/index.ts"
   },
   "dependencies": {
+    "@clobber/server": "workspace:*",
     "@clobber/shared": "workspace:*"
   }
 }
