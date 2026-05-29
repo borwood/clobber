@@ -228,6 +228,11 @@ export function createDatabase(path: string): Database {
   db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(SCHEMA);
+  // contract_version must be added before migrateRoleVersions runs: that migration
+  // constructs a RoleVersionStore whose prepared INSERT references contract_version,
+  // so on an existing pre-#236 database the store's prepare throws unless the column
+  // already exists. Fresh databases get it from SCHEMA; existing ones get it here.
+  migrateRoleContractVersion(db);
   migrateRoleVersions(db);
   migrateSessionLabel(db);
   migrateSessionRuntime(db);
@@ -237,7 +242,6 @@ export function createDatabase(path: string): Database {
   migrateSessionWasLive(db);
   migrateSessionComposedPrompt(db);
   migrateRoleAllowedToolsColumnDrop(db);
-  migrateRoleContractVersion(db);
   return db;
 }
 
