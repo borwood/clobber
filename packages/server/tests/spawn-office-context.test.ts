@@ -17,6 +17,8 @@ import {
 } from "../src/spawn-pipeline.ts";
 import { seedWorkspaceRoles } from "../src/seed-workspace-roles.ts";
 import { createAgentRegistry } from "../src/agent-registry.ts";
+import { createRoleContractRefusalStore } from "../src/role-contract-refusal-store.ts";
+import { EMPTY_ROLE_CONTRACT_MIGRATOR } from "../src/role-contract-compat.ts";
 import { createDatabase } from "../src/db.ts";
 import { createEventStore } from "../src/event-store.ts";
 import { createWorkspaceStore } from "../src/workspace-store.ts";
@@ -243,6 +245,8 @@ describe("spawn — office continuity at spawn (#55)", () => {
       runtimeProvider: claudeRuntimeProvider,
       agentQuestions,
       agentQuestionWaiter,
+      roleContractRefusals: createRoleContractRefusalStore(db),
+      roleContractMigrator: EMPTY_ROLE_CONTRACT_MIGRATOR,
       onSessionEnded: () => {},
     };
 

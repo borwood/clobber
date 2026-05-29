@@ -16,6 +16,8 @@ import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import { createAgentRegistry } from "../src/agent-registry.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
 import { createAgentStatusLogStore } from "../src/agent-status-log-store.ts";
+import { createRoleContractRefusalStore } from "../src/role-contract-refusal-store.ts";
+import { EMPTY_ROLE_CONTRACT_MIGRATOR } from "../src/role-contract-compat.ts";
 import { createTriggerScheduler } from "../src/trigger-scheduler.ts";
 import { createTestClock, type TestClock } from "../src/clock.ts";
 import { editRole } from "../src/edit-role.ts";
@@ -128,6 +130,8 @@ function makeHarness(initial: Date): Harness {
     runtimeProvider: claudeRuntimeProvider,
     agentQuestions,
     agentQuestionWaiter,
+    roleContractRefusals: createRoleContractRefusalStore(db),
+    roleContractMigrator: EMPTY_ROLE_CONTRACT_MIGRATOR,
     onSessionEnded: () => {},
   };
 

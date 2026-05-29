@@ -24,6 +24,8 @@ import { createLayoutEventStore } from "./layout-event-store.ts";
 import { createTriggerScheduler } from "./trigger-scheduler.ts";
 import { createFinalReportConsumer } from "./final-report-consumer.ts";
 import { attachSessionToAgent, type SpawnPipelineDeps } from "./spawn-pipeline.ts";
+import { EMPTY_ROLE_CONTRACT_MIGRATOR } from "./role-contract-compat.ts";
+import { createRoleContractRefusalStore } from "./role-contract-refusal-store.ts";
 import { resumeSessionTurn, resumeEndedSession } from "./resume-pipeline.ts";
 import { createSystemClock } from "./clock.ts";
 
@@ -45,6 +47,17 @@ export function createServer(opts: ServerOptions): FastifyInstance {
   const clock = opts.clock === undefined ? createSystemClock() : opts.clock;
   const runtimeProvider =
     opts.runtimeProvider === undefined ? claudeRuntimeProvider : opts.runtimeProvider;
+  // The #237 contract gate's migration seam (#238 fills it). Defaults to the
+  // empty migrator so every unmigratable mismatch refuses; a fork can inject a
+  // populated migrator without touching the spawn boundary.
+  const roleContractMigrator =
+    opts.roleContractMigrator === undefined
+      ? EMPTY_ROLE_CONTRACT_MIGRATOR
+      : opts.roleContractMigrator;
+  const roleContractRefusals =
+    opts.roleContractRefusals === undefined
+      ? createRoleContractRefusalStore(opts.db)
+      : opts.roleContractRefusals;
 
   // Declared before construction so the spawn-pipeline's onSessionEnded can
   // reference it without a circular dependency — the scheduler in turn closes
@@ -73,6 +86,8 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     runtimeProvider,
     agentQuestions: opts.agentQuestions,
     agentQuestionWaiter: opts.agentQuestionWaiter,
+    roleContractRefusals: roleContractRefusals,
+    roleContractMigrator,
     onSessionEnded,
   };
 
@@ -154,6 +169,8 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     registry,
     agentQuestions: opts.agentQuestions,
     agentQuestionWaiter: opts.agentQuestionWaiter,
+    roleContractRefusals: roleContractRefusals,
+    roleContractMigrator,
     runtimeProvider,
     scheduler,
     onSessionEnded,
@@ -201,6 +218,8 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     agents: opts.agents,
     agentStatuses: opts.agentStatuses,
     agentStatusLog: opts.agentStatusLog,
+    roleContractRefusals: roleContractRefusals,
+    roleContractMigrator,
     agentQuestions: opts.agentQuestions,
     agentQuestionWaiter: opts.agentQuestionWaiter,
     registry,

@@ -12,6 +12,8 @@ import type { AgentSpawner } from "../types.ts";
 import type { AgentRegistry } from "../agent-registry.ts";
 import type { AgentQuestionStore } from "../agent-question-store.ts";
 import type { AgentQuestionWaiter } from "../agent-question-waiter.ts";
+import type { RoleContractMigrator } from "../role-contract-compat.ts";
+import type { RoleContractRefusalStore } from "../role-contract-refusal-store.ts";
 import type { TriggerScheduler } from "../trigger-scheduler.ts";
 import { EffortLevelSchema } from "@clobber/shared";
 import { executeSpawn } from "../spawn-pipeline.ts";
@@ -44,6 +46,8 @@ export interface SpawnRouteDeps {
   readonly runtimeProvider: RuntimeProvider;
   readonly agentQuestions: AgentQuestionStore;
   readonly agentQuestionWaiter: AgentQuestionWaiter;
+  readonly roleContractRefusals: RoleContractRefusalStore;
+  readonly roleContractMigrator: RoleContractMigrator;
   readonly scheduler: Pick<TriggerScheduler, "reloadAgent">;
   readonly onSessionEnded: (workspaceId: string, finishedSessionId: string) => void;
 }
