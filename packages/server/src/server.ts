@@ -24,7 +24,7 @@ import { createLayoutEventStore } from "./layout-event-store.ts";
 import { createTriggerScheduler } from "./trigger-scheduler.ts";
 import { createFinalReportConsumer } from "./final-report-consumer.ts";
 import { attachSessionToAgent, type SpawnPipelineDeps } from "./spawn-pipeline.ts";
-import { EMPTY_ROLE_CONTRACT_MIGRATOR } from "./role-contract-compat.ts";
+import { ROLE_CONTRACT_MIGRATOR } from "./role-contract-migration.ts";
 import { createRoleContractRefusalStore } from "./role-contract-refusal-store.ts";
 import { resumeSessionTurn, resumeEndedSession } from "./resume-pipeline.ts";
 import { createSystemClock } from "./clock.ts";
@@ -47,12 +47,13 @@ export function createServer(opts: ServerOptions): FastifyInstance {
   const clock = opts.clock === undefined ? createSystemClock() : opts.clock;
   const runtimeProvider =
     opts.runtimeProvider === undefined ? claudeRuntimeProvider : opts.runtimeProvider;
-  // The #237 contract gate's migration seam (#238 fills it). Defaults to the
-  // empty migrator so every unmigratable mismatch refuses; a fork can inject a
-  // populated migrator without touching the spawn boundary.
+  // The #237 contract gate's migration seam, filled by the #238 framework.
+  // Defaults to the real forward-only migrator (zero real steps at contract v1,
+  // so it still declines every mismatch today); a fork can inject its own
+  // migrator without touching the spawn boundary.
   const roleContractMigrator =
     opts.roleContractMigrator === undefined
-      ? EMPTY_ROLE_CONTRACT_MIGRATOR
+      ? ROLE_CONTRACT_MIGRATOR
       : opts.roleContractMigrator;
   const roleContractRefusals =
     opts.roleContractRefusals === undefined
