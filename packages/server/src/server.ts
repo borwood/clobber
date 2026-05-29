@@ -26,6 +26,7 @@ import { createFinalReportConsumer } from "./final-report-consumer.ts";
 import { attachSessionToAgent, type SpawnPipelineDeps } from "./spawn-pipeline.ts";
 import { ROLE_CONTRACT_MIGRATOR } from "./role-contract-migration.ts";
 import { createRoleContractRefusalStore } from "./role-contract-refusal-store.ts";
+import { runBootRoleContractSweep } from "./role-contract-sweep.ts";
 import { resumeSessionTurn, resumeEndedSession } from "./resume-pipeline.ts";
 import { createSystemClock } from "./clock.ts";
 
@@ -59,6 +60,18 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     opts.roleContractRefusals === undefined
       ? createRoleContractRefusalStore(opts.db)
       : opts.roleContractRefusals;
+
+  // #239 — the engine-adopt sweep: at boot re-check every adopted role version
+  // against the engine's contract through the SHARED migrator (same instance the
+  // spawn pipeline uses below). Incompatible → quarantined as a refusal row;
+  // boot is never wedged. Runs before routes so the audit is current at go-live.
+  runBootRoleContractSweep({
+    workspaces: opts.workspaces,
+    workspaceRoles: opts.workspaceRoles,
+    roleVersions: opts.roleVersions,
+    roleContractRefusals,
+    migrator: roleContractMigrator,
+  });
 
   // Declared before construction so the spawn-pipeline's onSessionEnded can
   // reference it without a circular dependency — the scheduler in turn closes
