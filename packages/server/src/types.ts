@@ -20,6 +20,7 @@ import type { AgentQuestionStore } from "./agent-question-store.ts";
 import type { AgentQuestionWaiter } from "./agent-question-waiter.ts";
 import type { TriggerDispatchStore } from "./trigger-dispatch-store.ts";
 import type { FinalReportConsumerStateStore } from "./final-report-consumer.ts";
+import type { LayoutEventStore } from "./layout-event-store.ts";
 import type { Clock } from "./clock.ts";
 
 export type AgentSpawnRequest = RuntimeSpawnRequest;
@@ -59,5 +60,9 @@ export interface ServerOptions {
   readonly cliEntry: string;
   readonly dispatches: TriggerDispatchStore;
   readonly finalReportConsumerState: FinalReportConsumerStateStore;
+  // Transient server→web layout bus (#326). Optional with an internal default so
+  // existing callers are untouched; the producer seam (`emit`) is reached from
+  // inside the server by future consumers (#320 cycle, #246 sticky tabs).
+  readonly layoutEvents?: LayoutEventStore;
   readonly clock?: Clock;
 }

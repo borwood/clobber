@@ -228,7 +228,11 @@ export function App() {
         </div>
       </header>
 
-      <LayoutProvider workspaceSlug={workspaceSlug} deepLinkSessionId={selectedSession}>
+      <LayoutProvider
+        workspaceSlug={workspaceSlug}
+        workspaceId={activeWorkspaceId}
+        deepLinkSessionId={selectedSession}
+      >
         <WorkspaceProvider value={workspaceValue}>
           <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
             <HintBanner />
