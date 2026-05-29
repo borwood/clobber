@@ -27,6 +27,7 @@ export type Action =
       tab?: { from: string; index: number } | { view: ViewId };
     }
   | { kind: "add_pane" }
+  | { kind: "swap_session_tab"; oldSessionId: string; newSessionId: string }
   | { kind: "load_layout"; tree: LayoutNode }
   | { kind: "reopen_pane"; pane: PaneNode }
   | { kind: "reset" };
@@ -76,6 +77,8 @@ export function layoutReducer(state: LayoutNode, action: Action): LayoutNode {
       return splitPane(state, action.pane, action.direction, action.before, action.tab);
     case "add_pane":
       return appendPane(state, emptyPane());
+    case "swap_session_tab":
+      return swapSessionTab(state, action.oldSessionId, action.newSessionId);
     case "load_layout":
       return action.tree;
     case "reopen_pane":
@@ -87,6 +90,35 @@ export function layoutReducer(state: LayoutNode, action: Action): LayoutNode {
       return _exhaustive;
     }
   }
+}
+
+// Re-target every mailbox tab pointing at `oldId` to `newId`, in place — the
+// tab keeps its pane and position, so `activeIndex` is untouched. Returns the
+// same node when nothing matched, so a swap for a session no client has open is
+// a true no-op (no re-render, no localStorage write).
+function swapSessionTab(
+  node: LayoutNode,
+  oldId: string,
+  newId: string,
+): LayoutNode {
+  if (node.kind === "pane") {
+    let changed = false;
+    const views = node.views.map((v) => {
+      if (v.kind === "mailbox" && v.sessionId === oldId) {
+        changed = true;
+        return { kind: "mailbox", sessionId: newId } as const;
+      }
+      return v;
+    });
+    return changed ? { ...node, views } : node;
+  }
+  let changed = false;
+  const children = node.children.map((c) => {
+    const next = swapSessionTab(c, oldId, newId);
+    if (next !== c) changed = true;
+    return next;
+  });
+  return changed ? { ...node, children } : node;
 }
 
 function mapPane(

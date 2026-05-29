@@ -12,6 +12,7 @@ import type { LayoutNode, PaneNode, ViewId } from "./types.ts";
 import { defaultLayout } from "./default-layout.ts";
 import { loadLayout, pushClosedPane, saveLayout } from "./persistence.ts";
 import { closedRingCaptureFor } from "./closed-ring-capture.ts";
+import { useLayoutEvents } from "./useLayoutEvents.ts";
 import { viewLabel } from "./ViewHost.tsx";
 import { computeDropIndex, edgeFromEvent, paneIdFromEvent } from "./drop-target.ts";
 
@@ -46,11 +47,19 @@ const Ctx = createContext<LayoutContextValue | null>(null);
 
 interface Props {
   readonly workspaceSlug: string | null;
+  // Workspace id keys the server→web layout-event poll (#326); the slug keys
+  // localStorage. Both are needed because the provider sits above WorkspaceContext.
+  readonly workspaceId: string | null;
   readonly deepLinkSessionId: string | null;
   readonly children: ReactNode;
 }
 
-export function LayoutProvider({ workspaceSlug, deepLinkSessionId, children }: Props) {
+export function LayoutProvider({
+  workspaceSlug,
+  workspaceId,
+  deepLinkSessionId,
+  children,
+}: Props) {
   const [layout, rawDispatch] = useReducer(layoutReducer, workspaceSlug, init);
   const [tabDrag, setTabDrag] = useState<PendingDrop | null>(null);
 
@@ -131,6 +140,10 @@ export function LayoutProvider({ workspaceSlug, deepLinkSessionId, children }: P
     },
     [layout, workspaceSlug],
   );
+
+  // Server→web layout bridge (#326): a server-emitted layout event becomes a
+  // local reducer dispatch, so a swap persists and renders like any local edit.
+  useLayoutEvents(workspaceId, dispatch);
 
   // Whiteboard's wake handler used to flip the global view to mailbox; in the
   // new model, "focus a view" means selecting its tab in whichever pane

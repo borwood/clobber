@@ -8,6 +8,7 @@ import type {
   BrowseDirResponse,
   UpdateWorkspaceConfigRequest,
   AskQuestion,
+  SequencedLayoutEvent,
 } from "@clobber/shared";
 
 export type {
@@ -199,5 +200,9 @@ export const api = {
     postJson<{ dispatched: number }>(
       `/workspaces/${encodeURIComponent(id)}/open`,
       {},
+    ),
+  getLayoutEvents: (workspaceId: string, since: number) =>
+    getJson<SequencedLayoutEvent[]>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/layout-events?since=${since}`,
     ),
 };

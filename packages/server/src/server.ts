@@ -15,10 +15,12 @@ import { registerAgentAskRoutes } from "./routes/agent-ask.ts";
 import { registerPersistentAgentsRoutes } from "./routes/persistent-agents.ts";
 import { registerWhiteboardRoutes } from "./routes/whiteboard.ts";
 import { registerWebhookTriggersRoutes } from "./routes/webhook-triggers.ts";
+import { registerLayoutEventRoutes } from "./routes/layout-events.ts";
 import { createAgentRegistry } from "./agent-registry.ts";
 import { createToolTokenStore } from "./tool-token-store.ts";
 import { injectPrompt } from "./inject-prompt.ts";
 import { registerToolTokenTestRoutes } from "./routes/tool-token-test.ts";
+import { createLayoutEventStore } from "./layout-event-store.ts";
 import { createTriggerScheduler } from "./trigger-scheduler.ts";
 import { createFinalReportConsumer } from "./final-report-consumer.ts";
 import { attachSessionToAgent, type SpawnPipelineDeps } from "./spawn-pipeline.ts";
@@ -38,6 +40,8 @@ export function createServer(opts: ServerOptions): FastifyInstance {
   const app = Fastify({ logger: false });
   const registry = createAgentRegistry();
   const toolTokens = createToolTokenStore(opts.db);
+  const layoutEvents =
+    opts.layoutEvents === undefined ? createLayoutEventStore() : opts.layoutEvents;
   const clock = opts.clock === undefined ? createSystemClock() : opts.clock;
   const runtimeProvider =
     opts.runtimeProvider === undefined ? claudeRuntimeProvider : opts.runtimeProvider;
@@ -160,6 +164,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     scheduler,
   });
   registerWebhookTriggersRoutes(app, { scheduler });
+  registerLayoutEventRoutes(app, { layoutEvents });
   registerFsRoutes(app);
   registerPersistentAgentsRoutes(app, {
     workspaces: opts.workspaces,
