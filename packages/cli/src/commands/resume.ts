@@ -1,5 +1,6 @@
 import type { Command } from "../commands.ts";
 import { request } from "../http.ts";
+import { resolveAgentTarget } from "../agent-target.ts";
 import { CliUsageError } from "../usage-error.ts";
 
 interface ResumeResponse {
@@ -7,12 +8,15 @@ interface ResumeResponse {
   readonly pid: number;
 }
 
-const RESUME_USAGE = `usage: clobber resume <session-id> [--prompt <text>]
+const RESUME_USAGE = `usage: clobber resume <agent> [--prompt <text>]
 
 Bring an ended agent session back in the current workspace. Respawns the
 underlying runtime against the session's existing conversation thread
 (claude --resume) and re-registers it, preserving the role version pinned to
 the original session. Re-checks the workspace role ceiling first.
+
+<agent> may be a label, a full session-id, or a session-id prefix (≥4 chars),
+resolved against ended sessions; an ambiguous match is rejected.
 
 Flags:
   -p, --prompt <text>   Follow-up directive for the revived agent (e.g. "the
@@ -20,6 +24,7 @@ Flags:
                         the conversation cleanly.
 
 Example:
+  clobber resume scribe --prompt "CI is green now, open the PR"
   clobber resume 0b2f4e1a-... --prompt "CI is green now, open the PR"
 
 Skill: see manager:resume (parallels manager:kill) for when to revive a worker
@@ -59,7 +64,8 @@ export const resumeCommand: Command = {
   summary: "Bring an ended agent session back in the current workspace.",
   usage: RESUME_USAGE,
   async run(ctx) {
-    const { sessionId, prompt } = parseResumeArgs(ctx.args);
+    const { sessionId: target, prompt } = parseResumeArgs(ctx.args);
+    const sessionId = await resolveAgentTarget(ctx.env, target, ["ended"]);
     const result = await request<ResumeResponse>(ctx.env, {
       method: "POST",
       path: `/agent/sessions/${encodeURIComponent(sessionId)}/resume`,
