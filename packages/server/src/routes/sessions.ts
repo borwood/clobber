@@ -40,6 +40,7 @@ const UserTurnKindSchema = z.enum([
   "spawn-prompt",
   "live-inject",
   "interrupt-notice",
+  "tool-token",
 ]);
 
 // The composer (web `sendPrompt`) omits `kind` so its turn lands bare —

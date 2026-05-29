@@ -16,6 +16,9 @@ import { registerPersistentAgentsRoutes } from "./routes/persistent-agents.ts";
 import { registerWhiteboardRoutes } from "./routes/whiteboard.ts";
 import { registerWebhookTriggersRoutes } from "./routes/webhook-triggers.ts";
 import { createAgentRegistry } from "./agent-registry.ts";
+import { createToolTokenStore } from "./tool-token-store.ts";
+import { injectPrompt } from "./inject-prompt.ts";
+import { registerToolTokenTestRoutes } from "./routes/tool-token-test.ts";
 import { createTriggerScheduler } from "./trigger-scheduler.ts";
 import { createFinalReportConsumer } from "./final-report-consumer.ts";
 import { attachSessionToAgent, type SpawnPipelineDeps } from "./spawn-pipeline.ts";
@@ -34,6 +37,7 @@ import type { ServerOptions } from "./types.ts";
 export function createServer(opts: ServerOptions): FastifyInstance {
   const app = Fastify({ logger: false });
   const registry = createAgentRegistry();
+  const toolTokens = createToolTokenStore(opts.db);
   const clock = opts.clock === undefined ? createSystemClock() : opts.clock;
   const runtimeProvider =
     opts.runtimeProvider === undefined ? claudeRuntimeProvider : opts.runtimeProvider;
@@ -110,6 +114,26 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     runtimeProvider,
     resumeTurn: (input) => resumeSessionTurn(spawnPipelineDeps, input),
     resumeEnded: (input) => resumeEndedSession(spawnPipelineDeps, input),
+  });
+  // The tool-token primitive's first consumer (#321). The gate injects the
+  // repercussion brief into the bearer's transcript via the same `injectPrompt`
+  // path the session routes use; saved args replay on redemption.
+  const injectDeps = {
+    ...spawnPipelineDeps,
+    resumeTurn: (input: { sessionId: string; prompt: string }) =>
+      resumeSessionTurn(spawnPipelineDeps, input),
+  };
+  registerToolTokenTestRoutes(app, {
+    sessionTokens: opts.sessionTokens,
+    sessions: opts.sessions,
+    roles: opts.roles,
+    roleVersions: opts.roleVersions,
+    agentStatuses: opts.agentStatuses,
+    gate: {
+      tokens: toolTokens,
+      inject: (sessionId, content, tag) =>
+        injectPrompt(sessionId, content, injectDeps, tag),
+    },
   });
   registerSpawnRoutes(app, {
     workspaces: opts.workspaces,

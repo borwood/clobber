@@ -126,6 +126,16 @@ const SCHEMA = `
     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
   );
 
+  CREATE TABLE IF NOT EXISTS tool_tokens (
+    token             TEXT    PRIMARY KEY,
+    target_session_id TEXT    NOT NULL,
+    tool              TEXT    NOT NULL,
+    args_json         TEXT    NOT NULL,
+    created_at        INTEGER NOT NULL,
+    UNIQUE (target_session_id, tool),
+    FOREIGN KEY (target_session_id) REFERENCES sessions(id) ON DELETE CASCADE
+  );
+
   CREATE TABLE IF NOT EXISTS agent_statuses (
     session_id    TEXT    PRIMARY KEY,
     state         TEXT    NOT NULL,
