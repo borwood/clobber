@@ -16,6 +16,7 @@ import { rolesCommand } from "./commands/roles.ts";
 import { workspaceCommand } from "./commands/workspace.ts";
 import { selfSkillsCommand } from "./commands/self-skills.ts";
 import { dbDryRunCommand } from "./commands/db-dryrun.ts";
+import { roleCutoverCommand } from "./commands/role-cutover.ts";
 import { readEnv, CliEnvError } from "./env.ts";
 import { CliHttpError } from "./http.ts";
 import { CliUsageError } from "./usage-error.ts";
@@ -48,6 +49,7 @@ function buildRegistry(): CommandRegistry {
   registry.register(workspaceCommand);
   registry.register(selfSkillsCommand);
   registry.register(dbDryRunCommand);
+  registry.register(roleCutoverCommand);
   return registry;
 }
 
