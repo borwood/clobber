@@ -19,10 +19,9 @@ import { registerWhiteboardRoutes } from "./routes/whiteboard.ts";
 import { registerWebhookTriggersRoutes } from "./routes/webhook-triggers.ts";
 import { registerLayoutEventRoutes } from "./routes/layout-events.ts";
 import { createAgentRegistry } from "./agent-registry.ts";
-import { createAgentWorkQueue } from "./agent-work-queue.ts";
 import { createToolTokenStore } from "./tool-token-store.ts";
 import type { ToolTokenGateDeps } from "./tool-token-gate.ts";
-import { injectPrompt, type PendingInject } from "./inject-prompt.ts";
+import { injectPrompt } from "./inject-prompt.ts";
 import { registerToolTokenTestRoutes } from "./routes/tool-token-test.ts";
 import { createLayoutEventStore } from "./layout-event-store.ts";
 import { createTriggerScheduler } from "./trigger-scheduler.ts";
@@ -46,8 +45,6 @@ import type { ServerOptions } from "./types.ts";
 export function createServer(opts: ServerOptions): FastifyInstance {
   const app = Fastify({ logger: false });
   const registry = createAgentRegistry();
-  // #360: mid-turn injects are held here and flushed on the Stop boundary.
-  const injectQueue = createAgentWorkQueue<PendingInject>();
   const toolTokens = createToolTokenStore(opts.db);
   const layoutEvents =
     opts.layoutEvents === undefined ? createLayoutEventStore() : opts.layoutEvents;
@@ -135,7 +132,6 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     agentQuestionWaiter: opts.agentQuestionWaiter,
     registry,
     runtimeProvider,
-    injectQueue,
     agentStatusLog: opts.agentStatusLog,
     scheduler,
     ...(opts.askTimeoutMs === undefined ? {} : { askBridgeTimeoutMs: opts.askTimeoutMs }),
@@ -151,7 +147,6 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     agentQuestionWaiter: opts.agentQuestionWaiter,
     registry,
     runtimeProvider,
-    injectQueue,
     resumeTurn: (input) => resumeSessionTurn(spawnPipelineDeps, input),
     resumeEnded: (input) => resumeEndedSession(spawnPipelineDeps, input),
   });
@@ -160,7 +155,6 @@ export function createServer(opts: ServerOptions): FastifyInstance {
   // path the session routes use; saved args replay on redemption.
   const injectDeps = {
     ...spawnPipelineDeps,
-    injectQueue,
     resumeTurn: (input: { sessionId: string; prompt: string }) =>
       resumeSessionTurn(spawnPipelineDeps, input),
   };

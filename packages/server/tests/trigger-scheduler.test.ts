@@ -263,7 +263,7 @@ describe("TriggerScheduler — cron firing", () => {
       role_id: h.managerRoleId,
       pid: 4242,
     });
-    h.registry.register(sessionId, liveStdin, () => {});
+    h.registry.register(sessionId, liveStdin, () => {}, true);
     h.registry.setBusy(sessionId, false);
 
     h.scheduler.start();
@@ -310,7 +310,7 @@ describe("TriggerScheduler — cron firing", () => {
       role_id: h.managerRoleId,
       pid: 4243,
     });
-    h.registry.register(sessionId, liveStdin, () => {});
+    h.registry.register(sessionId, liveStdin, () => {}, true);
     // registry registers busy=true by default — perfect.
 
     h.scheduler.start();
@@ -663,7 +663,7 @@ describe("TriggerScheduler — webhook firing", () => {
       role_id: h.managerRoleId,
       pid: 5151,
     });
-    h.registry.register(sessionId, liveStdin, () => {});
+    h.registry.register(sessionId, liveStdin, () => {}, true);
     h.registry.setBusy(sessionId, false);
 
     h.scheduler.start();
@@ -779,7 +779,7 @@ describe("TriggerScheduler — webhook firing", () => {
       role_id: h.managerRoleId,
       pid: 5252,
     });
-    h.registry.register(sessionId, liveStdin, () => {});
+    h.registry.register(sessionId, liveStdin, () => {}, true);
     h.registry.setBusy(sessionId, false);
 
     h.scheduler.start();
@@ -852,7 +852,7 @@ describe("TriggerScheduler — workspace-open firing", () => {
       role_id: h.managerRoleId,
       pid: 6161,
     });
-    h.registry.register(sessionId, liveStdin, () => {});
+    h.registry.register(sessionId, liveStdin, () => {}, true);
     h.registry.setBusy(sessionId, false);
 
     h.scheduler.start();

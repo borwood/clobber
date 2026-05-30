@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
+import { serializeUserMessage } from "@clobber/runtime";
 import { createServer } from "../src/server.ts";
 import { createDatabase } from "../src/db.ts";
 import { createEventStore } from "../src/event-store.ts";
@@ -39,13 +40,8 @@ interface Harness {
   workerToken: string;
   workerRoleId: string;
   resumeRequests: AgentSpawnRequest[];
+  writesBySession: Map<string, string[]>;
   repoPath: string;
-}
-
-function makeStdin(): NodeJS.WritableStream {
-  const s = new PassThrough();
-  s.resume();
-  return s;
 }
 
 function buildHarness(): Harness {
@@ -66,15 +62,23 @@ function buildHarness(): Harness {
   if (managerRole === null || workerRole === null) throw new Error("roles not seeded");
 
   const resumeRequests: AgentSpawnRequest[] = [];
+  // Capture per-session stdin so a test can assert what injectPrompt delivered
+  // (and in what order) to a resumed child.
+  const writesBySession = new Map<string, string[]>();
   let pidCounter = 6000;
   const spawner: AgentSpawner = (req): SpawnedAgentInfo => {
     pidCounter += 1;
     if (req.resume === true) resumeRequests.push(req);
+    const sessionId = req.sessionId ?? randomUUID();
+    const writes: string[] = [];
+    writesBySession.set(sessionId, writes);
+    const stdin = new PassThrough();
+    stdin.on("data", (chunk: Buffer) => writes.push(chunk.toString()));
     return {
-      sessionId: req.sessionId ?? randomUUID(),
+      sessionId,
       pid: pidCounter,
       exited: new Promise<number | null>(() => {}),
-      stdin: makeStdin(),
+      stdin,
       kill: () => {},
     };
   };
@@ -132,6 +136,7 @@ function buildHarness(): Harness {
     workerToken,
     workerRoleId: workerRole.id,
     resumeRequests,
+    writesBySession,
     repoPath,
   };
 }
@@ -221,6 +226,50 @@ describe("POST /agent/sessions/:id/resume", () => {
     // No prompt + noop boot context => nothing to inject. The `?? ""` default
     // that used to fabricate an empty user turn (#227) is gone.
     expect(h.resumeRequests[0]!.prompt).toBeUndefined();
+  });
+
+  it("a bare resume leaves the session idle and a follow-up prompt delivers immediately, in order (#366)", async () => {
+    const ended = seedEndedWorkerSession(h);
+
+    // The UI resume button: no prompt, kick suppressed, so no turn runs. Pre-fix
+    // this registered busy:true forever (no Stop ever fires) and the #360 inject
+    // queue stranded every composer message until some later real turn's Stop.
+    const res = await h.server.inject({
+      method: "POST",
+      url: `/agent/sessions/${ended.sessionId}/resume`,
+      headers: { authorization: `Bearer ${h.managerToken}` },
+    });
+    expect(res.statusCode).toBe(200);
+
+    // Root fix (#366 part a): a suppressed-kick resume registers idle.
+    const listed = await h.server.inject({
+      method: "GET",
+      url: `/sessions?workspace_id=${h.workspaceId}`,
+    });
+    const summary = (listed.json() as { session_id: string; busy: boolean }[]).find(
+      (s) => s.session_id === ended.sessionId,
+    );
+    expect(summary!.busy).toBe(false);
+
+    // Two composer messages to the now-idle session: written straight to stdin,
+    // immediately and in send order — not enqueued, not reordered (#366 strand gone).
+    const first = await h.server.inject({
+      method: "POST",
+      url: `/sessions/${ended.sessionId}/prompt`,
+      payload: { prompt: "We're back!" },
+    });
+    expect(first.statusCode).toBe(200);
+    const second = await h.server.inject({
+      method: "POST",
+      url: `/sessions/${ended.sessionId}/prompt`,
+      payload: { prompt: "Can you see this?" },
+    });
+    expect(second.statusCode).toBe(200);
+
+    const written = h.writesBySession.get(ended.sessionId)!.join("");
+    expect(written).toBe(
+      serializeUserMessage("We're back!") + serializeUserMessage("Can you see this?"),
+    );
   });
 
   it("a worker is denied (403) — workers don't bring sessions back", async () => {

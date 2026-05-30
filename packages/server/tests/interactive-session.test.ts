@@ -199,11 +199,11 @@ describe("POST /sessions/:id/prompt — interactive sessions (issue #8)", () => 
     await teardown(h);
   });
 
-  it("defers a prompt sent while busy until the next turn boundary, then flushes it (#360)", async () => {
-    // #360: writing to stdin mid extended-thinking turn poisons the message log
-    // (the interrupted partial turn persists with an emptied-but-signed thinking
-    // block → permanent 400). The session is busy (initial turn in flight), so
-    // the inject must be enqueued, not written, and flushed on the Stop boundary.
+  it("writes a prompt sent while busy directly to stdin — claude's native queue defers it (#367)", async () => {
+    // #367 spike: claude's native stdin queue already defers a mid-thinking write
+    // to a safe tool-result boundary (14/14, never poisons). The clobber inject
+    // queue that held the write until Stop is removed; injectPrompt writes
+    // straight through even while the session is busy (initial turn in flight).
     const h = buildHarness();
     const spawned = await seedAndSpawn(h);
 
@@ -214,19 +214,18 @@ describe("POST /sessions/:id/prompt — interactive sessions (issue #8)", () => 
     });
     expect(res.statusCode).toBe(200);
 
+    // Written immediately — no clobber-side queue, no waiting for Stop.
     const stub = h.control.agents.find((a) => a.sessionId === spawned.session_id)!;
-    // Deferred: nothing hit stdin while the turn was open.
-    expect(stub.writes.join("")).toBe("");
+    expect(stub.writes.join("")).toBe(serializeUserMessage("while busy"));
 
-    // Turn boundary (Stop, busy→idle) flushes the queued prompt to the now-idle
-    // child — the safe point where no thinking block is open.
+    // Stop must not re-deliver: the queue + its Stop-flush are gone.
     await fireStop(h, spawned.session_id);
     expect(stub.writes.join("")).toBe(serializeUserMessage("while busy"));
 
     await teardown(h);
   });
 
-  it("defers multiple prompts sent while busy and flushes them in order on Stop", async () => {
+  it("writes multiple prompts sent while busy directly, in send order (#367)", async () => {
     const h = buildHarness();
     const spawned = await seedAndSpawn(h);
 
@@ -244,9 +243,13 @@ describe("POST /sessions/:id/prompt — interactive sessions (issue #8)", () => 
     });
     expect(second.statusCode).toBe(200);
 
+    // Both written immediately, in order — native queue handles mid-turn deferral.
     const stub = h.control.agents.find((a) => a.sessionId === spawned.session_id)!;
-    expect(stub.writes.join("")).toBe(""); // both deferred while busy
+    expect(stub.writes.join("")).toBe(
+      serializeUserMessage("one") + serializeUserMessage("two"),
+    );
 
+    // Stop does not re-deliver.
     await fireStop(h, spawned.session_id);
     expect(stub.writes.join("")).toBe(
       serializeUserMessage("one") + serializeUserMessage("two"),
@@ -415,7 +418,7 @@ describe("POST /sessions/:id/answer — late answer to a timed-out ask routes ba
     await teardown(h);
   });
 
-  it("defers a late answer to the turn boundary, then injects it and flips the question to answered", async () => {
+  it("routes a late answer to a busy session as an immediate direct write (#367/#183)", async () => {
     const h = buildHarness();
     const spawned = await seedAndSpawn(h);
     const q = askQuestion(h, spawned.session_id);
@@ -428,14 +431,11 @@ describe("POST /sessions/:id/answer — late answer to a timed-out ask routes ba
     });
     expect(res.statusCode).toBe(200);
 
-    // The session is mid-turn, so the late answer is held back (#360) — writing
-    // it now would poison an open thinking block. It still routes: the Stop
-    // boundary flushes it to the live child's stdin (the #252 delivery path),
-    // carrying both the original question and the chosen answer so the agent
-    // can pick the thread back up.
+    // The session is mid-turn, but the late answer is written straight to stdin
+    // now — claude's native queue defers it to a safe boundary (#367), no clobber
+    // queue. It rides the #252 delivery path, carrying both the original question
+    // and the chosen answer so the agent can pick the thread back up.
     const stub = h.control.agents.find((a) => a.sessionId === spawned.session_id);
-    expect(stub!.writes.join("")).toBe("");
-    await fireStop(h, spawned.session_id);
     const written = stub!.writes.join("");
     expect(written).toContain("Roll the milestone forward?");
     expect(written).toContain("Roll forward");

@@ -2,24 +2,13 @@ import type { RuntimeProvider } from "@clobber/runtime";
 import type { ClobberPromptTag } from "@clobber/shared";
 import type { SessionStore } from "./session-store.ts";
 import type { AgentRegistry } from "./agent-registry.ts";
-import type { AgentWorkQueue } from "./agent-work-queue.ts";
 import { endSession, type SessionLifecycleDeps } from "./session-lifecycle.ts";
 import type { ResumeTurnSuccess, ResumeTurnError } from "./resume-pipeline.ts";
-
-// A user turn held back because the agent was mid-turn when it arrived. Carries
-// the original tag so each deferred turn flushes with its own provenance.
-export interface PendingInject {
-  readonly prompt: string;
-  readonly tag?: ClobberPromptTag;
-}
 
 export interface InjectPromptDeps extends SessionLifecycleDeps {
   readonly sessions: SessionStore;
   readonly registry: AgentRegistry;
   readonly runtimeProvider: RuntimeProvider;
-  // Per-session FIFO of mid-turn injects, flushed on the next turn boundary
-  // (`flushPendingInjects`). Keyed by session id.
-  readonly injectQueue: AgentWorkQueue<PendingInject>;
   resumeTurn: (input: {
     readonly sessionId: string;
     readonly prompt: string;
@@ -78,40 +67,12 @@ export async function injectPrompt(
   if (!deps.runtimeProvider.capabilities.livePromptInjection) {
     return { ok: false, status: 409, error: "runtime does not support live prompt injection" };
   }
-  // #360: never write to stdin while the assistant turn is open — that is what
-  // lands inside an extended-thinking block and poisons the log. If the agent is
-  // busy, enqueue and flush on the next Stop (`flushPendingInjects`); only an
-  // idle child takes the write now.
-  if (live.busy) {
-    deps.injectQueue.enqueue(sessionId, tag === undefined ? { prompt } : { prompt, tag });
-    return { ok: true };
-  }
+  // Write straight to stdin even mid-turn: claude's native stdin queue defers a
+  // mid-thinking write to a safe tool-result boundary on its own (#367 spike —
+  // 14/14, never poisons), so the clobber-side inject queue is redundant. The
+  // inject-independent interleaved-thinking poison (#372) is handled by the #360
+  // repair half on resume. setBusy marks the turn now in flight.
   live.stdin.write(deps.runtimeProvider.serializeUserPrompt(prompt, tag));
   deps.registry.setBusy(sessionId, true);
   return { ok: true };
-}
-
-/**
- * Flush every inject queued while the agent was busy, at the Stop boundary
- * (busy→idle) where no thinking block is open. Coalesced into a single stdin
- * write so the runtime receives them as already-queued turns rather than a
- * second mid-turn write — preserving order and per-turn tags.
- */
-export function flushPendingInjects(
-  sessionId: string,
-  deps: {
-    readonly registry: AgentRegistry;
-    readonly runtimeProvider: RuntimeProvider;
-    readonly injectQueue: AgentWorkQueue<PendingInject>;
-  },
-): void {
-  const pending = deps.injectQueue.drain(sessionId);
-  if (pending.length === 0) return;
-  const live = deps.registry.get(sessionId);
-  if (live === null) return;
-  const payload = pending
-    .map((item) => deps.runtimeProvider.serializeUserPrompt(item.prompt, item.tag))
-    .join("");
-  live.stdin.write(payload);
-  deps.registry.setBusy(sessionId, true);
 }
