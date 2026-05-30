@@ -13,6 +13,7 @@ import {
   DEFAULT_TRIGGER_OVERRIDES,
   DEFAULT_FINAL_REPORT_CALLBACK,
   DEFAULT_MANAGER_SKILL_POLICY,
+  DEFAULT_WORKSPACE_THEME,
   type Workspace,
 } from "@clobber/shared";
 
@@ -438,6 +439,113 @@ describe("PATCH /workspaces/:id — updating final_report_callback", () => {
       forbidden_keys: [...DEFAULT_ROLE_EDIT_FORBIDDEN_KEYS],
     });
     expect(updated.trigger_overrides).toEqual({ ...DEFAULT_TRIGGER_OVERRIDES });
+  });
+});
+
+describe("workspace theme — defaults + creation", () => {
+  it("new workspaces default to dark/emerald", async () => {
+    const ws = await createWorkspace({});
+    expect(ws.theme).toEqual({ ...DEFAULT_WORKSPACE_THEME });
+  });
+
+  it("accepts a custom mode + accent on creation", async () => {
+    const ws = await createWorkspace({ theme: { mode: "light", accent: "violet" } });
+    expect(ws.theme).toEqual({ mode: "light", accent: "violet" });
+  });
+
+  it("rejects an unknown mode (no silent fallback to dark)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/workspaces",
+      payload: {
+        name: "ws",
+        repo_path: repoPath,
+        theme: { mode: "midnight", accent: "emerald" },
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("rejects an unknown accent", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/workspaces",
+      payload: {
+        name: "ws",
+        repo_path: repoPath,
+        theme: { mode: "dark", accent: "chartreuse" },
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe("PATCH /workspaces/:id — updating theme", () => {
+  it("PATCH theme round-trips: default → light/blue → back to default", async () => {
+    const ws = await createWorkspace({});
+    const set = await app.inject({
+      method: "PATCH",
+      url: `/workspaces/${ws.id}`,
+      payload: { theme: { mode: "light", accent: "blue" } },
+    });
+    expect(set.statusCode).toBe(200);
+    expect((set.json() as Workspace).theme).toEqual({ mode: "light", accent: "blue" });
+
+    const back = await app.inject({
+      method: "PATCH",
+      url: `/workspaces/${ws.id}`,
+      payload: { theme: { ...DEFAULT_WORKSPACE_THEME } },
+    });
+    expect(back.statusCode).toBe(200);
+    expect((back.json() as Workspace).theme).toEqual({ ...DEFAULT_WORKSPACE_THEME });
+  });
+
+  it("persists the theme — a subsequent GET (reload) reflects it", async () => {
+    const ws = await createWorkspace({});
+    await app.inject({
+      method: "PATCH",
+      url: `/workspaces/${ws.id}`,
+      payload: { theme: { mode: "paper", accent: "rose" } },
+    });
+    const getRes = await app.inject({ method: "GET", url: `/workspaces/${ws.id}` });
+    expect((getRes.json() as Workspace).theme).toEqual({ mode: "paper", accent: "rose" });
+  });
+
+  it("rejects an unknown stored mode on PATCH (no silent fallback)", async () => {
+    const ws = await createWorkspace({});
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/workspaces/${ws.id}`,
+      payload: { theme: { mode: "neon", accent: "emerald" } },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("PATCH theme alone does not reload the trigger scheduler", async () => {
+    const ws = await createWorkspace({});
+    reloadedRoles.length = 0;
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/workspaces/${ws.id}`,
+      payload: { theme: { mode: "light", accent: "amber" } },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(reloadedRoles).toEqual([]);
+  });
+
+  it("PATCH theme leaves other config fields untouched", async () => {
+    const ws = await createWorkspace({});
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/workspaces/${ws.id}`,
+      payload: { theme: { mode: "paper", accent: "violet" } },
+    });
+    expect(res.statusCode).toBe(200);
+    const updated = res.json() as Workspace;
+    expect(updated.setting_sources).toEqual([...DEFAULT_SETTING_SOURCES]);
+    expect(updated.role_edit_policy).toEqual({
+      forbidden_keys: [...DEFAULT_ROLE_EDIT_FORBIDDEN_KEYS],
+    });
   });
 });
 

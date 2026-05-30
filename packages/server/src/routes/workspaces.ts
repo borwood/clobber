@@ -91,6 +91,9 @@ export function registerWorkspaceRoutes(
         ...(parsed.data.manager_skill_policy === undefined
           ? {}
           : { manager_skill_policy: parsed.data.manager_skill_policy }),
+        ...(parsed.data.theme === undefined
+          ? {}
+          : { theme: parsed.data.theme }),
       });
       if (updated === null) {
         reply.code(404);

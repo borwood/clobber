@@ -9,7 +9,7 @@ import { App } from "../src/App.tsx";
 import { layoutStorageKey } from "../src/layout/persistence.ts";
 import type { LayoutNode } from "../src/layout/types.ts";
 
-const WORKSPACES = [{ id: "ws-a", name: "Workspace A", repo_path: "/a" }];
+const WORKSPACES = [{ id: "ws-a", name: "Workspace A", repo_path: "/a", theme: { mode: "dark", accent: "emerald" } }];
 const SLUG = "workspace-a";
 
 function jsonResponse(data: unknown): Response {

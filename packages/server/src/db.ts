@@ -10,6 +10,7 @@ import { migrateSessionComposedPrompt } from "./session-composed-prompt-migratio
 import { migrateRoleAllowedToolsColumnDrop } from "./role-allowed-tools-column-drop-migration.ts";
 import { migrateRoleContractVersion } from "./role-contract-version-migration.ts";
 import { migrateRoleCommitPin } from "./role-commit-pin-migration.ts";
+import { migrateWorkspaceTheme } from "./theme-migration.ts";
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS events (
@@ -32,6 +33,7 @@ const SCHEMA = `
     spawn_worktree        TEXT    NOT NULL DEFAULT '{"kind":"off"}',
     file_size_policy      TEXT    NOT NULL DEFAULT '{"kind":"on","max_lines":300}',
     manager_skill_policy  TEXT    NOT NULL DEFAULT '{"allow_self_grant":false,"allowed_skills":[]}',
+    theme                 TEXT    NOT NULL DEFAULT '{"mode":"dark","accent":"emerald"}',
     created_at            INTEGER NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_workspaces_created ON workspaces(created_at DESC);
@@ -268,6 +270,7 @@ export function createDatabase(path: string): Database {
   migrateSessionComposedPrompt(db);
   migrateRoleAllowedToolsColumnDrop(db);
   migrateRoleCommitPin(db);
+  migrateWorkspaceTheme(db);
   return db;
 }
 

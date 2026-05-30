@@ -2,6 +2,7 @@ import { z } from "zod";
 import { FinalReportCallbackSchema } from "./final-report-callback.ts";
 import { SpawnWorktreeSchema } from "./spawn-worktree.ts";
 import { FileSizePolicySchema } from "./file-size-policy.ts";
+import { WorkspaceThemeSchema } from "./workspace-theme.ts";
 import { ManagerSkillPolicySchema } from "./manager-skill-policy.ts";
 
 export const SettingSourceSchema = z.enum(["user", "project", "local"]);
@@ -87,6 +88,7 @@ export const WorkspaceSchema = z.object({
   spawn_worktree: SpawnWorktreeSchema,
   file_size_policy: FileSizePolicySchema,
   manager_skill_policy: ManagerSkillPolicySchema,
+  theme: WorkspaceThemeSchema,
   created_at: z.number().int().nonnegative(),
 });
 export type Workspace = z.infer<typeof WorkspaceSchema>;
@@ -101,6 +103,7 @@ export const CreateWorkspaceRequestSchema = z.object({
   spawn_worktree: SpawnWorktreeSchema.optional(),
   file_size_policy: FileSizePolicySchema.optional(),
   manager_skill_policy: ManagerSkillPolicySchema.optional(),
+  theme: WorkspaceThemeSchema.optional(),
 });
 export type CreateWorkspaceRequest = z.infer<typeof CreateWorkspaceRequestSchema>;
 
@@ -113,6 +116,7 @@ export const UpdateWorkspaceConfigRequestSchema = z
     spawn_worktree: SpawnWorktreeSchema.optional(),
     file_size_policy: FileSizePolicySchema.optional(),
     manager_skill_policy: ManagerSkillPolicySchema.optional(),
+    theme: WorkspaceThemeSchema.optional(),
   })
   .refine(
     (v) =>
@@ -122,10 +126,11 @@ export const UpdateWorkspaceConfigRequestSchema = z
       v.final_report_callback !== undefined ||
       v.spawn_worktree !== undefined ||
       v.file_size_policy !== undefined ||
-      v.manager_skill_policy !== undefined,
+      v.manager_skill_policy !== undefined ||
+      v.theme !== undefined,
     {
       message:
-        "must include at least one of setting_sources, role_edit_policy, trigger_overrides, final_report_callback, spawn_worktree, file_size_policy, manager_skill_policy",
+        "must include at least one of setting_sources, role_edit_policy, trigger_overrides, final_report_callback, spawn_worktree, file_size_policy, manager_skill_policy, theme",
     },
   );
 export type UpdateWorkspaceConfigRequest = z.infer<
