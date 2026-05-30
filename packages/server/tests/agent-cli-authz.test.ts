@@ -278,7 +278,7 @@ describe("agent CLI authz — manager wildcard vs worker allow-list", () => {
         )
         .get(version_id) as { allowed_cli_commands_json: string };
       const allowed = JSON.parse(row.allowed_cli_commands_json);
-      expect(allowed).toEqual(["whoami", "ask", "status", "report"]);
+      expect(allowed).toEqual(["whoami", "ask", "status", "report", "reply"]);
       expect(role_id).toBeDefined();
     } finally {
       await teardown(h);

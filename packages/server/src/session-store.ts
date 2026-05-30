@@ -4,6 +4,10 @@ import { SessionSchema, type Session, type CreateSessionRequest } from "@clobber
 export interface SessionStore {
   create(req: CreateSessionRequest): Session;
   get(id: string): Session | null;
+  // The agent's most recent session, ended or live. The messaging primitive
+  // resolves a recipient agent to its current session; an ended one still
+  // resolves (so the sender gets a 410, not a 404, for a recipient that died).
+  latestForAgent(agentId: string): Session | null;
   countActive(workspaceId: string, roleId: string): number;
   markEnded(id: string): boolean;
   // Revive an ended session: clear ended_at and the was-live-at-shutdown flag
@@ -77,6 +81,9 @@ export function createSessionStore(db: Database): SessionStore {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
   );
   const getStmt = db.prepare("SELECT * FROM sessions WHERE id = ?");
+  const latestForAgentStmt = db.prepare(
+    "SELECT * FROM sessions WHERE agent_id = ? ORDER BY started_at DESC, id DESC LIMIT 1",
+  );
   const countActiveStmt = db.prepare(
     "SELECT COUNT(*) AS n FROM sessions WHERE workspace_id = ? AND role_id = ? AND ended_at IS NULL",
   );
@@ -172,6 +179,11 @@ export function createSessionStore(db: Database): SessionStore {
 
     get(id) {
       const row = getStmt.get(id) as Row | null;
+      return row === null ? null : rowToSession(row);
+    },
+
+    latestForAgent(agentId) {
+      const row = latestForAgentStmt.get(agentId) as Row | null;
       return row === null ? null : rowToSession(row);
     },
 

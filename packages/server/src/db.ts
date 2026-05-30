@@ -172,6 +172,19 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_status_log_kind
     ON agent_status_log(kind, created_at DESC);
 
+  CREATE TABLE IF NOT EXISTS agent_message_tokens (
+    token                 TEXT    PRIMARY KEY,
+    originator_session_id TEXT    NOT NULL,
+    recipient_session_id  TEXT    NOT NULL,
+    message_id            TEXT    NOT NULL,
+    created_at            INTEGER NOT NULL,
+    redeemed_at           INTEGER,
+    FOREIGN KEY (originator_session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+    FOREIGN KEY (recipient_session_id)  REFERENCES sessions(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_message_tokens_recipient
+    ON agent_message_tokens(recipient_session_id);
+
   CREATE TABLE IF NOT EXISTS agent_questions (
     id             TEXT    PRIMARY KEY,
     session_id     TEXT    NOT NULL,

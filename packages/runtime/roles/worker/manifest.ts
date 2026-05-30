@@ -23,7 +23,7 @@ export const workerRole = defineRole({
     systemPromptPath: "system-prompt.md",
     framingPath: "framing.md",
     pluginTemplatePath: "plugin-template",
-    allowedCliCommands: ["whoami", "ask", "status", "report"],
+    allowedCliCommands: ["whoami", "ask", "status", "report", "reply"],
     persistent: false,
     defaultCeiling: 3,
     // permissionMode + allowedTools are inherited from `base` (#355).

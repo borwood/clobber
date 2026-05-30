@@ -13,7 +13,9 @@ export type UserTurnKind =
   | "spawn-prompt"
   | "live-inject"
   | "interrupt-notice"
-  | "tool-token";
+  | "tool-token"
+  | "message"
+  | "message-reply";
 
 export interface ClobberPromptTag {
   readonly kind: UserTurnKind;
@@ -48,4 +50,8 @@ export const CLOBBER_TAG_INTERPRETATION_GUIDANCE = [
   "assume someone is on the other end. A bare user turn (no wrapper) is a",
   "human typing live at the composer. The wrapper is for your interpretation",
   "of incoming turns only; never emit it in your own output.",
+  "A `message` turn is a note another agent (a manager) sent you mid-session;",
+  "its `token` attr, when present, is a single-use reply capability you may",
+  "redeem with `clobber reply <token>` or ignore. A `message-reply` turn is a",
+  "worker's one-shot answer arriving back on the manager that opened the thread.",
 ].join(" ");
