@@ -266,6 +266,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     workspaceRoles: opts.workspaceRoles,
     workspaces: opts.workspaces,
     scheduler,
+    ...roleEmbodiment,
   });
   registerAgentSelfSkillsRoutes(app, {
     db: opts.db,
@@ -275,6 +276,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     roleVersions: opts.roleVersions,
     workspaces: opts.workspaces,
     agentStatusLog: opts.agentStatusLog,
+    ...roleEmbodiment,
   });
   registerAgentAskRoutes(app, {
     sessionTokens: opts.sessionTokens,

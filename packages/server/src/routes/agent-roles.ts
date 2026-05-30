@@ -19,6 +19,7 @@ import { forkRole } from "../fork-role.ts";
 import { type RoleEditPatch } from "../edit-role.ts";
 import { applyRoleEdit, triggersRequirePersistent } from "../apply-role-edit.ts";
 import { resolveRoleByIdOrName } from "../resolve-role.ts";
+import { resolveCurrentRoleVersion } from "../resolve-role-content.ts";
 import { withAgentAuth } from "./_with-agent-auth.ts";
 import { buildDetail, buildListEntry } from "./_agent-roles-views.ts";
 
@@ -53,6 +54,10 @@ export interface AgentRolesRouteDeps {
   readonly workspaceRoles: WorkspaceRoleStore;
   readonly workspaces: WorkspaceStore;
   readonly scheduler: Pick<TriggerScheduler, "reloadRole">;
+  // #361 — git-as-truth wiring, so the write verbs can read a commit-pinned
+  // source/target role's content from the materialized cache (Option A).
+  readonly roleContentCache?: import("../role-content-cache.ts").RoleContentCache;
+  readonly roleRepoDir?: string;
 }
 
 export function registerAgentRolesRoutes(
@@ -89,14 +94,10 @@ export function registerAgentRolesRoutes(
           reply.code(404);
           return { error: `role not found: ${idOrName}` };
         }
-        if (source.current_version_id === undefined) {
-          reply.code(500);
-          return { error: "source role has no current version" };
-        }
-        const sourceVersion = deps.roleVersions.get(source.current_version_id);
+        const sourceVersion = resolveCurrentRoleVersion(source, deps);
         if (sourceVersion === null) {
           reply.code(500);
-          return { error: "source role version missing" };
+          return { error: "source role has no current version" };
         }
         if (
           deps.roles.findInWorkspace(session.workspace_id, parsed.data.new_name) !==
@@ -185,14 +186,10 @@ export function registerAgentRolesRoutes(
           response.description = parsed.data.description;
         }
         if (versionBumping) {
-          if (role.current_version_id === undefined) {
-            reply.code(500);
-            return { error: "role has no current version" };
-          }
-          const currentVersion = deps.roleVersions.get(role.current_version_id);
+          const currentVersion = resolveCurrentRoleVersion(role, deps);
           if (currentVersion === null) {
             reply.code(500);
-            return { error: "role current version missing" };
+            return { error: "role has no current version" };
           }
           const patch: RoleEditPatch = {
             ...(parsed.data.system_prompt === undefined

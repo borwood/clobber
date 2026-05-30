@@ -4,6 +4,8 @@ import type { SessionTokenStore } from "../session-token-store.ts";
 import type { SessionStore } from "../session-store.ts";
 import type { RoleStore } from "../role-store.ts";
 import type { RoleVersionStore } from "../role-version-store.ts";
+import type { RoleContentCache } from "../role-content-cache.ts";
+import { resolveCurrentRoleVersion } from "../resolve-role-content.ts";
 
 const BEARER = "Bearer ";
 
@@ -15,6 +17,10 @@ export interface AgentAuthDeps {
 export interface CommandAuthzDeps {
   readonly roles: RoleStore;
   readonly roleVersions: RoleVersionStore;
+  // #361 — present when git-as-truth is configured, so the gate resolves a
+  // commit-pinned role's allow-list from the materialized tree, not a row.
+  readonly roleContentCache?: RoleContentCache;
+  readonly roleRepoDir?: string;
 }
 
 export type AuthResult =
@@ -61,19 +67,12 @@ export function authorizeCommand(
   if (role === null) {
     return { ok: false, status: 500, error: "role missing for session" };
   }
-  if (role.current_version_id === undefined) {
-    return {
-      ok: false,
-      status: 500,
-      error: `role '${role.name}' has no current version`,
-    };
-  }
-  const version = deps.roleVersions.get(role.current_version_id);
+  const version = resolveCurrentRoleVersion(role, deps);
   if (version === null) {
     return {
       ok: false,
       status: 500,
-      error: `role '${role.name}' current version missing`,
+      error: `role '${role.name}' has no current version`,
     };
   }
   const allowed = JSON.parse(version.allowed_cli_commands_json) as readonly string[];

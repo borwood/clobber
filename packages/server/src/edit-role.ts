@@ -25,8 +25,11 @@ export function editRole(
 ): EditRoleResult {
   const versions = createRoleVersionStore(db);
 
+  // Writing a new version demotes a git-backed role to row-backed: the row now
+  // drives embodiment, so the commit pin (#349) must be cleared in the same
+  // update. A no-op for a role that was already row-backed.
   const setCurrentVersion = db.prepare(
-    "UPDATE roles SET current_version_id = ? WHERE id = ?",
+    "UPDATE roles SET current_version_id = ?, current_commit_branch = NULL, current_commit_sha = NULL WHERE id = ?",
   );
 
   const maxRow = db
