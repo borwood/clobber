@@ -1,6 +1,7 @@
 import type { Session } from "@clobber/shared";
 import type { SpawnedAgentInfo } from "./types.ts";
 import { endSession } from "./session-lifecycle.ts";
+import { repairTranscriptFile } from "./session-health.ts";
 import { prepareSpawnContext } from "./spawn-context.ts";
 import { sessionPin } from "./embody-role.ts";
 import { isProviderThreadMissing, waitForRuntimeStartup } from "./runtime-startup.ts";
@@ -115,6 +116,15 @@ async function performResume(
   if (role === null) return { ok: false, status: 422, error: "role not found" };
   const agent = session.agent_id === undefined ? null : deps.agents.get(session.agent_id);
   if (agent === null) return { ok: false, status: 422, error: "agent not found" };
+
+  // #360: de-poison before re-sending history. A turn interrupted mid
+  // extended-thinking leaves an emptied-but-signed thinking block in the
+  // transcript; resuming over it 400s permanently. Truncate that dangling
+  // partial turn back to the last clean boundary first. Shared chokepoint for
+  // both the live-continuation (wake) and revive-ended (`clobber resume`) paths.
+  if (session.transcript_path !== undefined) {
+    await repairTranscriptFile(session.transcript_path);
+  }
 
   const prepared = await prepareSpawnContext(deps, {
     mode: "resume",
