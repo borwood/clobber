@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
@@ -269,6 +269,68 @@ describe("POST /agent/sessions/:id/resume", () => {
     });
     expect(res.statusCode).toBe(404);
     rmSync(otherRepo, { recursive: true, force: true });
+  });
+
+  it("repairs a poisoned on-disk transcript before re-sending history (#360)", async () => {
+    const ended = seedEndedWorkerSession(h);
+    // A bricked session: its transcript ends in an interrupted assistant turn
+    // (unanswered tool_use) followed by a CLI synthetic-error placeholder.
+    // Resuming over this debris is what 400s; repair must strip it first.
+    const transcriptPath = join(h.repoPath, `${ended.sessionId}.jsonl`);
+    const records = [
+      { type: "user", message: { role: "user", content: "start the task" } },
+      {
+        type: "assistant",
+        message: {
+          model: "claude-opus-4-8",
+          role: "assistant",
+          content: [
+            // The real persisted form: thinking text redacted, signature kept.
+            { type: "thinking", thinking: "", signature: "sigOK==" },
+            { type: "text", text: "On it." },
+          ],
+        },
+      },
+      {
+        type: "assistant",
+        message: {
+          model: "claude-opus-4-8",
+          role: "assistant",
+          content: [
+            { type: "thinking", thinking: "", signature: "EsUKpoison==" },
+            { type: "tool_use", id: "toolu_9", name: "Bash", input: {} },
+          ],
+        },
+      },
+      {
+        type: "assistant",
+        message: {
+          model: "<synthetic>",
+          role: "assistant",
+          content: [{ type: "text", text: "API Error: 400" }],
+        },
+      },
+    ];
+    const rawLines = records.map((r) => JSON.stringify(r));
+    writeFileSync(transcriptPath, rawLines.join("\n") + "\n");
+    h.sessions.updateTranscriptPath(ended.sessionId, transcriptPath);
+
+    const res = await h.server.inject({
+      method: "POST",
+      url: `/agent/sessions/${ended.sessionId}/resume`,
+      headers: { authorization: `Bearer ${h.managerToken}` },
+      payload: { prompt: "continue" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(h.resumeRequests.length).toBe(1);
+
+    // The poisoned partial turn + synthetic placeholder are gone; the transcript
+    // now ends on the last clean assistant turn, so the re-sent history is valid.
+    const after = readFileSync(transcriptPath, "utf8");
+    const keptRaw = after.split("\n").filter((l) => l.length > 0);
+    expect(keptRaw).toEqual(rawLines.slice(0, 2));
+    expect(after).not.toContain("EsUKpoison");
+    expect(after).not.toContain("<synthetic>");
   });
 
   it("returns 403 when reviving would exceed the role ceiling", async () => {

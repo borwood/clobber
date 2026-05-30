@@ -5,7 +5,10 @@ import type { AgentStore } from "../agent-store.ts";
 import type { SessionStore } from "../session-store.ts";
 import type { RoleStore } from "../role-store.ts";
 import type { SessionTokenStore } from "../session-token-store.ts";
+import type { RuntimeProvider } from "@clobber/runtime";
 import type { AgentRegistry } from "../agent-registry.ts";
+import type { AgentWorkQueue } from "../agent-work-queue.ts";
+import { flushPendingInjects, type PendingInject } from "../inject-prompt.ts";
 import type { AgentQuestionStore } from "../agent-question-store.ts";
 import type { AgentQuestionWaiter } from "../agent-question-waiter.ts";
 import type { AgentStatusLogStore } from "../agent-status-log-store.ts";
@@ -27,6 +30,8 @@ export interface RegisterHookRoutesDeps {
   roles: RoleStore;
   sessionTokens: SessionTokenStore;
   registry: AgentRegistry;
+  runtimeProvider: RuntimeProvider;
+  injectQueue: AgentWorkQueue<PendingInject>;
   agentQuestions: AgentQuestionStore;
   agentQuestionWaiter: AgentQuestionWaiter;
   agentStatusLog: AgentStatusLogStore;
@@ -75,6 +80,8 @@ async function applySessionLifecycle(
     roles: RoleStore;
     sessionTokens: SessionTokenStore;
     registry: AgentRegistry;
+    runtimeProvider: RuntimeProvider;
+    injectQueue: AgentWorkQueue<PendingInject>;
     agentQuestions: AgentQuestionStore;
     agentQuestionWaiter: AgentQuestionWaiter;
     scheduler: Pick<TriggerScheduler, "fireSessionEnded" | "flushPendingWakes">;
@@ -89,8 +96,10 @@ async function applySessionLifecycle(
 
   if (payload.hook_event_name === "Stop") {
     deps.registry.setBusy(payload.session_id, false);
-    // Busy→idle: deliver any completion wakes that queued while this agent
-    // (typically the manager) was mid-turn.
+    // Busy→idle is the safe turn boundary: flush any injects that arrived
+    // mid-turn (#360 — writing them earlier would have poisoned an open
+    // thinking block) before the completion wakes that queued the same way.
+    flushPendingInjects(payload.session_id, deps);
     if (session.agent_id !== undefined) {
       await deps.scheduler.flushPendingWakes(session.agent_id);
     }

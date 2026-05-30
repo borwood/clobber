@@ -198,6 +198,10 @@ async function waitForInterjectedToken(
   h: Harness,
   sessionId: string,
 ): Promise<{ content: string; token: string }> {
+  // #360: a brief injected into a busy (mid-turn) session is held back and
+  // flushed on the next turn boundary, never written into an open thinking
+  // block. Advance to that boundary so the deferred interjection lands.
+  await fireStopToFlush(h, sessionId);
   for (let i = 0; i < 200; i++) {
     const buf = h.stdinChunks.get(sessionId);
     if (buf !== undefined) {
@@ -215,6 +219,23 @@ async function waitForInterjectedToken(
     await Bun.sleep(5);
   }
   throw new Error(`no tool-token interjection landed in session ${sessionId}`);
+}
+
+// Fire the Stop hook (busy→idle) so any inject deferred mid-turn flushes to the
+// live child's stdin — the production turn-boundary delivery path (#360).
+async function fireStopToFlush(h: Harness, sessionId: string): Promise<void> {
+  const transcriptPath = h.sessions.get(sessionId)?.transcript_path ?? "/tmp/t.jsonl";
+  await h.server.inject({
+    method: "POST",
+    url: "/hook",
+    payload: {
+      session_id: sessionId,
+      transcript_path: transcriptPath,
+      cwd: "/r",
+      permission_mode: "default",
+      hook_event_name: "Stop",
+    },
+  });
 }
 
 describe("tool-token primitive (#321)", () => {
