@@ -8,7 +8,9 @@ import type { RoleStore } from "../role-store.ts";
 import type { RoleVersionStore } from "../role-version-store.ts";
 import type { WorkspaceStore } from "../workspace-store.ts";
 import type { AgentStatusLogStore } from "../agent-status-log-store.ts";
+import type { RoleContentCache } from "../role-content-cache.ts";
 import { editRole } from "../edit-role.ts";
+import { resolveCurrentRoleVersion } from "../resolve-role-content.ts";
 import { loadWorkspaceSkillCatalog } from "../workspace-skill-catalog.ts";
 import { withAgentAuth } from "./_with-agent-auth.ts";
 
@@ -28,6 +30,10 @@ export interface AgentSelfSkillsRouteDeps {
   readonly roleVersions: RoleVersionStore;
   readonly workspaces: WorkspaceStore;
   readonly agentStatusLog: AgentStatusLogStore;
+  // #361 — git-as-truth wiring, so a commit-pinned persistent role's skills are
+  // read from the materialized cache and the grant demotes it to row-backed.
+  readonly roleContentCache?: RoleContentCache;
+  readonly roleRepoDir?: string;
 }
 
 interface SelfSkillsContext {
@@ -60,12 +66,9 @@ function resolveSelfSkillsContext(
       error: "self-grant is only allowed for persistent roles",
     };
   }
-  if (role.current_version_id === undefined) {
-    return { ok: false, status: 500, error: "role has no current version" };
-  }
-  const version = deps.roleVersions.get(role.current_version_id);
+  const version = resolveCurrentRoleVersion(role, deps);
   if (version === null) {
-    return { ok: false, status: 500, error: "role current version missing" };
+    return { ok: false, status: 500, error: "role has no current version" };
   }
   const workspace = deps.workspaces.get(sessionWorkspaceId);
   if (workspace === null) {
@@ -93,12 +96,9 @@ function commitSkillChange(
 ): AppendedGrant {
   const role = deps.roles.get(ctx.roleId);
   if (role === null) throw new Error("role disappeared");
-  if (role.current_version_id === undefined) {
-    throw new Error("role lost current version");
-  }
-  const currentVersion = deps.roleVersions.get(role.current_version_id);
+  const currentVersion = resolveCurrentRoleVersion(role, deps);
   if (currentVersion === null) {
-    throw new Error("role current version disappeared");
+    throw new Error("role lost current version");
   }
   const result = editRole(deps.db, role, currentVersion, {
     skills: nextSkills,
