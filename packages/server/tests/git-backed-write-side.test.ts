@@ -29,9 +29,9 @@ import { resolveCurrentRoleVersion } from "../src/resolve-role-content.ts";
 import type { AgentSpawner, SpawnedAgentInfo } from "../src/types.ts";
 
 // #361 — the git-backed WRITE-SIDE machinery (Option A), exercised against a
-// commit-pinned role. The default-seeding flip is deferred (a tracked follow-up
-// that also rewires the GET /agent/roles views + web role panel); this slice
-// proves the additive, zero-regression half: a role pinned to a commit (#349)
+// commit-pinned role. (The default-seeding flip + view/web rewire landed in
+// #385; with a repo configured, seeding now pins commits — see git-seed-flip.)
+// This slice proves the write-side half: a role pinned to a commit (#349)
 //  1. resolves its current content from the materialized cache as a version view,
 //  2. passes the per-command auth gate (which read a `role_versions` row before),
 //  3. and is mutated by edit / fork / self-skills — sourcing content from the
@@ -58,7 +58,11 @@ function workerCliAllowList(): readonly string[] {
 
 let roleRepoDir: string;
 
-function buildHarness(): Harness {
+// `withRepo` defaults true: the upstream repo is configured, so seeding pins
+// commits (#385) and the auth gate can resolve them. Pass `{ withRepo: false }`
+// for the no-repo fallback, where seeding stays row-backed.
+function buildHarness({ withRepo = true }: { withRepo?: boolean } = {}): Harness {
+  const repoDir = withRepo ? roleRepoDir : undefined;
   const db = createDatabase(":memory:");
   const tokens = createSessionTokenStore(db);
   const roles = createRoleStore(db);
@@ -95,7 +99,7 @@ function buildHarness(): Harness {
     cliEntry: "/dummy/cli.ts",
     dispatches: createTriggerDispatchStore(db),
     finalReportConsumerState: createFinalReportConsumerStateStore(db),
-    roleRepoDir,
+    ...(repoDir === undefined ? {} : { roleRepoDir: repoDir }),
   });
   return { server, db, tokens, roles };
 }
@@ -113,8 +117,9 @@ function roleId(h: Harness, name: string, wsId: string): string {
   return row.id;
 }
 
-// Flip a seeded (row-backed) role to git-backed by pinning its fork commit, the
-// way production will once the seeding flip lands. Returns the pinned role.
+// Re-pin a seeded role to its fork commit. With a repo configured the seed is
+// already commit-pinned (#385), so this is idempotent; it stays explicit so the
+// tests below read clearly against a known commit pin. Returns the pinned role.
 function pinToFork(h: Harness, id: string, name: string) {
   const repo = ensureUpstreamRoleRepo(roleRepoDir);
   const fork = repo.forks.get(name);
@@ -204,7 +209,8 @@ describe("#361 resolveCurrentRoleVersion read-view", () => {
   });
 
   it("returns the persisted row for a row-backed role", async () => {
-    const h = buildHarness();
+    // No repo configured → seeding stays row-backed (the #385 fallback).
+    const h = buildHarness({ withRepo: false });
     const wsId = await createWorkspace(h, repo.path);
     const worker = h.roles.get(roleId(h, "worker", wsId))!;
 

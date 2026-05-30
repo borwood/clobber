@@ -53,13 +53,24 @@ export function RolePicker({ assignments, selectedRoleId, onSelect }: Props) {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
                       <span className="font-medium text-text-dim">{role.name}</span>
-                      {current_version !== undefined && (
+                      {current_version !== undefined ? (
                         <span
                           className="px-1 py-0.5 rounded bg-elevated text-accent-text font-mono text-[10px]"
                           title={current_version.id}
                         >
                           v{current_version.version}
                         </span>
+                      ) : (
+                        // #385 — a git-backed (commit-pinned) role has no version
+                        // row; surface its real commit provenance (branch @ short sha).
+                        role.current_commit !== undefined && (
+                          <span
+                            className="px-1 py-0.5 rounded bg-elevated text-provenance-text font-mono text-[10px]"
+                            title={`${role.current_commit.branch} @ ${role.current_commit.sha}`}
+                          >
+                            {role.current_commit.sha.slice(0, 7)}
+                          </span>
+                        )
                       )}
                     </div>
                     <span className="text-xs text-text-subtle font-mono">

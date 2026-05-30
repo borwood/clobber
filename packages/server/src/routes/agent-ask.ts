@@ -8,6 +8,7 @@ import type { SessionTokenStore } from "../session-token-store.ts";
 import type { SessionStore } from "../session-store.ts";
 import type { RoleStore } from "../role-store.ts";
 import type { RoleVersionStore } from "../role-version-store.ts";
+import type { RoleContentCache } from "../role-content-cache.ts";
 import type { AgentQuestionStore } from "../agent-question-store.ts";
 import type { AgentQuestionWaiter } from "../agent-question-waiter.ts";
 import { askAndAwaitAnswer } from "../agent-question-blocking.ts";
@@ -20,6 +21,10 @@ export interface AgentAskRouteDeps {
   readonly sessions: SessionStore;
   readonly roles: RoleStore;
   readonly roleVersions: RoleVersionStore;
+  // #385 — present iff git-as-truth is configured; keeps the ask command's auth
+  // gate commit-safe for a git-backed role.
+  readonly roleContentCache?: RoleContentCache;
+  readonly roleRepoDir?: string;
   readonly agentQuestions: AgentQuestionStore;
   readonly agentQuestionWaiter: AgentQuestionWaiter;
   readonly askTimeoutMs?: number;

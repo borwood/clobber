@@ -119,6 +119,9 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     dispatches: opts.dispatches,
     agentStatusLog: opts.agentStatusLog,
     attachSession: (input) => attachSessionToAgent(spawnPipelineDeps, input),
+    // #385 — the manager's wake path resolves triggers through the commit-pin
+    // view, so a git-backed (commit-pinned) manager still registers and wakes.
+    ...roleEmbodiment,
   });
 
   registerHookRoutes(app, {
@@ -169,6 +172,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     roleVersions: opts.roleVersions,
     agentStatuses: opts.agentStatuses,
     gate: toolTokenGate,
+    ...roleEmbodiment,
   });
   registerSpawnRoutes(app, {
     workspaces: opts.workspaces,
@@ -196,6 +200,9 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     db: opts.db,
     workspaces: opts.workspaces,
     scheduler,
+    // #385 — `roleForks` (present iff a role repo is configured) flips seeding to
+    // commit-pins, so a fresh workspace embodies its roles from git by default.
+    ...roleEmbodiment,
   });
   registerWebhookTriggersRoutes(app, { scheduler });
   registerLayoutEventRoutes(app, { layoutEvents });
@@ -225,6 +232,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     roleVersions: opts.roleVersions,
     workspaceRoles: opts.workspaceRoles,
     scheduler,
+    ...roleEmbodiment,
   });
   registerAgentRoutes(app, {
     sessionTokens: opts.sessionTokens,
@@ -251,6 +259,9 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     onSessionEnded,
     onWorkerDone,
     resumeEnded: (input) => resumeEndedSession(spawnPipelineDeps, input),
+    // #385 — the auth gate (whoami/status/report/cycle/sessions…) resolves a
+    // commit-pinned role's allow-list through the cache, so these routes don't 500.
+    ...roleEmbodiment,
   });
   registerAgentMessagesRoutes(app, {
     ...injectDeps,
@@ -286,6 +297,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     agentQuestions: opts.agentQuestions,
     agentQuestionWaiter: opts.agentQuestionWaiter,
     ...(opts.askTimeoutMs === undefined ? {} : { askTimeoutMs: opts.askTimeoutMs }),
+    ...roleEmbodiment,
   });
 
   const finalReportConsumer = createFinalReportConsumer({

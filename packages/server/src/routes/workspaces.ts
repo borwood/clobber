@@ -7,6 +7,7 @@ import {
 } from "@clobber/shared";
 import type { WorkspaceStore } from "../workspace-store.ts";
 import type { TriggerScheduler } from "../trigger-scheduler.ts";
+import type { ForkRef } from "../role-repo.ts";
 import { seedWorkspaceRoles } from "../seed-workspace-roles.ts";
 import { validateWorkspacePath } from "../validate-workspace-path.ts";
 
@@ -20,9 +21,11 @@ export function registerWorkspaceRoutes(
     db: Database;
     workspaces: WorkspaceStore;
     scheduler: Pick<TriggerScheduler, "reloadRole" | "fireWorkspaceOpen">;
+    // #385 — present iff a role repo is configured; flips fresh seeds to git-backed.
+    roleForks?: ReadonlyMap<string, ForkRef>;
   },
 ): void {
-  const { db, workspaces, scheduler } = deps;
+  const { db, workspaces, scheduler, roleForks } = deps;
 
   app.post("/workspaces", async (request, reply) => {
     const parsed = CreateWorkspaceRequestSchema.safeParse(request.body);
@@ -45,7 +48,7 @@ export function registerWorkspaceRoutes(
       return { error: "workspace name already exists" };
     }
     const created = workspaces.create(parsed.data);
-    seedWorkspaceRoles(db, created.id);
+    seedWorkspaceRoles(db, created.id, roleForks);
     reply.code(201);
     return created;
   });

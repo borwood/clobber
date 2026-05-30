@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { PassThrough } from "node:stream";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { makeRepoFixture, type RepoFixture } from "./repo-fixture.ts";
 import { createDatabase } from "../src/db.ts";
@@ -22,8 +23,12 @@ import { createTriggerScheduler } from "../src/trigger-scheduler.ts";
 import { createTestClock, type TestClock } from "../src/clock.ts";
 import { editRole } from "../src/edit-role.ts";
 import { seedWorkspaceRoles } from "../src/seed-workspace-roles.ts";
+import { ensureUpstreamRoleRepo, commitContractOnBranch } from "../src/role-repo.ts";
+import { createRoleContentCache } from "../src/role-content-cache.ts";
+import { roleSnapshotToContract } from "../src/role-tree.ts";
+import { snapshotShippedBundle } from "../src/role-version-snapshot.ts";
 import { attachSessionToAgent, type SpawnPipelineDeps } from "../src/spawn-pipeline.ts";
-import { claudeRuntimeProvider, serializeUserMessage } from "@clobber/runtime";
+import { claudeRuntimeProvider, serializeUserMessage, loadRoleBundle } from "@clobber/runtime";
 import type { AgentSpawner, SpawnedAgentInfo } from "../src/types.ts";
 import { z } from "zod";
 import {
@@ -61,7 +66,7 @@ afterEach(() => {
   repo.cleanup();
 });
 
-function makeHarness(initial: Date): Harness {
+function makeHarness(initial: Date, opts: { roleRepoDir?: string } = {}): Harness {
   const db = createDatabase(":memory:");
   const clock = createTestClock(initial);
   const workspaces = createWorkspaceStore(db);
@@ -148,6 +153,11 @@ function makeHarness(initial: Date): Harness {
     dispatches,
     agentStatusLog,
     attachSession: (input) => attachSessionToAgent(spawnDeps, input),
+    // #385 — when a role repo is configured, the scheduler resolves a
+    // commit-pinned manager's triggers through the cache (its wake path).
+    ...(opts.roleRepoDir === undefined
+      ? {}
+      : { roleRepoDir: opts.roleRepoDir, roleContentCache: createRoleContentCache(db) }),
   });
 
   return {
@@ -1182,5 +1192,51 @@ describe("TriggerScheduler — wake-program mapping (#213)", () => {
 
     h.scheduler.stop();
     h.db.close();
+  });
+});
+
+// #385 (LOAD-BEARING) — the persistent manager's wake path. With the seed flip,
+// a production manager is commit-pinned and has no `role_versions` row; the
+// scheduler must resolve its triggers through the commit-pin view, or it never
+// registers them and the manager never wakes.
+describe("TriggerScheduler — commit-pinned manager wakes (#385)", () => {
+  it("loads and fires the triggers baked into a commit-pinned manager", async () => {
+    const roleRepoDir = mkdtempSync(join(tmpdir(), "clobber-sched-git-truth-"));
+    try {
+      const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"), { roleRepoDir });
+
+      // Build a manager fork tree that carries a webhook trigger, then pin the
+      // seeded manager to it — a git-backed role with no version row.
+      ensureUpstreamRoleRepo(roleRepoDir);
+      const managerLoaded = loadRoleBundle("manager")!;
+      const contract = roleSnapshotToContract(
+        snapshotShippedBundle({ loaded: managerLoaded, allowedTools: managerLoaded.allowedTools }),
+      );
+      const triggered = { ...contract, triggers: [{ kind: "webhook" as const, path: "/wake" }] };
+      const fork = commitContractOnBranch(
+        roleRepoDir,
+        "manager-triggered",
+        "manager-default",
+        triggered,
+        "manager: + webhook trigger",
+      );
+      h.roles.pinCommit(h.managerRoleId, { branch: fork.branch, sha: fork.sha });
+      expect(h.roles.get(h.managerRoleId)!.current_version_id).toBeUndefined();
+
+      h.scheduler.start();
+      const result = await h.scheduler.fireWebhook("/wake", { hello: "world" });
+      // dispatched > 0 proves the commit-pinned manager's webhook trigger was
+      // registered — i.e. its triggers resolved through the commit-pin view.
+      expect(result.dispatched).toBe(1);
+
+      const audit = h.dispatches.listForAgent(h.managerAgentId);
+      expect(audit.length).toBe(1);
+      expect(audit[0]!.trigger_kind).toBe("webhook");
+
+      h.scheduler.stop();
+      h.db.close();
+    } finally {
+      rmSync(roleRepoDir, { recursive: true, force: true });
+    }
   });
 });

@@ -10,6 +10,8 @@ import type { Clock } from "./clock.ts";
 import type { WorkspaceStore } from "./workspace-store.ts";
 import type { RoleStore } from "./role-store.ts";
 import type { RoleVersionStore } from "./role-version-store.ts";
+import type { RoleContentCache } from "./role-content-cache.ts";
+import { resolveCurrentRoleVersion } from "./resolve-role-content.ts";
 import type { AgentStore } from "./agent-store.ts";
 import type { SessionStore } from "./session-store.ts";
 import type { AgentRegistry } from "./agent-registry.ts";
@@ -46,6 +48,10 @@ export interface TriggerSchedulerDeps {
   readonly agentStatusLog: AgentStatusLogStore;
   readonly attachSession: AttachSessionFn;
   readonly synthesizePrompt?: (trigger: RoleTrigger, payload: unknown) => string;
+  // #385 — present iff git-as-truth is configured. The manager's wake path
+  // resolves its triggers through these, so a commit-pinned manager still wakes.
+  readonly roleContentCache?: RoleContentCache;
+  readonly roleRepoDir?: string;
 }
 
 export interface TriggerScheduler {
@@ -121,9 +127,10 @@ export function createTriggerScheduler(
     if (agent === null) return null;
     const role = deps.roles.get(agent.role_id);
     if (role === null || !role.persistent) return null;
-    const versionId = role.current_version_id;
-    if (versionId === undefined) return null;
-    const version = deps.roleVersions.get(versionId);
+    // #385 — resolve through the commit-pin view: a git-backed manager has no
+    // `role_versions` row, so reading `current_version_id` directly would never
+    // register its triggers and it would never wake.
+    const version = resolveCurrentRoleVersion(role, deps);
     if (version === null) return null;
     const raw = JSON.parse(version.triggers_json) as unknown[];
     const triggers: RoleTrigger[] = [];
