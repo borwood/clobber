@@ -11,6 +11,7 @@ export * from "./seed.ts";
 export * from "./wake-program.ts";
 export * from "./spawn-worktree.ts";
 export * from "./file-size-policy.ts";
+export * from "./workspace-theme.ts";
 export * from "./manager-skill-policy.ts";
 export * from "./agent-question.ts";
 export * from "./session.ts";

@@ -10,7 +10,7 @@ import { defaultLayout } from "../src/layout/default-layout.ts";
 import { saveLayout } from "../src/layout/persistence.ts";
 import { layoutReducer } from "../src/layout/reducer.ts";
 
-const WORKSPACES = [{ id: "ws-a", name: "Workspace A", repo_path: "/a" }];
+const WORKSPACES = [{ id: "ws-a", name: "Workspace A", repo_path: "/a", theme: { mode: "dark", accent: "emerald" } }];
 
 function jsonResponse(data: unknown): Response {
   return new Response(JSON.stringify(data), {

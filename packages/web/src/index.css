@@ -1,7 +1,4 @@
 @import "tailwindcss";
-/* Syntax-highlight theme for transcript code blocks (#43). rehype-highlight
-   emits .hljs-* token classes; this theme paints them. */
-@import "highlight.js/styles/github-dark.css";
 
 /* ── Semantic color tokens (#368) ──────────────────────────────────────────
    Every color in the web UI is named by ROLE here, not by crayon, so the UI
@@ -70,6 +67,22 @@
   --color-provenance-deep: oklch(27.9% 0.077 45.635); /* amber-950 */
 }
 
+/* ── Syntax-highlight tokens (#43/#369) ────────────────────────────────────
+   rehype-highlight emits .hljs-* classes; instead of importing a fixed theme
+   (was hard-coded github-dark) we paint them from CSS vars so the code theme
+   swaps with the mode like everything else. The dark default lives here; the
+   per-mode blocks below repoint these for light/paper. `.hljs` itself is
+   transparent so the token-driven <pre> surface shows through in every mode. */
+:root {
+  --hljs-text: oklch(87.1% 0.006 286.286); /* zinc-300 */
+  --hljs-comment: oklch(55.2% 0.016 285.938); /* zinc-500 */
+  --hljs-keyword: oklch(70.4% 0.191 22.216); /* red-400 */
+  --hljs-string: oklch(74.6% 0.16 232.661); /* sky-400 */
+  --hljs-title: oklch(70.2% 0.183 293.541); /* violet-400 */
+  --hljs-number: oklch(70.7% 0.165 254.624); /* blue-400 */
+  --hljs-attr: oklch(82.8% 0.189 84.429); /* amber-400 */
+}
+
 /* Dark-theme scrollbars (#41). Applied globally so transcript, sidebar,
    modals, and any future scrollable panel match the UI without each component
    having to re-style. Token-driven (#368) so they re-theme with everything else. */
@@ -99,4 +112,184 @@
 
 *::-webkit-scrollbar-corner {
   background: var(--color-surface);
+}
+
+/* ── Per-mode token overrides (#369) ───────────────────────────────────────
+   `<html data-theme>` is set from the active workspace's theme (apply-theme.ts).
+   Dark is the :root default above — it needs no block. light + paper are light
+   surfaces, so they SHARE the status-contrast + syntax overrides (status tokens
+   that read on dark are too pale on white; raised to -600/-700 here), then each
+   sets its own surface/text ramp (cool zinc vs. warm stone). Mode touches
+   surfaces / text / status only; the accent ramp is the orthogonal axis below. */
+[data-theme="light"],
+[data-theme="paper"] {
+  /* Status — darkened for legibility on a light surface */
+  --color-working: oklch(59.6% 0.145 163.225); /* emerald-600 */
+  --color-blocked: oklch(66.6% 0.179 58.318); /* amber-600 */
+  --color-done: oklch(55.2% 0.016 285.938); /* zinc-500 */
+  --color-danger: oklch(57.7% 0.245 27.325); /* red-600 */
+  --color-danger-strong: oklch(50.5% 0.213 27.518); /* red-700 */
+  --color-danger-text: oklch(50.5% 0.213 27.518); /* red-700 */
+  --color-danger-muted: oklch(88.5% 0.062 18.334); /* red-200 */
+
+  --color-info: oklch(58.8% 0.158 241.966); /* sky-600 */
+  --color-info-strong: oklch(50% 0.134 242.749); /* sky-700 */
+  --color-info-text: oklch(50% 0.134 242.749); /* sky-700 */
+  --color-info-surface: oklch(82.8% 0.111 230.318); /* sky-300 */
+  --color-info-fg: oklch(29.3% 0.066 243.157); /* sky-950 */
+
+  --color-provenance: oklch(55.5% 0.163 48.998); /* amber-700 */
+  --color-provenance-fg: oklch(27.9% 0.077 45.635); /* amber-950 */
+  --color-provenance-text: oklch(47.3% 0.137 46.201); /* amber-800 */
+  --color-provenance-strong: oklch(55.5% 0.163 48.998); /* amber-700 */
+  --color-provenance-muted: oklch(92.4% 0.12 95.746); /* amber-200 */
+  --color-provenance-deep: oklch(96.2% 0.059 95.617); /* amber-100 */
+
+  /* Syntax — github-light token colors */
+  --hljs-text: oklch(27.4% 0.006 286.033); /* zinc-800 */
+  --hljs-comment: oklch(55.2% 0.016 285.938); /* zinc-500 */
+  --hljs-keyword: oklch(50.5% 0.213 27.518); /* red-700 */
+  --hljs-string: oklch(42.4% 0.146 265.522); /* blue-800 */
+  --hljs-title: oklch(49.1% 0.27 292.581); /* violet-700 */
+  --hljs-number: oklch(48.8% 0.243 264.376); /* blue-700 */
+  --hljs-attr: oklch(55.3% 0.195 38.402); /* orange-700 */
+}
+
+/* light — cool zinc surfaces, ramp inverted from dark */
+[data-theme="light"] {
+  --color-bg: oklch(100% 0 0); /* white */
+  --color-surface: oklch(96.7% 0.001 286.375); /* zinc-100 */
+  --color-elevated: oklch(92% 0.004 286.32); /* zinc-200 */
+  --color-raised: oklch(87.1% 0.006 286.286); /* zinc-300 */
+
+  --color-border: oklch(92% 0.004 286.32); /* zinc-200 */
+  --color-border-strong: oklch(87.1% 0.006 286.286); /* zinc-300 */
+
+  --color-text: oklch(21% 0.006 285.885); /* zinc-900 */
+  --color-text-dim: oklch(27.4% 0.006 286.033); /* zinc-800 */
+  --color-text-soft: oklch(37% 0.013 285.805); /* zinc-700 */
+  --color-text-muted: oklch(44.2% 0.017 285.786); /* zinc-600 */
+  --color-text-subtle: oklch(55.2% 0.016 285.938); /* zinc-500 */
+  --color-text-faint: oklch(70.5% 0.015 286.067); /* zinc-400 */
+}
+
+/* paper — warm stone surfaces for a softer, off-white reading mode */
+[data-theme="paper"] {
+  --color-bg: oklch(98.4% 0.006 95); /* warm cream */
+  --color-surface: oklch(96.1% 0.008 92); /* warm off-white */
+  --color-elevated: oklch(92.3% 0.01 90); /* warm stone-200 */
+  --color-raised: oklch(86.9% 0.012 88); /* warm stone-300 */
+
+  --color-border: oklch(92.3% 0.01 90); /* warm stone-200 */
+  --color-border-strong: oklch(86.9% 0.012 88); /* warm stone-300 */
+
+  --color-text: oklch(24% 0.012 60); /* warm near-black */
+  --color-text-dim: oklch(30% 0.012 60);
+  --color-text-soft: oklch(40% 0.014 62);
+  --color-text-muted: oklch(47% 0.013 65);
+  --color-text-subtle: oklch(56% 0.013 65);
+  --color-text-faint: oklch(70% 0.012 70);
+}
+
+/* ── Per-accent token overrides (#369) ─────────────────────────────────────
+   `<html data-accent>` recolors the accent ramp ONLY — never the status tokens,
+   so the `working` dot keeps its emerald STATUS hue regardless of accent. One
+   block per built-in accent (the orthogonal `+N` half of `3 + N`); emerald
+   restates the :root default so switching back is explicit. `--color-accent-fg`
+   (button text) stays the shared zinc-50 from :root for every accent. */
+[data-accent="emerald"] {
+  --color-accent: oklch(59.6% 0.145 163.225); /* emerald-600 */
+  --color-accent-strong: oklch(50.8% 0.118 165.612); /* emerald-700 */
+  --color-accent-hover: oklch(69.6% 0.17 162.48); /* emerald-500 */
+  --color-accent-text: oklch(76.5% 0.177 163.223); /* emerald-400 */
+  --color-accent-muted: oklch(37.8% 0.077 168.94); /* emerald-900 */
+  --color-accent-deep: oklch(26.2% 0.051 172.552); /* emerald-950 */
+}
+
+[data-accent="blue"] {
+  --color-accent: oklch(54.6% 0.245 262.881); /* blue-600 */
+  --color-accent-strong: oklch(48.8% 0.243 264.376); /* blue-700 */
+  --color-accent-hover: oklch(62.3% 0.214 259.815); /* blue-500 */
+  --color-accent-text: oklch(70.7% 0.165 254.624); /* blue-400 */
+  --color-accent-muted: oklch(37.9% 0.146 265.522); /* blue-900 */
+  --color-accent-deep: oklch(28.2% 0.091 267.935); /* blue-950 */
+}
+
+[data-accent="violet"] {
+  --color-accent: oklch(54.1% 0.281 293.009); /* violet-600 */
+  --color-accent-strong: oklch(49.1% 0.27 292.581); /* violet-700 */
+  --color-accent-hover: oklch(60.6% 0.25 292.717); /* violet-500 */
+  --color-accent-text: oklch(70.2% 0.183 293.541); /* violet-400 */
+  --color-accent-muted: oklch(38% 0.189 293.745); /* violet-900 */
+  --color-accent-deep: oklch(28.3% 0.141 291.089); /* violet-950 */
+}
+
+[data-accent="amber"] {
+  --color-accent: oklch(66.6% 0.179 58.318); /* amber-600 */
+  --color-accent-strong: oklch(55.5% 0.163 48.998); /* amber-700 */
+  --color-accent-hover: oklch(76.9% 0.188 70.08); /* amber-500 */
+  --color-accent-text: oklch(82.8% 0.189 84.429); /* amber-400 */
+  --color-accent-muted: oklch(41.4% 0.112 45.904); /* amber-900 */
+  --color-accent-deep: oklch(27.9% 0.077 45.635); /* amber-950 */
+}
+
+[data-accent="rose"] {
+  --color-accent: oklch(58.6% 0.253 17.585); /* rose-600 */
+  --color-accent-strong: oklch(51.4% 0.222 16.935); /* rose-700 */
+  --color-accent-hover: oklch(64.5% 0.246 16.439); /* rose-500 */
+  --color-accent-text: oklch(71.2% 0.194 13.428); /* rose-400 */
+  --color-accent-muted: oklch(41% 0.159 10.272); /* rose-900 */
+  --color-accent-deep: oklch(27.1% 0.105 12.094); /* rose-950 */
+}
+
+/* ── Syntax-highlight rendering (#369) ─────────────────────────────────────
+   One rule set, painted from the --hljs-* vars the mode blocks repoint. `.hljs`
+   stays transparent so the <pre>'s token-driven surface carries the background
+   in every mode. */
+.hljs {
+  color: var(--hljs-text);
+  background: transparent;
+}
+.hljs-comment,
+.hljs-quote {
+  color: var(--hljs-comment);
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-type,
+.hljs-name,
+.hljs-tag {
+  color: var(--hljs-keyword);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-doctag,
+.hljs-addition {
+  color: var(--hljs-string);
+}
+.hljs-title,
+.hljs-section,
+.hljs-built_in {
+  color: var(--hljs-title);
+}
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link {
+  color: var(--hljs-number);
+}
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-meta {
+  color: var(--hljs-attr);
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 600;
 }

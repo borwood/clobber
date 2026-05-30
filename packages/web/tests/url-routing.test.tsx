@@ -13,8 +13,8 @@ import { App } from "../src/App.tsx";
 // (slugify("Workspace A") === "workspace-a"). The unknown-slug scenario uses a
 // slug absent from this list.
 const WORKSPACES = [
-  { id: "ws-a", name: "Workspace A", repo_path: "/a" },
-  { id: "ws-b", name: "Workspace B", repo_path: "/b" },
+  { id: "ws-a", name: "Workspace A", repo_path: "/a", theme: { mode: "dark", accent: "emerald" } },
+  { id: "ws-b", name: "Workspace B", repo_path: "/b", theme: { mode: "dark", accent: "emerald" } },
 ];
 
 // Mutable so a test can simulate "zero live sessions" (the dead-end scenario).

@@ -11,6 +11,7 @@ import {
 import { WorkspaceTabs } from "./components/WorkspaceTabs.tsx";
 import { WorkspaceConfigModal } from "./components/WorkspaceConfigModal.tsx";
 import { slugify } from "@clobber/shared";
+import { applyWorkspaceTheme, applyLandingTheme } from "./lib/apply-theme.ts";
 import { usePolledResource } from "./hooks/usePolledResource.ts";
 import { useLocation } from "./hooks/useLocation.ts";
 import { buildPath, parseLocation } from "./router.ts";
@@ -125,6 +126,19 @@ export function App() {
     if (activeWorkspaceId === null) return;
     void api.notifyWorkspaceOpen(activeWorkspaceId);
   }, [activeWorkspaceId]);
+
+  // The active workspace's theme applies app-wide; the no-workspace landing uses
+  // dark (#369). Depending on the primitives (not the polled object) keeps this
+  // from re-firing every poll tick.
+  const themeMode = activeWorkspace?.theme.mode;
+  const themeAccent = activeWorkspace?.theme.accent;
+  useEffect(() => {
+    if (themeMode === undefined || themeAccent === undefined) {
+      applyLandingTheme();
+      return;
+    }
+    applyWorkspaceTheme({ mode: themeMode, accent: themeAccent });
+  }, [themeMode, themeAccent]);
 
   function focusSession(id: string): void {
     navigate(buildPath(workspaceSlug, id));

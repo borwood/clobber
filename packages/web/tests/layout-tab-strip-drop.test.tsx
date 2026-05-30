@@ -7,7 +7,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { App } from "../src/App.tsx";
 
-const WORKSPACES = [{ id: "ws-a", name: "Workspace A", repo_path: "/a" }];
+const WORKSPACES = [{ id: "ws-a", name: "Workspace A", repo_path: "/a", theme: { mode: "dark", accent: "emerald" } }];
 
 const SESSION = {
   session_id: "sess-1",

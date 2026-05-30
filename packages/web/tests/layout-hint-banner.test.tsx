@@ -9,8 +9,8 @@ import { App } from "../src/App.tsx";
 import { HINT_DISMISSED_KEY } from "../src/layout/HintBanner.tsx";
 
 const WORKSPACES = [
-  { id: "ws-a", name: "Workspace A", repo_path: "/a" },
-  { id: "ws-b", name: "Workspace B", repo_path: "/b" },
+  { id: "ws-a", name: "Workspace A", repo_path: "/a", theme: { mode: "dark", accent: "emerald" } },
+  { id: "ws-b", name: "Workspace B", repo_path: "/b", theme: { mode: "dark", accent: "emerald" } },
 ];
 
 function jsonResponse(data: unknown): Response {

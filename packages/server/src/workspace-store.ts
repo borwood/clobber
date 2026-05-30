@@ -8,6 +8,7 @@ import {
   DEFAULT_SPAWN_WORKTREE,
   DEFAULT_FILE_SIZE_POLICY,
   DEFAULT_MANAGER_SKILL_POLICY,
+  DEFAULT_WORKSPACE_THEME,
   WorkspaceSchema,
   slugify,
   type CreateWorkspaceRequest,
@@ -19,6 +20,7 @@ import {
   type SpawnWorktree,
   type TriggerOverrides,
   type Workspace,
+  type WorkspaceTheme,
 } from "@clobber/shared";
 
 export interface WorkspaceConfigPatch {
@@ -29,6 +31,7 @@ export interface WorkspaceConfigPatch {
   readonly spawn_worktree?: SpawnWorktree;
   readonly file_size_policy?: FileSizePolicy;
   readonly manager_skill_policy?: ManagerSkillPolicy;
+  readonly theme?: WorkspaceTheme;
 }
 
 export interface WorkspaceStore {
@@ -53,6 +56,7 @@ interface Row {
   spawn_worktree: string;
   file_size_policy: string;
   manager_skill_policy: string;
+  theme: string;
   created_at: number;
 }
 
@@ -68,6 +72,7 @@ function rowToWorkspace(row: Row): Workspace {
     spawn_worktree: JSON.parse(row.spawn_worktree),
     file_size_policy: JSON.parse(row.file_size_policy),
     manager_skill_policy: JSON.parse(row.manager_skill_policy),
+    theme: JSON.parse(row.theme),
     created_at: row.created_at,
   });
 }
@@ -75,8 +80,8 @@ function rowToWorkspace(row: Row): Workspace {
 export function createWorkspaceStore(db: Database): WorkspaceStore {
   const insertStmt = db.prepare(
     `INSERT INTO workspaces
-       (id, name, repo_path, setting_sources, role_edit_policy, trigger_overrides, final_report_callback, spawn_worktree, file_size_policy, manager_skill_policy, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, name, repo_path, setting_sources, role_edit_policy, trigger_overrides, final_report_callback, spawn_worktree, file_size_policy, manager_skill_policy, theme, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const getStmt = db.prepare("SELECT * FROM workspaces WHERE id = ?");
   const listStmt = db.prepare(
@@ -104,6 +109,7 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
         allow_self_grant: DEFAULT_MANAGER_SKILL_POLICY.allow_self_grant,
         allowed_skills: [...DEFAULT_MANAGER_SKILL_POLICY.allowed_skills],
       };
+      const theme: WorkspaceTheme = req.theme ?? { ...DEFAULT_WORKSPACE_THEME };
       insertStmt.run(
         id,
         req.name,
@@ -115,6 +121,7 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
         JSON.stringify(spawnWorktree),
         JSON.stringify(fileSizePolicy),
         JSON.stringify(skillPolicy),
+        JSON.stringify(theme),
         created_at,
       );
       return {
@@ -131,6 +138,7 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
           allow_self_grant: skillPolicy.allow_self_grant,
           allowed_skills: [...skillPolicy.allowed_skills],
         },
+        theme,
         created_at,
       };
     },
@@ -181,6 +189,10 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
       if (config.manager_skill_policy !== undefined) {
         fragments.push("manager_skill_policy = ?");
         values.push(JSON.stringify(config.manager_skill_policy));
+      }
+      if (config.theme !== undefined) {
+        fragments.push("theme = ?");
+        values.push(JSON.stringify(config.theme));
       }
       if (fragments.length === 0) {
         const row = getStmt.get(id) as Row | null;
