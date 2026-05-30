@@ -132,13 +132,23 @@ export function App() {
   // from re-firing every poll tick.
   const themeMode = activeWorkspace?.theme.mode;
   const themeAccent = activeWorkspace?.theme.accent;
+  // Serialized so the effect only re-fires when a custom theme's definitions
+  // actually change, not on every poll tick that re-creates the workspace object.
+  const themeCustom =
+    activeWorkspace === undefined
+      ? undefined
+      : JSON.stringify(activeWorkspace.theme.custom);
   useEffect(() => {
-    if (themeMode === undefined || themeAccent === undefined) {
+    if (themeMode === undefined || themeAccent === undefined || themeCustom === undefined) {
       applyLandingTheme();
       return;
     }
-    applyWorkspaceTheme({ mode: themeMode, accent: themeAccent });
-  }, [themeMode, themeAccent]);
+    applyWorkspaceTheme({
+      mode: themeMode,
+      accent: themeAccent,
+      custom: JSON.parse(themeCustom),
+    });
+  }, [themeMode, themeAccent, themeCustom]);
 
   function focusSession(id: string): void {
     navigate(buildPath(workspaceSlug, id));

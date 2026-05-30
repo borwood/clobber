@@ -15,6 +15,7 @@ import {
   DEFAULT_MANAGER_SKILL_POLICY,
   DEFAULT_WORKSPACE_THEME,
   type Workspace,
+  type WorkspaceTheme,
 } from "@clobber/shared";
 
 let app: ReturnType<typeof Fastify>;
@@ -450,7 +451,7 @@ describe("workspace theme — defaults + creation", () => {
 
   it("accepts a custom mode + accent on creation", async () => {
     const ws = await createWorkspace({ theme: { mode: "light", accent: "violet" } });
-    expect(ws.theme).toEqual({ mode: "light", accent: "violet" });
+    expect(ws.theme).toEqual({ mode: "light", accent: "violet", custom: [] });
   });
 
   it("rejects an unknown mode (no silent fallback to dark)", async () => {
@@ -489,7 +490,11 @@ describe("PATCH /workspaces/:id — updating theme", () => {
       payload: { theme: { mode: "light", accent: "blue" } },
     });
     expect(set.statusCode).toBe(200);
-    expect((set.json() as Workspace).theme).toEqual({ mode: "light", accent: "blue" });
+    expect((set.json() as Workspace).theme).toEqual({
+      mode: "light",
+      accent: "blue",
+      custom: [],
+    });
 
     const back = await app.inject({
       method: "PATCH",
@@ -508,7 +513,11 @@ describe("PATCH /workspaces/:id — updating theme", () => {
       payload: { theme: { mode: "paper", accent: "rose" } },
     });
     const getRes = await app.inject({ method: "GET", url: `/workspaces/${ws.id}` });
-    expect((getRes.json() as Workspace).theme).toEqual({ mode: "paper", accent: "rose" });
+    expect((getRes.json() as Workspace).theme).toEqual({
+      mode: "paper",
+      accent: "rose",
+      custom: [],
+    });
   });
 
   it("rejects an unknown stored mode on PATCH (no silent fallback)", async () => {
@@ -546,6 +555,94 @@ describe("PATCH /workspaces/:id — updating theme", () => {
     expect(updated.role_edit_policy).toEqual({
       forbidden_keys: [...DEFAULT_ROLE_EDIT_FORBIDDEN_KEYS],
     });
+  });
+});
+
+describe("workspace theme — custom themes (#370)", () => {
+  const customTheme: WorkspaceTheme = {
+    mode: "c1",
+    accent: "emerald",
+    custom: [
+      {
+        id: "c1",
+        name: "Midnight Citrus",
+        base: "paper",
+        accent: "amber",
+        tokens: { bg: "#101010", accent: "oklch(70% 0.18 80)" },
+      },
+    ],
+  };
+
+  it("create → persist → reload round-trips a sparse custom theme", async () => {
+    const ws = await createWorkspace({ theme: customTheme });
+    expect(ws.theme).toEqual(customTheme);
+
+    // Reload (a fresh GET — the persistence boundary) must reflect it byte-for-byte,
+    // including the sparse token map (only the two overridden tokens stored).
+    const getRes = await app.inject({ method: "GET", url: `/workspaces/${ws.id}` });
+    expect((getRes.json() as Workspace).theme).toEqual(customTheme);
+  });
+
+  it("PATCH adds a custom theme and selects it by id", async () => {
+    const ws = await createWorkspace({});
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/workspaces/${ws.id}`,
+      payload: { theme: customTheme },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as Workspace).theme).toEqual(customTheme);
+  });
+
+  it("rejects an injection-bearing token value (no break-out of the CSS value)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/workspaces",
+      payload: {
+        name: "ws",
+        repo_path: repoPath,
+        theme: {
+          mode: "dark",
+          accent: "emerald",
+          custom: [{ id: "c1", name: "Evil", base: "dark", tokens: { bg: "#fff; x:url(y)" } }],
+        },
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("rejects an unknown token key in a custom theme", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/workspaces",
+      payload: {
+        name: "ws",
+        repo_path: repoPath,
+        theme: {
+          mode: "dark",
+          accent: "emerald",
+          custom: [{ id: "c1", name: "Typo", base: "dark", tokens: { bogus: "#fff" } }],
+        },
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("rejects an unknown base (provenance must be a built-in mode)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/workspaces",
+      payload: {
+        name: "ws",
+        repo_path: repoPath,
+        theme: {
+          mode: "dark",
+          accent: "emerald",
+          custom: [{ id: "c1", name: "Orphan", base: "midnight", tokens: {} }],
+        },
+      },
+    });
+    expect(res.statusCode).toBe(400);
   });
 });
 
