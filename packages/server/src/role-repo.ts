@@ -45,10 +45,14 @@ export interface BundleIdentity {
   readonly description?: string;
 }
 
-// Materialize a fresh upstream repo at `dir` (which must be an empty directory).
+// Materialize a fresh upstream repo at `dir`, creating it if it does not exist.
 // Commits the base layer on `base`, then forks one branch per shipped role and
 // commits its effective (base ⊕ fork) tree. HEAD is left on `base`.
 export function materializeUpstreamRoleRepo(dir: string): UpstreamRoleRepo {
+  // On a fresh boot `dir` (`<dataDir>/clobber-role-repo`) has never been
+  // created, and `git -C <dir> init` needs it to already exist. Create it
+  // first — `recursive: true` is idempotent if it's already an empty dir.
+  mkdirSync(dir, { recursive: true });
   git(dir, "init", "-q", "-b", BASE_BRANCH);
 
   commitTree(dir, serializeRoleTree(baseContract(baseRole)), "base: universal layer");
