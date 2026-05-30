@@ -34,15 +34,18 @@ describe("RoleListEntrySchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("rejects an entry missing current_version_id", () => {
+  // #385 — a git-backed role has no version-row uuid; it surfaces its real
+  // commit ref as provenance instead. Both pins are optional in the schema.
+  it("accepts a commit-pinned entry carrying current_commit instead of a version id", () => {
     const result = RoleListEntrySchema.safeParse({
       id: UUID_A,
-      name: "worker",
-      persistent: false,
+      name: "manager",
+      persistent: true,
+      current_commit: { branch: "manager-default", sha: "deadbeef" },
       version: 1,
       created_at: 1700000000000,
     });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
   });
 
   it("rejects a non-positive version", () => {

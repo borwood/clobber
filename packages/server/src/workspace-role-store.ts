@@ -27,6 +27,8 @@ interface JoinedRow extends CeilingRow {
   role_persistent: number;
   role_workspace_id: string | null;
   role_current_version_id: string | null;
+  role_current_commit_branch: string | null;
+  role_current_commit_sha: string | null;
   role_created_at: number;
   current_version_number: number | null;
   current_version_allowed_tools_json: string | null;
@@ -51,6 +53,14 @@ function joinedRowToAssignment(row: JoinedRow): WorkspaceRoleAssignment {
   }
   if (row.role_workspace_id !== null) roleInput["workspace_id"] = row.role_workspace_id;
   if (row.role_current_version_id !== null) roleInput["current_version_id"] = row.role_current_version_id;
+  // #385 — surface the commit pin so the operator role picker can render a
+  // git-backed role's provenance (its current_version is absent by design).
+  if (row.role_current_commit_branch !== null && row.role_current_commit_sha !== null) {
+    roleInput["current_commit"] = {
+      branch: row.role_current_commit_branch,
+      sha: row.role_current_commit_sha,
+    };
+  }
   const role: Role = RoleSchema.parse(roleInput);
   const assignment: WorkspaceRoleAssignment = {
     role,
@@ -87,6 +97,8 @@ export function createWorkspaceRoleStore(db: Database): WorkspaceRoleStore {
       r.persistent        AS role_persistent,
       r.workspace_id      AS role_workspace_id,
       r.current_version_id AS role_current_version_id,
+      r.current_commit_branch AS role_current_commit_branch,
+      r.current_commit_sha AS role_current_commit_sha,
       r.created_at        AS role_created_at,
       cv.version          AS current_version_number,
       cv.allowed_tools_json AS current_version_allowed_tools_json

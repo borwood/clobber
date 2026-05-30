@@ -3,15 +3,22 @@ import type { Database } from "bun:sqlite";
 import { enumerateShippedRoles, type LoadedRole } from "@clobber/runtime";
 import { snapshotShippedBundle } from "./role-version-snapshot.ts";
 import { createRoleVersionStore } from "./role-version-store.ts";
+import type { ForkRef } from "./role-repo.ts";
 
 export interface SeedWorkspaceRolesResult {
   readonly created: number;
   readonly skipped: number;
 }
 
+// #385 — `forks` (role name → its fork tip in the upstream role repo) flips a
+// seeded role from row-backed to git-backed: present → the role is pinned to its
+// commit and embodiment reads content from the tree; absent → the pre-#349
+// `role_versions` row is written. Production always materializes the repo, so it
+// embodies from git by default; a no-repo run (an in-memory DB) keeps the row.
 export function seedWorkspaceRoles(
   db: Database,
   workspaceId: string,
+  forks?: ReadonlyMap<string, ForkRef>,
 ): SeedWorkspaceRolesResult {
   const versions = createRoleVersionStore(db);
 
@@ -20,6 +27,9 @@ export function seedWorkspaceRoles(
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const setVersion = db.prepare("UPDATE roles SET current_version_id = ? WHERE id = ?");
+  const pinCommit = db.prepare(
+    "UPDATE roles SET current_commit_branch = ?, current_commit_sha = ? WHERE id = ?",
+  );
   const upsertCeiling = db.prepare(
     `INSERT INTO workspace_role_ceilings (workspace_id, role_id, max_concurrent)
      VALUES (?, ?, ?)
@@ -40,9 +50,10 @@ export function seedWorkspaceRoles(
       skipped += 1;
       continue;
     }
-    const roleId = seedSingleRole(db, workspaceId, shipped, {
+    const roleId = seedSingleRole(db, workspaceId, shipped, forks, {
       insertRole,
       setVersion,
+      pinCommit,
       upsertCeiling,
       createVersion: versions.create,
     });
@@ -56,6 +67,7 @@ export function seedWorkspaceRoles(
 interface SeedDeps {
   readonly insertRole: ReturnType<Database["prepare"]>;
   readonly setVersion: ReturnType<Database["prepare"]>;
+  readonly pinCommit: ReturnType<Database["prepare"]>;
   readonly upsertCeiling: ReturnType<Database["prepare"]>;
   readonly createVersion: ReturnType<typeof createRoleVersionStore>["create"];
 }
@@ -64,14 +76,15 @@ function seedSingleRole(
   _db: Database,
   workspaceId: string,
   shipped: LoadedRole,
+  forks: ReadonlyMap<string, ForkRef> | undefined,
   deps: SeedDeps,
 ): string {
   const id = randomUUID();
   const created_at = Date.now();
   const allowedTools = shipped.allowedTools;
   const description = shipped.manifest.description;
-  const permissionMode = shipped.permissionMode ?? null;
-  const effort = shipped.manifest.effort ?? null;
+  const permissionMode = shipped.permissionMode === undefined ? null : shipped.permissionMode;
+  const effort = shipped.manifest.effort === undefined ? null : shipped.manifest.effort;
 
   deps.insertRole.run(
     id,
@@ -84,6 +97,17 @@ function seedSingleRole(
     null,
     created_at,
   );
+
+  if (forks !== undefined) {
+    const fork = forks.get(shipped.manifest.name);
+    // The fork map is built from the same shipped-role set, so a missing entry
+    // is a materialization bug, not a fallback case — surface it.
+    if (fork === undefined) {
+      throw new Error(`no upstream fork branch for shipped role '${shipped.manifest.name}'`);
+    }
+    deps.pinCommit.run(fork.branch, fork.sha, id);
+    return id;
+  }
 
   const snapshot = snapshotShippedBundle({ loaded: shipped, allowedTools });
   const version = deps.createVersion({

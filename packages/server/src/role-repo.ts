@@ -61,15 +61,37 @@ export function materializeUpstreamRoleRepo(dir: string): UpstreamRoleRepo {
   const forks = new Map<string, ForkRef>();
   for (const loaded of enumerateShippedRoles()) {
     const name = loaded.manifest.name;
-    const branch = `${name}-default`;
-    git(dir, "checkout", "-q", "-b", branch, BASE_BRANCH);
     const snapshot = snapshotShippedBundle({ loaded, allowedTools: loaded.allowedTools });
-    commitTree(dir, serializeRoleTree(roleSnapshotToContract(snapshot)), `${name}: fork from base`);
-    forks.set(name, { branch, sha: revParse(dir, branch) });
+    forks.set(
+      name,
+      commitContractOnBranch(
+        dir,
+        `${name}-default`,
+        BASE_BRANCH,
+        roleSnapshotToContract(snapshot),
+        `${name}: fork from base`,
+      ),
+    );
   }
 
   git(dir, "checkout", "-q", BASE_BRANCH);
   return { dir, baseBranch: BASE_BRANCH, baseSha, forks };
+}
+
+// Branch `branch` off `fromRef`, commit `contract`'s serialized tree, and return
+// the resulting pin. The fork-materialization loop builds each shipped role's
+// default branch this way; it is also the seam a caller (or test) uses to commit
+// a bespoke contract — e.g. a role tree carrying triggers — onto its own branch.
+export function commitContractOnBranch(
+  dir: string,
+  branch: string,
+  fromRef: string,
+  contract: RoleTreeContract,
+  message: string,
+): ForkRef {
+  git(dir, "checkout", "-q", "-b", branch, fromRef);
+  commitTree(dir, serializeRoleTree(contract), message);
+  return { branch, sha: revParse(dir, branch) };
 }
 
 // Idempotent boot entrypoint: materialize the upstream repo into `dir` the first

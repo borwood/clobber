@@ -223,13 +223,20 @@ export const WorkspaceRoleAssignmentSchema = z.object({
 });
 export type WorkspaceRoleAssignment = z.infer<typeof WorkspaceRoleAssignmentSchema>;
 
+// #385 — a role is pinned EITHER by a `role_versions` row (current_version_id)
+// OR by a commit into the upstream role repo (current_commit). The list/detail
+// views mirror that dual-pin: a git-backed role surfaces its real commit ref as
+// provenance — it has no version-row uuid, and synthesizing a fake one would
+// betray git-as-truth. `version` stays present (the projected view's number) so
+// the picker badge has something to render for both pin kinds.
 export const RoleListEntrySchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1),
   persistent: z.boolean(),
   description: z.string().min(1).optional(),
   allowed_tools: z.array(z.string().min(1)).optional(),
-  current_version_id: z.string().uuid(),
+  current_version_id: z.string().uuid().optional(),
+  current_commit: CommitRefSchema.optional(),
   version: z.number().int().positive(),
   created_at: z.number().int().nonnegative(),
 });
@@ -241,7 +248,10 @@ export const RolesListResponseSchema = z.object({
 export type RolesListResponse = z.infer<typeof RolesListResponseSchema>;
 
 export const RoleDetailVersionSchema = z.object({
-  id: z.string().uuid(),
+  // Absent for a commit-pinned role — its content lives in git, not a row, so
+  // `current_commit` carries the provenance instead (see RoleListEntrySchema).
+  id: z.string().uuid().optional(),
+  current_commit: CommitRefSchema.optional(),
   version: z.number().int().positive(),
   framing: z.string(),
   system_prompt: z.string().min(1),

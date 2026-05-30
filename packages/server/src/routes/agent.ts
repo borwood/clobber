@@ -5,6 +5,7 @@ import type { SessionTokenStore } from "../session-token-store.ts";
 import type { SessionStore } from "../session-store.ts";
 import type { RoleStore } from "../role-store.ts";
 import type { RoleVersionStore } from "../role-version-store.ts";
+import type { RoleContentCache } from "../role-content-cache.ts";
 import type { WorkspaceStore } from "../workspace-store.ts";
 import type { WorkspaceRoleStore } from "../workspace-role-store.ts";
 import type { AgentStore } from "../agent-store.ts";
@@ -38,6 +39,10 @@ export interface AgentRouteDeps {
   readonly sessions: SessionStore;
   readonly roles: RoleStore;
   readonly roleVersions: RoleVersionStore;
+  // #385 — present iff git-as-truth is configured; the auth gate resolves a
+  // commit-pinned role's allow-list through these (shared by cycle + sessions).
+  readonly roleContentCache?: RoleContentCache;
+  readonly roleRepoDir?: string;
   readonly workspaces: WorkspaceStore;
   readonly workspaceRoles: WorkspaceRoleStore;
   readonly agents: AgentStore;
