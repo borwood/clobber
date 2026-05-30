@@ -177,6 +177,10 @@ async function performResume(
   // The prompt is re-composed every wake; keep the row honest about the
   // rendered prompt this resume actually ran with (#253).
   deps.sessions.updateComposedSystemPrompt(session.id, ctx.spawnOptions.systemPrompt);
-  bindLiveSession(deps, session.id, ctx, spawned);
+  // #366: the resume kick is suppressed (gated on mode === "resume"), so a turn
+  // is in flight only when this resume carried an explicit prompt. A bare resume
+  // (the UI resume button) runs no turn and emits no `Stop` — register it idle so
+  // it isn't stuck false-busy, stranding the next composer message.
+  bindLiveSession(deps, session.id, ctx, spawned, prompt !== undefined);
   return { ok: true, session_id: session.id, pid: spawned.pid };
 }

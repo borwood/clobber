@@ -225,7 +225,9 @@ export async function attachSessionToAgent(
     // can surface exactly what the agent was told (#253).
     composed_system_prompt: ctx.spawnOptions.systemPrompt,
   });
-  bindLiveSession(deps, sessionId, ctx, spawned);
+  // A fresh attach always delivers the opening kick (or prompt), so a turn is in
+  // flight — register busy until its `Stop`.
+  bindLiveSession(deps, sessionId, ctx, spawned, true);
 
   return { ok: true, agent_id: agent.id, session_id: sessionId, pid: spawned.pid };
 }
@@ -235,9 +237,10 @@ export function bindLiveSession(
   sessionId: string,
   ctx: SpawnContext,
   spawned: SpawnedAgentInfo,
+  busy: boolean,
 ): void {
   deps.sessionTokens.register(sessionId, ctx.token);
-  deps.registry.register(sessionId, spawned.stdin, spawned.kill);
+  deps.registry.register(sessionId, spawned.stdin, spawned.kill, busy);
   bindRuntimeEvents(deps, sessionId, spawned);
   const endOnCleanExit = deps.runtimeProvider.capabilities.processLifetime === "session";
   spawned.exited.then((code) => {

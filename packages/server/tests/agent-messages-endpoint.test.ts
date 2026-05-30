@@ -151,9 +151,9 @@ function bearer(token: string): { authorization: string } {
   return { authorization: `Bearer ${token}` };
 }
 
-// A recipient must be idle for injectPrompt to write to stdin now rather than
-// enqueue (the #360 mid-turn defer). The Stop hook flips a freshly-spawned
-// (busy) session to idle, the same boundary the real flush rides.
+// injectPrompt writes straight to stdin whether the recipient is busy or idle
+// (the clobber inject queue was removed in #367 — claude's native queue defers a
+// mid-turn write). The Stop hook flips a freshly-spawned (busy) session to idle.
 async function fireStop(h: Harness, sessionId: string): Promise<void> {
   const res = await h.server.inject({
     method: "POST",

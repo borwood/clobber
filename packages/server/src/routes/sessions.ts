@@ -7,8 +7,7 @@ import {
   type AgentQuestion,
 } from "@clobber/shared";
 import type { RuntimeProvider } from "@clobber/runtime";
-import { injectPrompt, type PendingInject } from "../inject-prompt.ts";
-import type { AgentWorkQueue } from "../agent-work-queue.ts";
+import { injectPrompt } from "../inject-prompt.ts";
 import type { SessionStore } from "../session-store.ts";
 import type { AgentStore } from "../agent-store.ts";
 import type { RoleStore } from "../role-store.ts";
@@ -67,7 +66,6 @@ export function registerSessionRoutes(
     summaries: WorkspaceSessionSummaries;
     registry: AgentRegistry;
     runtimeProvider: RuntimeProvider;
-    injectQueue: AgentWorkQueue<PendingInject>;
     resumeTurn: (input: {
       readonly sessionId: string;
       readonly prompt: string;

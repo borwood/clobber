@@ -7,8 +7,6 @@ import type { RoleStore } from "../role-store.ts";
 import type { SessionTokenStore } from "../session-token-store.ts";
 import type { RuntimeProvider } from "@clobber/runtime";
 import type { AgentRegistry } from "../agent-registry.ts";
-import type { AgentWorkQueue } from "../agent-work-queue.ts";
-import { flushPendingInjects, type PendingInject } from "../inject-prompt.ts";
 import type { AgentQuestionStore } from "../agent-question-store.ts";
 import type { AgentQuestionWaiter } from "../agent-question-waiter.ts";
 import type { AgentStatusLogStore } from "../agent-status-log-store.ts";
@@ -31,7 +29,6 @@ export interface RegisterHookRoutesDeps {
   sessionTokens: SessionTokenStore;
   registry: AgentRegistry;
   runtimeProvider: RuntimeProvider;
-  injectQueue: AgentWorkQueue<PendingInject>;
   agentQuestions: AgentQuestionStore;
   agentQuestionWaiter: AgentQuestionWaiter;
   agentStatusLog: AgentStatusLogStore;
@@ -81,7 +78,6 @@ async function applySessionLifecycle(
     sessionTokens: SessionTokenStore;
     registry: AgentRegistry;
     runtimeProvider: RuntimeProvider;
-    injectQueue: AgentWorkQueue<PendingInject>;
     agentQuestions: AgentQuestionStore;
     agentQuestionWaiter: AgentQuestionWaiter;
     scheduler: Pick<TriggerScheduler, "fireSessionEnded" | "flushPendingWakes">;
@@ -96,10 +92,8 @@ async function applySessionLifecycle(
 
   if (payload.hook_event_name === "Stop") {
     deps.registry.setBusy(payload.session_id, false);
-    // Busy→idle is the safe turn boundary: flush any injects that arrived
-    // mid-turn (#360 — writing them earlier would have poisoned an open
-    // thinking block) before the completion wakes that queued the same way.
-    flushPendingInjects(payload.session_id, deps);
+    // Busy→idle is the safe boundary to release the completion wakes that were
+    // queued while the manager was mid-turn (#171).
     if (session.agent_id !== undefined) {
       await deps.scheduler.flushPendingWakes(session.agent_id);
     }
