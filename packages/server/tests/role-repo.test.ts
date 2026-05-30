@@ -8,6 +8,7 @@ import { roleSnapshotToContract } from "../src/role-tree.ts";
 import { snapshotShippedBundle } from "../src/role-version-snapshot.ts";
 import {
   materializeUpstreamRoleRepo,
+  ensureUpstreamRoleRepo,
   loadRoleBundleAtCommit,
   bundleFromContract,
   BASE_BRANCH,
@@ -72,6 +73,22 @@ describe("upstream role git repo (#349)", () => {
         { stdout: "pipe", stderr: "pipe" },
       );
       expect(res.exitCode, `${BASE_BRANCH} is ancestor of ${fork.branch}`).toBe(0);
+    }
+  });
+
+  it("materializes on a fresh boot where the role-repo dir does not exist yet (#365)", () => {
+    // The live boot path derives `<dataDir>/clobber-role-repo` and hands it to
+    // ensureUpstreamRoleRepo before anything has created it. `git -C <dir> init`
+    // needs the dir to already exist, so a clean install used to fail here.
+    const fresh = join(dir, "clobber-role-repo");
+    const repo = ensureUpstreamRoleRepo(fresh);
+
+    expect(repo.baseBranch).toBe(BASE_BRANCH);
+    expect(repo.forks.has("manager")).toBe(true);
+    expect(repo.forks.has("worker")).toBe(true);
+    for (const [name, fork] of repo.forks) {
+      expect(fork.branch).toBe(`${name}-default`);
+      expect(git(fresh, "rev-parse", fork.branch).trim()).toBe(fork.sha);
     }
   });
 
