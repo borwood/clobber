@@ -129,6 +129,24 @@ describe("session-health — detectTranscriptPoison", () => {
     expect(detectTranscriptPoison(lines).cutIndex).toBe(1);
   });
 
+  it("does NOT flag a transient synthetic error the session recovered past", () => {
+    // A transient API error (e.g. a 529 overload) writes a synthetic turn, then
+    // the session recovers and continues with healthy, closed turns. That old
+    // synthetic is mid-history, not the unrecoverable tail — repairing it would
+    // silently delete all the recovered work.
+    const lines = [
+      userTurn("start"),
+      thinkThenTool("sigA==", "toolu_1"),
+      toolResultTurn("toolu_1"), // first exchange closed
+      syntheticError(), // transient error...
+      userTurn("retry"),
+      thinkThenText("sigB==", "recovered and finished"), // ...session recovered past it
+    ];
+    const diag = detectTranscriptPoison(lines);
+    expect(diag.poisoned).toBe(false);
+    expect(diag.cutIndex).toBe(-1);
+  });
+
   it("repairs nothing when there is no synthetic anchor (incomplete tail but no debris)", () => {
     // A session killed mid-thinking but not yet resumed has no synthetic debris.
     // Conservative: leave it alone rather than risk cutting healthy history.

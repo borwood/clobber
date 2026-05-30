@@ -73,36 +73,57 @@ function lastBlockType(line: TranscriptLine): string | null {
   return typeof type === "string" ? type : null;
 }
 
-// The real assistant turn immediately before the synthetic tail is incomplete
-// when it ends on an unterminated block: a `thinking` block with nothing after
-// it, or a `tool_use` whose `tool_result` never arrived (the synthetic error
-// landed instead). A turn ending in `text` is a finished answer — keep it.
-function isIncompleteBeforeSyntheticTail(line: TranscriptLine): boolean {
-  const type = lastBlockType(line);
-  return type === "thinking" || type === "redacted_thinking" || type === "tool_use";
+// A user turn carrying a `tool_result` — the record that closes the tool_use of
+// the assistant turn before it.
+function isToolResultTurn(line: TranscriptLine): boolean {
+  const message = messageOf(line);
+  if (message === null || message["role"] !== "user") return false;
+  const content = message["content"];
+  if (!Array.isArray(content)) return false;
+  return content.some((block) => asObject(block)?.["type"] === "tool_result");
 }
 
 /**
- * Locate the unrecoverable trailing region: the `model:"<synthetic>"` debris at
- * the tail plus the single incomplete real-assistant turn immediately before
- * it. Anchored on the synthetic marker; no anchor → repair nothing.
+ * Locate the unrecoverable trailing region. Only a STRICTLY-TRAILING broken
+ * region is poison: walking back from the tail, a finished assistant turn (ends
+ * in `text`) or a `tool_result` that closes a tool_use turn is a clean boundary
+ * — the session was healthy there, so everything at and before it stays.
+ *
+ * The trailing region swept up is the `model:"<synthetic>"` debris plus the
+ * recovery re-prompts / bookkeeping records interleaved with it, optionally
+ * fronted by the single incomplete assistant turn that started the break (ends
+ * on `thinking`/`tool_use`, unanswered). The region is poison only if it
+ * actually contains synthetic debris — so a transient synthetic the session
+ * later recovered past (a closed turn exists after it) is NOT flagged, and an
+ * incomplete tail with no debris is left alone. Both biases are toward
+ * false-negatives: a wrongful cut silently deletes healthy history.
  */
 export function detectTranscriptPoison(
   lines: readonly TranscriptLine[],
 ): PoisonDiagnosis {
-  let firstSynthetic = -1;
-  for (let i = 0; i < lines.length; i++) {
-    if (isSyntheticErrorRecord(lines[i]!)) {
-      firstSynthetic = i;
+  let cut = lines.length;
+  let sawSynthetic = false;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i]!;
+    if (isSyntheticErrorRecord(line)) {
+      sawSynthetic = true;
+      cut = i;
+      continue;
+    }
+    const type = lastBlockType(line);
+    if (type === "text") break; // a finished answer — clean boundary
+    if (type === "thinking" || type === "redacted_thinking" || type === "tool_use") {
+      // The incomplete turn that started the break: include it, then stop —
+      // never walk back past the one originating turn into healthy history.
+      cut = i;
       break;
     }
+    if (isToolResultTurn(line)) break; // closes a tool_use turn — clean boundary
+    // A recovery re-prompt or non-message bookkeeping record in the debris.
+    cut = i;
   }
-  if (firstSynthetic === -1) return { poisoned: false, cutIndex: -1 };
-  const before = firstSynthetic - 1;
-  if (before >= 0 && isIncompleteBeforeSyntheticTail(lines[before]!)) {
-    return { poisoned: true, cutIndex: before };
-  }
-  return { poisoned: true, cutIndex: firstSynthetic };
+  if (!sawSynthetic) return { poisoned: false, cutIndex: -1 };
+  return { poisoned: true, cutIndex: cut };
 }
 
 /**
