@@ -273,9 +273,9 @@ describe("POST /agent/sessions/:id/resume", () => {
 
   it("repairs a poisoned on-disk transcript before re-sending history (#360)", async () => {
     const ended = seedEndedWorkerSession(h);
-    // A bricked session: its transcript ends in a poisoned partial turn
-    // (thinking:"" + retained signature) plus CLI synthetic-error placeholders.
-    // Resuming over this history is what 400s; repair must run first.
+    // A bricked session: its transcript ends in an interrupted assistant turn
+    // (unanswered tool_use) followed by a CLI synthetic-error placeholder.
+    // Resuming over this debris is what 400s; repair must strip it first.
     const transcriptPath = join(h.repoPath, `${ended.sessionId}.jsonl`);
     const records = [
       { type: "user", message: { role: "user", content: "start the task" } },
@@ -285,7 +285,8 @@ describe("POST /agent/sessions/:id/resume", () => {
           model: "claude-opus-4-8",
           role: "assistant",
           content: [
-            { type: "thinking", thinking: "planning the work", signature: "sigOK==" },
+            // The real persisted form: thinking text redacted, signature kept.
+            { type: "thinking", thinking: "", signature: "sigOK==" },
             { type: "text", text: "On it." },
           ],
         },

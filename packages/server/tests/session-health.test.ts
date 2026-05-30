@@ -9,34 +9,55 @@ import {
 } from "../src/session-health.ts";
 import type { TranscriptLine } from "../src/transcript-reader.ts";
 
-// Records shaped per the #360 forensic (context.md): a poisoned trailing
-// assistant turn carries a thinking block whose content was emptied but whose
-// cryptographic signature was retained, optionally followed by CLI
-// `model:"<synthetic>"` error placeholders and a clobber recovery re-prompt.
+// IMPORTANT: claude redacts thinking *text* from the persisted JSONL and keeps
+// only the signature, so `{thinking:"", signature}` is the NORMAL on-disk form
+// of EVERY healthy thinking block (verified against the #360 forensics). These
+// fixtures model that real form so the detector is exercised honestly — empty
+// thinking content must never be treated as poison.
 const userTurn = (text: string): TranscriptLine => ({
   type: "user",
   message: { role: "user", content: text },
 });
-const cleanAssistant = (): TranscriptLine => ({
+const toolResultTurn = (toolId: string): TranscriptLine => ({
+  type: "user",
+  message: {
+    role: "user",
+    content: [{ type: "tool_result", tool_use_id: toolId, content: "ok" }],
+  },
+});
+// A healthy turn that thinks (empty-content+signature, the real form) then calls
+// a tool — completed by the matching tool_result that follows.
+const thinkThenTool = (sig: string, toolId: string): TranscriptLine => ({
   type: "assistant",
   message: {
     model: "claude-opus-4-8",
     role: "assistant",
     content: [
-      { type: "thinking", thinking: "weighing the options", signature: "sigCLEAN==" },
-      { type: "text", text: "Here is the answer." },
+      { type: "thinking", thinking: "", signature: sig },
+      { type: "tool_use", id: toolId, name: "Bash", input: { cmd: "ls" } },
     ],
   },
 });
-const poisonAssistant = (): TranscriptLine => ({
+// A healthy turn that thinks then gives a terminal text answer.
+const thinkThenText = (sig: string, text: string): TranscriptLine => ({
   type: "assistant",
   message: {
     model: "claude-opus-4-8",
     role: "assistant",
     content: [
-      { type: "thinking", thinking: "", signature: "EsUKCmMIDhgCKkCk==" },
-      { type: "tool_use", id: "toolu_1", name: "Bash", input: { cmd: "ls" } },
+      { type: "thinking", thinking: "", signature: sig },
+      { type: "text", text },
     ],
+  },
+});
+// The interrupted turn: it ends on a thinking block (empty-content+signature,
+// like every persisted thinking block) with no terminal continuation.
+const interruptedThinking = (sig: string): TranscriptLine => ({
+  type: "assistant",
+  message: {
+    model: "claude-opus-4-8",
+    role: "assistant",
+    content: [{ type: "thinking", thinking: "", signature: sig }],
   },
 });
 const syntheticError = (): TranscriptLine => ({
@@ -52,12 +73,27 @@ const recoveryReprompt = (): TranscriptLine => ({
   message: { role: "user", content: "Your previous turn stalled… Start now" },
 });
 
+// A long healthy session that used extended thinking on every turn — the case
+// the previous (empty-thinking) detector would have catastrophically truncated.
+function healthyLongFixture(): TranscriptLine[] {
+  return [
+    userTurn("start the task"),
+    thinkThenTool("sigA==", "toolu_1"),
+    toolResultTurn("toolu_1"),
+    thinkThenTool("sigB==", "toolu_2"),
+    toolResultTurn("toolu_2"),
+    thinkThenText("sigC==", "All done."),
+  ];
+}
+
+// The bricked tail: a healthy prefix, then an interrupted thinking turn, then
+// the synthetic-error debris interleaved with clobber recovery re-prompts.
 function poisonedFixture(): TranscriptLine[] {
   return [
     userTurn("hi"),
-    cleanAssistant(),
-    userTurn("do X"), // index 2 — last clean boundary
-    poisonAssistant(), // index 3 — first bad record
+    thinkThenTool("sig1==", "toolu_9"),
+    toolResultTurn("toolu_9"), // index 2 — last clean boundary
+    interruptedThinking("sigBROKEN=="), // index 3 — incomplete trailing turn
     syntheticError(),
     recoveryReprompt(),
     syntheticError(),
@@ -65,51 +101,58 @@ function poisonedFixture(): TranscriptLine[] {
 }
 
 describe("session-health — detectTranscriptPoison", () => {
-  it("flags the poisoned trailing region and points cutIndex at the first bad record", () => {
+  it("flags the synthetic tail and pulls in the one incomplete turn before it", () => {
     const diag = detectTranscriptPoison(poisonedFixture());
     expect(diag.poisoned).toBe(true);
     expect(diag.cutIndex).toBe(3);
   });
 
-  it("reports a clean transcript as not poisoned (cutIndex -1)", () => {
-    const clean = [userTurn("hi"), cleanAssistant(), userTurn("again"), cleanAssistant()];
-    const diag = detectTranscriptPoison(clean);
+  it("does NOT flag a long healthy session built entirely from empty-thinking turns", () => {
+    // Regression for the over-broad marker: every thinking block here is the
+    // real `{thinking:"", signature}` form. None is poison.
+    const diag = detectTranscriptPoison(healthyLongFixture());
     expect(diag.poisoned).toBe(false);
     expect(diag.cutIndex).toBe(-1);
   });
 
-  it("does NOT flag an emptied thinking block that has no signature (not the poison pattern)", () => {
-    const unsigned: TranscriptLine[] = [
-      userTurn("hi"),
-      {
-        type: "assistant",
-        message: {
-          model: "claude-opus-4-8",
-          role: "assistant",
-          content: [{ type: "thinking", thinking: "", signature: "" }],
-        },
-      },
-    ];
-    expect(detectTranscriptPoison(unsigned).poisoned).toBe(false);
+  it("strips only the synthetic debris when the preceding turn is a finished answer", () => {
+    // A completed text turn that happens to precede synthetic debris is kept —
+    // bias toward false-negatives, never cut a finished turn.
+    const lines = [userTurn("q"), thinkThenText("sigT==", "the answer"), syntheticError()];
+    const diag = detectTranscriptPoison(lines);
+    expect(diag.poisoned).toBe(true);
+    expect(diag.cutIndex).toBe(2);
+  });
+
+  it("pulls in an incomplete tool_use turn (unanswered) before the synthetic tail", () => {
+    const lines = [userTurn("q"), thinkThenTool("sigU==", "toolu_x"), syntheticError()];
+    expect(detectTranscriptPoison(lines).cutIndex).toBe(1);
+  });
+
+  it("repairs nothing when there is no synthetic anchor (incomplete tail but no debris)", () => {
+    // A session killed mid-thinking but not yet resumed has no synthetic debris.
+    // Conservative: leave it alone rather than risk cutting healthy history.
+    const lines = [userTurn("hi"), thinkThenTool("sigA==", "toolu_1"), interruptedThinking("sigB==")];
+    const diag = detectTranscriptPoison(lines);
+    expect(diag.poisoned).toBe(false);
+    expect(diag.cutIndex).toBe(-1);
   });
 });
 
 describe("session-health — repairTranscript", () => {
-  it("truncates the dangling partial turn back to the last clean user/assistant boundary", () => {
+  it("truncates the synthetic tail + incomplete turn back to the last clean boundary", () => {
     const { lines, dropped } = repairTranscript(poisonedFixture());
     expect(dropped).toBe(4);
     expect(lines.length).toBe(3);
-    // Last surviving record is the genuine user turn — a resumable boundary.
-    expect(lines[lines.length - 1]).toEqual(userTurn("do X"));
-    // No poison survives.
+    expect(lines[lines.length - 1]).toEqual(toolResultTurn("toolu_9"));
     expect(detectTranscriptPoison(lines).poisoned).toBe(false);
   });
 
-  it("leaves a clean transcript untouched", () => {
-    const clean = [userTurn("hi"), cleanAssistant()];
-    const { lines, dropped } = repairTranscript(clean);
+  it("is a no-op on a long healthy empty-thinking session (dropped: 0, all preserved)", () => {
+    const healthy = healthyLongFixture();
+    const { lines, dropped } = repairTranscript(healthy);
     expect(dropped).toBe(0);
-    expect(lines).toEqual(clean);
+    expect(lines).toEqual(healthy);
   });
 });
 
@@ -130,15 +173,15 @@ describe("session-health — repairTranscriptFile (on-disk JSONL)", () => {
     expect(keptRaw.length).toBe(3);
     // Kept records are byte-identical to the originals (signatures intact).
     expect(keptRaw).toEqual(rawLines.slice(0, 3));
+    expect(after).not.toContain("<synthetic>");
 
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it("is a no-op on a clean transcript file", async () => {
+  it("is a no-op on a healthy empty-thinking transcript file", async () => {
     const dir = mkdtempSync(join(tmpdir(), "clobber-health-"));
-    const path = join(dir, "clean.jsonl");
-    const fixture = [userTurn("hi"), cleanAssistant()];
-    const original = fixture.map((l) => JSON.stringify(l)).join("\n") + "\n";
+    const path = join(dir, "healthy.jsonl");
+    const original = healthyLongFixture().map((l) => JSON.stringify(l)).join("\n") + "\n";
     writeFileSync(path, original);
 
     const result = await repairTranscriptFile(path);
