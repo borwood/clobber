@@ -8,7 +8,9 @@ export type AgentStatusLogKind =
   | "final-report"
   | "callback-error"
   | "skill-self-grant"
-  | "session-boundary";
+  | "session-boundary"
+  | "message"
+  | "message-reply";
 
 export interface AppendStatusLogRequest {
   readonly agent_id: string;

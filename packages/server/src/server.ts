@@ -9,6 +9,8 @@ import { registerFsRoutes } from "./routes/fs.ts";
 import { registerRoleRoutes } from "./routes/roles.ts";
 import { registerWorkspaceRoleRoutes } from "./routes/workspace-roles.ts";
 import { registerAgentRoutes } from "./routes/agent.ts";
+import { registerAgentMessagesRoutes } from "./routes/agent-messages.ts";
+import { createAgentMessageStore } from "./agent-message-store.ts";
 import { registerAgentRolesRoutes } from "./routes/agent-roles.ts";
 import { registerAgentSelfSkillsRoutes } from "./routes/agent-self-skills.ts";
 import { registerAgentAskRoutes } from "./routes/agent-ask.ts";
@@ -255,6 +257,11 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     onSessionEnded,
     onWorkerDone,
     resumeEnded: (input) => resumeEndedSession(spawnPipelineDeps, input),
+  });
+  registerAgentMessagesRoutes(app, {
+    ...injectDeps,
+    agentStatusLog: opts.agentStatusLog,
+    agentMessages: createAgentMessageStore(opts.db),
   });
   registerAgentRolesRoutes(app, {
     db: opts.db,
