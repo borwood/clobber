@@ -7,16 +7,16 @@ import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 // compose the primitive rather than hand-rolling their own.
 const VARIANTS = {
   pane: {
-    strip: "flex items-stretch border-b border-zinc-800 h-9 shrink-0",
-    base: "px-3 py-1 text-xs uppercase tracking-wider transition-colors cursor-grab focus-visible:outline focus-visible:outline-1 focus-visible:outline-zinc-500",
-    active: "bg-zinc-800 text-zinc-100",
-    idle: "bg-transparent text-zinc-400 hover:bg-zinc-900",
+    strip: "flex items-stretch border-b border-border h-9 shrink-0",
+    base: "px-3 py-1 text-xs uppercase tracking-wider transition-colors cursor-grab focus-visible:outline focus-visible:outline-1 focus-visible:outline-text-subtle",
+    active: "bg-elevated text-text",
+    idle: "bg-transparent text-text-muted hover:bg-surface",
   },
   workspace: {
     strip: "flex items-stretch gap-1",
-    base: "px-3 py-1 rounded-t text-sm font-mono border-b-2 focus-visible:outline focus-visible:outline-1 focus-visible:outline-zinc-500",
-    active: "text-zinc-100 border-emerald-500",
-    idle: "text-zinc-400 border-transparent hover:text-zinc-200 hover:border-zinc-700",
+    base: "px-3 py-1 rounded-t text-sm font-mono border-b-2 focus-visible:outline focus-visible:outline-1 focus-visible:outline-text-subtle",
+    active: "text-text border-accent-hover",
+    idle: "text-text-muted border-transparent hover:text-text-dim hover:border-border-strong",
   },
 } as const;
 
@@ -86,7 +86,7 @@ export function Tabs<T extends string>(props: TabsProps<T>) {
                 e.stopPropagation();
                 onClose(i);
               }}
-              className="ml-2 w-4 h-4 inline-flex items-center justify-center rounded text-zinc-500 hover:text-zinc-100 hover:bg-zinc-700 opacity-0 group-hover:opacity-100 focus:opacity-100 cursor-pointer"
+              className="ml-2 w-4 h-4 inline-flex items-center justify-center rounded text-text-subtle hover:text-text hover:bg-raised opacity-0 group-hover:opacity-100 focus:opacity-100 cursor-pointer"
             >
               ×
             </span>
@@ -95,7 +95,7 @@ export function Tabs<T extends string>(props: TabsProps<T>) {
           <>
             {t.label}
             {t.badge !== undefined && (
-              <span className="text-zinc-500 text-xs ml-2">{t.badge}</span>
+              <span className="text-text-subtle text-xs ml-2">{t.badge}</span>
             )}
             {closeButton}
           </>

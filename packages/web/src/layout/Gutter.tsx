@@ -14,9 +14,9 @@ interface Props {
 
 // 4px hit-target; ring on hover/active for cursor affordance (epic plan §6.8).
 const HORIZONTAL_CLASS =
-  "w-1 cursor-col-resize bg-zinc-800 hover:bg-zinc-600 active:bg-zinc-500";
+  "w-1 cursor-col-resize bg-elevated hover:bg-raised active:bg-done";
 const VERTICAL_CLASS =
-  "h-1 cursor-row-resize bg-zinc-800 hover:bg-zinc-600 active:bg-zinc-500";
+  "h-1 cursor-row-resize bg-elevated hover:bg-raised active:bg-done";
 
 export function Gutter(props: Props) {
   const { splitPath, sizes, index, direction, containerPx, disabled } = props;

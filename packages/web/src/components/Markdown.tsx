@@ -22,21 +22,21 @@ export const Markdown = memo(function Markdown({ text }: Props) {
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeHighlight]}
         components={{
-          p: ({ children }) => <p className="text-sm text-zinc-100 leading-relaxed">{children}</p>,
+          p: ({ children }) => <p className="text-sm text-text leading-relaxed">{children}</p>,
           h1: ({ children }) => (
-            <h1 className="text-base font-semibold text-zinc-50 mt-3 mb-1">{children}</h1>
+            <h1 className="text-base font-semibold text-text mt-3 mb-1">{children}</h1>
           ),
           h2: ({ children }) => (
-            <h2 className="text-sm font-semibold text-zinc-50 mt-3 mb-1">{children}</h2>
+            <h2 className="text-sm font-semibold text-text mt-3 mb-1">{children}</h2>
           ),
           h3: ({ children }) => (
-            <h3 className="text-sm font-semibold text-zinc-100 mt-2 mb-1">{children}</h3>
+            <h3 className="text-sm font-semibold text-text mt-2 mb-1">{children}</h3>
           ),
           ul: ({ children }) => (
-            <ul className="text-sm text-zinc-100 list-disc pl-5 space-y-0.5">{children}</ul>
+            <ul className="text-sm text-text list-disc pl-5 space-y-0.5">{children}</ul>
           ),
           ol: ({ children }) => (
-            <ol className="text-sm text-zinc-100 list-decimal pl-5 space-y-0.5">{children}</ol>
+            <ol className="text-sm text-text list-decimal pl-5 space-y-0.5">{children}</ol>
           ),
           li: ({ children }) => <li className="leading-relaxed">{children}</li>,
           code: ({ className, children }) => {
@@ -49,13 +49,13 @@ export const Markdown = memo(function Markdown({ text }: Props) {
               return <code className={`font-mono text-xs ${className}`}>{children}</code>;
             }
             return (
-              <code className="font-mono text-[0.85em] bg-zinc-900 border border-zinc-800 px-1 py-0.5 rounded text-emerald-300">
+              <code className="font-mono text-[0.85em] bg-surface border border-border px-1 py-0.5 rounded text-accent-text">
                 {children}
               </code>
             );
           },
           pre: ({ children }) => (
-            <pre className="whitespace-pre-wrap text-xs bg-zinc-950 border border-zinc-800 rounded p-2 my-2 overflow-x-auto">
+            <pre className="whitespace-pre-wrap text-xs bg-bg border border-border rounded p-2 my-2 overflow-x-auto">
               {children}
             </pre>
           ),
@@ -64,29 +64,29 @@ export const Markdown = memo(function Markdown({ text }: Props) {
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-emerald-400 underline hover:text-emerald-300"
+              className="text-accent-text underline hover:text-accent-text"
             >
               {children}
             </a>
           ),
           blockquote: ({ children }) => (
-            <blockquote className="border-l-2 border-zinc-700 pl-3 my-1 text-zinc-300 italic">
+            <blockquote className="border-l-2 border-border-strong pl-3 my-1 text-text-soft italic">
               {children}
             </blockquote>
           ),
           strong: ({ children }) => (
-            <strong className="font-semibold text-zinc-50">{children}</strong>
+            <strong className="font-semibold text-text">{children}</strong>
           ),
-          em: ({ children }) => <em className="italic text-zinc-100">{children}</em>,
-          hr: () => <hr className="border-zinc-800 my-3" />,
+          em: ({ children }) => <em className="italic text-text">{children}</em>,
+          hr: () => <hr className="border-border my-3" />,
           table: ({ children }) => (
-            <table className="text-xs my-2 border border-zinc-800">{children}</table>
+            <table className="text-xs my-2 border border-border">{children}</table>
           ),
           th: ({ children }) => (
-            <th className="border border-zinc-800 px-2 py-1 bg-zinc-900 text-left">{children}</th>
+            <th className="border border-border px-2 py-1 bg-surface text-left">{children}</th>
           ),
           td: ({ children }) => (
-            <td className="border border-zinc-800 px-2 py-1">{children}</td>
+            <td className="border border-border px-2 py-1">{children}</td>
           ),
         }}
       >

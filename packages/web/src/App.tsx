@@ -198,7 +198,7 @@ export function App() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
-      <header className="border-b border-zinc-800 px-6 py-3 flex items-center gap-4">
+      <header className="border-b border-border px-6 py-3 flex items-center gap-4">
         <h1 className="text-xl font-bold tracking-tight">clobber</h1>
         <WorkspaceTabs
           workspaces={workspaces}
@@ -211,19 +211,19 @@ export function App() {
           <button
             type="button"
             onClick={() => setConfigOpen(true)}
-            className="px-2 py-1 rounded text-zinc-400 hover:text-zinc-200 border border-zinc-800 hover:border-zinc-700"
+            className="px-2 py-1 rounded text-text-muted hover:text-text-dim border border-border hover:border-border-strong"
             title="Workspace settings"
             aria-label="Workspace settings"
           >
             <span className="text-base leading-none">⚙</span>
           </button>
         )}
-        <span className="text-zinc-500 text-sm">
+        <span className="text-text-subtle text-sm">
           {sessions.length} session{sessions.length === 1 ? "" : "s"}
         </span>
         <div className="ml-auto flex items-center gap-3">
           {error !== null && (
-            <span className="text-red-400 text-xs font-mono">{error}</span>
+            <span className="text-danger-text text-xs font-mono">{error}</span>
           )}
         </div>
       </header>
@@ -237,7 +237,7 @@ export function App() {
           <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
             <HintBanner />
             {invalidWorkspace && (
-              <div className="px-4 py-2 text-sm text-zinc-400 border-b border-zinc-800">
+              <div className="px-4 py-2 text-sm text-text-muted border-b border-border">
                 Workspace not found. Pick one above or create a new workspace.
               </div>
             )}

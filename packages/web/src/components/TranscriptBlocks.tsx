@@ -41,12 +41,12 @@ export function ClobberTurnBubble({ tag }: { tag: ClobberTurnTag }) {
   return (
     <div
       data-clobber-turn-type={tag.type}
-      className="border-l-2 border-amber-900 pl-3 space-y-2"
+      className="border-l-2 border-provenance-muted pl-3 space-y-2"
     >
-      <div className="text-xs uppercase tracking-wider text-amber-500">
+      <div className="text-xs uppercase tracking-wider text-provenance">
         clobber · {label}
       </div>
-      <div className="bg-amber-950/30 border border-amber-900/40 rounded px-3 py-2">
+      <div className="bg-provenance-deep/30 border border-provenance-muted/40 rounded px-3 py-2">
         <Markdown text={tag.inner} />
       </div>
     </div>
@@ -66,8 +66,8 @@ function UserContentBlock({ block }: { block: ContentBlock }) {
       typeof block.content === "string" ? block.content : JSON.stringify(block.content, null, 2);
     return (
       <div className="text-xs">
-        <div className="text-zinc-500 mb-1">tool_result · {block.tool_use_id.slice(0, 12)}…</div>
-        <pre className="whitespace-pre-wrap text-zinc-300 bg-zinc-950 p-2 rounded border border-zinc-800 overflow-x-auto">
+        <div className="text-text-subtle mb-1">tool_result · {block.tool_use_id.slice(0, 12)}…</div>
+        <pre className="whitespace-pre-wrap text-text-soft bg-bg p-2 rounded border border-border overflow-x-auto">
           {text}
         </pre>
       </div>
@@ -120,9 +120,9 @@ function AssistantContentBlock({
   if (block.type === "thinking") {
     if (block.thinking.trim().length === 0) return null;
     return (
-      <details className="text-xs text-zinc-500">
-        <summary className="cursor-pointer hover:text-zinc-300">thinking</summary>
-        <pre className="whitespace-pre-wrap mt-1 text-zinc-400">{block.thinking}</pre>
+      <details className="text-xs text-text-subtle">
+        <summary className="cursor-pointer hover:text-text-soft">thinking</summary>
+        <pre className="whitespace-pre-wrap mt-1 text-text-muted">{block.thinking}</pre>
       </details>
     );
   }
@@ -159,10 +159,10 @@ function ToolCallCard({
   const preview = previewToolInput(input);
   const dot =
     status === "error"
-      ? "bg-red-500"
+      ? "bg-danger"
       : status === "ok"
-        ? "bg-emerald-500"
-        : "bg-amber-500";
+        ? "bg-working"
+        : "bg-blocked";
   return (
     <div className="flex items-start gap-2 text-xs">
       <span
@@ -172,13 +172,13 @@ function ToolCallCard({
       />
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex items-baseline gap-2">
-          <span className="text-emerald-400 font-mono shrink-0">{name}</span>
+          <span className="text-accent-text font-mono shrink-0">{name}</span>
           {preview !== null && (
-            <span className="text-zinc-400 truncate font-mono">{preview}</span>
+            <span className="text-text-muted truncate font-mono">{preview}</span>
           )}
         </div>
         {showDetails && (
-          <pre className="whitespace-pre-wrap text-zinc-300 bg-zinc-950 p-2 rounded border border-zinc-800 overflow-x-auto">
+          <pre className="whitespace-pre-wrap text-text-soft bg-bg p-2 rounded border border-border overflow-x-auto">
             {JSON.stringify(input, null, 2)}
           </pre>
         )}
@@ -189,7 +189,7 @@ function ToolCallCard({
 
 function RawBlock({ block }: { block: ContentBlock }) {
   return (
-    <pre className="whitespace-pre-wrap text-xs text-zinc-500 bg-zinc-950 p-2 rounded border border-zinc-800 overflow-x-auto">
+    <pre className="whitespace-pre-wrap text-xs text-text-subtle bg-bg p-2 rounded border border-border overflow-x-auto">
       {JSON.stringify(block, null, 2)}
     </pre>
   );
@@ -208,16 +208,16 @@ export function NotificationCard({
 }) {
   const tone =
     status === "failed"
-      ? "border-red-900 bg-red-950/40 text-red-200"
+      ? "border-danger-muted bg-danger-muted/40 text-danger-text"
       : status === "completed"
-        ? "border-emerald-900 bg-emerald-950/30 text-emerald-200"
-        : "border-zinc-800 bg-zinc-900/60 text-zinc-200";
+        ? "border-accent-muted bg-accent-deep/30 text-accent-text"
+        : "border-border bg-surface/60 text-text-dim";
   const dot =
     status === "failed"
-      ? "bg-red-500"
+      ? "bg-danger"
       : status === "completed"
-        ? "bg-emerald-500"
-        : "bg-zinc-500";
+        ? "bg-working"
+        : "bg-done";
   return (
     <div
       className={`flex items-start gap-2 px-3 py-2 rounded border text-xs ${tone}`}
@@ -231,7 +231,7 @@ export function NotificationCard({
         </div>
         <div className="break-words">{summary}</div>
         {showRaw && (
-          <pre className="mt-1 whitespace-pre-wrap text-[10px] text-zinc-500 bg-zinc-950 p-2 rounded border border-zinc-800 overflow-x-auto">
+          <pre className="mt-1 whitespace-pre-wrap text-[10px] text-text-subtle bg-bg p-2 rounded border border-border overflow-x-auto">
             {JSON.stringify(raw, null, 2)}
           </pre>
         )}
@@ -250,14 +250,14 @@ export function SystemLine({
   raw: TranscriptLine;
 }) {
   return (
-    <details className="text-xs text-zinc-500 leading-snug">
-      <summary className="cursor-pointer hover:text-zinc-300 select-none">
-        <span className="font-mono text-zinc-400">{type}</span>
+    <details className="text-xs text-text-subtle leading-snug">
+      <summary className="cursor-pointer hover:text-text-soft select-none">
+        <span className="font-mono text-text-muted">{type}</span>
         {summary !== undefined && (
-          <span className="text-zinc-500"> · {summary}</span>
+          <span className="text-text-subtle"> · {summary}</span>
         )}
       </summary>
-      <pre className="whitespace-pre-wrap mt-1 text-zinc-500 bg-zinc-950 p-2 rounded border border-zinc-800 overflow-x-auto">
+      <pre className="whitespace-pre-wrap mt-1 text-text-subtle bg-bg p-2 rounded border border-border overflow-x-auto">
         {JSON.stringify(raw, null, 2)}
       </pre>
     </details>
@@ -271,12 +271,12 @@ export function SystemPromptLine({ raw }: { raw: TranscriptLine }) {
   const prompt = raw["prompt"];
   const text = typeof prompt === "string" ? prompt : JSON.stringify(raw, null, 2);
   return (
-    <details className="text-xs text-zinc-500 leading-snug">
-      <summary className="cursor-pointer hover:text-zinc-300 select-none">
-        <span className="font-mono text-zinc-400">system prompt</span>
-        <span className="text-zinc-500"> · composed at spawn</span>
+    <details className="text-xs text-text-subtle leading-snug">
+      <summary className="cursor-pointer hover:text-text-soft select-none">
+        <span className="font-mono text-text-muted">system prompt</span>
+        <span className="text-text-subtle"> · composed at spawn</span>
       </summary>
-      <pre className="whitespace-pre-wrap mt-1 text-zinc-400 bg-zinc-950 p-2 rounded border border-zinc-800 overflow-x-auto">
+      <pre className="whitespace-pre-wrap mt-1 text-text-muted bg-bg p-2 rounded border border-border overflow-x-auto">
         {text}
       </pre>
     </details>
@@ -294,16 +294,16 @@ function Bubble({ label, tone, children }: BubbleProps) {
   // applied per text block (see ASSISTANT_TEXT_BG / USER_TEXT_BG below)
   // so that tool_use boxes — which have their own dark bg — don't sit
   // inside a coloured wash.
-  const accent = tone === "emerald" ? "border-emerald-900" : "border-zinc-800";
+  const accent = tone === "emerald" ? "border-accent-muted" : "border-border";
   return (
     <div className={`border-l-2 ${accent} pl-3 space-y-2`}>
       {label !== null && (
-        <div className="text-xs uppercase tracking-wider text-zinc-500">{label}</div>
+        <div className="text-xs uppercase tracking-wider text-text-subtle">{label}</div>
       )}
       {children}
     </div>
   );
 }
 
-const ASSISTANT_TEXT_BG = "bg-emerald-950/30 border border-emerald-900/40 rounded px-3 py-2";
-const USER_TEXT_BG = "bg-zinc-900/40 border border-zinc-800/60 rounded px-3 py-2";
+const ASSISTANT_TEXT_BG = "bg-accent-deep/30 border border-accent-muted/40 rounded px-3 py-2";
+const USER_TEXT_BG = "bg-surface/40 border border-border/60 rounded px-3 py-2";

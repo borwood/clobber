@@ -45,7 +45,7 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume, o
 
   if (sessions.length === 0) {
     return (
-      <div className="p-4 text-sm text-zinc-500">
+      <div className="p-4 text-sm text-text-subtle">
         No sessions yet. Spawn one →
       </div>
     );
@@ -56,14 +56,14 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume, o
     {menu !== null && onOpenInPane !== undefined && (
       <div
         role="menu"
-        className="fixed z-50 min-w-[14rem] rounded border border-zinc-700 bg-zinc-900 shadow-lg text-sm text-zinc-100"
+        className="fixed z-50 min-w-[14rem] rounded border border-border-strong bg-surface shadow-lg text-sm text-text"
         style={{ left: menu.x, top: menu.y }}
         onClick={(e) => e.stopPropagation()}
       >
         <button
           type="button"
           role="menuitem"
-          className="w-full text-left px-3 py-2 hover:bg-zinc-800"
+          className="w-full text-left px-3 py-2 hover:bg-elevated"
           onClick={() => {
             onOpenInPane(menu.sessionId, menu.x, menu.y);
             setMenu(null);
@@ -73,7 +73,7 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume, o
         </button>
       </div>
     )}
-    <ul className="divide-y divide-zinc-800">
+    <ul className="divide-y divide-border">
       {sessions.map((s) => {
         const isSelected = s.session_id === selectedId;
         const isEnded = s.ended_at !== undefined;
@@ -109,7 +109,7 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume, o
               <div className="flex items-center gap-2">
                 {s.open_question !== undefined && !isEnded && (
                   <span
-                    className="inline-block px-1 rounded bg-amber-700 text-amber-50 text-[10px] font-bold shrink-0 animate-pulse"
+                    className="inline-block px-1 rounded bg-provenance-strong text-provenance-fg text-[10px] font-bold shrink-0 animate-pulse"
                     title="Waiting for an answer"
                   >
                     ?
@@ -124,42 +124,42 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume, o
                     title={s.latest_status.state}
                   />
                 )}
-                <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 text-[10px] uppercase tracking-wider shrink-0">
+                <span className="px-1.5 py-0.5 rounded bg-elevated text-text-soft text-[10px] uppercase tracking-wider shrink-0">
                   {s.role_name}
                 </span>
-                <div className="text-sm text-zinc-100 truncate font-medium">
+                <div className="text-sm text-text truncate font-medium">
                   {primary}
                 </div>
               </div>
               {s.open_question !== undefined && !isEnded && (
-                <div className="mt-1 text-xs text-amber-200 truncate italic">
+                <div className="mt-1 text-xs text-provenance-text truncate italic">
                   {openQuestionLabel(s.open_question)}
                 </div>
               )}
               {s.latest_status !== undefined && !isEnded && (
-                <div className="mt-1 text-xs text-zinc-300 truncate">
+                <div className="mt-1 text-xs text-text-soft truncate">
                   {s.latest_status.summary}
                 </div>
               )}
-              <div className="mt-1 flex items-center gap-2 text-xs text-zinc-500">
+              <div className="mt-1 flex items-center gap-2 text-xs text-text-subtle">
                 {wasLive && (
                   <span
-                    className="px-1.5 py-0.5 rounded bg-sky-800 text-sky-100"
+                    className="px-1.5 py-0.5 rounded bg-info-surface text-info-fg"
                     title="Running when clobber last closed — resume to pick up unfinished business"
                   >
                     was live
                   </span>
                 )}
                 {isEnded ? (
-                  <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500">
+                  <span className="px-1.5 py-0.5 rounded bg-elevated text-text-subtle">
                     ended
                   </span>
                 ) : s.last_event_name === undefined ? (
-                  <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500 italic">
+                  <span className="px-1.5 py-0.5 rounded bg-elevated text-text-subtle italic">
                     no events yet
                   </span>
                 ) : (
-                  <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">
+                  <span className="px-1.5 py-0.5 rounded bg-elevated text-text-soft">
                     {s.last_event_name}
                   </span>
                 )}
@@ -183,7 +183,7 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume, o
                     setResumingId(null);
                   }
                 }}
-                className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded text-zinc-500 hover:text-sky-400 hover:bg-zinc-800 transition-colors disabled:opacity-50"
+                className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded text-text-subtle hover:text-info-text hover:bg-elevated transition-colors disabled:opacity-50"
               >
                 ↻
               </button>
@@ -199,7 +199,7 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume, o
                   e.stopPropagation();
                   setConfirmingId(s.session_id);
                 }}
-                className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded text-zinc-500 hover:text-red-400 hover:bg-zinc-800 transition-colors disabled:opacity-50"
+                className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded text-text-subtle hover:text-danger-text hover:bg-elevated transition-colors disabled:opacity-50"
               >
                 ✕
               </button>
@@ -207,14 +207,14 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume, o
 
             {isConfirming && (
               <div
-                className="absolute inset-0 flex items-center justify-end gap-2 px-4 bg-zinc-950/95 backdrop-blur-sm"
+                className="absolute inset-0 flex items-center justify-end gap-2 px-4 bg-bg/95 backdrop-blur-sm"
                 onClick={(e) => e.stopPropagation()}
               >
-                <span className="text-xs text-zinc-300 mr-auto">End this session?</span>
+                <span className="text-xs text-text-soft mr-auto">End this session?</span>
                 <button
                   type="button"
                   onClick={() => setConfirmingId(null)}
-                  className="px-2 py-1 text-xs rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                  className="px-2 py-1 text-xs rounded bg-elevated text-text-soft hover:bg-raised"
                 >
                   Cancel
                 </button>
@@ -229,7 +229,7 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume, o
                       setEndingId(null);
                     }
                   }}
-                  className="px-2 py-1 text-xs rounded bg-red-700 text-white hover:bg-red-600"
+                  className="px-2 py-1 text-xs rounded bg-danger-strong text-white hover:bg-danger-strong"
                 >
                   End
                 </button>

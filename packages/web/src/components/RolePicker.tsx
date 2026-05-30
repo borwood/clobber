@@ -23,15 +23,15 @@ export function RolePicker({ assignments, selectedRoleId, onSelect }: Props) {
           totalSpawnable === 0 ? "no spawnable roles" : `search ${totalSpawnable} role${totalSpawnable === 1 ? "" : "s"}…`
         }
         disabled={totalSpawnable === 0}
-        className="w-full px-3 py-1.5 mb-2 bg-zinc-900 border border-zinc-800 rounded text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600 disabled:opacity-50"
+        className="w-full px-3 py-1.5 mb-2 bg-surface border border-border rounded text-sm text-text-dim placeholder:text-text-faint focus:outline-none focus:border-border-strong disabled:opacity-50"
       />
 
       {totalSpawnable === 0 ? (
-        <div className="p-3 text-xs text-zinc-500 border border-zinc-800 rounded">
+        <div className="p-3 text-xs text-text-subtle border border-border rounded">
           No roles available in this workspace. Set a ceiling first.
         </div>
       ) : visible.length === 0 ? (
-        <div className="p-3 text-xs text-zinc-500 border border-zinc-800 rounded">
+        <div className="p-3 text-xs text-text-subtle border border-border rounded">
           No roles match "{query.trim()}".
         </div>
       ) : (
@@ -46,37 +46,37 @@ export function RolePicker({ assignments, selectedRoleId, onSelect }: Props) {
                   className={
                     "w-full text-left px-3 py-2 rounded border text-sm transition-colors " +
                     (isSelected
-                      ? "bg-zinc-900 border-emerald-700"
-                      : "border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900")
+                      ? "bg-surface border-accent-strong"
+                      : "border-border hover:border-border-strong hover:bg-surface")
                   }
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-medium text-zinc-200">{role.name}</span>
+                      <span className="font-medium text-text-dim">{role.name}</span>
                       {current_version !== undefined && (
                         <span
-                          className="px-1 py-0.5 rounded bg-zinc-800 text-emerald-400 font-mono text-[10px]"
+                          className="px-1 py-0.5 rounded bg-elevated text-accent-text font-mono text-[10px]"
                           title={current_version.id}
                         >
                           v{current_version.version}
                         </span>
                       )}
                     </div>
-                    <span className="text-xs text-zinc-500 font-mono">
+                    <span className="text-xs text-text-subtle font-mono">
                       ceiling {max_concurrent}
                     </span>
                   </div>
                   {role.description !== undefined && (
-                    <div className="mt-0.5 text-xs text-zinc-500">{role.description}</div>
+                    <div className="mt-0.5 text-xs text-text-subtle">{role.description}</div>
                   )}
-                  <div className="mt-1 flex items-center gap-2 text-xs text-zinc-500">
+                  <div className="mt-1 flex items-center gap-2 text-xs text-text-subtle">
                     {role.persistent && (
-                      <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">
+                      <span className="px-1.5 py-0.5 rounded bg-elevated text-text-muted">
                         persistent
                       </span>
                     )}
                     {role.permission_mode !== undefined && (
-                      <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 font-mono">
+                      <span className="px-1.5 py-0.5 rounded bg-elevated text-text-muted font-mono">
                         {role.permission_mode}
                       </span>
                     )}

@@ -16,7 +16,7 @@ export function WhiteboardView(props: WhiteboardViewProps) {
   if (offices.length === 0 && desks.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center px-6">
-        <p className="text-zinc-500 text-sm">
+        <p className="text-text-subtle text-sm">
           No agents in this workspace yet — spawn a worker or install a manager
           to populate the whiteboard.
         </p>
@@ -28,7 +28,7 @@ export function WhiteboardView(props: WhiteboardViewProps) {
     <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-6">
       {offices.length > 0 && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-xs uppercase tracking-wider text-zinc-500">
+          <h2 className="text-xs uppercase tracking-wider text-text-subtle">
             Offices
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -47,7 +47,7 @@ export function WhiteboardView(props: WhiteboardViewProps) {
       )}
       {desks.length > 0 && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-xs uppercase tracking-wider text-zinc-500">
+          <h2 className="text-xs uppercase tracking-wider text-text-subtle">
             Desks at work
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">

@@ -8,7 +8,7 @@ interface Props {
 export function EmptyRootPanePlaceholder({ paneId }: Props) {
   const { dispatch } = useLayout();
   return (
-    <div className="flex-1 flex flex-col items-center justify-center gap-3 text-sm text-zinc-500">
+    <div className="flex-1 flex flex-col items-center justify-center gap-3 text-sm text-text-subtle">
       <span>Nothing here yet — open a view:</span>
       <div className="flex gap-2">
         {QUICK_ADDS.map((qa) => (
@@ -18,7 +18,7 @@ export function EmptyRootPanePlaceholder({ paneId }: Props) {
             onClick={() =>
               dispatch({ kind: "open_view", pane: paneId, view: qa.view })
             }
-            className="px-3 py-1 rounded border border-zinc-700 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
+            className="px-3 py-1 rounded border border-border-strong text-text-soft hover:text-text hover:bg-elevated"
           >
             {qa.label}
           </button>

@@ -142,7 +142,7 @@ export function Pane(props: { readonly node: PaneNode }) {
               </div>
             ) : (
               <div
-                className="relative flex-1 flex items-center justify-center text-xs text-zinc-600"
+                className="relative flex-1 flex items-center justify-center text-xs text-text-faint"
                 onContextMenu={openMenu}
               >
                 drop a tab here
@@ -157,7 +157,7 @@ export function Pane(props: { readonly node: PaneNode }) {
                     e.stopPropagation();
                     dispatch({ kind: "close_pane", pane: node.id });
                   }}
-                  className="absolute top-2 right-2 w-5 h-5 inline-flex items-center justify-center rounded text-zinc-500 hover:text-zinc-100 hover:bg-zinc-700 cursor-pointer"
+                  className="absolute top-2 right-2 w-5 h-5 inline-flex items-center justify-center rounded text-text-subtle hover:text-text hover:bg-raised cursor-pointer"
                 >
                   ×
                 </span>
@@ -199,7 +199,7 @@ function SplitButton(props: {
         e.stopPropagation();
         props.onClick();
       }}
-      className="px-2 inline-flex items-center text-zinc-500 hover:text-zinc-100 hover:bg-zinc-900 focus-visible:outline focus-visible:outline-1 focus-visible:outline-zinc-500"
+      className="px-2 inline-flex items-center text-text-subtle hover:text-text hover:bg-surface focus-visible:outline focus-visible:outline-1 focus-visible:outline-text-subtle"
     >
       {props.children}
     </button>

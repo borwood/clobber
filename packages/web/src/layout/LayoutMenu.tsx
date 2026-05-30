@@ -100,7 +100,7 @@ export function LayoutMenu() {
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="px-2 py-1 rounded text-zinc-400 hover:text-zinc-200 border border-zinc-800 hover:border-zinc-700 text-sm leading-none focus-visible:outline focus-visible:outline-1 focus-visible:outline-zinc-500"
+        className="px-2 py-1 rounded text-text-muted hover:text-text-dim border border-border hover:border-border-strong text-sm leading-none focus-visible:outline focus-visible:outline-1 focus-visible:outline-text-subtle"
       >
         ▦
       </button>
@@ -108,7 +108,7 @@ export function LayoutMenu() {
         <div
           role="menu"
           aria-label="Layout"
-          className="absolute right-0 top-full mt-1 z-20 w-60 rounded border border-zinc-800 bg-zinc-950 shadow-lg py-1 text-sm"
+          className="absolute right-0 top-full mt-1 z-20 w-60 rounded border border-border bg-bg shadow-lg py-1 text-sm"
         >
           <MenuItem onClick={onAddPane}>Add pane</MenuItem>
           {renaming ? (
@@ -121,12 +121,12 @@ export function LayoutMenu() {
                   if (e.key === "Enter") onSaveConfirm();
                 }}
                 placeholder="Name"
-                className="flex-1 min-w-0 bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-zinc-100 focus:outline-none focus:border-zinc-600"
+                className="flex-1 min-w-0 bg-surface border border-border rounded px-2 py-1 text-text focus:outline-none focus:border-border-strong"
               />
               <button
                 type="button"
                 onClick={onSaveConfirm}
-                className="px-2 py-1 rounded text-zinc-200 border border-zinc-700 hover:border-zinc-500"
+                className="px-2 py-1 rounded text-text-dim border border-border-strong hover:border-text-subtle"
               >
                 Save
               </button>
@@ -151,7 +151,7 @@ export function LayoutMenu() {
               </MenuItem>
             ))}
           </Submenu>
-          <div className="my-1 border-t border-zinc-800" />
+          <div className="my-1 border-t border-border" />
           <MenuItem onClick={onReset}>Reset layout</MenuItem>
         </div>
       )}
@@ -165,7 +165,7 @@ function MenuItem(props: { readonly onClick: () => void; readonly children: Reac
       type="button"
       role="menuitem"
       onClick={props.onClick}
-      className="w-full text-left px-3 py-1.5 text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-zinc-500"
+      className="w-full text-left px-3 py-1.5 text-text-soft hover:bg-surface hover:text-text focus-visible:outline focus-visible:outline-1 focus-visible:outline-text-subtle"
     >
       {props.children}
     </button>
@@ -179,11 +179,11 @@ function Submenu(props: {
 }) {
   return (
     <div className="px-3 py-1.5">
-      <div className="text-zinc-500 text-xs uppercase tracking-wider mb-1">
+      <div className="text-text-subtle text-xs uppercase tracking-wider mb-1">
         {props.label}
       </div>
       {props.empty !== null ? (
-        <div className="text-zinc-600 italic pl-2">{props.empty}</div>
+        <div className="text-text-faint italic pl-2">{props.empty}</div>
       ) : (
         <div className="flex flex-col -mx-3">{props.children}</div>
       )}

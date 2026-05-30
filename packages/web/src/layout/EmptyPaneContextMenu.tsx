@@ -37,7 +37,7 @@ export function EmptyPaneContextMenu({ paneId, x, y, onClose }: Props) {
       aria-label="Open view"
       data-empty-pane-menu="true"
       style={{ position: "fixed", left: x, top: y }}
-      className="z-30 w-40 rounded border border-zinc-800 bg-zinc-950 shadow-lg py-1 text-sm"
+      className="z-30 w-40 rounded border border-border bg-bg shadow-lg py-1 text-sm"
     >
       {QUICK_ADDS.map((qa) => (
         <button
@@ -48,7 +48,7 @@ export function EmptyPaneContextMenu({ paneId, x, y, onClose }: Props) {
             dispatch({ kind: "open_view", pane: paneId, view: qa.view });
             onClose();
           }}
-          className="w-full text-left px-3 py-1.5 text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-zinc-500"
+          className="w-full text-left px-3 py-1.5 text-text-soft hover:bg-surface hover:text-text focus-visible:outline focus-visible:outline-1 focus-visible:outline-text-subtle"
         >
           {qa.label}
         </button>
