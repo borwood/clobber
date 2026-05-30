@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, type SettingSource, type Workspace } from "../api.ts";
 import {
   BUILT_IN_MODES,
   BUILT_IN_ACCENTS,
-  type BuiltInMode,
   type BuiltInAccent,
+  type CustomTheme,
 } from "@clobber/shared";
+import { previewWorkspaceTheme } from "../lib/apply-theme.ts";
+import { CustomThemeEditor } from "./CustomThemeEditor.tsx";
 
 interface Props {
   readonly workspace: Workspace;
@@ -19,10 +21,22 @@ export function WorkspaceConfigModal({ workspace, onClose, onSaved }: Props) {
   const initial = new Set<SettingSource>(workspace.setting_sources);
   const [project, setProject] = useState(initial.has("project"));
   const [local, setLocal] = useState(initial.has("local"));
-  const [mode, setMode] = useState<BuiltInMode>(workspace.theme.mode);
+  const [mode, setMode] = useState<string>(workspace.theme.mode);
   const [accent, setAccent] = useState<BuiltInAccent>(workspace.theme.accent);
+  const [custom, setCustom] = useState<CustomTheme[]>([...workspace.theme.custom]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Live preview: paint the in-progress theme on the real UI (no cache write) on
+  // every change. Reverting on cancel repaints the workspace's saved theme.
+  useEffect(() => {
+    previewWorkspaceTheme({ mode, accent, custom });
+  }, [mode, accent, custom]);
+
+  function cancel(): void {
+    previewWorkspaceTheme(workspace.theme);
+    onClose();
+  }
 
   async function save() {
     const sources: SettingSource[] = ["user"];
@@ -33,7 +47,7 @@ export function WorkspaceConfigModal({ workspace, onClose, onSaved }: Props) {
     try {
       const updated = await api.updateWorkspaceConfig(workspace.id, {
         setting_sources: sources,
-        theme: { mode, accent },
+        theme: { mode, accent, custom },
       });
       onSaved(updated);
     } catch (e) {
@@ -45,10 +59,10 @@ export function WorkspaceConfigModal({ workspace, onClose, onSaved }: Props) {
   return (
     <div
       className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center"
-      onClick={onClose}
+      onClick={cancel}
     >
       <div
-        className="w-[32rem] max-w-[90vw] bg-bg border border-border-strong rounded-md shadow-xl"
+        className="w-[32rem] max-w-[90vw] max-h-[90vh] overflow-y-auto bg-bg border border-border-strong rounded-md shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-4 py-3 border-b border-border">
@@ -155,6 +169,13 @@ export function WorkspaceConfigModal({ workspace, onClose, onSaved }: Props) {
           </div>
         </div>
 
+        <CustomThemeEditor
+          custom={custom}
+          selectedMode={mode}
+          onChange={setCustom}
+          onSelect={setMode}
+        />
+
         {error !== null && (
           <div className="px-4 py-2 text-xs text-danger-text font-mono break-all">
             {error}
@@ -164,7 +185,7 @@ export function WorkspaceConfigModal({ workspace, onClose, onSaved }: Props) {
         <div className="px-4 py-3 border-t border-border flex justify-end gap-2">
           <button
             type="button"
-            onClick={onClose}
+            onClick={cancel}
             disabled={busy}
             className="px-3 py-1 rounded text-xs text-text-muted hover:text-text-dim"
           >
