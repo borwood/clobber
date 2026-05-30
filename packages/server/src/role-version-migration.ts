@@ -219,9 +219,20 @@ function backfillRoleVersions(db: Database): void {
   // shipped bundle's manifest defaults instead of the legacy column.
   const versions = createRoleVersionStore(db);
   const hasLegacyTools = hasColumn(db, "roles", "allowed_tools");
-  const sql = hasLegacyTools
-    ? "SELECT id, name, allowed_tools FROM roles WHERE current_version_id IS NULL"
-    : "SELECT id, name, NULL AS allowed_tools FROM roles WHERE current_version_id IS NULL";
+  // A commit-pinned (git-as-truth) role legitimately has current_version_id
+  // NULL while owning role_versions rows + a commit pin — it is NOT unversioned.
+  // Backfilling it would re-insert version 1 and trip the (role_id, version)
+  // UNIQUE. Exclude it. Guarded on column presence (pre-git-as-truth DBs lack
+  // the column, and have no commit-pinned roles anyway) to keep migration
+  // ordering safe.
+  const commitGuard = hasColumn(db, "roles", "current_commit_sha")
+    ? " AND current_commit_sha IS NULL"
+    : "";
+  const sql =
+    (hasLegacyTools
+      ? "SELECT id, name, allowed_tools FROM roles WHERE current_version_id IS NULL"
+      : "SELECT id, name, NULL AS allowed_tools FROM roles WHERE current_version_id IS NULL") +
+    commitGuard;
   const rows = db.prepare(sql).all() as UnversionedRow[];
   if (rows.length === 0) return;
 
