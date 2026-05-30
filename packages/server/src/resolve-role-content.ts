@@ -3,6 +3,7 @@ import { RoleVersionSchema, type Role, type RoleVersion } from "@clobber/shared"
 import { roleContractToSnapshot } from "./role-tree.ts";
 import type { RoleContentCache } from "./role-content-cache.ts";
 import type { RoleVersionStore } from "./role-version-store.ts";
+import { resolveRoleRepoDir, type RoleRepoResolution } from "./resolve-role-repo-dir.ts";
 
 // #361 git-as-truth — the read-view that unifies the two pin kinds. Pre-#349
 // every site read a role's content as `roleVersions.get(role.current_version_id)`;
@@ -20,13 +21,12 @@ import type { RoleVersionStore } from "./role-version-store.ts";
 // The view's `id` is synthetic (the content lives in git, not a row) — load-
 // bearing readers (the command gate, the trigger scheduler, the write verbs)
 // consume content fields, never the id.
-export interface RoleContentResolverDeps {
+export interface RoleContentResolverDeps extends RoleRepoResolution {
   readonly roleVersions: RoleVersionStore;
   // Present only when git-as-truth is configured (a role repo was materialized at
   // boot). A commit pin without these is a misconfiguration, not a fallback —
   // resolving throws rather than silently degrade (mirrors embodyRole).
   readonly roleContentCache?: RoleContentCache;
-  readonly roleRepoDir?: string;
 }
 
 export function resolveCurrentRoleVersion(
@@ -34,14 +34,15 @@ export function resolveCurrentRoleVersion(
   deps: RoleContentResolverDeps,
 ): RoleVersion | null {
   if (role.current_commit !== undefined) {
-    if (deps.roleContentCache === undefined || deps.roleRepoDir === undefined) {
+    const repoDir = resolveRoleRepoDir(role, deps);
+    if (deps.roleContentCache === undefined || repoDir === undefined) {
       throw new Error(
         "commit-pinned role resolved without an upstream role repo configured",
       );
     }
     const { contract, contractVersion } = deps.roleContentCache.getOrLoad(
       role.current_commit.sha,
-      deps.roleRepoDir,
+      repoDir,
     );
     return RoleVersionSchema.parse({
       id: randomUUID(),

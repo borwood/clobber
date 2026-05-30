@@ -3,6 +3,7 @@ import type { Role, Session } from "@clobber/shared";
 import { bundleFromContract } from "./role-repo.ts";
 import type { RoleContentCache } from "./role-content-cache.ts";
 import type { RoleVersionStore } from "./role-version-store.ts";
+import { resolveRoleRepoDir, type RoleRepoResolution } from "./resolve-role-repo-dir.ts";
 
 // #349 git-as-truth — the embodiment dispatch. A role/session is pinned EITHER by
 // a `role_versions` row (the pre-#349 store) OR by a commit into the upstream role
@@ -14,13 +15,12 @@ export type RolePin =
   | { readonly kind: "version"; readonly versionId: string }
   | { readonly kind: "commit"; readonly branch: string; readonly sha: string };
 
-export interface RoleEmbodimentDeps {
+export interface RoleEmbodimentDeps extends RoleRepoResolution {
   readonly roleVersions: RoleVersionStore;
   // Present only when git-as-truth is configured (a role repo was materialized at
   // boot). A commit pin without these is a misconfiguration, not a fallback case —
   // embodyRole throws rather than silently degrade.
   readonly roleContentCache?: RoleContentCache;
-  readonly roleRepoDir?: string;
 }
 
 // The role's live pin — prefers the commit ref (git-backed) over the row pointer.
@@ -54,12 +54,13 @@ export function embodyRole(
 ): RoleBundleData | null {
   if (pin === null) return null;
   if (pin.kind === "version") return deps.roleVersions.loadAsBundle(pin.versionId);
-  if (deps.roleContentCache === undefined || deps.roleRepoDir === undefined) {
+  const repoDir = resolveRoleRepoDir(role, deps);
+  if (deps.roleContentCache === undefined || repoDir === undefined) {
     throw new Error(
       "commit-pinned role embodied without an upstream role repo configured",
     );
   }
-  const { contract } = deps.roleContentCache.getOrLoad(pin.sha, deps.roleRepoDir);
+  const { contract } = deps.roleContentCache.getOrLoad(pin.sha, repoDir);
   return bundleFromContract(contract, {
     pluginName: role.name,
     ...(role.description === undefined ? {} : { description: role.description }),
