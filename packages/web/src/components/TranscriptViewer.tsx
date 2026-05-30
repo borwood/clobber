@@ -61,7 +61,7 @@ export function TranscriptViewer({ lines, showSystem, busy }: Props) {
         className="absolute inset-0 overflow-y-auto px-6 pb-6"
       >
         {lines.length === 0 ? (
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-text-subtle">
             No transcript yet. Wait for the agent to start.
           </p>
         ) : (
@@ -123,7 +123,7 @@ export function TranscriptViewer({ lines, showSystem, busy }: Props) {
         <button
           type="button"
           onClick={jumpToLatest}
-          className="absolute bottom-3 right-4 px-3 py-1.5 text-xs rounded-full bg-zinc-800 text-zinc-100 border border-zinc-700 shadow-lg hover:bg-zinc-700"
+          className="absolute bottom-3 right-4 px-3 py-1.5 text-xs rounded-full bg-elevated text-text border border-border-strong shadow-lg hover:bg-raised"
         >
           ↓ jump to latest
         </button>

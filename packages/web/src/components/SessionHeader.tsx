@@ -23,24 +23,24 @@ export function SessionHeader({ session }: Props) {
             title={status.state}
           />
         )}
-        <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 text-[10px] uppercase tracking-wider shrink-0">
+        <span className="px-1.5 py-0.5 rounded bg-elevated text-text-soft text-[10px] uppercase tracking-wider shrink-0">
           {session.role_name}
         </span>
         <RoleVersionBadge session={session} />
         {session.label !== undefined && (
-          <span className="text-sm text-zinc-100 font-medium truncate min-w-0">
+          <span className="text-sm text-text font-medium truncate min-w-0">
             {session.label}
           </span>
         )}
         {isEnded && (
-          <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500 text-xs shrink-0">
+          <span className="px-1.5 py-0.5 rounded bg-elevated text-text-subtle text-xs shrink-0">
             ended
           </span>
         )}
         <CopyableId id={session.session_id} />
       </div>
       {showSummary && (
-        <div className="mt-1 text-xs text-zinc-300 truncate pl-[22px]">
+        <div className="mt-1 text-xs text-text-soft truncate pl-[22px]">
           {status.summary}
         </div>
       )}
@@ -60,12 +60,12 @@ function RoleVersionBadge({ session }: { session: SessionSummary }) {
     <span
       className={
         "px-1 py-0.5 rounded font-mono text-[10px] shrink-0 " +
-        (stale ? "bg-amber-950 text-amber-300" : "bg-zinc-800 text-emerald-400")
+        (stale ? "bg-provenance-deep text-provenance-text" : "bg-elevated text-accent-text")
       }
       title={tooltip}
     >
       v{pinned.version}
-      {stale && <span className="ml-1 text-amber-400">→ v{current!.version}</span>}
+      {stale && <span className="ml-1 text-provenance-text">→ v{current!.version}</span>}
     </span>
   );
 }
@@ -82,7 +82,7 @@ function CopyableId({ id }: { id: string }) {
         setTimeout(() => setCopied(false), 1200);
       }}
       title={copied ? "copied" : `${id} — click to copy`}
-      className="ml-auto font-mono text-[10px] text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 px-2 py-1 rounded transition-colors shrink-0"
+      className="ml-auto font-mono text-[10px] text-text-subtle hover:text-text-soft hover:bg-elevated px-2 py-1 rounded transition-colors shrink-0"
     >
       {copied ? "copied" : short}
     </button>

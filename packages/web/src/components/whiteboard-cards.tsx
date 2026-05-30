@@ -11,28 +11,28 @@ interface IntentStyle {
 const INTENT_STYLES: Record<AgentState, IntentStyle> = {
   working: {
     label: "working",
-    accent: "border-l-emerald-500",
-    dot: "bg-emerald-500",
+    accent: "border-l-working",
+    dot: "bg-working",
   },
   blocked: {
     label: "blocked",
-    accent: "border-l-amber-500",
-    dot: "bg-amber-500",
+    accent: "border-l-blocked",
+    dot: "bg-blocked",
   },
   done: {
     label: "done",
-    accent: "border-l-zinc-400",
-    dot: "bg-zinc-400",
+    accent: "border-l-text-muted",
+    dot: "bg-text-muted",
   },
 };
 
 const ASLEEP_STYLE = {
-  accent: "border-l-zinc-700",
-  dot: "bg-zinc-500",
+  accent: "border-l-border-strong",
+  dot: "bg-done",
 } as const;
 
-const FALLBACK_ACCENT = "border-l-sky-500";
-const FALLBACK_DOT = "bg-sky-500";
+const FALLBACK_ACCENT = "border-l-info";
+const FALLBACK_DOT = "bg-info";
 
 function intentStyleFor(session: SessionView): IntentStyle | null {
   if (session.latest_status === null) return null;
@@ -58,7 +58,7 @@ export function OfficeCardView(props: OfficeCardViewProps) {
       ? FALLBACK_ACCENT
       : intentStyle.accent;
 
-  const className = `text-left rounded-md border border-zinc-800 border-l-4 ${accent} bg-zinc-900/60 p-4 flex flex-col gap-2 transition-colors`;
+  const className = `text-left rounded-md border border-border border-l-4 ${accent} bg-surface/60 p-4 flex flex-col gap-2 transition-colors`;
 
   const header = (
     <>
@@ -66,7 +66,7 @@ export function OfficeCardView(props: OfficeCardViewProps) {
         {isAsleep ? (
           <>
             <span className={`size-2 rounded-full ${ASLEEP_STYLE.dot}`} aria-hidden />
-            <span className="text-xs uppercase tracking-wider text-zinc-400">
+            <span className="text-xs uppercase tracking-wider text-text-muted">
               asleep
             </span>
           </>
@@ -76,11 +76,11 @@ export function OfficeCardView(props: OfficeCardViewProps) {
             intentDot={intentStyle === null ? FALLBACK_DOT : intentStyle.dot}
           />
         )}
-        <span className="ml-auto font-mono text-xs text-zinc-500">
+        <span className="ml-auto font-mono text-xs text-text-subtle">
           {office.role.name}
         </span>
       </header>
-      <h3 className="font-semibold text-zinc-100 truncate">
+      <h3 className="font-semibold text-text truncate">
         {office.label === null ? office.role.name : office.label}
       </h3>
       <OfficeSessionLine
@@ -111,7 +111,7 @@ export function OfficeCardView(props: OfficeCardViewProps) {
     <button
       type="button"
       onClick={() => onOpenSession(office.active_session!.id)}
-      className={`${className} hover:bg-zinc-900`}
+      className={`${className} hover:bg-surface`}
     >
       {header}
     </button>
@@ -135,7 +135,7 @@ function OfficeWakeControl(props: OfficeWakeControlProps) {
         value={selected}
         disabled={isWaking}
         onChange={(e) => setSelected(e.target.value)}
-        className="flex-1 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-200 disabled:opacity-50"
+        className="flex-1 rounded border border-border-strong bg-bg px-2 py-1 text-xs text-text-dim disabled:opacity-50"
       >
         {office.wake_programs.map((name) => (
           <option key={name} value={name}>
@@ -147,7 +147,7 @@ function OfficeWakeControl(props: OfficeWakeControlProps) {
         type="button"
         disabled={isWaking}
         onClick={() => onWake(office.agent_id, selected)}
-        className="rounded bg-sky-600 hover:bg-sky-500 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-1 text-xs font-medium text-white transition-colors"
+        className="rounded bg-info-strong hover:bg-info disabled:opacity-50 disabled:cursor-not-allowed px-3 py-1 text-xs font-medium text-white transition-colors"
       >
         {isWaking ? "waking…" : "Wake"}
       </button>
@@ -158,23 +158,23 @@ function OfficeWakeControl(props: OfficeWakeControlProps) {
 function OfficeNotesPreview(props: { readonly office: OfficeCard }) {
   const { office } = props;
   return (
-    <div className="mt-1 rounded bg-zinc-950/80 border border-zinc-800 p-2 text-xs text-zinc-400">
+    <div className="mt-1 rounded bg-bg/80 border border-border p-2 text-xs text-text-muted">
       {office.office.latest === null ? (
-        <span className="italic text-zinc-600">
+        <span className="italic text-text-faint">
           office is empty — no notes yet
         </span>
       ) : (
         <>
           <div className="flex items-center gap-2 mb-1">
-            <span className="font-mono text-[10px] text-zinc-500 truncate">
+            <span className="font-mono text-[10px] text-text-subtle truncate">
               {office.office.latest.name}
             </span>
-            <span className="ml-auto text-[10px] text-zinc-600 shrink-0">
+            <span className="ml-auto text-[10px] text-text-faint shrink-0">
               {office.office.file_count} note
               {office.office.file_count === 1 ? "" : "s"}
             </span>
           </div>
-          <pre className="whitespace-pre-wrap line-clamp-4 font-mono text-[11px] text-zinc-400">
+          <pre className="whitespace-pre-wrap line-clamp-4 font-mono text-[11px] text-text-muted">
             {office.office.latest.preview}
           </pre>
         </>
@@ -199,15 +199,15 @@ export function DeskCardView(props: DeskCardViewProps) {
     <button
       type="button"
       onClick={() => onOpenSession(desk.session.id)}
-      className={`text-left rounded-md border border-zinc-800 border-l-4 ${accent} bg-zinc-900/40 hover:bg-zinc-900 p-3 flex flex-col gap-1.5 transition-colors`}
+      className={`text-left rounded-md border border-border border-l-4 ${accent} bg-surface/40 hover:bg-surface p-3 flex flex-col gap-1.5 transition-colors`}
     >
       <header className="flex items-center gap-2">
         <ActivityDot busy={desk.session.busy} intentDot={dot} />
-        <span className="ml-auto font-mono text-xs text-zinc-500">
+        <span className="ml-auto font-mono text-xs text-text-subtle">
           {desk.role.name}
         </span>
       </header>
-      <h3 className="font-semibold text-zinc-100 truncate">
+      <h3 className="font-semibold text-text truncate">
         {desk.label === null ? desk.role.name : desk.label}
       </h3>
       <SessionStatusLine
@@ -248,10 +248,10 @@ function OfficeSessionLine(props: OfficeSessionLineProps) {
   const { office, now, intentLabel } = props;
   if (office.active_session === null) {
     if (office.last_started_at === null) {
-      return <p className="text-xs text-zinc-500">never started</p>;
+      return <p className="text-xs text-text-subtle">never started</p>;
     }
     return (
-      <p className="text-xs text-zinc-500">
+      <p className="text-xs text-text-subtle">
         last awake {relativeTime(now, office.last_started_at)}
       </p>
     );
@@ -275,19 +275,19 @@ function SessionStatusLine(props: SessionStatusLineProps) {
   const { session, now, intentLabel } = props;
   if (session.latest_status === null) {
     return (
-      <p className="text-xs text-zinc-500">
+      <p className="text-xs text-text-subtle">
         started {relativeTime(now, session.started_at)} — no status
       </p>
     );
   }
   return (
-    <p className="text-xs text-zinc-300">
+    <p className="text-xs text-text-soft">
       {intentLabel !== null && (
-        <span className="uppercase tracking-wider text-[10px] text-zinc-500 mr-2">
+        <span className="uppercase tracking-wider text-[10px] text-text-subtle mr-2">
           {intentLabel}
         </span>
       )}
-      <span className="text-zinc-200">{session.latest_status.summary}</span>
+      <span className="text-text-dim">{session.latest_status.summary}</span>
     </p>
   );
 }

@@ -38,20 +38,20 @@ export function WorkspaceCreateForm({ onCreated, onCancel }: Props) {
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="name"
-        className="px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-xs focus:outline-none focus:border-zinc-600"
+        className="px-2 py-1 bg-surface border border-border rounded text-xs focus:outline-none focus:border-border-strong"
       />
       <input
         type="text"
         value={repoPath}
         onChange={(e) => setRepoPath(e.target.value)}
         placeholder="/repo/path"
-        className="px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-xs font-mono focus:outline-none focus:border-zinc-600"
+        className="px-2 py-1 bg-surface border border-border rounded text-xs font-mono focus:outline-none focus:border-border-strong"
       />
       <div className="flex items-center gap-1">
         <button
           type="button"
           onClick={() => setPickerOpen((open) => !open)}
-          className="px-2 py-1 rounded text-xs text-zinc-300 hover:text-zinc-100 border border-zinc-800 hover:border-zinc-600"
+          className="px-2 py-1 rounded text-xs text-text-soft hover:text-text border border-border hover:border-border-strong"
           title="Browse for a folder"
         >
           browse…
@@ -60,7 +60,7 @@ export function WorkspaceCreateForm({ onCreated, onCancel }: Props) {
           type="button"
           onClick={() => void submit()}
           disabled={busy || name.trim().length === 0 || repoPath.trim().length === 0}
-          className="px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 disabled:bg-zinc-800 disabled:text-zinc-500 text-xs"
+          className="px-2 py-1 rounded bg-accent-strong hover:bg-accent disabled:bg-elevated disabled:text-text-subtle text-xs"
         >
           {busy ? "…" : "create"}
         </button>
@@ -71,7 +71,7 @@ export function WorkspaceCreateForm({ onCreated, onCancel }: Props) {
             setError(null);
             onCancel();
           }}
-          className="px-2 py-1 rounded text-xs text-zinc-400 hover:text-zinc-200"
+          className="px-2 py-1 rounded text-xs text-text-muted hover:text-text-dim"
         >
           cancel
         </button>
@@ -87,7 +87,7 @@ export function WorkspaceCreateForm({ onCreated, onCancel }: Props) {
         />
       )}
       {error !== null && (
-        <span className="text-xs text-red-400 font-mono break-all">{error}</span>
+        <span className="text-xs text-danger-text font-mono break-all">{error}</span>
       )}
     </div>
   );

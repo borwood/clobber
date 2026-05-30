@@ -10,7 +10,7 @@ export function MailboxView({ sessionId }: Props) {
   const w = useWorkspace();
   if (w.invalidWorkspace) {
     return (
-      <p className="text-sm text-zinc-500 p-4">
+      <p className="text-sm text-text-subtle p-4">
         Workspace not found. Pick one above or create a new workspace.
       </p>
     );

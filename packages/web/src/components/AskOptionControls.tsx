@@ -30,8 +30,8 @@ export function OptionRow({
       className={
         "w-full text-left px-2.5 py-1.5 rounded border text-xs transition-colors " +
         (selected
-          ? "border-amber-400 bg-amber-700/60 text-amber-50"
-          : "border-amber-800/70 bg-amber-900/40 text-amber-100 hover:bg-amber-800/60") +
+          ? "border-provenance-text bg-provenance-strong/60 text-provenance-fg"
+          : "border-provenance-strong/70 bg-provenance-muted/40 text-provenance-text hover:bg-provenance-strong/60") +
         " disabled:opacity-40 disabled:cursor-not-allowed"
       }
     >
@@ -40,12 +40,12 @@ export function OptionRow({
         <span className="font-medium">{option.label}</span>
       </div>
       {option.description !== undefined && (
-        <div className="ml-5 text-[10px] text-amber-200/70 leading-tight">
+        <div className="ml-5 text-[10px] text-provenance-text/70 leading-tight">
           {option.description}
         </div>
       )}
       {option.preview !== undefined && (
-        <pre className="ml-5 mt-1 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-amber-950/70 px-2 py-1 text-[10px] leading-snug text-amber-100/90">
+        <pre className="ml-5 mt-1 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-provenance-deep/70 px-2 py-1 text-[10px] leading-snug text-provenance-text/90">
           {option.preview}
         </pre>
       )}

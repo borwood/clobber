@@ -23,7 +23,7 @@ export function DragGhost() {
     <div
       data-drag-ghost="true"
       style={style}
-      className={`${TAB_BASE_CLASS} ${TAB_ACTIVE_CLASS} border border-zinc-700 shadow-lg`}
+      className={`${TAB_BASE_CLASS} ${TAB_ACTIVE_CLASS} border border-border-strong shadow-lg`}
     >
       {viewLabel(view)}
     </div>

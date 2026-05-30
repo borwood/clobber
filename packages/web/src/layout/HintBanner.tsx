@@ -16,7 +16,7 @@ export function HintBanner() {
   return (
     <div
       data-layout-hint="true"
-      className="flex items-center gap-3 px-4 py-2 border-b border-zinc-800 bg-zinc-900/50 text-xs text-zinc-300"
+      className="flex items-center gap-3 px-4 py-2 border-b border-border bg-surface/50 text-xs text-text-soft"
     >
       <span className="flex-1">{HINT_COPY}</span>
       <button
@@ -26,7 +26,7 @@ export function HintBanner() {
           localStorage.setItem(HINT_DISMISSED_KEY, "1");
           setDismissed(true);
         }}
-        className="px-2 py-0.5 rounded text-zinc-400 hover:text-zinc-200 border border-zinc-800 hover:border-zinc-700 focus-visible:outline focus-visible:outline-1 focus-visible:outline-zinc-500"
+        className="px-2 py-0.5 rounded text-text-muted hover:text-text-dim border border-border hover:border-border-strong focus-visible:outline focus-visible:outline-1 focus-visible:outline-text-subtle"
       >
         Got it
       </button>

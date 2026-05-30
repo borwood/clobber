@@ -26,10 +26,10 @@ export function QuestionPanel({
   return (
     <div className="space-y-1.5">
       <div className="flex items-baseline gap-2">
-        <span className="px-1.5 py-0.5 rounded bg-amber-700/70 text-amber-50 text-[10px] uppercase tracking-wider shrink-0">
+        <span className="px-1.5 py-0.5 rounded bg-provenance-strong/70 text-provenance-fg text-[10px] uppercase tracking-wider shrink-0">
           {question.header === undefined ? "asking" : question.header}
         </span>
-        <p className="text-sm text-amber-100 font-medium leading-snug">
+        <p className="text-sm text-provenance-text font-medium leading-snug">
           {question.question}
         </p>
       </div>
@@ -53,7 +53,7 @@ export function QuestionPanel({
         onChange={(e) => onFree(e.target.value)}
         disabled={disabled}
         placeholder={hasOptions ? "add a note, or type a custom answer…" : "type an answer…"}
-        className="w-full rounded border border-amber-800/70 bg-amber-950/60 px-2 py-1 text-sm text-amber-50 placeholder:text-amber-200/40 focus:outline-none focus:border-amber-600"
+        className="w-full rounded border border-provenance-strong/70 bg-provenance-deep/60 px-2 py-1 text-sm text-provenance-fg placeholder:text-provenance-text/40 focus:outline-none focus:border-provenance"
       />
     </div>
   );

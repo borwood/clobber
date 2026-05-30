@@ -80,9 +80,9 @@ export function AskWidget({ question, onAnswer }: Props) {
       : `Send ${questions.length} answers`;
 
   return (
-    <div className="border-t border-amber-700/50 bg-amber-950/40 px-3 py-2.5 space-y-3">
+    <div className="border-t border-provenance-strong/50 bg-provenance-deep/40 px-3 py-2.5 space-y-3">
       {timedOut && (
-        <p className="text-xs text-amber-300/90">
+        <p className="text-xs text-provenance-text/90">
           This ask timed out — your answer will be sent to the agent as a new
           message.
         </p>
@@ -102,12 +102,12 @@ export function AskWidget({ question, onAnswer }: Props) {
         type="button"
         disabled={submitting || !allAnswered}
         onClick={() => void submit()}
-        className="px-2.5 py-1 text-xs rounded bg-amber-700 text-amber-50 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed"
+        className="px-2.5 py-1 text-xs rounded bg-provenance-strong text-provenance-fg hover:bg-provenance disabled:opacity-40 disabled:cursor-not-allowed"
       >
         {submitting ? "Sending…" : label}
       </button>
       {error !== null && (
-        <p className="text-xs text-red-400 truncate" title={error}>
+        <p className="text-xs text-danger-text truncate" title={error}>
           {error}
         </p>
       )}

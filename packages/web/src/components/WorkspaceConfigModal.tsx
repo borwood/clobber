@@ -39,60 +39,60 @@ export function WorkspaceConfigModal({ workspace, onClose, onSaved }: Props) {
       onClick={onClose}
     >
       <div
-        className="w-[32rem] max-w-[90vw] bg-zinc-950 border border-zinc-700 rounded-md shadow-xl"
+        className="w-[32rem] max-w-[90vw] bg-bg border border-border-strong rounded-md shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-4 py-3 border-b border-zinc-800">
-          <div className="text-sm font-semibold text-zinc-100">
+        <div className="px-4 py-3 border-b border-border">
+          <div className="text-sm font-semibold text-text">
             workspace settings
           </div>
-          <div className="text-xs text-zinc-500 font-mono truncate">
+          <div className="text-xs text-text-subtle font-mono truncate">
             {workspace.name} · {workspace.repo_path}
           </div>
         </div>
 
         <div className="px-4 py-3 space-y-3">
-          <div className="text-xs text-zinc-400 uppercase tracking-wide">
+          <div className="text-xs text-text-muted uppercase tracking-wide">
             claude setting sources
           </div>
-          <label className="flex items-start gap-2 text-sm text-zinc-200 cursor-pointer">
+          <label className="flex items-start gap-2 text-sm text-text-dim cursor-pointer">
             <input
               type="checkbox"
               checked
               disabled
-              className="mt-0.5 accent-emerald-700"
+              className="mt-0.5 accent-accent-strong"
             />
             <span>
               <span className="font-mono">user</span> &nbsp;
-              <span className="text-zinc-500 text-xs">
+              <span className="text-text-subtle text-xs">
                 — your <code>~/.claude/</code> (always on)
               </span>
             </span>
           </label>
-          <label className="flex items-start gap-2 text-sm text-zinc-200 cursor-pointer">
+          <label className="flex items-start gap-2 text-sm text-text-dim cursor-pointer">
             <input
               type="checkbox"
               checked={project}
               onChange={(e) => setProject(e.target.checked)}
-              className="mt-0.5 accent-emerald-700"
+              className="mt-0.5 accent-accent-strong"
             />
             <span>
               <span className="font-mono">project</span> &nbsp;
-              <span className="text-zinc-500 text-xs">
+              <span className="text-text-subtle text-xs">
                 — the repo's <code>.claude/</code> (skills, commands, hooks)
               </span>
             </span>
           </label>
-          <label className="flex items-start gap-2 text-sm text-zinc-200 cursor-pointer">
+          <label className="flex items-start gap-2 text-sm text-text-dim cursor-pointer">
             <input
               type="checkbox"
               checked={local}
               onChange={(e) => setLocal(e.target.checked)}
-              className="mt-0.5 accent-emerald-700"
+              className="mt-0.5 accent-accent-strong"
             />
             <span>
               <span className="font-mono">local</span> &nbsp;
-              <span className="text-zinc-500 text-xs">
+              <span className="text-text-subtle text-xs">
                 — the repo's <code>.claude.local/</code> (machine-specific)
               </span>
             </span>
@@ -100,17 +100,17 @@ export function WorkspaceConfigModal({ workspace, onClose, onSaved }: Props) {
         </div>
 
         {error !== null && (
-          <div className="px-4 py-2 text-xs text-red-400 font-mono break-all">
+          <div className="px-4 py-2 text-xs text-danger-text font-mono break-all">
             {error}
           </div>
         )}
 
-        <div className="px-4 py-3 border-t border-zinc-800 flex justify-end gap-2">
+        <div className="px-4 py-3 border-t border-border flex justify-end gap-2">
           <button
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="px-3 py-1 rounded text-xs text-zinc-400 hover:text-zinc-200"
+            className="px-3 py-1 rounded text-xs text-text-muted hover:text-text-dim"
           >
             cancel
           </button>
@@ -118,7 +118,7 @@ export function WorkspaceConfigModal({ workspace, onClose, onSaved }: Props) {
             type="button"
             onClick={() => void save()}
             disabled={busy}
-            className="px-3 py-1 rounded bg-emerald-700 hover:bg-emerald-600 disabled:bg-zinc-800 disabled:text-zinc-500 text-xs"
+            className="px-3 py-1 rounded bg-accent-strong hover:bg-accent disabled:bg-elevated disabled:text-text-subtle text-xs"
           >
             {busy ? "saving…" : "save"}
           </button>

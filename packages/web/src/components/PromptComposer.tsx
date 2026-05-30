@@ -72,7 +72,7 @@ export function PromptComposer({
   }
 
   return (
-    <div className="border-t border-zinc-800 bg-zinc-950 p-3 space-y-2">
+    <div className="border-t border-border bg-bg p-3 space-y-2">
       <textarea
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
@@ -86,14 +86,14 @@ export function PromptComposer({
               : "Follow-up prompt… (Enter to send, Shift+Enter for newline)"
         }
         rows={3}
-        className="w-full resize-none rounded border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600 disabled:opacity-50"
+        className="w-full resize-none rounded border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-faint focus:outline-none focus:border-border-strong disabled:opacity-50"
       />
       <div className="flex items-center gap-2">
-        <span className="text-xs text-zinc-600 font-mono truncate">
+        <span className="text-xs text-text-faint font-mono truncate">
           {sessionId.slice(0, 8)}
         </span>
         {error !== null && (
-          <span className="text-xs text-red-400 truncate" title={error}>
+          <span className="text-xs text-danger-text truncate" title={error}>
             {error}
           </span>
         )}
@@ -103,7 +103,7 @@ export function PromptComposer({
             onClick={() => void interrupt()}
             disabled={interrupting}
             title="Interrupt the running turn (Ctrl+C)"
-            className="ml-auto px-3 py-1.5 text-xs rounded bg-red-700 text-white hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="ml-auto px-3 py-1.5 text-xs rounded bg-danger-strong text-white hover:bg-danger-strong disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {interrupting ? "Stopping…" : "Stop"}
           </button>
@@ -113,7 +113,7 @@ export function PromptComposer({
           onClick={() => void send()}
           disabled={!canSend}
           className={
-            "px-3 py-1.5 text-xs rounded bg-emerald-700 text-white hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed " +
+            "px-3 py-1.5 text-xs rounded bg-accent-strong text-white hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed " +
             (canInterrupt ? "" : "ml-auto")
           }
         >

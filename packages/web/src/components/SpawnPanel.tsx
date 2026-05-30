@@ -59,26 +59,26 @@ export function SpawnPanel({ workspaceId, roleId, onSpawned }: Props) {
 
   return (
     <div className="space-y-3">
-      <h2 className="text-sm uppercase tracking-wider text-zinc-500">spawn</h2>
+      <h2 className="text-sm uppercase tracking-wider text-text-subtle">spawn</h2>
 
       <label className="block">
-        <span className="block text-xs text-zinc-400 mb-1">label</span>
+        <span className="block text-xs text-text-muted mb-1">label</span>
         <input
           type="text"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           placeholder="e.g. fix-flaky-test"
-          className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded text-sm focus:outline-none focus:border-zinc-600"
+          className="w-full px-3 py-2 bg-surface border border-border rounded text-sm focus:outline-none focus:border-border-strong"
         />
       </label>
 
       <label className="block">
-        <span className="block text-xs text-zinc-400 mb-1">prompt</span>
+        <span className="block text-xs text-text-muted mb-1">prompt</span>
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           rows={6}
-          className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded text-sm focus:outline-none focus:border-zinc-600"
+          className="w-full px-3 py-2 bg-surface border border-border rounded text-sm focus:outline-none focus:border-border-strong"
           placeholder={
             roleId === null
               ? "select a role above first…"
@@ -89,16 +89,16 @@ export function SpawnPanel({ workspaceId, roleId, onSpawned }: Props) {
       </label>
 
       <label className="block">
-        <span className="block text-xs text-zinc-400 mb-1">
+        <span className="block text-xs text-text-muted mb-1">
           effort{" "}
-          <span className="text-zinc-600">
+          <span className="text-text-faint">
             (default = role's reasoning depth)
           </span>
         </span>
         <select
           value={effort}
           onChange={(e) => setEffort(e.target.value as EffortChoice)}
-          className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded text-sm focus:outline-none focus:border-zinc-600"
+          className="w-full px-3 py-2 bg-surface border border-border rounded text-sm focus:outline-none focus:border-border-strong"
         >
           {EFFORT_CHOICES.map((choice) => (
             <option key={choice} value={choice}>
@@ -112,13 +112,13 @@ export function SpawnPanel({ workspaceId, roleId, onSpawned }: Props) {
         type="button"
         onClick={() => void submit()}
         disabled={disabled}
-        className="w-full px-3 py-2 rounded bg-emerald-700 hover:bg-emerald-600 disabled:bg-zinc-800 disabled:text-zinc-500 text-sm font-medium transition-colors"
+        className="w-full px-3 py-2 rounded bg-accent-strong hover:bg-accent disabled:bg-elevated disabled:text-text-subtle text-sm font-medium transition-colors"
       >
         {busy ? "spawning…" : "spawn"}
       </button>
 
       {error !== null && (
-        <p className="text-xs text-red-400 font-mono break-all">{error}</p>
+        <p className="text-xs text-danger-text font-mono break-all">{error}</p>
       )}
     </div>
   );

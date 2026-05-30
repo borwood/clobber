@@ -8,7 +8,7 @@ export type DropEdge = "top" | "right" | "bottom" | "left" | "center" | "tabs";
 // the tab strip triggers an insert/reorder at the cursor index.
 // Uniform chrome across all zones (mirror-presentation discipline, #299).
 const ZONE_BASE =
-  "absolute pointer-events-auto transition-colors bg-transparent hover:bg-sky-500/30";
+  "absolute pointer-events-auto transition-colors bg-transparent hover:bg-info/30";
 
 export function PaneDropZones(props: { readonly paneId: string; readonly hasTabs: boolean }) {
   const { paneId, hasTabs } = props;
@@ -82,7 +82,7 @@ function TabStripZone(props: { readonly paneId: string; readonly height: number 
       {caretX !== null && (
         <div
           data-tab-caret="true"
-          className="absolute top-0 bottom-0 w-0.5 bg-sky-400 pointer-events-none"
+          className="absolute top-0 bottom-0 w-0.5 bg-info-text pointer-events-none"
           style={{ left: caretX }}
         />
       )}

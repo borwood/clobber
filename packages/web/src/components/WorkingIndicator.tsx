@@ -21,12 +21,12 @@ export function WorkingIndicator({ state }: Props) {
     state.startMs === null ? null : Math.max(0, Math.floor((now - state.startMs) / 1000));
 
   return (
-    <div className="shrink-0 flex items-center gap-2 border-t border-zinc-800 px-6 py-1.5 text-xs font-mono text-zinc-400">
+    <div className="shrink-0 flex items-center gap-2 border-t border-border px-6 py-1.5 text-xs font-mono text-text-muted">
       <span className="relative inline-flex h-1.5 w-1.5">
-        <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75 animate-ping" />
-        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+        <span className="absolute inline-flex h-full w-full rounded-full bg-working opacity-75 animate-ping" />
+        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-working" />
       </span>
-      <span className="text-emerald-400">{state.verb}…</span>
+      <span className="text-accent-text">{state.verb}…</span>
       {elapsedSec !== null && (
         <>
           <Sep />
@@ -44,5 +44,5 @@ export function WorkingIndicator({ state }: Props) {
 }
 
 function Sep() {
-  return <span className="text-zinc-700 select-none">|</span>;
+  return <span className="text-border-strong select-none">|</span>;
 }

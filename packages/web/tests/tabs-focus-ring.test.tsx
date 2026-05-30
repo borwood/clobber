@@ -68,7 +68,7 @@ async function renderAt(pathname: string) {
 const RING_CLASSES = [
   "focus-visible:outline",
   "focus-visible:outline-1",
-  "focus-visible:outline-zinc-500",
+  "focus-visible:outline-text-subtle",
 ];
 
 describe("focus-ring grammar (#281 §6.7)", () => {

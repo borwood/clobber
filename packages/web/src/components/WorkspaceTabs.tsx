@@ -66,7 +66,7 @@ export function WorkspaceTabs({
           setMenuOpen((open) => !open);
           setCreating(false);
         }}
-        className="px-2 py-1 rounded text-sm text-zinc-400 hover:text-zinc-200 border border-zinc-800 hover:border-zinc-700"
+        className="px-2 py-1 rounded text-sm text-text-muted hover:text-text-dim border border-border hover:border-border-strong"
       >
         +
       </button>
@@ -76,7 +76,7 @@ export function WorkspaceTabs({
           <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
           <div
             role="menu"
-            className="absolute top-full left-0 mt-1 z-20 w-64 bg-zinc-950 border border-zinc-800 rounded shadow-xl flex flex-col"
+            className="absolute top-full left-0 mt-1 z-20 w-64 bg-bg border border-border rounded shadow-xl flex flex-col"
           >
             <div className="max-h-72 overflow-y-auto py-1">
               {workspaces.map((w) => {
@@ -86,8 +86,8 @@ export function WorkspaceTabs({
                     key={w.id}
                     href={buildPath(slug, null)}
                     onClick={(e) => navigateMenu(e, slug)}
-                    className={`block px-3 py-1.5 text-sm font-mono hover:bg-zinc-800 focus-visible:outline focus-visible:outline-1 focus-visible:outline-zinc-500 ${
-                      w.id === selectedId ? "text-zinc-100" : "text-zinc-300"
+                    className={`block px-3 py-1.5 text-sm font-mono hover:bg-elevated focus-visible:outline focus-visible:outline-1 focus-visible:outline-text-subtle ${
+                      w.id === selectedId ? "text-text" : "text-text-soft"
                     }`}
                   >
                     {w.name}
@@ -95,7 +95,7 @@ export function WorkspaceTabs({
                 );
               })}
             </div>
-            <div className="border-t border-zinc-800 p-2 sticky bottom-0 bg-zinc-950">
+            <div className="border-t border-border p-2 sticky bottom-0 bg-bg">
               {creating ? (
                 <WorkspaceCreateForm
                   onCreated={(ws) => {
@@ -109,7 +109,7 @@ export function WorkspaceTabs({
                 <button
                   type="button"
                   onClick={() => setCreating(true)}
-                  className="w-full text-left px-1 py-1 text-sm text-emerald-400 hover:text-emerald-300"
+                  className="w-full text-left px-1 py-1 text-sm text-accent-text hover:text-accent-text"
                 >
                   + new workspace…
                 </button>

@@ -3,12 +3,79 @@
    emits .hljs-* token classes; this theme paints them. */
 @import "highlight.js/styles/github-dark.css";
 
+/* ── Semantic color tokens (#368) ──────────────────────────────────────────
+   Every color in the web UI is named by ROLE here, not by crayon, so the UI
+   becomes themeable without any component knowing which literal it renders.
+   This is the ONE file allowed to hold literal colors (the raw-color lint gate
+   exempts it); everywhere else goes through the semantic utilities Tailwind v4
+   generates from these tokens (`bg-surface`, `text-accent`, `border-border`, …).
+
+   Defaults equal today's dark literals byte-for-byte (Tailwind v4.2.4 oklch
+   values, noted per line), so issue A ships ZERO visual change. Several names
+   share a value on purpose (e.g. done == text-subtle == zinc-500): the
+   duplication is semantic, so a later theme (#369/#370) can diverge the roles
+   without touching component code. Alpha tints ride on a base token via
+   `/opacity` rather than minting a token per shade. */
+@theme {
+  /* Surfaces — dark → light */
+  --color-bg: oklch(14.1% 0.005 285.823); /* zinc-950 */
+  --color-surface: oklch(21% 0.006 285.885); /* zinc-900 */
+  --color-elevated: oklch(27.4% 0.006 286.033); /* zinc-800 */
+  --color-raised: oklch(37% 0.013 285.805); /* zinc-700 */
+
+  /* Borders (share surface values; distinct role) */
+  --color-border: oklch(27.4% 0.006 286.033); /* zinc-800 */
+  --color-border-strong: oklch(37% 0.013 285.805); /* zinc-700 */
+
+  /* Text — bright → dim */
+  --color-text: oklch(96.7% 0.001 286.375); /* zinc-100 */
+  --color-text-dim: oklch(92% 0.004 286.32); /* zinc-200 */
+  --color-text-soft: oklch(87.1% 0.006 286.286); /* zinc-300 */
+  --color-text-muted: oklch(70.5% 0.015 286.067); /* zinc-400 */
+  --color-text-subtle: oklch(55.2% 0.016 285.938); /* zinc-500 */
+  --color-text-faint: oklch(44.2% 0.017 285.786); /* zinc-600 */
+
+  /* Accent — emerald */
+  --color-accent: oklch(59.6% 0.145 163.225); /* emerald-600 */
+  --color-accent-strong: oklch(50.8% 0.118 165.612); /* emerald-700 */
+  --color-accent-hover: oklch(69.6% 0.17 162.48); /* emerald-500 */
+  --color-accent-text: oklch(76.5% 0.177 163.223); /* emerald-400 */
+  --color-accent-fg: oklch(98.5% 0 0); /* zinc-50 */
+  --color-accent-muted: oklch(37.8% 0.077 168.94); /* emerald-900 */
+  --color-accent-deep: oklch(26.2% 0.051 172.552); /* emerald-950 */
+
+  /* Status — working/blocked/done generalize state-tones.ts */
+  --color-working: oklch(69.6% 0.17 162.48); /* emerald-500 */
+  --color-blocked: oklch(76.9% 0.188 70.08); /* amber-500 */
+  --color-done: oklch(55.2% 0.016 285.938); /* zinc-500 */
+  --color-danger: oklch(63.7% 0.237 25.331); /* red-500 */
+  --color-danger-strong: oklch(50.5% 0.213 27.518); /* red-700 */
+  --color-danger-text: oklch(70.4% 0.191 22.216); /* red-400 */
+  --color-danger-muted: oklch(39.6% 0.141 25.723); /* red-900 */
+
+  /* Info — interactive / external cues: links, drop zones, external-session
+     badge, unknown-state fallback (sky) */
+  --color-info: oklch(68.5% 0.169 237.323); /* sky-500 */
+  --color-info-strong: oklch(58.8% 0.158 241.966); /* sky-600 */
+  --color-info-text: oklch(74.6% 0.16 232.661); /* sky-400 */
+  --color-info-surface: oklch(44.3% 0.11 240.79); /* sky-800 */
+  --color-info-fg: oklch(95.1% 0.026 236.824); /* sky-100 */
+
+  /* Provenance — clobber-injected turns + ask/question UI (amber) */
+  --color-provenance: oklch(76.9% 0.188 70.08); /* amber-500 */
+  --color-provenance-fg: oklch(98.7% 0.022 95.277); /* amber-50 */
+  --color-provenance-text: oklch(87.9% 0.169 91.605); /* amber-300 */
+  --color-provenance-strong: oklch(55.5% 0.163 48.998); /* amber-700 */
+  --color-provenance-muted: oklch(41.4% 0.112 45.904); /* amber-900 */
+  --color-provenance-deep: oklch(27.9% 0.077 45.635); /* amber-950 */
+}
+
 /* Dark-theme scrollbars (#41). Applied globally so transcript, sidebar,
-   modals, and any future scrollable panel match the zinc/black UI without
-   each component having to re-style. */
+   modals, and any future scrollable panel match the UI without each component
+   having to re-style. Token-driven (#368) so they re-theme with everything else. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #3f3f46 #18181b; /* zinc-700 thumb / zinc-900 track */
+  scrollbar-color: var(--color-border-strong) var(--color-surface);
 }
 
 *::-webkit-scrollbar {
@@ -17,19 +84,19 @@
 }
 
 *::-webkit-scrollbar-track {
-  background: #18181b; /* zinc-900 */
+  background: var(--color-surface);
 }
 
 *::-webkit-scrollbar-thumb {
-  background: #3f3f46; /* zinc-700 */
+  background: var(--color-border-strong);
   border-radius: 5px;
-  border: 2px solid #18181b;
+  border: 2px solid var(--color-surface);
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: #52525b; /* zinc-600 */
+  background: var(--color-text-faint);
 }
 
 *::-webkit-scrollbar-corner {
-  background: #18181b;
+  background: var(--color-surface);
 }
