@@ -17,6 +17,17 @@ import type { ForkRef } from "./role-repo.ts";
 // forking). These compose the git plumbing in role-git.ts, the same file-walk
 // the version store commits with.
 
+// Establish a LOCAL editable branch at `sha`, the role's working-copy line. A
+// seeded role is pinned to the shared `<name>-default` fork, which lives in the
+// clone only as a remote-tracking ref — committing needs a local branch. This
+// (re)points a local `<name>` branch at the pinned sha; HEAD is detached at the
+// sha first so the force-update never trips on "the current branch". Idempotent:
+// a role already on its local `<name>` branch is reset to the same sha.
+export function ensureEditBranch(dir: string, branch: string, sha: string): void {
+  git(dir, "checkout", "-q", "--detach", sha);
+  git(dir, "branch", "-f", branch, sha);
+}
+
 // Advance an EXISTING branch. The sibling of commitContractOnBranch minus the
 // `-b`: the working-copy `commit` verb serializes the edited tree back onto the
 // role's own branch (it never forks). git content-addresses blobs, so files

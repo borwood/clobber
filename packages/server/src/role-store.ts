@@ -1,7 +1,13 @@
 import { randomUUID } from "node:crypto";
 import type { Database } from "bun:sqlite";
 import { loadRoleBundle } from "@clobber/runtime";
-import { RoleSchema, type CommitRef, type Role, type CreateRoleRequest } from "@clobber/shared";
+import {
+  RoleSchema,
+  type CommitRef,
+  type EffortLevel,
+  type Role,
+  type CreateRoleRequest,
+} from "@clobber/shared";
 import { snapshotShippedBundle } from "./role-version-snapshot.ts";
 import { createRoleVersionStore } from "./role-version-store.ts";
 
@@ -14,9 +20,20 @@ export interface RoleStore {
   listForWorkspace(workspaceId: string): Role[];
   delete(id: string): boolean;
   updateDescription(id: string, description: string): void;
+  // #216 — re-sync the index columns from a committed ROLE.md frontmatter. The
+  // columns are a cache of the role's canonical metadata (now the frontmatter),
+  // refreshed on every working-copy commit so listings stay coherent without
+  // materializing the commit.
+  syncManifestColumns(id: string, manifest: RoleManifestColumns): void;
   // #349 — pin a role to a commit in the upstream role repo (git-backed),
   // clearing any row pointer. Embodiment then reads content from the tree at sha.
   pinCommit(id: string, commit: CommitRef): void;
+}
+
+export interface RoleManifestColumns {
+  readonly description: string;
+  readonly persistent: boolean;
+  readonly effort: EffortLevel;
 }
 
 interface Row {
@@ -98,6 +115,9 @@ export function createRoleStore(db: Database): RoleStore {
   const updateDescriptionStmt = db.prepare(
     "UPDATE roles SET description = ? WHERE id = ?",
   );
+  const syncManifestColumnsStmt = db.prepare(
+    "UPDATE roles SET description = ?, persistent = ?, effort = ? WHERE id = ?",
+  );
 
   return {
     create(req) {
@@ -165,6 +185,15 @@ export function createRoleStore(db: Database): RoleStore {
 
     updateDescription(id, description) {
       updateDescriptionStmt.run(description, id);
+    },
+
+    syncManifestColumns(id, manifest) {
+      syncManifestColumnsStmt.run(
+        manifest.description,
+        manifest.persistent ? 1 : 0,
+        manifest.effort,
+        id,
+      );
     },
 
     pinCommit(id, commit) {

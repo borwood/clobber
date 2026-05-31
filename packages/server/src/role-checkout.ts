@@ -1,0 +1,246 @@
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+import {
+  parseRoleManifest,
+  ROLE_FILE,
+  ROLE_NAME_RE,
+  type RoleEditManifest,
+  type Session,
+} from "@clobber/shared";
+import { deserializeRoleTree } from "./role-tree.ts";
+import {
+  commitOnBranch,
+  ensureEditBranch,
+  materializeCheckout,
+  readCheckout,
+} from "./role-checkout-repo.ts";
+import { revParse } from "./role-git.ts";
+import { loadRoleContractAtCommit } from "./role-repo.ts";
+import { migrateWorkspaceRole } from "./role-state-git-migration.ts";
+import { resolveRoleByIdOrName } from "./resolve-role.ts";
+import {
+  baselineTree,
+  checkoutDirOf,
+  clearCheckout,
+  computeChanges,
+  deskFor,
+  readSidecar,
+  renderRoleMd,
+  repoDirOf,
+  requireConfig,
+  writeSidecar,
+  type RoleCheckoutDeps,
+  type RouteResult,
+} from "./role-checkout-context.ts";
+
+// #216 — the working-copy verbs: checkout / status / diff / commit / discard. A
+// role is a git branch; these let an agent edit it like code. The server owns
+// all git + DB writes; the desk holds plain files the agent edits with normal
+// tools. `commit` advances the branch + pin with NO new role_versions row — the
+// no-demotion guarantee that closes #396.
+
+export function openCheckout(
+  deps: RoleCheckoutDeps,
+  session: Session,
+  idOrName: string,
+): RouteResult {
+  const cfg = requireConfig(deps);
+  const found = resolveRoleByIdOrName(deps.roles, idOrName, session.workspace_id);
+  if (found === null || found.workspace_id !== session.workspace_id) {
+    return { status: 404, body: { error: `role not found: ${idOrName}` } };
+  }
+  if (!ROLE_NAME_RE.test(found.name)) {
+    return { status: 400, body: { error: `role name is not a git-safe slug: ${found.name}` } };
+  }
+
+  // Lazy per-role cutover: a still-row-backed role is committed onto a <name>
+  // branch on first edit, so the flow works whether or not the global cutover
+  // (#395) has run.
+  let role = found;
+  if (role.current_commit === undefined) {
+    if (role.current_version_id === undefined) {
+      return { status: 500, body: { error: `role ${role.name} has no pin` } };
+    }
+    migrateWorkspaceRole(role, session.workspace_id, {
+      roles: deps.roles,
+      roleVersions: deps.roleVersions,
+      workspaceRepos: cfg.workspaceRepos,
+      forks: cfg.roleForks,
+    });
+    const refetched = deps.roles.get(role.id);
+    if (refetched === null || refetched.current_commit === undefined) {
+      throw new Error(`lazy cutover did not pin role ${role.name} to a commit`);
+    }
+    role = refetched;
+  }
+  const commit = role.current_commit!;
+
+  const deskDir = deskFor(deps, session);
+  const open = readSidecar(deskDir);
+  if (open !== null && open.role_id !== role.id) {
+    return {
+      status: 409,
+      body: {
+        error: `a checkout is already open for a different role (${open.role_id}); discard it first`,
+      },
+    };
+  }
+
+  // The working copy is edited on a LOCAL `<name>` branch (the design's editable
+  // line, distinct from the shared `<name>-default` upstream ancestor). A seeded
+  // role pinned to `<name>-default` gets its local `<name>` branch established
+  // here at the pinned sha; `commit` advances it and repins the role to it.
+  const repoDir = repoDirOf(deps, role);
+  const branch = role.name;
+  ensureEditBranch(repoDir, branch, commit.sha);
+
+  const dir = checkoutDirOf(deskDir);
+  materializeCheckout(repoDir, commit.sha, dir);
+  writeFileSync(join(dir, ROLE_FILE), renderRoleMd(role));
+  writeSidecar(deskDir, { role_id: role.id, branch, base_sha: commit.sha });
+
+  return {
+    status: 200,
+    body: { role_id: role.id, branch, base_sha: commit.sha, checkout_dir: dir },
+  };
+}
+
+export function checkoutStatus(deps: RoleCheckoutDeps, session: Session): RouteResult {
+  requireConfig(deps);
+  const deskDir = deskFor(deps, session);
+  const sidecar = readSidecar(deskDir);
+  if (sidecar === null) return { status: 200, body: { open: false } };
+  const role = deps.roles.get(sidecar.role_id);
+  if (role === null) return { status: 200, body: { open: false } };
+
+  const repoDir = repoDirOf(deps, role);
+  const tip = revParse(repoDir, sidecar.branch);
+  const changed = computeChanges(checkoutDirOf(deskDir), baselineTree(role, repoDir, sidecar.branch));
+  return {
+    status: 200,
+    body: {
+      open: true,
+      role_id: role.id,
+      role_name: role.name,
+      branch: sidecar.branch,
+      base_sha: sidecar.base_sha,
+      stale: tip !== sidecar.base_sha,
+      changed,
+    },
+  };
+}
+
+export function diffCheckout(deps: RoleCheckoutDeps, session: Session): RouteResult {
+  requireConfig(deps);
+  const deskDir = deskFor(deps, session);
+  const sidecar = readSidecar(deskDir);
+  if (sidecar === null) return { status: 400, body: { error: "no checkout is open" } };
+  const role = deps.roles.get(sidecar.role_id);
+  if (role === null) return { status: 404, body: { error: "checkout references a missing role" } };
+
+  const repoDir = repoDirOf(deps, role);
+  const tip = revParse(repoDir, sidecar.branch);
+  const changed = computeChanges(checkoutDirOf(deskDir), baselineTree(role, repoDir, sidecar.branch));
+  return { status: 200, body: { changed, stale: tip !== sidecar.base_sha } };
+}
+
+export interface CommitOptions {
+  readonly message?: string | undefined;
+  readonly force?: boolean | undefined;
+}
+
+export function commitCheckout(
+  deps: RoleCheckoutDeps,
+  session: Session,
+  opts: CommitOptions,
+): RouteResult {
+  const cfg = requireConfig(deps);
+  const deskDir = deskFor(deps, session);
+  const sidecar = readSidecar(deskDir);
+  if (sidecar === null) return { status: 400, body: { error: "no checkout is open" } };
+  const role = deps.roles.get(sidecar.role_id);
+  if (role === null || role.workspace_id !== session.workspace_id) {
+    return { status: 404, body: { error: "checkout references a missing role" } };
+  }
+
+  const repoDir = repoDirOf(deps, role);
+  const tip = revParse(repoDir, sidecar.branch);
+  if (tip !== sidecar.base_sha && opts.force !== true) {
+    return {
+      status: 409,
+      body: {
+        error: `branch ${sidecar.branch} advanced since checkout (base ${sidecar.base_sha.slice(0, 8)} → tip ${tip.slice(0, 8)}); re-checkout or commit with --force`,
+      },
+    };
+  }
+
+  const tree = new Map(readCheckout(checkoutDirOf(deskDir)));
+  const roleMd = tree.get(ROLE_FILE);
+  if (roleMd === undefined) return { status: 400, body: { error: `checkout is missing ${ROLE_FILE}` } };
+  let manifest: RoleEditManifest;
+  try {
+    manifest = parseRoleManifest(roleMd);
+  } catch (err) {
+    return { status: 400, body: { error: `${ROLE_FILE}: ${(err as Error).message}` } };
+  }
+  if (manifest.name !== role.name) {
+    return {
+      status: 400,
+      body: {
+        error: `renaming a role via ${ROLE_FILE} is not supported (v1): ${role.name} → ${manifest.name}`,
+      },
+    };
+  }
+  tree.delete(ROLE_FILE);
+
+  let contract;
+  try {
+    contract = deserializeRoleTree(tree);
+  } catch (err) {
+    return { status: 400, body: { error: `invalid role tree: ${(err as Error).message}` } };
+  }
+  if (contract.triggers.length > 0 && !manifest.persistent) {
+    return { status: 422, body: { error: "triggers are only allowed on persistent roles" } };
+  }
+
+  const baseTriggers = JSON.stringify(loadRoleContractAtCommit(repoDir, sidecar.base_sha).triggers);
+  const message = opts.message ?? `edit ${role.name} via working copy`;
+  const newRef = commitOnBranch(repoDir, sidecar.branch, contract, message);
+
+  // Re-sync the pin + index/cache immediately after the commit returns the sha,
+  // so a failure after this point leaves a coherent row. pinCommit is idempotent
+  // (re-running finalize from the tip is safe).
+  deps.roles.pinCommit(role.id, newRef);
+  deps.roles.syncManifestColumns(role.id, {
+    description: manifest.description,
+    persistent: manifest.persistent,
+    effort: manifest.effort,
+  });
+  cfg.roleContentCache.getOrLoad(newRef.sha, repoDir);
+  if (manifest.persistent && JSON.stringify(contract.triggers) !== baseTriggers) {
+    deps.scheduler.reloadRole(role.id);
+  }
+
+  clearCheckout(deskDir);
+  return {
+    status: 200,
+    body: {
+      role_id: role.id,
+      branch: newRef.branch,
+      sha: newRef.sha,
+      description: manifest.description,
+      persistent: manifest.persistent,
+      effort: manifest.effort,
+      no_new_version: true,
+    },
+  };
+}
+
+export function discardCheckout(deps: RoleCheckoutDeps, session: Session): RouteResult {
+  requireConfig(deps);
+  const deskDir = deskFor(deps, session);
+  const sidecar = readSidecar(deskDir);
+  if (sidecar === null) return { status: 200, body: { discarded: false } };
+  clearCheckout(deskDir);
+  return { status: 200, body: { discarded: true, role_id: sidecar.role_id } };
+}

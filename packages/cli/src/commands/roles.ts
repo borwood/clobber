@@ -6,6 +6,13 @@ import { runList, runShow } from "./roles-inspect.ts";
 import { runEdit } from "./roles-edit.ts";
 import { runSeeds } from "./roles-seeds.ts";
 import { runWakePrograms } from "./roles-wake-programs.ts";
+import {
+  runCheckout,
+  runCheckoutStatus,
+  runCommit,
+  runDiff,
+  runDiscard,
+} from "./roles-checkout.ts";
 
 const SUBCOMMANDS = [
   "list",
@@ -15,11 +22,22 @@ const SUBCOMMANDS = [
   "ceiling",
   "seeds",
   "wake-programs",
+  "checkout",
+  "status",
+  "diff",
+  "commit",
+  "discard",
 ] as const;
 type Subcommand = (typeof SUBCOMMANDS)[number];
 
 function isSubcommand(name: string): name is Subcommand {
   return (SUBCOMMANDS as readonly string[]).includes(name);
+}
+
+function assertNoArgs(sub: string, args: readonly string[]): void {
+  if (args.length > 0) {
+    throw new CliUsageError(`roles ${sub}: unexpected arguments: ${args.join(" ")}`);
+  }
 }
 
 interface ForkResponse {
@@ -114,7 +132,7 @@ export const rolesCommand: Command = {
   name: "roles",
   summary: "List or inspect roles available in the current workspace.",
   usage:
-    "usage: clobber roles <list|show|fork|edit|ceiling|seeds|wake-programs> [args...]\n\n" +
+    "usage: clobber roles <list|show|fork|edit|ceiling|seeds|wake-programs|checkout|status|diff|commit|discard> [args...]\n\n" +
     "Subcommands:\n" +
     "  roles list [--json]                          List workspace roles with version metadata.\n" +
     "  roles show <name|id> [--json]                Show full role + current version + history.\n" +
@@ -123,6 +141,12 @@ export const rolesCommand: Command = {
     "  roles ceiling <name|id> <max> [--json]       Set the spawn ceiling for this role in this workspace.\n" +
     "  roles seeds <name|id> [add|enable|disable <seed> [--disabled]]  List a role's seed refs, or add/toggle one.\n" +
     "  roles wake-programs <name|id> [show|add|edit|remove <name> ...]  List/show/author wake-programs (`idle` is the built-in).\n\n" +
+    "Working-copy verbs (edit a role like code — commit advances the git pin, no new version row):\n" +
+    "  roles checkout <name|id> [--json]            Materialize the role's branch into the desk; edit the files, then commit.\n" +
+    "  roles status [--json]                        Is a checkout open? for which role? which files changed? stale?\n" +
+    "  roles diff [--json]                          Show the working copy's changes against the branch tip.\n" +
+    "  roles commit [-m <msg>] [--force] [--json]   Serialize the edits onto the branch + advance the pin (--force overrides a stale tip).\n" +
+    "  roles discard [--json]                       Throw the checkout away (the branch is untouched).\n\n" +
     "Flags (roles edit):\n" +
     "  --system-prompt-file FILE      Replace system prompt from a file.\n" +
     "  --system-prompt -              Replace system prompt from stdin.\n" +
@@ -173,6 +197,24 @@ export const rolesCommand: Command = {
     }
     if (sub === "ceiling") {
       return runCeiling(ctx, json, subArgs);
+    }
+    if (sub === "checkout") {
+      return runCheckout(ctx, json, subArgs);
+    }
+    if (sub === "status") {
+      assertNoArgs("status", subArgs);
+      return runCheckoutStatus(ctx, json);
+    }
+    if (sub === "diff") {
+      assertNoArgs("diff", subArgs);
+      return runDiff(ctx, json);
+    }
+    if (sub === "commit") {
+      return runCommit(ctx, json, subArgs);
+    }
+    if (sub === "discard") {
+      assertNoArgs("discard", subArgs);
+      return runDiscard(ctx, json);
     }
     return runShow(ctx, json, subArgs);
   },

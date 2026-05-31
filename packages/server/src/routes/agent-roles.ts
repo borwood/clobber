@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { Database } from "bun:sqlite";
 import { z } from "zod";
 import {
+  ROLE_NAME_RE,
   RoleSkillSchema,
   RoleTriggerSchema,
   SeedRefSchema,
@@ -20,10 +21,9 @@ import { type RoleEditPatch } from "../edit-role.ts";
 import { applyRoleEdit, triggersRequirePersistent } from "../apply-role-edit.ts";
 import { resolveRoleByIdOrName } from "../resolve-role.ts";
 import { resolveCurrentRoleVersion } from "../resolve-role-content.ts";
+import { registerAgentRoleCheckoutRoutes } from "./agent-role-checkout.ts";
 import { withAgentAuth } from "./_with-agent-auth.ts";
 import { buildDetail, buildListEntry } from "./_agent-roles-views.ts";
-
-const ROLE_NAME_RE = /^[A-Za-z0-9_-]+$/;
 
 const ForkBodySchema = z.object({
   new_name: z.string().min(1).regex(ROLE_NAME_RE),
@@ -58,6 +58,10 @@ export interface AgentRolesRouteDeps {
   // source/target role's content from the materialized cache (Option A).
   readonly roleContentCache?: import("../role-content-cache.ts").RoleContentCache;
   readonly roleRepoDir?: string;
+  // #216 — the working-copy verbs reach the per-workspace clone + the fork-tip
+  // map (for the lazy per-role cutover) through these.
+  readonly roleForks?: ReadonlyMap<string, import("../role-repo.ts").ForkRef>;
+  readonly workspaceRepos?: import("../workspace-role-repos.ts").WorkspaceRoleRepos;
 }
 
 export function registerAgentRolesRoutes(
@@ -270,4 +274,8 @@ export function registerAgentRolesRoutes(
       },
     ),
   );
+
+  // #216 — the working-copy verbs (checkout / status / diff / commit / discard)
+  // register on the same auth surface, in their own module to stay reviewable.
+  registerAgentRoleCheckoutRoutes(app, deps);
 }

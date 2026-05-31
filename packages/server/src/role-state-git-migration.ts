@@ -4,10 +4,21 @@ import type { RoleVersionStore } from "./role-version-store.ts";
 import {
   BASE_BRANCH,
   commitContractOnBranch,
+  type ForkRef,
   type UpstreamRoleRepo,
 } from "./role-repo.ts";
 import { roleSnapshotToContract } from "./role-tree.ts";
 import type { WorkspaceRoleRepos } from "./workspace-role-repos.ts";
+
+// The per-role cutover's inputs, narrowed so the working-copy `checkout` verb
+// (#216) can reuse it for the lazy on-demand cutover without owning the whole
+// boot migration's deps. `forks` is the upstream fork-tip map (= upstream.forks).
+export interface WorkspaceRoleCutoverDeps {
+  readonly roles: Pick<RoleStore, "pinCommit">;
+  readonly roleVersions: Pick<RoleVersionStore, "get">;
+  readonly workspaceRepos: WorkspaceRoleRepos;
+  readonly forks: ReadonlyMap<string, ForkRef>;
+}
 
 // #351 — forward-only migration of existing role state into topology-B fork
 // repos. Three role shapes, each non-destructive (`role_versions` rows are
@@ -61,7 +72,12 @@ export function migrateRoleStateToWorkspaceRepos(
       else skipped += 1;
       continue;
     }
-    migrateWorkspaceRole(role, role.workspace_id, deps);
+    migrateWorkspaceRole(role, role.workspace_id, {
+      roles: deps.roles,
+      roleVersions: deps.roleVersions,
+      workspaceRepos: deps.workspaceRepos,
+      forks: deps.upstream.forks,
+    });
     migrated += 1;
   }
 
@@ -78,17 +94,23 @@ function pinNullWorkspaceToDefault(role: Role, deps: RoleStateMigrationDeps): bo
   return true;
 }
 
-function migrateWorkspaceRole(
+// Commit a row-backed workspace role's current version onto a flat `<name>`
+// branch (parented off the upstream `<name>-default` fork when one exists, so a
+// merge-base ancestor exists for #265), then repoint the DB pin to that sha. The
+// boot migration runs it across all roles; the #216 `checkout` verb runs it
+// lazily for one role on first edit, so the working-copy flow works whether or
+// not the global cutover (#395) has run.
+export function migrateWorkspaceRole(
   role: Role,
   workspaceId: string,
-  deps: RoleStateMigrationDeps,
+  deps: WorkspaceRoleCutoverDeps,
 ): void {
   const version = deps.roleVersions.get(role.current_version_id!);
   if (version === null) throw new Error(`role ${role.id} pins a missing version row`);
   const contract = roleSnapshotToContract(version);
 
   const dir = deps.workspaceRepos.dirFor(workspaceId);
-  const hasDefault = deps.upstream.forks.has(role.name);
+  const hasDefault = deps.forks.has(role.name);
   // In the clone the upstream fork is the remote-tracking ref `upstream/<name>`;
   // `base` is a local branch (the clone's default checkout).
   const parentRef = hasDefault ? `upstream/${role.name}-default` : BASE_BRANCH;
