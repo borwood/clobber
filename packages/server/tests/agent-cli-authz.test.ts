@@ -23,6 +23,8 @@ import type { SpawnedAgentInfo } from "../src/types.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
 import { createFinalReportConsumerStateStore } from "../src/final-report-consumer.ts";
 import { seedWorkspaceRoles } from "../src/seed-workspace-roles.ts";
+import { loadRoleContractAtCommit } from "../src/role-repo.ts";
+import { dirname } from "node:path";
 
 interface RoleSession {
   readonly sessionId: string;
@@ -36,6 +38,7 @@ interface Harness {
   readonly manager: RoleSession;
   readonly worker: RoleSession;
   readonly repoPath: string;
+  readonly roleRepoDir: string;
 }
 
 function makeStdin(): NodeJS.WritableStream {
@@ -54,6 +57,7 @@ function buildHarness(): Harness {
   const sessions = createSessionStore(db);
   const tokens = createSessionTokenStore(db);
   const repoPath = mkdtempSync(join(tmpdir(), "clobber-cli-authz-"));
+  const roleRepoDir = mkdtempSync(join(tmpdir(), "clobber-cli-authz-repo-"));
   const ws = workspaces.create({ name: "ws", repo_path: repoPath });
 
   seedWorkspaceRoles(db, ws.id);
@@ -107,15 +111,17 @@ function buildHarness(): Harness {
     cliEntry: "/dummy/cli.ts",
     dispatches: createTriggerDispatchStore(db),
     finalReportConsumerState: createFinalReportConsumerStateStore(db),
+    roleRepoDir,
   });
 
-  return { server, db, workspaceId: ws.id, manager, worker, repoPath };
+  return { server, db, workspaceId: ws.id, manager, worker, repoPath, roleRepoDir };
 }
 
 async function teardown(h: Harness): Promise<void> {
   await h.server.close();
   h.db.close();
   rmSync(h.repoPath, { recursive: true, force: true });
+  rmSync(h.roleRepoDir, { recursive: true, force: true });
 }
 
 function bearer(token: string): { authorization: string } {
@@ -268,17 +274,14 @@ describe("agent CLI authz — manager wildcard vs worker allow-list", () => {
         payload: { new_name: "worker-fork" },
       });
       expect(fork.statusCode).toBe(201);
-      const { role_id, version_id } = fork.json() as {
+      const { role_id, sha } = fork.json() as {
         role_id: string;
-        version_id: string;
+        sha: string;
       };
-      const row = h.db
-        .prepare(
-          "SELECT allowed_cli_commands_json FROM role_versions WHERE id = ?",
-        )
-        .get(version_id) as { allowed_cli_commands_json: string };
-      const allowed = JSON.parse(row.allowed_cli_commands_json);
-      expect(allowed).toEqual(["whoami", "ask", "status", "report", "reply"]);
+      // Git-native fork: the allow-list rides the fork's commit, not a version row.
+      const cloneDir = join(dirname(h.roleRepoDir), "role-repos", h.workspaceId);
+      const contract = loadRoleContractAtCommit(cloneDir, sha);
+      expect(contract.allowedCliCommands).toEqual(["whoami", "ask", "status", "report", "reply"]);
       expect(role_id).toBeDefined();
     } finally {
       await teardown(h);

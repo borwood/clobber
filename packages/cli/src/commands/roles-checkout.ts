@@ -35,6 +35,12 @@ interface CommitResponse {
   readonly description: string;
 }
 
+interface BranchResponse {
+  readonly role_id: string;
+  readonly branch: string;
+  readonly sha: string;
+}
+
 function emit(ctx: CommandContext, json: boolean, value: unknown, human: string): number {
   ctx.stdout.write(json ? `${JSON.stringify(value, null, 2)}\n` : human);
   return 0;
@@ -50,6 +56,9 @@ export async function runCheckout(
   json: boolean,
   rest: readonly string[],
 ): Promise<number> {
+  if (rest[0] === "-b") {
+    return runCheckoutBranch(ctx, json, rest.slice(1));
+  }
   const [target, ...extra] = rest;
   if (target === undefined) {
     throw new CliUsageError("roles checkout: missing role name or id (usage: `roles checkout <name|id>`)");
@@ -66,6 +75,63 @@ export async function runCheckout(
     json,
     result,
     `checked out ${target} -> ${result.checkout_dir}\nedit the files, then \`clobber roles commit\` (or \`roles discard\`).\n`,
+  );
+}
+
+// `roles checkout -b <new-name> --from <source>` — create/fork a role as a fresh
+// git branch off the source tip (commit-pinned, no version row). `roles fork`
+// is a thin alias that calls the same path.
+async function runCheckoutBranch(
+  ctx: CommandContext,
+  json: boolean,
+  rest: readonly string[],
+): Promise<number> {
+  let newName: string | undefined;
+  let from: string | undefined;
+  const args = [...rest];
+  while (args.length > 0) {
+    const arg = args.shift()!;
+    if (arg === "--from") {
+      from = args.shift();
+      if (from === undefined) {
+        throw new CliUsageError("roles checkout -b: --from requires a source name or id");
+      }
+    } else if (newName === undefined) {
+      newName = arg;
+    } else {
+      throw new CliUsageError(`roles checkout -b: unexpected argument: ${arg}`);
+    }
+  }
+  if (newName === undefined) {
+    throw new CliUsageError(
+      "roles checkout -b: missing <new-name> (usage: `roles checkout -b <new-name> --from <source>`)",
+    );
+  }
+  if (from === undefined) {
+    throw new CliUsageError(
+      "roles checkout -b: missing --from <source> (usage: `roles checkout -b <new-name> --from <source>`)",
+    );
+  }
+  return forkRoleBranch(ctx, json, from, newName);
+}
+
+// The shared create-via-git request behind both `checkout -b` and `fork`.
+export async function forkRoleBranch(
+  ctx: CommandContext,
+  json: boolean,
+  source: string,
+  newName: string,
+): Promise<number> {
+  const result = await request<BranchResponse>(ctx.env, {
+    method: "POST",
+    path: `/agent/roles/${encodeURIComponent(source)}/fork`,
+    body: { new_name: newName },
+  });
+  return emit(
+    ctx,
+    json,
+    result,
+    `created ${newName} (id: ${result.role_id}) -> ${result.branch}@${result.sha.slice(0, 8)} (forked from ${source}, no version row)\n`,
   );
 }
 

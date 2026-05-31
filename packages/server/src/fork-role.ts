@@ -1,38 +1,59 @@
 import { randomUUID } from "node:crypto";
 import type { Database } from "bun:sqlite";
-import type { Role, RoleVersion } from "@clobber/shared";
-import { createRoleVersionStore } from "./role-version-store.ts";
+import type { Role } from "@clobber/shared";
+import { commitContractOnBranch, loadRoleContractAtCommit } from "./role-repo.ts";
+import {
+  ensureCommitPinned,
+  repoDirOf,
+  requireConfig,
+  type RoleCheckoutDeps,
+} from "./role-checkout-context.ts";
+
+// #216 — fork a role as a NEW git branch (`roles checkout -b`, of which
+// `roles fork` is a thin CLI alias). The source's content is branched off its
+// commit tip onto a fresh `<new-name>` branch; the new role row is inserted
+// commit-pinned via pinCommit — NOT a role_versions row. This replaces the old
+// row-minting fork: the demotion-on-fork code is gone, and the new role embodies
+// from git like every other commit-pinned role.
 
 export interface ForkRoleResult {
   readonly role_id: string;
-  readonly version_id: string;
-  readonly version: 1;
+  readonly branch: string;
+  readonly sha: string;
 }
 
 export function forkRole(
   db: Database,
+  deps: RoleCheckoutDeps,
   source: Role,
-  sourceVersion: RoleVersion,
   newName: string,
   workspaceId: string,
 ): ForkRoleResult {
-  const versions = createRoleVersionStore(db);
+  const cfg = requireConfig(deps);
+  const pinnedSource = ensureCommitPinned(deps, cfg, source, workspaceId);
+  const commit = pinnedSource.current_commit!;
+  const repoDir = repoDirOf(deps, pinnedSource);
 
-  const insertRole = db.prepare(
-    `INSERT INTO roles (id, name, description, permission_mode, effort, persistent, workspace_id, current_version_id, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  );
-  const setCurrentVersion = db.prepare(
-    "UPDATE roles SET current_version_id = ? WHERE id = ?",
+  // Branch the source's content off its tip, giving the fork its own commit (and
+  // a merge-base ancestor with the source for a future #265 upstream merge).
+  const contract = loadRoleContractAtCommit(repoDir, commit.sha);
+  const newRef = commitContractOnBranch(
+    repoDir,
+    newName,
+    commit.sha,
+    contract,
+    `fork ${newName} from ${pinnedSource.name}`,
   );
 
   const id = randomUUID();
   const createdAt = Date.now();
-  const description = source.description ?? null;
-  const permissionMode = source.permission_mode ?? null;
-  const effort = source.effort ?? null;
-
-  insertRole.run(
+  const description = source.description === undefined ? null : source.description;
+  const permissionMode = source.permission_mode === undefined ? null : source.permission_mode;
+  const effort = source.effort === undefined ? null : source.effort;
+  db.prepare(
+    `INSERT INTO roles (id, name, description, permission_mode, effort, persistent, workspace_id, current_version_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+  ).run(
     id,
     newName,
     description,
@@ -40,25 +61,10 @@ export function forkRole(
     effort,
     source.persistent ? 1 : 0,
     workspaceId,
-    null,
     createdAt,
   );
-
-  const newVersion = versions.create({
-    role_id: id,
-    version: 1,
-    framing: sourceVersion.framing,
-    system_prompt: sourceVersion.system_prompt,
-    skills_json: sourceVersion.skills_json,
-    allowed_tools_json: sourceVersion.allowed_tools_json,
-    allowed_cli_commands_json: sourceVersion.allowed_cli_commands_json,
-    hooks_json: sourceVersion.hooks_json,
-    triggers_json: sourceVersion.triggers_json,
-    seed_refs_json: sourceVersion.seed_refs_json,
-    wake_programs_json: sourceVersion.wake_programs_json,
-    default_wake_program: sourceVersion.default_wake_program,
-  });
-  setCurrentVersion.run(newVersion.id, id);
+  deps.roles.pinCommit(id, newRef);
+  cfg.roleContentCache.getOrLoad(newRef.sha, repoDir);
 
   const sourceCeilingRow = db
     .prepare(
@@ -72,5 +78,5 @@ export function forkRole(
      ON CONFLICT (workspace_id, role_id) DO UPDATE SET max_concurrent = excluded.max_concurrent`,
   ).run(workspaceId, id, inheritedCeiling);
 
-  return { role_id: id, version_id: newVersion.id, version: 1 };
+  return { role_id: id, branch: newRef.branch, sha: newRef.sha };
 }

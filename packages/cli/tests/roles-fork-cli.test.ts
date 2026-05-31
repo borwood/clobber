@@ -40,9 +40,12 @@ function makeStdin(): NodeJS.WritableStream {
   return s;
 }
 
+let roleRepoDir: string;
+
 beforeAll(async () => {
   const repoPath = mkdtempSync(join(tmpdir(), "clobber-roles-fork-cli-"));
   writeFileSync(join(repoPath, ".git"), "gitdir: stub\n");
+  roleRepoDir = mkdtempSync(join(tmpdir(), "clobber-roles-fork-cli-repo-"));
   const db = createDatabase(":memory:");
   const workspaces = createWorkspaceStore(db);
   const roles = createRoleStore(db);
@@ -87,6 +90,7 @@ beforeAll(async () => {
   
     dispatches: createTriggerDispatchStore(db),
     finalReportConsumerState: createFinalReportConsumerStateStore(db),
+    roleRepoDir,
   });
   await app.listen({ port: 0, host: "127.0.0.1" });
   const addr = app.server.address();
@@ -122,6 +126,7 @@ afterAll(async () => {
   await harness.app.close();
   harness.db.close();
   rmSync(harness.repoPath, { recursive: true, force: true });
+  rmSync(roleRepoDir, { recursive: true, force: true });
 });
 
 function captureStreams() {
@@ -166,7 +171,7 @@ describe("clobber CLI — roles fork", () => {
     expect(out).toContain(row!.id);
   });
 
-  it("returns JSON when --json is passed", async () => {
+  it("returns the git-native shape (branch + sha, no version row) when --json is passed", async () => {
     const s = captureStreams();
     const code = await run({
       argv: ["roles", "fork", "worker", "auditor-json", "--json"],
@@ -177,12 +182,47 @@ describe("clobber CLI — roles fork", () => {
     expect(code).toBe(0);
     const parsed = JSON.parse(s.out()) as {
       role_id: string;
-      version_id: string;
-      version: number;
+      branch: string;
+      sha: string;
     };
     expect(typeof parsed.role_id).toBe("string");
-    expect(typeof parsed.version_id).toBe("string");
-    expect(parsed.version).toBe(1);
+    expect(parsed.branch).toBe("auditor-json");
+    expect(typeof parsed.sha).toBe("string");
+
+    const versionRows = (
+      harness.db
+        .prepare("SELECT COUNT(*) AS n FROM role_versions WHERE role_id = ?")
+        .get(parsed.role_id) as { n: number }
+    ).n;
+    expect(versionRows).toBe(0);
+  });
+
+  it("`checkout -b <new> --from <src>` is an alias yielding the same git-native result", async () => {
+    const s = captureStreams();
+    const code = await run({
+      argv: ["roles", "checkout", "-b", "checkout-b-role", "--from", "worker", "--json"],
+      env: envFor(harness.managerToken),
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(0);
+    const parsed = JSON.parse(s.out()) as {
+      role_id: string;
+      branch: string;
+      sha: string;
+    };
+    expect(parsed.branch).toBe("checkout-b-role");
+    expect(typeof parsed.sha).toBe("string");
+
+    const row = harness.db
+      .prepare(
+        "SELECT current_version_id, current_commit_branch FROM roles WHERE id = ?",
+      )
+      .get(parsed.role_id) as
+      | { current_version_id: string | null; current_commit_branch: string | null }
+      | null;
+    expect(row!.current_version_id).toBeNull();
+    expect(row!.current_commit_branch).toBe("checkout-b-role");
   });
 
   it("exits 2 when source name/id is missing", async () => {

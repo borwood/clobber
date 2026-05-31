@@ -184,11 +184,11 @@ The Manager-as-workspace-shell vision (above) requires roles to be **mutable, ve
 | Decision | Choice |
 |---|---|
 | Scope | **Workspace-local.** Each workspace owns its own role copies. Cross-workspace pollution cut at the schema. |
-| Composition | **Fork + edit.** No inheritance graphs, no slot overrides. `clobber roles fork <id> <new-name>` copies the current version into a new role; edit freely from there. Cheap, traceable. |
-| Versioning | **Immutable `role_versions` table; `roles.current_version_id` pointer.** Edit = insert new version + bump pointer. Spawn pins `sessions.role_version_id` so live sessions keep their boot version; new spawns pick up edits. |
-| Editable surface (manager-authored) | `system_prompt`, `skills`, `allowed_tools`. |
-| Locked surface (dev-only seeds) | `hooks`, `permission_mode`. **Why:** hooks are bash with workspace permissions; `permission_mode` controls whether claude bypasses tool prompts. Both are "give the agent code execution outside the agent" if LLM-authored. Revisit when there's a sandbox/audit story. |
-| `allowed_tools` on fork | **Fully alterable** — expand or narrow. Forking is a starting-point convenience, not a constraint. |
+| Composition | **Branch + edit.** No inheritance graphs, no slot overrides. A role is a git branch; `clobber roles checkout -b <new-name> --from <source>` (alias: `roles fork`) branches a fresh role off the source's commit tip — commit-pinned, no version row. Edit freely from there. Cheap, traceable (#346/#348/#216). |
+| Versioning | **Roles are git branches.** Edit = `checkout` the branch → edit files → `commit`, which advances the branch and re-pins the role to the new tip (no `role_versions` row minted). A spawn captures `sessions.role_commit_*`, so a live session embodies its exact boot commit; new spawns pick up the advanced pin. The branch *is* the history; the working copy *is* the draft. |
+| Editable surface (in-commit, agent-editable) | `system_prompt`, `skills`, `allowed_tools`, triggers, seeds, wake-programs, and `ROLE.md` frontmatter — everything the working-copy tree carries. |
+| Locked surface (not LLM-authored) | `permission_mode` is **workspace policy** (human-governed; its editable path is #400), and `hooks.json` is **engine instrumentation** — always composed in at spawn, **never** in the checkout (#216). Neither is a "locked DB column"; they live outside the editable commit tree by construction. **Why:** hooks are bash with workspace permissions, and `permission_mode` controls whether claude bypasses tool prompts — both are "give the agent code execution outside the agent" if LLM-authored. |
+| `allowed_tools` on branch | **Fully alterable** — expand or narrow. Branching is a starting-point convenience, not a constraint. |
 | Shipped roles | First-boot seed: ship `manager` and a generic `worker` template. Cloned per-workspace on workspace create. Edits to seed sources don't propagate to existing workspaces (intentional — workspaces own their roles). |
 
 ### Implementation order

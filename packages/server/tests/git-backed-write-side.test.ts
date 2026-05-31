@@ -23,7 +23,8 @@ import { createAgentQuestionStore } from "../src/agent-question-store.ts";
 import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
 import { createFinalReportConsumerStateStore } from "../src/final-report-consumer.ts";
-import { ensureUpstreamRoleRepo } from "../src/role-repo.ts";
+import { dirname } from "node:path";
+import { ensureUpstreamRoleRepo, loadRoleContractAtCommit } from "../src/role-repo.ts";
 import { createRoleContentCache } from "../src/role-content-cache.ts";
 import { resolveCurrentRoleVersion } from "../src/resolve-role-content.ts";
 import type { AgentSpawner, SpawnedAgentInfo } from "../src/types.ts";
@@ -282,7 +283,7 @@ describe("#361 git-backed write-side through the routes", () => {
     await teardown(h);
   });
 
-  it("forks a commit-pinned source: row-backed fork with the source's tools, source unchanged", async () => {
+  it("forks a commit-pinned source: commit-pinned fork with the source's tools, source unchanged", async () => {
     const h = buildHarness();
     const wsId = await createWorkspace(h, repo.path);
     const managerId = roleId(h, "manager", wsId);
@@ -297,16 +298,25 @@ describe("#361 git-backed write-side through the routes", () => {
       payload: { new_name: "worker-fork" },
     });
     expect(res.statusCode).toBe(201);
-    const fork = res.json() as { role_id: string; version: number };
-    expect(fork.version).toBe(1);
+    const fork = res.json() as { role_id: string; branch: string; sha: string };
+    expect(fork.branch).toBe("worker-fork");
 
-    const toolsRow = h.db
-      .prepare(
-        `SELECT v.allowed_tools_json AS j FROM role_versions v
-         JOIN roles r ON r.current_version_id = v.id WHERE r.id = ?`,
-      )
-      .get(fork.role_id) as { j: string };
-    expect(Array.isArray(JSON.parse(toolsRow.j))).toBe(true);
+    // The fork is commit-pinned to its own branch — NOT a new role_versions row.
+    const forkPin = pinState(h, fork.role_id);
+    expect(forkPin.branch).toBe("worker-fork");
+    expect(forkPin.sha).toBe(fork.sha);
+    expect(forkPin.versionId).toBeNull();
+    const forkVersionRows = (
+      h.db.prepare("SELECT COUNT(*) AS n FROM role_versions WHERE role_id = ?").get(fork.role_id) as {
+        n: number;
+      }
+    ).n;
+    expect(forkVersionRows).toBe(0);
+
+    // The fork's commit carries the source's tools.
+    const cloneDir = join(dirname(roleRepoDir), "role-repos", wsId);
+    const contract = loadRoleContractAtCommit(cloneDir, fork.sha);
+    expect(Array.isArray(contract.allowedTools)).toBe(true);
 
     // The forked source stays git-backed — forking reads it, never demotes it.
     expect(pinState(h, workerId).sha).not.toBeNull();
