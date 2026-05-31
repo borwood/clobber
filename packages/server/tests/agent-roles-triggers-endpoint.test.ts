@@ -252,41 +252,6 @@ describe("PATCH /agent/roles/:idOrName — triggers", () => {
     await teardown(h);
   });
 
-  it("fork preserves triggers from the source role", async () => {
-    const h = buildHarness();
-    const boot = await bootInWorkspace(h, repo.path);
-
-    const triggers = [{ kind: "webhook", path: "/hooks/triage" }];
-    const setRes = await h.server.inject({
-      method: "PATCH",
-      url: `/agent/roles/${boot.managerRoleId}`,
-      headers: { authorization: `Bearer ${boot.managerToken}` },
-      payload: { triggers },
-    });
-    expect(setRes.statusCode).toBe(200);
-
-    const forkRes = await h.server.inject({
-      method: "POST",
-      url: `/agent/roles/${boot.managerRoleId}/fork`,
-      headers: { authorization: `Bearer ${boot.managerToken}` },
-      payload: { new_name: "manager-clone" },
-    });
-    expect(forkRes.statusCode).toBe(201);
-    const forked = forkRes.json() as { role_id: string };
-
-    const showRes = await h.server.inject({
-      method: "GET",
-      url: `/agent/roles/${forked.role_id}`,
-      headers: { authorization: `Bearer ${boot.managerToken}` },
-    });
-    const detail = showRes.json() as {
-      current_version: { triggers: unknown };
-    };
-    expect(detail.current_version.triggers).toEqual(triggers);
-
-    await teardown(h);
-  });
-
   it("a role created from seed has triggers: [] in its detail response", async () => {
     const h = buildHarness();
     const boot = await bootInWorkspace(h, repo.path);

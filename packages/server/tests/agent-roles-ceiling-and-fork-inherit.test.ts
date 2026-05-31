@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { makeRepoFixture, type RepoFixture } from "./repo-fixture.ts";
@@ -33,6 +34,8 @@ function makeStdin(): NodeJS.WritableStream {
   s.resume();
   return s;
 }
+
+let roleRepoDir: string;
 
 function buildHarness(): Harness {
   const db = createDatabase(":memory:");
@@ -71,6 +74,7 @@ function buildHarness(): Harness {
   
     dispatches: createTriggerDispatchStore(db),
     finalReportConsumerState: createFinalReportConsumerStateStore(db),
+    roleRepoDir,
   });
   return { server, db, tokens };
 }
@@ -84,10 +88,12 @@ let repo: RepoFixture;
 
 beforeEach(() => {
   repo = makeRepoFixture("clobber-roles-ceiling-");
+  roleRepoDir = mkdtempSync(join(tmpdir(), "clobber-roles-ceiling-repo-"));
 });
 
 afterEach(() => {
   repo.cleanup();
+  rmSync(roleRepoDir, { recursive: true, force: true });
 });
 
 interface Booted {
@@ -170,7 +176,7 @@ describe("forkRole inherits source ceiling so the fork is not stuck at capacity 
     await teardown(h);
   });
 
-  it("spawning a freshly forked role succeeds and materializes the plugin tree from DB-only state", async () => {
+  it("spawning a freshly forked role succeeds and materializes the plugin tree from its commit pin", async () => {
     const h = buildHarness();
     const boot = await bootInWorkspace(h);
 

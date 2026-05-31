@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { makeRepoFixture, type RepoFixture } from "./repo-fixture.ts";
 import { createServer } from "../src/server.ts";
@@ -31,6 +34,8 @@ function makeStdin(): NodeJS.WritableStream {
   s.resume();
   return s;
 }
+
+let roleRepoDir: string;
 
 function buildHarness(): Harness {
   const db = createDatabase(":memory:");
@@ -75,6 +80,7 @@ function buildHarness(): Harness {
   
     dispatches: createTriggerDispatchStore(db),
     finalReportConsumerState: createFinalReportConsumerStateStore(db),
+    roleRepoDir,
   });
   return { server, db, tokens };
 }
@@ -90,11 +96,13 @@ let otherRepo: RepoFixture;
 beforeEach(() => {
   repo = makeRepoFixture("clobber-roles-fork-");
   otherRepo = makeRepoFixture("clobber-roles-fork-other-");
+  roleRepoDir = mkdtempSync(join(tmpdir(), "clobber-roles-fork-repo-"));
 });
 
 afterEach(() => {
   repo.cleanup();
   otherRepo.cleanup();
+  rmSync(roleRepoDir, { recursive: true, force: true });
 });
 
 interface Booted {
@@ -155,7 +163,7 @@ describe("POST /agent/roles/:id/fork", () => {
     await teardown(h);
   });
 
-  it("forks a workspace role by id and creates a workspace-scoped role at version 1", async () => {
+  it("forks a workspace role by id, commit-pinned to a fresh branch with NO version row", async () => {
     const h = buildHarness();
     const boot = await bootInWorkspace(h, repo.path);
 
@@ -168,41 +176,73 @@ describe("POST /agent/roles/:id/fork", () => {
     expect(res.statusCode).toBe(201);
     const body = res.json() as {
       role_id: string;
-      version_id: string;
-      version: number;
+      branch: string;
+      sha: string;
     };
     expect(typeof body.role_id).toBe("string");
-    expect(typeof body.version_id).toBe("string");
-    expect(body.version).toBe(1);
+    expect(body.branch).toBe("auditor");
+    expect(typeof body.sha).toBe("string");
 
+    // The new role is commit-pinned to its fresh branch — NOT a role_versions row.
     const newRole = h.db
-      .prepare("SELECT name, workspace_id, current_version_id FROM roles WHERE id = ?")
+      .prepare(
+        "SELECT name, workspace_id, current_version_id, current_commit_branch, current_commit_sha FROM roles WHERE id = ?",
+      )
       .get(body.role_id) as
-      | { name: string; workspace_id: string; current_version_id: string }
+      | {
+          name: string;
+          workspace_id: string;
+          current_version_id: string | null;
+          current_commit_branch: string | null;
+          current_commit_sha: string | null;
+        }
       | null;
     expect(newRole).not.toBeNull();
     expect(newRole!.name).toBe("auditor");
     expect(newRole!.workspace_id).toBe(boot.workspaceId);
-    expect(newRole!.current_version_id).toBe(body.version_id);
+    expect(newRole!.current_version_id).toBeNull();
+    expect(newRole!.current_commit_branch).toBe("auditor");
+    expect(newRole!.current_commit_sha).toBe(body.sha);
 
-    const newVersion = h.db
-      .prepare(
-        "SELECT version, role_id, system_prompt FROM role_versions WHERE id = ?",
-      )
-      .get(body.version_id) as
-      | { version: number; role_id: string; system_prompt: string }
-      | null;
-    expect(newVersion).not.toBeNull();
-    expect(newVersion!.version).toBe(1);
-    expect(newVersion!.role_id).toBe(body.role_id);
+    const versionRows = (
+      h.db.prepare("SELECT COUNT(*) AS n FROM role_versions WHERE role_id = ?").get(body.role_id) as {
+        n: number;
+      }
+    ).n;
+    expect(versionRows).toBe(0);
 
-    const sourceVersionRow = h.db
-      .prepare(
-        "SELECT system_prompt FROM role_versions WHERE id = (SELECT current_version_id FROM roles WHERE id = ?)",
-      )
-      .get(boot.workerRoleId) as { system_prompt: string } | null;
-    expect(sourceVersionRow).not.toBeNull();
-    expect(newVersion!.system_prompt).toBe(sourceVersionRow!.system_prompt);
+    await teardown(h);
+  });
+
+  it("preserves the source role's triggers through the fork's commit", async () => {
+    const h = buildHarness();
+    const boot = await bootInWorkspace(h, repo.path);
+
+    const triggers = [{ kind: "webhook", path: "/hooks/triage" }];
+    const setRes = await h.server.inject({
+      method: "PATCH",
+      url: `/agent/roles/${boot.managerRoleId}`,
+      headers: { authorization: `Bearer ${boot.managerToken}` },
+      payload: { triggers },
+    });
+    expect(setRes.statusCode).toBe(200);
+
+    const forkRes = await h.server.inject({
+      method: "POST",
+      url: `/agent/roles/${boot.managerRoleId}/fork`,
+      headers: { authorization: `Bearer ${boot.managerToken}` },
+      payload: { new_name: "manager-clone" },
+    });
+    expect(forkRes.statusCode, forkRes.body).toBe(201);
+    const forked = forkRes.json() as { role_id: string };
+
+    const showRes = await h.server.inject({
+      method: "GET",
+      url: `/agent/roles/${forked.role_id}`,
+      headers: { authorization: `Bearer ${boot.managerToken}` },
+    });
+    const detail = showRes.json() as { current_version: { triggers: unknown } };
+    expect(detail.current_version.triggers).toEqual(triggers);
 
     await teardown(h);
   });

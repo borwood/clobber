@@ -16,7 +16,6 @@ import {
 } from "./role-checkout-repo.ts";
 import { revParse } from "./role-git.ts";
 import { loadRoleContractAtCommit } from "./role-repo.ts";
-import { migrateWorkspaceRole } from "./role-state-git-migration.ts";
 import { resolveRoleByIdOrName } from "./resolve-role.ts";
 import {
   baselineTree,
@@ -24,6 +23,7 @@ import {
   clearCheckout,
   computeChanges,
   deskFor,
+  ensureCommitPinned,
   readSidecar,
   renderRoleMd,
   repoDirOf,
@@ -56,23 +56,7 @@ export function openCheckout(
   // Lazy per-role cutover: a still-row-backed role is committed onto a <name>
   // branch on first edit, so the flow works whether or not the global cutover
   // (#395) has run.
-  let role = found;
-  if (role.current_commit === undefined) {
-    if (role.current_version_id === undefined) {
-      return { status: 500, body: { error: `role ${role.name} has no pin` } };
-    }
-    migrateWorkspaceRole(role, session.workspace_id, {
-      roles: deps.roles,
-      roleVersions: deps.roleVersions,
-      workspaceRepos: cfg.workspaceRepos,
-      forks: cfg.roleForks,
-    });
-    const refetched = deps.roles.get(role.id);
-    if (refetched === null || refetched.current_commit === undefined) {
-      throw new Error(`lazy cutover did not pin role ${role.name} to a commit`);
-    }
-    role = refetched;
-  }
+  const role = ensureCommitPinned(deps, cfg, found, session.workspace_id);
   const commit = role.current_commit!;
 
   const deskDir = deskFor(deps, session);

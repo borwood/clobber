@@ -98,11 +98,6 @@ export function registerAgentRolesRoutes(
           reply.code(404);
           return { error: `role not found: ${idOrName}` };
         }
-        const sourceVersion = resolveCurrentRoleVersion(source, deps);
-        if (sourceVersion === null) {
-          reply.code(500);
-          return { error: "source role has no current version" };
-        }
         if (
           deps.roles.findInWorkspace(session.workspace_id, parsed.data.new_name) !==
           null
@@ -112,8 +107,8 @@ export function registerAgentRolesRoutes(
         }
         const result = forkRole(
           deps.db,
+          deps,
           source,
-          sourceVersion,
           parsed.data.new_name,
           session.workspace_id,
         );

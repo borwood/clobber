@@ -5,6 +5,7 @@ import { roleEditSpecBody } from "@clobber/runtime";
 import { type RoleTree } from "./role-tree.ts";
 import { readCheckout } from "./role-checkout-repo.ts";
 import { readTreeAtCommit } from "./role-git.ts";
+import { migrateWorkspaceRole } from "./role-state-git-migration.ts";
 import { resolveRoleRepoDir } from "./resolve-role-repo-dir.ts";
 import { deskDirFor } from "./desk-store.ts";
 import type { RoleStore } from "./role-store.ts";
@@ -121,6 +122,34 @@ export function repoDirOf(deps: RoleCheckoutDeps, role: Role): string {
   const dir = resolveRoleRepoDir(role, deps);
   if (dir === undefined) throw new Error(`no role repo resolves for role ${role.name}`);
   return dir;
+}
+
+// Lazy per-role cutover: a still-row-backed role is committed onto a `<name>`
+// branch on first edit, so the working-copy flow (checkout AND checkout -b)
+// works whether or not the global cutover (#395) has run. A role already
+// commit-pinned is returned unchanged. Shared by openCheckout (edit the role)
+// and forkRole (branch a new role off it) so the cutover lives in one place.
+export function ensureCommitPinned(
+  deps: RoleCheckoutDeps,
+  cfg: RequiredConfig,
+  role: Role,
+  workspaceId: string,
+): Role {
+  if (role.current_commit !== undefined) return role;
+  if (role.current_version_id === undefined) {
+    throw new Error(`role ${role.name} has no pin`);
+  }
+  migrateWorkspaceRole(role, workspaceId, {
+    roles: deps.roles,
+    roleVersions: deps.roleVersions,
+    workspaceRepos: cfg.workspaceRepos,
+    forks: cfg.roleForks,
+  });
+  const refetched = deps.roles.get(role.id);
+  if (refetched === null || refetched.current_commit === undefined) {
+    throw new Error(`lazy cutover did not pin role ${role.name} to a commit`);
+  }
+  return refetched;
 }
 
 export interface FileChange {

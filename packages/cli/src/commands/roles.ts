@@ -7,6 +7,7 @@ import { runEdit } from "./roles-edit.ts";
 import { runSeeds } from "./roles-seeds.ts";
 import { runWakePrograms } from "./roles-wake-programs.ts";
 import {
+  forkRoleBranch,
   runCheckout,
   runCheckoutStatus,
   runCommit,
@@ -40,12 +41,9 @@ function assertNoArgs(sub: string, args: readonly string[]): void {
   }
 }
 
-interface ForkResponse {
-  readonly role_id: string;
-  readonly version_id: string;
-  readonly version: number;
-}
-
+// `roles fork <source> <new>` is a thin alias for `roles checkout -b <new>
+// --from <source>` — both call forkRoleBranch (one server operation: create a
+// role as a fresh git branch off the source tip, commit-pinned, no version row).
 async function runFork(
   ctx: CommandContext,
   json: boolean,
@@ -67,19 +65,7 @@ async function runFork(
       `roles fork: unexpected arguments: ${extra.join(" ")}`,
     );
   }
-  const result = await request<ForkResponse>(ctx.env, {
-    method: "POST",
-    path: `/agent/roles/${encodeURIComponent(source)}/fork`,
-    body: { new_name: newName },
-  });
-  if (json) {
-    ctx.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-    return 0;
-  }
-  ctx.stdout.write(
-    `forked ${source} -> ${newName} (id: ${result.role_id}, version: v${result.version})\n`,
-  );
-  return 0;
+  return forkRoleBranch(ctx, json, source, newName);
 }
 
 interface CeilingResponse {
@@ -136,13 +122,14 @@ export const rolesCommand: Command = {
     "Subcommands:\n" +
     "  roles list [--json]                          List workspace roles with version metadata.\n" +
     "  roles show <name|id> [--json]                Show full role + current version + history.\n" +
-    "  roles fork <source-name|id> <new-name> [--json]  Fork a role into a new editable workspace role.\n" +
+    "  roles fork <source-name|id> <new-name> [--json]  Alias for `checkout -b <new-name> --from <source>`.\n" +
     "  roles edit <name|id> [flags] [--json]        Patch a role; system_prompt/skills/allowed_tools/triggers bump version, description does not.\n" +
     "  roles ceiling <name|id> <max> [--json]       Set the spawn ceiling for this role in this workspace.\n" +
     "  roles seeds <name|id> [add|enable|disable <seed> [--disabled]]  List a role's seed refs, or add/toggle one.\n" +
     "  roles wake-programs <name|id> [show|add|edit|remove <name> ...]  List/show/author wake-programs (`idle` is the built-in).\n\n" +
     "Working-copy verbs (edit a role like code — commit advances the git pin, no new version row):\n" +
     "  roles checkout <name|id> [--json]            Materialize the role's branch into the desk; edit the files, then commit.\n" +
+    "  roles checkout -b <new-name> --from <src>    Create/fork a role as a fresh git branch off <src> (commit-pinned, no version row).\n" +
     "  roles status [--json]                        Is a checkout open? for which role? which files changed? stale?\n" +
     "  roles diff [--json]                          Show the working copy's changes against the branch tip.\n" +
     "  roles commit [-m <msg>] [--force] [--json]   Serialize the edits onto the branch + advance the pin (--force overrides a stale tip).\n" +
