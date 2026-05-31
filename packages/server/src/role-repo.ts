@@ -1,13 +1,13 @@
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { baseRole, enumerateShippedRoles, type BaseLayer, type RoleBundleData } from "@clobber/runtime";
 import {
   deserializeRoleTree,
   roleSnapshotToContract,
   serializeRoleTree,
-  type RoleTree,
   type RoleTreeContract,
 } from "./role-tree.ts";
+import { commitTree, git, readTreeAtCommit, revParse } from "./role-git.ts";
 import { snapshotShippedBundle } from "./role-version-snapshot.ts";
 
 // #349 — the upstream role git repo: the canonical store of role versions and
@@ -173,66 +173,3 @@ function baseContract(base: BaseLayer): RoleTreeContract {
   };
 }
 
-// Replace the working tree with exactly `tree` and commit it. Clearing first
-// makes the commit reflect the tree precisely regardless of what the parent
-// branch left behind; git content-addresses blobs, so files whose bytes match
-// the parent reuse its objects and the merge-base stays shared. `--allow-empty`
-// keeps a fork that happens to equal base a legitimate (empty) commit.
-function commitTree(dir: string, tree: RoleTree, message: string): void {
-  clearWorkingTree(dir);
-  for (const [rel, content] of tree) {
-    const abs = join(dir, rel);
-    mkdirSync(dirname(abs), { recursive: true });
-    writeFileSync(abs, content);
-  }
-  git(dir, "add", "-A");
-  git(
-    dir,
-    "-c",
-    "user.email=clobber@local",
-    "-c",
-    "user.name=clobber",
-    "-c",
-    "commit.gpgsign=false",
-    "commit",
-    "--allow-empty",
-    "-q",
-    "-m",
-    message,
-  );
-}
-
-function clearWorkingTree(dir: string): void {
-  for (const entry of readdirSync(dir)) {
-    if (entry === ".git") continue;
-    rmSync(join(dir, entry), { recursive: true, force: true });
-  }
-}
-
-// Reconstruct a role tree from the commit: list the blobs, then read each one
-// verbatim. `git show <ref>:<path>` emits the blob exactly, so empty files and
-// trailing newlines round-trip the codec losslessly.
-function readTreeAtCommit(dir: string, ref: string): RoleTree {
-  const listing = git(dir, "ls-tree", "-r", "--name-only", ref)
-    .split("\n")
-    .filter((line) => line.length > 0);
-  const tree = new Map<string, string>();
-  for (const path of listing) {
-    tree.set(path, git(dir, "show", `${ref}:${path}`));
-  }
-  return tree;
-}
-
-function revParse(dir: string, ref: string): string {
-  return git(dir, "rev-parse", ref).trim();
-}
-
-function git(dir: string, ...args: string[]): string {
-  const res = Bun.spawnSync(["git", "-C", dir, ...args], { stdout: "pipe", stderr: "pipe" });
-  if (res.exitCode !== 0) {
-    throw new Error(
-      `git ${args.join(" ")} failed (exit ${res.exitCode}): ${res.stderr.toString().trim()}`,
-    );
-  }
-  return res.stdout.toString();
-}

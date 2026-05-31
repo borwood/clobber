@@ -6,6 +6,7 @@ export * from "./runtime-provider.ts";
 export * from "./runtime-events.ts";
 export * from "./codex-jsonl.ts";
 export * from "./role-manifest/index.ts";
+export * from "./role-md.ts";
 export * from "./materialize-bundle.ts";
 export * from "./sdlc-profiles.ts";
 export { loadRoleBundle, enumerateShippedRoles } from "./role-bundles.ts";
