@@ -8,6 +8,13 @@ import { WakeProgramSchema } from "./wake-program.ts";
 export const EffortLevelSchema = z.enum(["low", "medium", "high", "xhigh", "max"]);
 export type EffortLevel = z.infer<typeof EffortLevelSchema>;
 
+// A role name is a git-branch-safe slug: roles ARE branches in the upstream
+// repo (#349), so every creation/fork/checkout site constrains the name to this
+// shape before it reaches git. The `ROLE.md` frontmatter codec (#216) and the
+// agent-roles routes share this one definition.
+export const ROLE_NAME_RE = /^[A-Za-z0-9_-]+$/;
+export const RoleNameSchema = z.string().min(1).regex(ROLE_NAME_RE);
+
 export const SdlcPhaseSchema = z.object({
   id: z
     .string()
