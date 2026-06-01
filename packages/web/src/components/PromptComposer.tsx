@@ -1,10 +1,13 @@
 import { useState, type KeyboardEvent } from "react";
 import { classifyComposerKey } from "./composer-key.ts";
+import { computeContextLength } from "../context-length.ts";
+import type { TranscriptLine } from "../api.ts";
 
 interface Props {
   readonly sessionId: string;
   readonly disabled: boolean;
   readonly busy: boolean;
+  readonly transcript?: readonly TranscriptLine[];
   readonly onSend: (prompt: string) => Promise<void>;
   readonly onInterrupt: () => Promise<void>;
 }
@@ -13,6 +16,7 @@ export function PromptComposer({
   sessionId,
   disabled,
   busy,
+  transcript,
   onSend,
   onInterrupt,
 }: Props) {
@@ -23,6 +27,7 @@ export function PromptComposer({
 
   const canSend = !disabled && !sending && prompt.trim().length > 0;
   const canInterrupt = !disabled && busy && !interrupting;
+  const contextTokens = transcript !== undefined ? computeContextLength(transcript) : undefined;
 
   async function send() {
     if (!canSend) return;
@@ -92,6 +97,11 @@ export function PromptComposer({
         <span className="text-xs text-text-faint font-mono truncate">
           {sessionId.slice(0, 8)}
         </span>
+        {contextTokens !== undefined && (
+          <span className="text-xs text-text-faint font-mono">
+            ~{Math.round(contextTokens / 1000)}k ctx
+          </span>
+        )}
         {error !== null && (
           <span className="text-xs text-danger-text truncate" title={error}>
             {error}
