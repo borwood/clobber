@@ -21,7 +21,7 @@ const bundleWith = (habits: readonly Habit[]): RoleBundleData => ({
   systemPrompt: "s",
   allowedTools: [],
   skills: [],
-  seedRefs: [],
+  promptModuleRefs: [],
   wakePrograms: [],
   hooksJson: readFileSync(BASE_HOOKS_PATH, "utf8"),
   habits,

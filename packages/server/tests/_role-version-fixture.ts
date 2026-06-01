@@ -1,10 +1,10 @@
 import type { Database } from "bun:sqlite";
 import type {
+  PromptModuleRef,
   Role,
   RoleSkill,
   RoleTrigger,
   RoleVersion,
-  SeedRef,
   WakeProgram,
 } from "@clobber/shared";
 import { createRoleVersionStore } from "../src/role-version-store.ts";
@@ -22,7 +22,7 @@ export interface RoleVersionPatch {
   readonly skills?: readonly RoleSkill[];
   readonly allowed_tools?: readonly string[];
   readonly triggers?: readonly RoleTrigger[];
-  readonly seedRefs?: readonly SeedRef[];
+  readonly promptModuleRefs?: readonly PromptModuleRef[];
   readonly wakePrograms?: readonly WakeProgram[];
 }
 
@@ -56,7 +56,7 @@ export function writeRoleVersion(
     triggers_json:
       patch.triggers === undefined ? currentVersion.triggers_json : JSON.stringify(patch.triggers),
     seed_refs_json:
-      patch.seedRefs === undefined ? currentVersion.seed_refs_json : JSON.stringify(patch.seedRefs),
+      patch.promptModuleRefs === undefined ? currentVersion.seed_refs_json : JSON.stringify(patch.promptModuleRefs),
     wake_programs_json:
       patch.wakePrograms === undefined
         ? currentVersion.wake_programs_json

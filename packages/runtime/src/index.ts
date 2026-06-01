@@ -12,7 +12,7 @@ export * from "./compile-self-habits.ts";
 export * from "./sdlc-profiles.ts";
 export * from "./habit-master-template.ts";
 export { loadRoleBundle, enumerateShippedRoles } from "./role-bundles.ts";
-export { enumerateDefaultSeeds } from "./default-seeds.ts";
+export { enumerateDefaultPromptModules } from "./default-prompt-modules.ts";
 export { baseRole } from "../roles/base/manifest.ts";
 export { managerRole } from "../roles/manager/manifest.ts";
 export { workerRole } from "../roles/worker/manifest.ts";

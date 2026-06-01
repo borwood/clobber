@@ -41,7 +41,7 @@ const FIXTURE_ROLE: RoleBundleData = {
   systemPrompt: "fixture",
   allowedTools: [],
   skills: [],
-  seedRefs: [],
+  promptModuleRefs: [],
   wakePrograms: [],
   hooksJson: baseRole.hooksJson,
   habits: [MVP_HABIT],

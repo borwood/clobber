@@ -445,12 +445,12 @@ describe("#361 git-backed write-side through the routes", () => {
     pinToFork(h, workerId, "worker");
     const before = upstreamContractAt(pinState(h, workerId).sha!);
 
-    const seedRefs = [...before.seedRefs, { name: "extra-seed", enabled: true }];
+    const promptModuleRefs = [...before.seedRefs, { name: "extra-seed", enabled: true }];
     const res = await h.server.inject({
       method: "PATCH",
       url: `/agent/roles/${workerId}`,
       headers: { authorization: `Bearer ${token}` },
-      payload: { seed_refs: seedRefs },
+      payload: { prompt_module_refs: promptModuleRefs },
     });
     expect(res.statusCode).toBe(200);
 
@@ -460,7 +460,7 @@ describe("#361 git-backed write-side through the routes", () => {
     expect(versionRowCount(h, workerId)).toBe(0);
 
     const after = contractAt(wsId, pin.sha!);
-    expect(after.seedRefs).toEqual(seedRefs);
+    expect(after.seedRefs).toEqual(promptModuleRefs);
 
     await teardown(h);
   });

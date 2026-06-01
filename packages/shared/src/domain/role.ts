@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { PermissionModeSchema } from "../hooks/payloads.ts";
-import { SeedRefSchema } from "./seed.ts";
+import { PromptModuleRefSchema } from "./prompt-module.ts";
 import { WakeProgramSchema } from "./wake-program.ts";
 
 // Reasoning depth knob exposed by `claude --effort <level>`. Mirrors the
@@ -276,7 +276,7 @@ export const RoleDetailVersionSchema = z.object({
   allowed_tools: z.array(z.string().min(1)),
   hooks: z.unknown(),
   triggers: z.array(RoleTriggerSchema),
-  seed_refs: z.array(SeedRefSchema),
+  prompt_module_refs: z.array(PromptModuleRefSchema),
   wake_programs: z.array(WakeProgramSchema),
   created_at: z.number().int().nonnegative(),
 });

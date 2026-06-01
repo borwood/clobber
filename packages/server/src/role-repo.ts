@@ -165,7 +165,7 @@ export function bundleFromContract(
     systemPrompt: contract.systemPrompt,
     allowedTools: contract.allowedTools,
     skills: contract.skills,
-    seedRefs: contract.seedRefs,
+    promptModuleRefs: contract.seedRefs,
     wakePrograms: contract.wakePrograms,
     ...(contract.defaultWakeProgram === null
       ? {}

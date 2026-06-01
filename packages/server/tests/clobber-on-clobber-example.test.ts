@@ -12,7 +12,7 @@ import {
   workerRole,
   managerRole,
   defaultSdlcProfile,
-  enumerateDefaultSeeds,
+  enumerateDefaultPromptModules,
 } from "@clobber/runtime";
 
 // examples/ lives at the repo root; this test file is packages/server/tests/.
@@ -42,22 +42,22 @@ describe("examples/clobber-on-clobber — dogfood workspace config (#150)", () =
     expect(cb?.kind).toBe("noop");
   });
 
-  it("the wisdom-pointer is now a role-scoped seed reaching the manager alone, not a workspace-global provider (#211)", () => {
+  it("the wisdom-pointer is now a role-scoped prompt-module reaching the manager alone, not a workspace-global provider (#211)", () => {
     // The boot_context_provider field is retired; the wisdom pointer migrated
-    // to the manager-role seed `wisdom-pointer`. The worker must not reference
-    // it — that global seeding was the #166 mis-shape this fixes.
+    // to the manager-role prompt-module `wisdom-pointer`. The worker must not
+    // reference it — that global seeding was the #166 mis-shape this fixes.
     expect(loadConfig()).not.toHaveProperty("boot_context_provider");
 
-    const managerRefs = managerRole.manifest.seedRefs ?? [];
-    const workerRefs = workerRole.manifest.seedRefs ?? [];
+    const managerRefs = managerRole.manifest.promptModuleRefs ?? [];
+    const workerRefs = workerRole.manifest.promptModuleRefs ?? [];
     expect(managerRefs).toContainEqual({ name: "wisdom-pointer", enabled: true });
     expect(workerRefs.some((r) => r.name === "wisdom-pointer")).toBe(false);
 
     // The pointer is one short line surfacing that the log exists, never its body.
-    const seed = enumerateDefaultSeeds().find((s) => s.name === "wisdom-pointer")!;
-    if (seed.definition.kind !== "static") throw new Error("expected static seed");
-    expect(seed.definition.text).toContain("brennan-volter/tasks#20");
-    expect(seed.definition.text.length).toBeLessThan(280);
+    const mod = enumerateDefaultPromptModules().find((m) => m.name === "wisdom-pointer")!;
+    if (mod.definition.kind !== "static") throw new Error("expected static prompt-module");
+    expect(mod.definition.text).toContain("brennan-volter/tasks#20");
+    expect(mod.definition.text.length).toBeLessThan(280);
   });
 
   it("manager_skill_policy (#148) allows self-grant + lists clobber-pm", () => {

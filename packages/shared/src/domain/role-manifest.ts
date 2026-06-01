@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { PermissionModeSchema } from "../hooks/payloads.ts";
 import { EffortLevelSchema, ModelSchema, SdlcProfileSchema } from "./role.ts";
-import { SeedRefSchema } from "./seed.ts";
+import { PromptModuleRefSchema } from "./prompt-module.ts";
 import { WakeProgramSchema } from "./wake-program.ts";
 
 const RelativeBundlePath = z
@@ -31,10 +31,10 @@ export const RoleManifestSchema = z
     effort: EffortLevelSchema.optional(),
     model: ModelSchema.optional(),
     sdlc: SdlcProfileSchema.optional(),
-    // Layer B — the role's default, ordered seed references. Each names a
-    // catalog seed and carries its enable toggle; snapshotted into the role
+    // Layer B — the role's default, ordered prompt-module references. Each names
+    // a catalog module and carries its enable toggle; snapshotted into the role
     // version's seed_refs_json at seed time.
-    seedRefs: z.array(SeedRefSchema).readonly().optional(),
+    promptModuleRefs: z.array(PromptModuleRefSchema).readonly().optional(),
     // The role's opening moves. Each owns a layer-C system addon and an opening
     // user-message kick; snapshotted into the role version's wake_programs_json
     // at seed time. `idle` is the universal built-in and is never listed here.

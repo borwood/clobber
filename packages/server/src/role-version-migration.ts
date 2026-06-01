@@ -155,8 +155,8 @@ function backfillSeedRefs(db: Database): void {
   for (const row of rows) {
     const loaded = loadRoleBundle(row.role_name);
     if (loaded === null) continue;
-    if (loaded.manifest.seedRefs === undefined) continue;
-    update.run(JSON.stringify(loaded.manifest.seedRefs), row.version_id);
+    if (loaded.manifest.promptModuleRefs === undefined) continue;
+    update.run(JSON.stringify(loaded.manifest.promptModuleRefs), row.version_id);
   }
 }
 
