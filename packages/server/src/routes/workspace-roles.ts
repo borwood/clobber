@@ -9,11 +9,12 @@ import type { WorkspaceStore } from "../workspace-store.ts";
 import type { RoleStore } from "../role-store.ts";
 import type { RoleVersionStore } from "../role-version-store.ts";
 import type { RoleContentCache } from "../role-content-cache.ts";
+import type { ForkRef } from "../role-repo.ts";
+import type { WorkspaceRoleRepos } from "../workspace-role-repos.ts";
 import type { WorkspaceRoleStore } from "../workspace-role-store.ts";
 import type { TriggerScheduler } from "../trigger-scheduler.ts";
-import { applyRoleEdit, triggersRequirePersistent } from "../apply-role-edit.ts";
+import { patchRoleThroughPin, triggersRequirePersistent } from "../role-commit.ts";
 import { resolveRoleByIdOrName } from "../resolve-role.ts";
-import { resolveCurrentRoleVersion } from "../resolve-role-content.ts";
 
 interface WorkspaceRoleParams {
   wid: string;
@@ -37,13 +38,16 @@ export function registerWorkspaceRoleRoutes(
     roleVersions: RoleVersionStore;
     workspaceRoles: WorkspaceRoleStore;
     scheduler: Pick<TriggerScheduler, "reloadRole">;
-    // #385 — present iff git-as-truth is configured; lets the operator triggers
-    // route source a commit-pinned role's current content from the cache.
+    // #385/#414 — present iff git-as-truth is configured; lets the operator
+    // triggers route source a commit-pinned role's content from the cache and
+    // commit the patch onto its per-workspace clone (advancing the pin).
     roleContentCache?: RoleContentCache;
     roleRepoDir?: string;
+    roleForks?: ReadonlyMap<string, ForkRef>;
+    workspaceRepos?: WorkspaceRoleRepos;
   },
 ): void {
-  const { db, workspaces, roles, workspaceRoles, scheduler } = deps;
+  const { workspaces, roles, workspaceRoles } = deps;
 
   app.put<{ Params: WorkspaceRoleParams }>(
     "/workspaces/:wid/roles/:rid",
@@ -94,18 +98,17 @@ export function registerWorkspaceRoleRoutes(
         reply.code(422);
         return { error: "triggers are only allowed on persistent roles" };
       }
-      // #385 — resolve through the commit-pin view: a git-backed role has no
-      // version row, so reading it directly would 500 the operator's edit.
-      const currentVersion = resolveCurrentRoleVersion(role, deps);
-      if (currentVersion === null) {
-        reply.code(500);
-        return { error: "role has no current version" };
-      }
-      const result = applyRoleEdit(db, scheduler, role, currentVersion, {
-        triggers: parsed.data.triggers,
+      // #414 — the operator triggers edit is a one-shot patch through the git
+      // pin: read the role's current contract from the pinned tree, swap in the
+      // new triggers, and commit onto its branch (no version row, no demotion).
+      const result = patchRoleThroughPin(deps, {
+        role,
+        workspaceId: wid,
+        apply: (current) => ({ ...current, triggers: parsed.data.triggers }),
+        message: `apply triggers to ${role.name}`,
       });
-      reply.code(200);
-      return result;
+      reply.code(result.status);
+      return result.body;
     },
   );
 

@@ -100,7 +100,7 @@ function renderMutation(
     return 0;
   }
   ctx.stdout.write(
-    `${verb} '${name}' (role ${result.role_id} → v${result.version}; ${result.granted.length} skills total)\n`,
+    `${verb} '${name}' (role ${result.role_id} → ${result.sha.slice(0, 8)}; ${result.granted.length} skills total)\n`,
   );
   return 0;
 }

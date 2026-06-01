@@ -64,7 +64,9 @@ interface CreatedWorkspace {
 }
 
 interface AppliedTriggers {
-  readonly version: number;
+  // #414 — applying manager triggers advances the role's git pin (no version row).
+  readonly branch: string;
+  readonly sha: string;
 }
 
 interface LoadResult {
@@ -116,7 +118,7 @@ async function runCreate(ctx: CommandContext, rest: readonly string[]): Promise<
   ctx.stdout.write(
     triggers === null
       ? `no ${MANAGER_TRIGGERS_FILE} found — manager triggers left unset\n`
-      : `applied manager triggers -> v${triggers.version}\n`,
+      : `applied manager triggers -> ${triggers.sha.slice(0, 8)}\n`,
   );
   return 0;
 }

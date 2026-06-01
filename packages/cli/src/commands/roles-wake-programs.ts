@@ -11,8 +11,10 @@ import { CliUsageError } from "../usage-error.ts";
 
 interface PatchResult {
   readonly role_id: string;
-  readonly version_id?: string;
-  readonly version?: number;
+  // #414 — wake-program edits advance the git pin (no version row).
+  readonly branch: string;
+  readonly sha: string;
+  readonly no_new_version: boolean;
 }
 
 // Parsed authoring inputs. `system`/`user` are present only when their flag was
@@ -211,7 +213,7 @@ export async function runWakePrograms(
 
   const result = await patchPrograms(ctx, target, next);
   ctx.stdout.write(
-    `roles wake-programs ${action} ${name} -> v${result.version} (${target})\n`,
+    `roles wake-programs ${action} ${name} -> ${result.sha.slice(0, 8)} (${target})\n`,
   );
   return 0;
 }

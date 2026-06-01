@@ -29,14 +29,17 @@ import { createRoleContentCache } from "../src/role-content-cache.ts";
 import { resolveCurrentRoleVersion } from "../src/resolve-role-content.ts";
 import type { AgentSpawner, SpawnedAgentInfo } from "../src/types.ts";
 
-// #361 — the git-backed WRITE-SIDE machinery (Option A), exercised against a
+// #361/#414 — the git-backed WRITE-SIDE machinery, exercised against a
 // commit-pinned role. (The default-seeding flip + view/web rewire landed in
 // #385; with a repo configured, seeding now pins commits — see git-seed-flip.)
 // This slice proves the write-side half: a role pinned to a commit (#349)
 //  1. resolves its current content from the materialized cache as a version view,
 //  2. passes the per-command auth gate (which read a `role_versions` row before),
-//  3. and is mutated by edit / fork / self-skills — sourcing content from the
-//     cache, writing a row, and demoting the role to row-backed.
+//  3. and is mutated by edit / fork / self-skills / operator-triggers — sourcing
+//     content from the cache and ADVANCING THE COMMIT PIN (no new version row, no
+//     demotion). #414 retired the version-row write path: every one-shot patch
+//     now compiles to a commit on the role branch, so the no-demotion guarantee
+//     (#396) holds across all three front-doors.
 
 interface Harness {
   server: ReturnType<typeof createServer>;
@@ -140,15 +143,28 @@ function pinState(
     .get(id) as { branch: string | null; sha: string | null; versionId: string | null };
 }
 
-function currentSkills(h: Harness, id: string): RoleSkill[] {
-  const row = h.db
-    .prepare(
-      `SELECT v.skills_json AS j FROM role_versions v
-       JOIN roles r ON r.current_version_id = v.id WHERE r.id = ?`,
-    )
-    .get(id) as { j: string } | null;
-  if (row === null) throw new Error(`no current version row for ${id}`);
-  return JSON.parse(row.j) as RoleSkill[];
+function versionRowCount(h: Harness, id: string): number {
+  return (
+    h.db
+      .prepare("SELECT COUNT(*) AS n FROM role_versions WHERE role_id = ?")
+      .get(id) as { n: number }
+  ).n;
+}
+
+// Read the committed role contract for a workspace role at a sha, from its
+// per-workspace clone (the same clone the write-side commits onto). The clone is
+// provisioned lazily on the first route call, so the post-mutation `after` reads
+// resolve here.
+function contractAt(wsId: string, sha: string) {
+  const cloneDir = join(dirname(roleRepoDir), "role-repos", wsId);
+  return loadRoleContractAtCommit(cloneDir, sha);
+}
+
+// The pre-mutation baseline resolves from the shared upstream repo: a seeded role
+// is pinned to its upstream fork tip, and the clone (which copies every reachable
+// object) does not exist until the first mutating route call materializes it.
+function upstreamContractAt(sha: string) {
+  return loadRoleContractAtCommit(roleRepoDir, sha);
 }
 
 async function createWorkspace(h: Harness, repoPath: string): Promise<string> {
@@ -246,13 +262,14 @@ describe("#361 git-backed write-side through the routes", () => {
     await teardown(h);
   });
 
-  it("self-skills grant against a commit-pinned manager demotes it to row-backed", async () => {
+  it("self-skills grant advances the manager's commit pin (no demotion), preserving every other field", async () => {
     const h = buildHarness();
     const wsId = await createWorkspace(h, repo.path);
     const managerId = roleId(h, "manager", wsId);
     const token = await spawnToken(h, wsId, managerId);
     pinToFork(h, managerId, "manager");
-    expect(pinState(h, managerId).versionId).toBeNull();
+    const beforeSha = pinState(h, managerId).sha!;
+    const before = upstreamContractAt(beforeSha);
 
     writeCatalogSkill(repo.path, "clobber-pm", "# /clobber-pm\nbody");
     const policy: ManagerSkillPolicy = {
@@ -274,11 +291,26 @@ describe("#361 git-backed write-side through the routes", () => {
     });
     expect(grant.statusCode).toBe(200);
 
+    // No demotion: the pin advances, no version row is written.
     const pin = pinState(h, managerId);
-    expect(pin.sha).toBeNull();
-    expect(pin.branch).toBeNull();
-    expect(pin.versionId).not.toBeNull();
-    expect(currentSkills(h, managerId).map((s) => s.name)).toContain("clobber-pm");
+    expect(pin.sha).not.toBeNull();
+    expect(pin.branch).toBe("manager");
+    expect(pin.versionId).toBeNull();
+    expect(pin.sha).not.toBe(beforeSha);
+    expect(versionRowCount(h, managerId)).toBe(0);
+
+    // The grant applied AND every other field survived the snapshot→commit round-trip.
+    const after = contractAt(wsId, pin.sha!);
+    expect(after.skills.map((s) => s.name)).toContain("clobber-pm");
+    expect(after.systemPrompt).toBe(before.systemPrompt);
+    expect(after.framing).toBe(before.framing);
+    expect(after.allowedTools).toEqual(before.allowedTools);
+    expect(after.allowedCliCommands).toEqual(before.allowedCliCommands);
+    expect(after.triggers).toEqual(before.triggers);
+    expect(after.seedRefs).toEqual(before.seedRefs);
+    expect(after.wakePrograms).toEqual(before.wakePrograms);
+    expect(after.hooks).toBe(before.hooks);
+    expect(after.defaultWakeProgram).toBe(before.defaultWakeProgram);
 
     await teardown(h);
   });
@@ -325,13 +357,15 @@ describe("#361 git-backed write-side through the routes", () => {
     await teardown(h);
   });
 
-  it("edits a commit-pinned role, demoting it and applying the patch", async () => {
+  it("edit advances a commit-pinned role's pin (no demotion), applying the patch and preserving every other field", async () => {
     const h = buildHarness();
     const wsId = await createWorkspace(h, repo.path);
     const managerId = roleId(h, "manager", wsId);
     const workerId = roleId(h, "worker", wsId);
     const token = await spawnToken(h, wsId, managerId);
     pinToFork(h, workerId, "worker");
+    const beforeSha = pinState(h, workerId).sha!;
+    const before = upstreamContractAt(beforeSha);
 
     const res = await h.server.inject({
       method: "PATCH",
@@ -340,18 +374,122 @@ describe("#361 git-backed write-side through the routes", () => {
       payload: { system_prompt: "edited worker prompt" },
     });
     expect(res.statusCode).toBe(200);
+    const body = res.json() as { branch: string; sha: string; no_new_version: boolean };
+    expect(body.no_new_version).toBe(true);
+    expect(body.branch).toBe("worker");
+
+    // No demotion: the pin advances to the returned sha, no version row written.
+    const pin = pinState(h, workerId);
+    expect(pin.sha).toBe(body.sha);
+    expect(pin.sha).not.toBe(beforeSha);
+    expect(pin.versionId).toBeNull();
+    expect(versionRowCount(h, workerId)).toBe(0);
+
+    // The patch applied AND every other field survived.
+    const after = contractAt(wsId, pin.sha!);
+    expect(after.systemPrompt).toBe("edited worker prompt");
+    expect(after.skills).toEqual(before.skills);
+    expect(after.allowedTools).toEqual(before.allowedTools);
+    expect(after.allowedCliCommands).toEqual(before.allowedCliCommands);
+    expect(after.triggers).toEqual(before.triggers);
+    expect(after.seedRefs).toEqual(before.seedRefs);
+    expect(after.wakePrograms).toEqual(before.wakePrograms);
+    expect(after.framing).toBe(before.framing);
+    expect(after.hooks).toBe(before.hooks);
+    expect(after.defaultWakeProgram).toBe(before.defaultWakeProgram);
+
+    await teardown(h);
+  });
+
+  it("operator triggers PUT advances the manager's commit pin (no demotion), preserving every other field", async () => {
+    const h = buildHarness();
+    const wsId = await createWorkspace(h, repo.path);
+    const managerId = roleId(h, "manager", wsId);
+    pinToFork(h, managerId, "manager");
+    const beforeSha = pinState(h, managerId).sha!;
+    const before = upstreamContractAt(beforeSha);
+
+    const triggers = [{ kind: "cron" as const, expr: "0 9 * * *" }];
+    const res = await h.server.inject({
+      method: "PUT",
+      url: `/workspaces/${wsId}/roles/${managerId}/triggers`,
+      payload: { triggers },
+    });
+    expect(res.statusCode).toBe(200);
+
+    const pin = pinState(h, managerId);
+    expect(pin.sha).not.toBeNull();
+    expect(pin.sha).not.toBe(beforeSha);
+    expect(pin.versionId).toBeNull();
+    expect(versionRowCount(h, managerId)).toBe(0);
+
+    const after = contractAt(wsId, pin.sha!);
+    expect(after.triggers).toEqual(triggers);
+    expect(after.systemPrompt).toBe(before.systemPrompt);
+    expect(after.skills).toEqual(before.skills);
+    expect(after.allowedTools).toEqual(before.allowedTools);
+    expect(after.seedRefs).toEqual(before.seedRefs);
+    expect(after.wakePrograms).toEqual(before.wakePrograms);
+    expect(after.framing).toBe(before.framing);
+    expect(after.hooks).toBe(before.hooks);
+
+    await teardown(h);
+  });
+
+  it("seeds add (PATCH seed_refs) advances the pin and keeps the role commit-pinned + resolvable", async () => {
+    const h = buildHarness();
+    const wsId = await createWorkspace(h, repo.path);
+    const managerId = roleId(h, "manager", wsId);
+    const workerId = roleId(h, "worker", wsId);
+    const token = await spawnToken(h, wsId, managerId);
+    pinToFork(h, workerId, "worker");
+    const before = upstreamContractAt(pinState(h, workerId).sha!);
+
+    const seedRefs = [...before.seedRefs, { name: "extra-seed", enabled: true }];
+    const res = await h.server.inject({
+      method: "PATCH",
+      url: `/agent/roles/${workerId}`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { seed_refs: seedRefs },
+    });
+    expect(res.statusCode).toBe(200);
 
     const pin = pinState(h, workerId);
-    expect(pin.sha).toBeNull();
-    expect(pin.versionId).not.toBeNull();
+    expect(pin.sha).not.toBeNull();
+    expect(pin.versionId).toBeNull();
+    expect(versionRowCount(h, workerId)).toBe(0);
 
-    const promptRow = h.db
-      .prepare(
-        `SELECT v.system_prompt AS p FROM role_versions v
-         JOIN roles r ON r.current_version_id = v.id WHERE r.id = ?`,
-      )
-      .get(workerId) as { p: string };
-    expect(promptRow.p).toBe("edited worker prompt");
+    const after = contractAt(wsId, pin.sha!);
+    expect(after.seedRefs).toEqual(seedRefs);
+
+    await teardown(h);
+  });
+
+  it("a one-shot edit is refused with 409 while the caller has an open checkout for that role", async () => {
+    const h = buildHarness();
+    const wsId = await createWorkspace(h, repo.path);
+    const managerId = roleId(h, "manager", wsId);
+    const workerId = roleId(h, "worker", wsId);
+    const token = await spawnToken(h, wsId, managerId);
+    pinToFork(h, workerId, "worker");
+
+    const co = await h.server.inject({
+      method: "POST",
+      url: `/agent/roles/${workerId}/checkout`,
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(co.statusCode).toBe(200);
+
+    const res = await h.server.inject({
+      method: "PATCH",
+      url: `/agent/roles/${workerId}`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { system_prompt: "clobbering an open checkout" },
+    });
+    expect(res.statusCode).toBe(409);
+
+    // The pin was not advanced by the refused edit.
+    expect(versionRowCount(h, workerId)).toBe(0);
 
     await teardown(h);
   });

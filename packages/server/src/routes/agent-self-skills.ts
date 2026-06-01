@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { Database } from "bun:sqlite";
 import { z } from "zod";
-import type { RoleSkill } from "@clobber/shared";
+import type { RoleSkill, Session } from "@clobber/shared";
 import type { SessionTokenStore } from "../session-token-store.ts";
 import type { SessionStore } from "../session-store.ts";
 import type { RoleStore } from "../role-store.ts";
@@ -9,7 +9,11 @@ import type { RoleVersionStore } from "../role-version-store.ts";
 import type { WorkspaceStore } from "../workspace-store.ts";
 import type { AgentStatusLogStore } from "../agent-status-log-store.ts";
 import type { RoleContentCache } from "../role-content-cache.ts";
-import { editRole } from "../edit-role.ts";
+import type { ForkRef } from "../role-repo.ts";
+import type { WorkspaceRoleRepos } from "../workspace-role-repos.ts";
+import type { TriggerScheduler } from "../trigger-scheduler.ts";
+import { patchRoleThroughPin } from "../role-commit.ts";
+import { deskFor, type RouteResult } from "../role-checkout-context.ts";
 import { resolveCurrentRoleVersion } from "../resolve-role-content.ts";
 import { loadWorkspaceSkillCatalog } from "../workspace-skill-catalog.ts";
 import { withAgentAuth } from "./_with-agent-auth.ts";
@@ -30,10 +34,14 @@ export interface AgentSelfSkillsRouteDeps {
   readonly roleVersions: RoleVersionStore;
   readonly workspaces: WorkspaceStore;
   readonly agentStatusLog: AgentStatusLogStore;
-  // #361 — git-as-truth wiring, so a commit-pinned persistent role's skills are
-  // read from the materialized cache and the grant demotes it to row-backed.
+  readonly scheduler: Pick<TriggerScheduler, "reloadRole">;
+  // #361/#414 — git-as-truth wiring, so a commit-pinned persistent role's skills
+  // are read from the materialized cache and a self-grant ADVANCES THE PIN
+  // (commits onto the per-workspace clone) rather than demoting to a version row.
   readonly roleContentCache?: RoleContentCache;
   readonly roleRepoDir?: string;
+  readonly roleForks?: ReadonlyMap<string, ForkRef>;
+  readonly workspaceRepos?: WorkspaceRoleRepos;
 }
 
 interface SelfSkillsContext {
@@ -84,26 +92,28 @@ function resolveSelfSkillsContext(
   };
 }
 
-interface AppendedGrant {
-  readonly version: number;
-  readonly granted: RoleSkill[];
-}
-
-function commitSkillChange(
+// Commit the new skill set onto the role's branch (advancing the pin). Returns
+// the route result verbatim so a 409 (an open checkout for the role) or 422
+// surfaces to the caller instead of being swallowed.
+function applySkills(
   ctx: SelfSkillsContext,
   nextSkills: readonly RoleSkill[],
   deps: AgentSelfSkillsRouteDeps,
-): AppendedGrant {
+  session: Session,
+): RouteResult {
   const role = deps.roles.get(ctx.roleId);
   if (role === null) throw new Error("role disappeared");
-  const currentVersion = resolveCurrentRoleVersion(role, deps);
-  if (currentVersion === null) {
-    throw new Error("role lost current version");
+  if (role.workspace_id === undefined) {
+    throw new Error(`self-skills role ${role.name} has no workspace`);
   }
-  const result = editRole(deps.db, role, currentVersion, {
-    skills: nextSkills,
+  const deskDir = session.agent_id === undefined ? undefined : deskFor(deps, session);
+  return patchRoleThroughPin(deps, {
+    role,
+    workspaceId: role.workspace_id,
+    ...(deskDir === undefined ? {} : { deskDir }),
+    apply: (current) => ({ ...current, skills: [...nextSkills] }),
+    message: `self-skills edit on ${role.name}`,
   });
-  return { version: result.version, granted: [...nextSkills] };
 }
 
 export function registerAgentSelfSkillsRoutes(
@@ -187,7 +197,12 @@ export function registerAgentSelfSkillsRoutes(
           };
         }
         const next = [...ctx.currentSkills, entry];
-        const committed = commitSkillChange(ctx, next, deps);
+        const result = applySkills(ctx, next, deps, session);
+        if (result.status !== 200) {
+          reply.code(result.status);
+          return result.body;
+        }
+        const committed = result.body as { branch: string; sha: string };
         deps.agentStatusLog.append({
           agent_id: session.agent_id!,
           session_id: session.id,
@@ -204,8 +219,10 @@ export function registerAgentSelfSkillsRoutes(
         });
         return {
           role_id: ctx.roleId,
-          version: committed.version,
-          granted: committed.granted,
+          branch: committed.branch,
+          sha: committed.sha,
+          no_new_version: true,
+          granted: next,
         };
       },
     ),
@@ -237,7 +254,12 @@ export function registerAgentSelfSkillsRoutes(
           reply.code(404);
           return { error: `skill '${name}' is not currently granted` };
         }
-        const committed = commitSkillChange(ctx, next, deps);
+        const result = applySkills(ctx, next, deps, session);
+        if (result.status !== 200) {
+          reply.code(result.status);
+          return result.body;
+        }
+        const committed = result.body as { branch: string; sha: string };
         deps.agentStatusLog.append({
           agent_id: session.agent_id!,
           session_id: session.id,
@@ -254,8 +276,10 @@ export function registerAgentSelfSkillsRoutes(
         });
         return {
           role_id: ctx.roleId,
-          version: committed.version,
-          granted: committed.granted,
+          branch: committed.branch,
+          sha: committed.sha,
+          no_new_version: true,
+          granted: next,
         };
       },
     ),

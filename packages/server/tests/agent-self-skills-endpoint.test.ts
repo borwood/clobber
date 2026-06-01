@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
+import { mkdtempSync as _mkdtempSync, rmSync as _rmSync } from "node:fs";
+import { tmpdir as _tmpdir } from "node:os";
+import { join as _joinPath } from "node:path";
 import { PassThrough } from "node:stream";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -75,6 +78,7 @@ function buildHarness(): Harness {
     hookUrl: "http://test.invalid/hook",
     apiBase: "http://test.invalid",
     cliEntry: "/dummy/cli.ts",
+    roleRepoDir,
     dispatches: createTriggerDispatchStore(db),
     finalReportConsumerState: createFinalReportConsumerStateStore(db),
   });
@@ -87,13 +91,16 @@ async function teardown(h: Harness): Promise<void> {
 }
 
 let repo: RepoFixture;
+let roleRepoDir: string;
 
 beforeEach(() => {
   repo = makeRepoFixture("clobber-self-skills-");
+  roleRepoDir = _mkdtempSync(_joinPath(_tmpdir(), "clobber-rolerepo-"));
 });
 
 afterEach(() => {
   repo.cleanup();
+  _rmSync(roleRepoDir, { recursive: true, force: true });
 });
 
 interface Booted {
@@ -189,17 +196,25 @@ interface SelfSkillsResponse {
   readonly catalog: readonly RoleSkill[];
 }
 
-function readSkillsJson(h: Harness, roleId: string): RoleSkill[] {
-  const row = h.db
-    .prepare(
-      `SELECT v.skills_json AS skills_json
-       FROM role_versions v
-       JOIN roles r ON r.current_version_id = v.id
-       WHERE r.id = ?`,
-    )
-    .get(roleId) as { skills_json: string } | null;
-  if (row === null) throw new Error(`no current version for ${roleId}`);
-  return JSON.parse(row.skills_json) as RoleSkill[];
+// #414 — read the role's current granted skills through the GET endpoint, which
+// resolves a commit-pinned role's content from the git tree (the self-skills
+// grant/release now advances the pin, never a version row).
+async function readGrantedSkills(h: Harness, token: string): Promise<RoleSkill[]> {
+  const res = await h.server.inject({
+    method: "GET",
+    url: "/agent/self-skills",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (res.statusCode !== 200) throw new Error(`read skills: ${res.body}`);
+  return (res.json() as SelfSkillsResponse).granted as RoleSkill[];
+}
+
+function versionRowCount(h: Harness, roleId: string): number {
+  return (
+    h.db
+      .prepare("SELECT COUNT(*) AS n FROM role_versions WHERE role_id = ?")
+      .get(roleId) as { n: number }
+  ).n;
 }
 
 interface SkillSelfGrantLogRow {
@@ -299,7 +314,7 @@ describe("POST /agent/self-skills — granting", () => {
     const h = buildHarness();
     const boot = await bootInWorkspace(h, repo.path);
     writeCatalogSkill(repo.path, "clobber-pm", "body");
-    const before = readSkillsJson(h, boot.managerRoleId);
+    const before = await readGrantedSkills(h, boot.managerToken);
 
     const res = await h.server.inject({
       method: "POST",
@@ -310,7 +325,7 @@ describe("POST /agent/self-skills — granting", () => {
     expect(res.statusCode).toBe(403);
     expect((res.json() as { error: string }).error).toMatch(/self.grant/);
 
-    const after = readSkillsJson(h, boot.managerRoleId);
+    const after = await readGrantedSkills(h, boot.managerToken);
     expect(after).toEqual(before);
     expect(readSelfGrantLog(h, boot.managerSessionId)).toEqual([]);
     await teardown(h);
@@ -357,7 +372,7 @@ describe("POST /agent/self-skills — granting", () => {
     await teardown(h);
   });
 
-  it("grants a catalog skill: bumps role version, appends the skill, fires audit row", async () => {
+  it("grants a catalog skill: advances the pin, appends the skill, fires audit row", async () => {
     const h = buildHarness();
     const boot = await bootInWorkspace(h, repo.path);
     writeCatalogSkill(repo.path, "clobber-pm", "# /clobber-pm\nworkspace skill body");
@@ -365,13 +380,7 @@ describe("POST /agent/self-skills — granting", () => {
       allow_self_grant: true,
       allowed_skills: ["clobber-pm"],
     });
-    const beforeRow = h.db
-      .prepare(
-        `SELECT v.version FROM role_versions v
-         JOIN roles r ON r.current_version_id = v.id WHERE r.id = ?`,
-      )
-      .get(boot.managerRoleId) as { version: number };
-    const before = readSkillsJson(h, boot.managerRoleId);
+    const before = await readGrantedSkills(h, boot.managerToken);
 
     const res = await h.server.inject({
       method: "POST",
@@ -382,14 +391,17 @@ describe("POST /agent/self-skills — granting", () => {
     expect(res.statusCode).toBe(200);
     const body = res.json() as {
       role_id: string;
-      version: number;
+      sha: string;
+      no_new_version: boolean;
       granted: RoleSkill[];
     };
     expect(body.role_id).toBe(boot.managerRoleId);
-    expect(body.version).toBe(beforeRow.version + 1);
+    expect(body.no_new_version).toBe(true);
+    expect(body.sha.length).toBeGreaterThan(0);
     expect(body.granted.map((s) => s.name)).toContain("clobber-pm");
+    expect(versionRowCount(h, boot.managerRoleId)).toBe(0);
 
-    const after = readSkillsJson(h, boot.managerRoleId);
+    const after = await readGrantedSkills(h, boot.managerToken);
     expect(after.length).toBe(before.length + 1);
     const added = after.find((s) => s.name === "clobber-pm");
     expect(added?.body).toContain("workspace skill body");
@@ -408,8 +420,10 @@ describe("POST /agent/self-skills — granting", () => {
     expect(details.action).toBe("grant");
     expect(details.skill).toBe("clobber-pm");
     expect(details.role_id).toBe(boot.managerRoleId);
-    expect(details.before).toEqual(before.map((s) => s.name));
-    expect(details.after).toEqual(after.map((s) => s.name));
+    // Skill membership is a set; the committed contract sorts by name while the
+    // audit log records append order, so compare as sorted sets.
+    expect([...details.before].sort()).toEqual(before.map((s) => s.name).sort());
+    expect([...details.after].sort()).toEqual(after.map((s) => s.name).sort());
 
     await teardown(h);
   });
@@ -487,7 +501,7 @@ describe("POST /agent/self-skills — granting", () => {
 });
 
 describe("DELETE /agent/self-skills/:name — releasing", () => {
-  it("removes a previously-granted skill: bumps role version, fires audit row", async () => {
+  it("removes a previously-granted skill: advances the pin, fires audit row", async () => {
     const h = buildHarness();
     const boot = await bootInWorkspace(h, repo.path);
     writeCatalogSkill(repo.path, "clobber-pm", "body");
@@ -502,8 +516,8 @@ describe("DELETE /agent/self-skills/:name — releasing", () => {
       payload: { name: "clobber-pm" },
     });
     expect(grantRes.statusCode).toBe(200);
-    const grantedVersion = (grantRes.json() as { version: number }).version;
-    const afterGrant = readSkillsJson(h, boot.managerRoleId);
+    const grantedSha = (grantRes.json() as { sha: string }).sha;
+    const afterGrant = await readGrantedSkills(h, boot.managerToken);
 
     const releaseRes = await h.server.inject({
       method: "DELETE",
@@ -513,13 +527,16 @@ describe("DELETE /agent/self-skills/:name — releasing", () => {
     expect(releaseRes.statusCode).toBe(200);
     const releaseBody = releaseRes.json() as {
       role_id: string;
-      version: number;
+      sha: string;
+      no_new_version: boolean;
       granted: RoleSkill[];
     };
-    expect(releaseBody.version).toBe(grantedVersion + 1);
+    expect(releaseBody.no_new_version).toBe(true);
+    expect(releaseBody.sha).not.toBe(grantedSha);
     expect(releaseBody.granted.map((s) => s.name)).not.toContain("clobber-pm");
+    expect(versionRowCount(h, boot.managerRoleId)).toBe(0);
 
-    const afterRelease = readSkillsJson(h, boot.managerRoleId);
+    const afterRelease = await readGrantedSkills(h, boot.managerToken);
     expect(afterRelease.length).toBe(afterGrant.length - 1);
     expect(afterRelease.find((s) => s.name === "clobber-pm")).toBeUndefined();
 

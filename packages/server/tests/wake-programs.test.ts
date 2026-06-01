@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { WakeProgram } from "@clobber/shared";
 import { buildHarness, teardown, turnProvider, type Harness } from "./_spawn-harness.ts";
 import { createRoleVersionStore } from "../src/role-version-store.ts";
-import { editRole } from "../src/edit-role.ts";
+import { writeRoleVersion } from "./_role-version-fixture.ts";
 
 // #212 — a wake-program is the opening move: it owns layer C (a system-prompt
 // addon) and the opening user-message kick (or null for no kick). `idle` is the
@@ -14,7 +14,7 @@ function setWakePrograms(h: Harness, roleId: string, programs: readonly WakeProg
   const versions = createRoleVersionStore(h.db);
   const role = h.roles.get(roleId)!;
   const current = versions.get(role.current_version_id!)!;
-  editRole(h.db, role, current, { wakePrograms: programs });
+  writeRoleVersion(h.db, role, current, { wakePrograms: programs });
 }
 
 async function spawnWith(

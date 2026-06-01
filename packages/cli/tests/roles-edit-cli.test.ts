@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { PassThrough, Readable } from "node:stream";
 import { createServer } from "@clobber/server/server.ts";
+import { loadRoleContractAtCommit } from "@clobber/server/role-repo.ts";
 import { createDatabase } from "@clobber/server/db.ts";
 import { createEventStore } from "@clobber/server/event-store.ts";
 import { createWorkspaceStore } from "@clobber/server/workspace-store.ts";
@@ -32,6 +33,7 @@ interface Harness {
   workerRoleId: string;
   repoPath: string;
   tmpDir: string;
+  roleRepoDir: string;
 }
 
 let harness: Harness;
@@ -46,6 +48,7 @@ beforeAll(async () => {
   const repoPath = mkdtempSync(join(tmpdir(), "clobber-roles-edit-cli-"));
   writeFileSync(join(repoPath, ".git"), "gitdir: stub\n");
   const tmpDir = mkdtempSync(join(tmpdir(), "clobber-roles-edit-files-"));
+  const roleRepoDir = mkdtempSync(join(tmpdir(), "clobber-roles-edit-repo-"));
   const db = createDatabase(":memory:");
   const workspaces = createWorkspaceStore(db);
   const roles = createRoleStore(db);
@@ -87,7 +90,7 @@ beforeAll(async () => {
     hookUrl: "http://test.invalid/hook",
     apiBase: "http://test.invalid",
     cliEntry: "/dummy/cli.ts",
-  
+    roleRepoDir,
     dispatches: createTriggerDispatchStore(db),
     finalReportConsumerState: createFinalReportConsumerStateStore(db),
   });
@@ -132,6 +135,7 @@ beforeAll(async () => {
     workerRoleId: workerRow.id,
     repoPath,
     tmpDir,
+    roleRepoDir,
   };
 });
 
@@ -140,6 +144,7 @@ afterAll(async () => {
   harness.db.close();
   rmSync(harness.repoPath, { recursive: true, force: true });
   rmSync(harness.tmpDir, { recursive: true, force: true });
+  rmSync(harness.roleRepoDir, { recursive: true, force: true });
 });
 
 function captureStreams() {
@@ -164,18 +169,42 @@ function envFor(token: string): NodeJS.ProcessEnv {
   };
 }
 
-function readWorkerVersion(): { version: number; system_prompt: string; skills_json: string; allowed_tools_json: string } {
+// #414 — the worker is commit-pinned; an edit advances the pin (no version row).
+function workerPinSha(): string {
+  const row = harness.db
+    .prepare("SELECT current_commit_sha AS sha FROM roles WHERE id = ?")
+    .get(harness.workerRoleId) as { sha: string | null };
+  if (row.sha === null) throw new Error("worker is not commit-pinned");
+  return row.sha;
+}
+
+// Read the worker's contract at its current pin. The seeded pin resolves from the
+// upstream repo until the first edit clones the per-workspace repo; thereafter
+// every advanced pin (and the seeded objects, copied at clone time) resolves there.
+function workerContract() {
+  const clone = join(dirname(harness.roleRepoDir), "role-repos", harness.workspaceId);
+  const dir = existsSync(join(clone, ".git")) ? clone : harness.roleRepoDir;
+  return loadRoleContractAtCommit(dir, workerPinSha());
+}
+
+function workerVersionRowCount(): number {
+  return (
+    harness.db
+      .prepare("SELECT COUNT(*) AS n FROM role_versions WHERE role_id = ?")
+      .get(harness.workerRoleId) as { n: number }
+  ).n;
+}
+
+function managerTriggers(): readonly unknown[] {
   const row = harness.db
     .prepare(
-      `SELECT v.version, v.system_prompt, v.skills_json, v.allowed_tools_json
-       FROM role_versions v JOIN roles r ON r.current_version_id = v.id
-       WHERE r.id = ?`,
+      "SELECT current_commit_sha AS sha FROM roles WHERE name = 'manager' AND workspace_id = ?",
     )
-    .get(harness.workerRoleId) as
-    | { version: number; system_prompt: string; skills_json: string; allowed_tools_json: string }
-    | null;
-  if (row === null) throw new Error("no version row");
-  return row;
+    .get(harness.workspaceId) as { sha: string | null };
+  if (row.sha === null) throw new Error("manager is not commit-pinned");
+  const clone = join(dirname(harness.roleRepoDir), "role-repos", harness.workspaceId);
+  const dir = existsSync(join(clone, ".git")) ? clone : harness.roleRepoDir;
+  return loadRoleContractAtCommit(dir, row.sha).triggers;
 }
 
 describe("clobber CLI — roles edit", () => {
@@ -184,7 +213,7 @@ describe("clobber CLI — roles edit", () => {
     const file = join(harness.tmpDir, "prompt-file.md");
     writeFileSync(file, "you are a careful auditor\n");
 
-    const before = readWorkerVersion();
+    const beforeSha = workerPinSha();
 
     const code = await run({
       argv: ["roles", "edit", "worker", "--system-prompt-file", file],
@@ -195,16 +224,16 @@ describe("clobber CLI — roles edit", () => {
     expect(code).toBe(0);
     expect(s.out()).toContain("worker");
 
-    const after = readWorkerVersion();
-    expect(after.version).toBe(before.version + 1);
-    expect(after.system_prompt).toBe("you are a careful auditor\n");
+    expect(workerPinSha()).not.toBe(beforeSha);
+    expect(workerContract().systemPrompt).toBe("you are a careful auditor\n");
+    expect(workerVersionRowCount()).toBe(0);
   });
 
   it("--system-prompt - reads from stdin", async () => {
     const s = captureStreams();
     const stdin = Readable.from(["stdin-prompt-content\n"]);
 
-    const before = readWorkerVersion();
+    const beforeSha = workerPinSha();
 
     const code = await run({
       argv: ["roles", "edit", "worker", "--system-prompt", "-"],
@@ -215,14 +244,13 @@ describe("clobber CLI — roles edit", () => {
     });
     expect(code).toBe(0);
 
-    const after = readWorkerVersion();
-    expect(after.version).toBe(before.version + 1);
-    expect(after.system_prompt).toBe("stdin-prompt-content\n");
+    expect(workerPinSha()).not.toBe(beforeSha);
+    expect(workerContract().systemPrompt).toBe("stdin-prompt-content\n");
   });
 
   it("--allowed-tools replaces the tool set", async () => {
     const s = captureStreams();
-    const before = readWorkerVersion();
+    const beforeSha = workerPinSha();
 
     const code = await run({
       argv: ["roles", "edit", "worker", "--allowed-tools", "Read,Grep,Bash"],
@@ -232,9 +260,8 @@ describe("clobber CLI — roles edit", () => {
     });
     expect(code).toBe(0);
 
-    const after = readWorkerVersion();
-    expect(after.version).toBe(before.version + 1);
-    expect(JSON.parse(after.allowed_tools_json)).toEqual(["Read", "Grep", "Bash"]);
+    expect(workerPinSha()).not.toBe(beforeSha);
+    expect(workerContract().allowedTools).toEqual(["Read", "Grep", "Bash"]);
   });
 
   it("--add-skill is repeatable and appends new skills", async () => {
@@ -244,9 +271,7 @@ describe("clobber CLI — roles edit", () => {
     writeFileSync(skillA, "# A skill body");
     writeFileSync(skillB, "# B skill body");
 
-    const before = readWorkerVersion();
-    const beforeSkills = JSON.parse(before.skills_json) as Array<{ name: string }>;
-    const beforeNames = beforeSkills.map((s) => s.name);
+    const beforeNames = workerContract().skills.map((sk) => sk.name);
 
     const code = await run({
       argv: [
@@ -264,16 +289,12 @@ describe("clobber CLI — roles edit", () => {
     });
     expect(code).toBe(0);
 
-    const after = readWorkerVersion();
-    expect(after.version).toBe(before.version + 1);
-    const afterSkills = JSON.parse(after.skills_json) as Array<{
-      name: string;
-      body: string;
-    }>;
-    const afterNames = afterSkills.map((s) => s.name);
-    expect(afterNames).toEqual([...beforeNames, "aaa", "bbb"]);
-    const aaa = afterSkills.find((s) => s.name === "aaa");
-    const bbb = afterSkills.find((s) => s.name === "bbb");
+    const afterSkills = workerContract().skills;
+    const afterNames = afterSkills.map((sk) => sk.name);
+    // The contract canonicalizes skills by name, so assert membership, not order.
+    expect(afterNames).toEqual([...beforeNames, "aaa", "bbb"].sort());
+    const aaa = afterSkills.find((sk) => sk.name === "aaa");
+    const bbb = afterSkills.find((sk) => sk.name === "bbb");
     expect(aaa?.body).toBe("# A skill body");
     expect(bbb?.body).toBe("# B skill body");
   });
@@ -281,10 +302,9 @@ describe("clobber CLI — roles edit", () => {
   it("--remove-skill drops named skills from the current set", async () => {
     const s = captureStreams();
 
-    const before = readWorkerVersion();
-    const beforeSkills = JSON.parse(before.skills_json) as Array<{ name: string }>;
-    const target = beforeSkills.find((s) => s.name === "aaa");
+    const target = workerContract().skills.find((sk) => sk.name === "aaa");
     expect(target).toBeDefined();
+    const beforeSha = workerPinSha();
 
     const code = await run({
       argv: ["roles", "edit", "worker", "--remove-skill", "aaa"],
@@ -294,12 +314,8 @@ describe("clobber CLI — roles edit", () => {
     });
     expect(code).toBe(0);
 
-    const after = readWorkerVersion();
-    expect(after.version).toBe(before.version + 1);
-    const afterNames = (JSON.parse(after.skills_json) as Array<{ name: string }>).map(
-      (s) => s.name,
-    );
-    expect(afterNames).not.toContain("aaa");
+    expect(workerPinSha()).not.toBe(beforeSha);
+    expect(workerContract().skills.map((sk) => sk.name)).not.toContain("aaa");
   });
 
   it("--json prints the patch result", async () => {
@@ -323,17 +339,19 @@ describe("clobber CLI — roles edit", () => {
     expect(code).toBe(0);
     const parsed = JSON.parse(s.out()) as {
       role_id: string;
-      version_id: string;
-      version: number;
+      branch: string;
+      sha: string;
+      no_new_version: boolean;
     };
     expect(parsed.role_id).toBe(harness.workerRoleId);
-    expect(typeof parsed.version_id).toBe("string");
-    expect(typeof parsed.version).toBe("number");
+    expect(typeof parsed.sha).toBe("string");
+    expect(typeof parsed.branch).toBe("string");
+    expect(parsed.no_new_version).toBe(true);
   });
 
-  it("--description updates roles.description without bumping the version", async () => {
+  it("--description updates roles.description without advancing the pin", async () => {
     const s = captureStreams();
-    const before = readWorkerVersion();
+    const beforeSha = workerPinSha();
 
     const code = await run({
       argv: ["roles", "edit", "worker", "--description", "the new desc"],
@@ -343,8 +361,7 @@ describe("clobber CLI — roles edit", () => {
     });
     expect(code).toBe(0);
 
-    const after = readWorkerVersion();
-    expect(after.version).toBe(before.version);
+    expect(workerPinSha()).toBe(beforeSha);
 
     const descRow = harness.db
       .prepare("SELECT description FROM roles WHERE id = ?")
@@ -457,14 +474,7 @@ describe("clobber CLI — roles edit", () => {
     });
     expect(code).toBe(0);
 
-    const row = harness.db
-      .prepare(
-        `SELECT v.triggers_json FROM role_versions v
-         JOIN roles r ON r.current_version_id = v.id
-         WHERE r.name = 'manager' AND r.workspace_id = ?`,
-      )
-      .get(harness.workspaceId) as { triggers_json: string };
-    expect(JSON.parse(row.triggers_json)).toEqual(triggers);
+    expect(managerTriggers()).toEqual(triggers);
   });
 
   it("--triggers-file reads triggers from a JSON file", async () => {
@@ -481,14 +491,7 @@ describe("clobber CLI — roles edit", () => {
     });
     expect(code).toBe(0);
 
-    const row = harness.db
-      .prepare(
-        `SELECT v.triggers_json FROM role_versions v
-         JOIN roles r ON r.current_version_id = v.id
-         WHERE r.name = 'manager' AND r.workspace_id = ?`,
-      )
-      .get(harness.workspaceId) as { triggers_json: string };
-    expect(JSON.parse(row.triggers_json)).toEqual(triggers);
+    expect(managerTriggers()).toEqual(triggers);
   });
 
   it("--triggers on an ephemeral role surfaces the 422 from the server", async () => {

@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
+import { mkdtempSync as _mkdtempSync, rmSync as _rmSync } from "node:fs";
+import { tmpdir as _tmpdir } from "node:os";
+import { join as _joinPath } from "node:path";
 import { PassThrough } from "node:stream";
 import { makeRepoFixture, type RepoFixture } from "./repo-fixture.ts";
 import { createServer } from "../src/server.ts";
@@ -93,6 +96,7 @@ function buildHarness(initial: Date): Harness {
     hookUrl: "http://test.invalid/hook",
     apiBase: "http://test.invalid",
     cliEntry: "/dummy/cli.ts",
+    roleRepoDir,
     dispatches,
     finalReportConsumerState,
     clock,
@@ -150,11 +154,14 @@ async function bootManager(h: Harness, repoPath: string): Promise<Booted> {
 }
 
 let repo: RepoFixture;
+let roleRepoDir: string;
 beforeEach(() => {
   repo = makeRepoFixture("clobber-trigger-sched-integ-");
+  roleRepoDir = _mkdtempSync(_joinPath(_tmpdir(), "clobber-rolerepo-"));
 });
 afterEach(() => {
   repo.cleanup();
+  _rmSync(roleRepoDir, { recursive: true, force: true });
 });
 
 describe("TriggerScheduler — HTTP integration wiring", () => {

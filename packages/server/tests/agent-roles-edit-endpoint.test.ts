@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
+import { mkdtempSync as _mkdtempSync, rmSync as _rmSync } from "node:fs";
+import { tmpdir as _tmpdir } from "node:os";
+import { join as _joinPath, dirname as _dirname } from "node:path";
 import { PassThrough } from "node:stream";
 import { makeRepoFixture, type RepoFixture } from "./repo-fixture.ts";
+import { loadRoleContractAtCommit } from "../src/role-repo.ts";
 import { createServer } from "../src/server.ts";
 import { createDatabase } from "../src/db.ts";
 import { createEventStore } from "../src/event-store.ts";
@@ -72,6 +76,7 @@ function buildHarness(): Harness {
     hookUrl: "http://test.invalid/hook",
     apiBase: "http://test.invalid",
     cliEntry: "/dummy/cli.ts",
+    roleRepoDir,
   
     dispatches: createTriggerDispatchStore(db),
     finalReportConsumerState: createFinalReportConsumerStateStore(db),
@@ -85,15 +90,18 @@ async function teardown(h: Harness): Promise<void> {
 }
 
 let repo: RepoFixture;
+let roleRepoDir: string;
 let otherRepo: RepoFixture;
 
 beforeEach(() => {
   repo = makeRepoFixture("clobber-roles-edit-");
+  roleRepoDir = _mkdtempSync(_joinPath(_tmpdir(), "clobber-rolerepo-"));
   otherRepo = makeRepoFixture("clobber-roles-edit-other-");
 });
 
 afterEach(() => {
   repo.cleanup();
+  _rmSync(roleRepoDir, { recursive: true, force: true });
   otherRepo.cleanup();
 });
 
@@ -142,26 +150,33 @@ async function bootInWorkspace(h: Harness, repoPath: string): Promise<Booted> {
   };
 }
 
-interface VersionRow {
-  id: string;
-  version: number;
-  system_prompt: string;
-  skills_json: string;
-  allowed_tools_json: string;
-  hooks_json: string;
+// #414 — a content edit advances the commit pin (no role_versions row). These
+// helpers read the new substrate: the pin sha, the row count (must stay 0), and
+// the committed contract from the per-workspace clone the edit committed onto.
+function pinSha(h: Harness, roleId: string): string | null {
+  return (
+    h.db
+      .prepare("SELECT current_commit_sha AS sha FROM roles WHERE id = ?")
+      .get(roleId) as { sha: string | null }
+  ).sha;
 }
 
-function readCurrentVersion(h: Harness, roleId: string): VersionRow {
-  const row = h.db
-    .prepare(
-      `SELECT v.id, v.version, v.system_prompt, v.skills_json, v.allowed_tools_json, v.hooks_json
-       FROM role_versions v
-       JOIN roles r ON r.current_version_id = v.id
-       WHERE r.id = ?`,
-    )
-    .get(roleId) as VersionRow | null;
-  if (row === null) throw new Error(`no current version for ${roleId}`);
-  return row;
+function versionRowCount(h: Harness, roleId: string): number {
+  return (
+    h.db
+      .prepare("SELECT COUNT(*) AS n FROM role_versions WHERE role_id = ?")
+      .get(roleId) as { n: number }
+  ).n;
+}
+
+function committedContract(wsId: string, sha: string) {
+  return loadRoleContractAtCommit(_joinPath(_dirname(roleRepoDir), "role-repos", wsId), sha);
+}
+
+// The seeded baseline resolves from the shared upstream repo: the per-workspace
+// clone is materialized lazily on the first mutating route call.
+function seededContract(sha: string) {
+  return loadRoleContractAtCommit(roleRepoDir, sha);
 }
 
 describe("PATCH /agent/roles/:idOrName — workspace role_edit_policy", () => {
@@ -269,11 +284,11 @@ describe("PATCH /agent/roles/:idOrName", () => {
     await teardown(h);
   });
 
-  it("PATCH only system_prompt creates v2 and copies skills/allowed_tools/hooks", async () => {
+  it("PATCH only system_prompt advances the pin and preserves skills/allowed_tools/hooks", async () => {
     const h = buildHarness();
     const boot = await bootInWorkspace(h, repo.path);
-    const before = readCurrentVersion(h, boot.workerRoleId);
-    expect(before.version).toBe(1);
+    const beforeSha = pinSha(h, boot.workerRoleId)!;
+    const before = seededContract(beforeSha);
 
     const res = await h.server.inject({
       method: "PATCH",
@@ -284,27 +299,30 @@ describe("PATCH /agent/roles/:idOrName", () => {
     expect(res.statusCode).toBe(200);
     const body = res.json() as {
       role_id: string;
-      version_id: string;
-      version: number;
+      branch: string;
+      sha: string;
+      no_new_version: boolean;
     };
     expect(body.role_id).toBe(boot.workerRoleId);
-    expect(body.version).toBe(2);
-    expect(body.version_id).not.toBe(before.id);
+    expect(body.no_new_version).toBe(true);
+    expect(body.sha).not.toBe(beforeSha);
 
-    const after = readCurrentVersion(h, boot.workerRoleId);
-    expect(after.version).toBe(2);
-    expect(after.system_prompt).toBe("you are a careful tester");
-    expect(after.skills_json).toBe(before.skills_json);
-    expect(after.allowed_tools_json).toBe(before.allowed_tools_json);
-    expect(after.hooks_json).toBe(before.hooks_json);
+    expect(pinSha(h, boot.workerRoleId)).toBe(body.sha);
+    expect(versionRowCount(h, boot.workerRoleId)).toBe(0);
+
+    const after = committedContract(boot.workspaceId, body.sha);
+    expect(after.systemPrompt).toBe("you are a careful tester");
+    expect(after.skills).toEqual(before.skills);
+    expect(after.allowedTools).toEqual(before.allowedTools);
+    expect(after.hooks).toBe(before.hooks);
 
     await teardown(h);
   });
 
-  it("PATCH only allowed_tools creates v2 and copies system_prompt/skills/hooks", async () => {
+  it("PATCH only allowed_tools advances the pin and preserves system_prompt/skills/hooks", async () => {
     const h = buildHarness();
     const boot = await bootInWorkspace(h, repo.path);
-    const before = readCurrentVersion(h, boot.workerRoleId);
+    const before = seededContract(pinSha(h, boot.workerRoleId)!);
 
     const res = await h.server.inject({
       method: "PATCH",
@@ -314,20 +332,20 @@ describe("PATCH /agent/roles/:idOrName", () => {
     });
     expect(res.statusCode).toBe(200);
 
-    const after = readCurrentVersion(h, boot.workerRoleId);
-    expect(after.version).toBe(2);
-    expect(after.system_prompt).toBe(before.system_prompt);
-    expect(JSON.parse(after.allowed_tools_json)).toEqual(["Read", "Grep"]);
-    expect(after.skills_json).toBe(before.skills_json);
-    expect(after.hooks_json).toBe(before.hooks_json);
+    const after = committedContract(boot.workspaceId, pinSha(h, boot.workerRoleId)!);
+    expect(after.allowedTools).toEqual(["Read", "Grep"]);
+    expect(after.systemPrompt).toBe(before.systemPrompt);
+    expect(after.skills).toEqual(before.skills);
+    expect(after.hooks).toBe(before.hooks);
+    expect(versionRowCount(h, boot.workerRoleId)).toBe(0);
 
     await teardown(h);
   });
 
-  it("PATCH only skills creates v2 and copies system_prompt/allowed_tools/hooks", async () => {
+  it("PATCH only skills advances the pin and preserves system_prompt/allowed_tools/hooks", async () => {
     const h = buildHarness();
     const boot = await bootInWorkspace(h, repo.path);
-    const before = readCurrentVersion(h, boot.workerRoleId);
+    const before = seededContract(pinSha(h, boot.workerRoleId)!);
 
     const skills = [
       { name: "linting", body: "# Linting\nUse the linter." },
@@ -341,19 +359,20 @@ describe("PATCH /agent/roles/:idOrName", () => {
     });
     expect(res.statusCode).toBe(200);
 
-    const after = readCurrentVersion(h, boot.workerRoleId);
-    expect(after.version).toBe(2);
-    expect(JSON.parse(after.skills_json)).toEqual(skills);
-    expect(after.system_prompt).toBe(before.system_prompt);
-    expect(after.allowed_tools_json).toBe(before.allowed_tools_json);
-    expect(after.hooks_json).toBe(before.hooks_json);
+    const after = committedContract(boot.workspaceId, pinSha(h, boot.workerRoleId)!);
+    expect(after.skills).toEqual(skills);
+    expect(after.systemPrompt).toBe(before.systemPrompt);
+    expect(after.allowedTools).toEqual(before.allowedTools);
+    expect(after.hooks).toBe(before.hooks);
+    expect(versionRowCount(h, boot.workerRoleId)).toBe(0);
 
     await teardown(h);
   });
 
-  it("PATCH multiple fields at once creates a single new version", async () => {
+  it("PATCH multiple fields at once produces a single commit, no version row", async () => {
     const h = buildHarness();
     const boot = await bootInWorkspace(h, repo.path);
+    const beforeSha = pinSha(h, boot.workerRoleId)!;
 
     const res = await h.server.inject({
       method: "PATCH",
@@ -366,38 +385,38 @@ describe("PATCH /agent/roles/:idOrName", () => {
       },
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as { version: number };
-    expect(body.version).toBe(2);
+    const body = res.json() as { sha: string };
+    expect(body.sha).not.toBe(beforeSha);
 
-    const totalVersions = h.db
-      .prepare(
-        "SELECT COUNT(*) AS n FROM role_versions WHERE role_id = ?",
-      )
-      .get(boot.workerRoleId) as { n: number };
-    expect(totalVersions.n).toBe(2);
+    const after = committedContract(boot.workspaceId, body.sha);
+    expect(after.systemPrompt).toBe("merged");
+    expect(after.allowedTools).toEqual(["Read"]);
+    expect(after.skills).toEqual([{ name: "s", body: "b" }]);
+    expect(versionRowCount(h, boot.workerRoleId)).toBe(0);
 
     await teardown(h);
   });
 
-  it("multiple sequential PATCHes increment version each time", async () => {
+  it("multiple sequential PATCHes advance the pin each time, never minting a version row", async () => {
     const h = buildHarness();
     const boot = await bootInWorkspace(h, repo.path);
 
-    for (const expected of [2, 3, 4]) {
+    let prevSha = pinSha(h, boot.workerRoleId)!;
+    for (const prompt of ["prompt a", "prompt b", "prompt c"]) {
       const res = await h.server.inject({
         method: "PATCH",
         url: `/agent/roles/${boot.workerRoleId}`,
         headers: { authorization: `Bearer ${boot.managerToken}` },
-        payload: { system_prompt: `prompt v${expected}` },
+        payload: { system_prompt: prompt },
       });
       expect(res.statusCode).toBe(200);
-      const body = res.json() as { version: number };
-      expect(body.version).toBe(expected);
+      const sha = (res.json() as { sha: string }).sha;
+      expect(sha).not.toBe(prevSha);
+      prevSha = sha;
     }
 
-    const after = readCurrentVersion(h, boot.workerRoleId);
-    expect(after.version).toBe(4);
-    expect(after.system_prompt).toBe("prompt v4");
+    expect(committedContract(boot.workspaceId, prevSha).systemPrompt).toBe("prompt c");
+    expect(versionRowCount(h, boot.workerRoleId)).toBe(0);
 
     await teardown(h);
   });
@@ -436,10 +455,10 @@ describe("PATCH /agent/roles/:idOrName", () => {
     await teardown(h);
   });
 
-  it("PATCH only description updates roles.description and does NOT bump version", async () => {
+  it("PATCH only description updates roles.description and does NOT advance the pin", async () => {
     const h = buildHarness();
     const boot = await bootInWorkspace(h, repo.path);
-    const before = readCurrentVersion(h, boot.workerRoleId);
+    const beforeSha = pinSha(h, boot.workerRoleId);
 
     const res = await h.server.inject({
       method: "PATCH",
@@ -451,32 +470,27 @@ describe("PATCH /agent/roles/:idOrName", () => {
     const body = res.json() as {
       role_id: string;
       description?: string;
-      version?: number;
+      sha?: string;
     };
     expect(body.role_id).toBe(boot.workerRoleId);
     expect(body.description).toBe("rewritten description");
-    expect(body.version).toBeUndefined();
+    expect(body.sha).toBeUndefined();
 
-    const after = readCurrentVersion(h, boot.workerRoleId);
-    expect(after.id).toBe(before.id);
-    expect(after.version).toBe(1);
-
+    // Metadata-only: the pin is untouched and no version row is minted.
+    expect(pinSha(h, boot.workerRoleId)).toBe(beforeSha);
     const descRow = h.db
       .prepare("SELECT description FROM roles WHERE id = ?")
       .get(boot.workerRoleId) as { description: string };
     expect(descRow.description).toBe("rewritten description");
-
-    const totalVersions = h.db
-      .prepare("SELECT COUNT(*) AS n FROM role_versions WHERE role_id = ?")
-      .get(boot.workerRoleId) as { n: number };
-    expect(totalVersions.n).toBe(1);
+    expect(versionRowCount(h, boot.workerRoleId)).toBe(0);
 
     await teardown(h);
   });
 
-  it("PATCH description + system_prompt bumps version AND updates description", async () => {
+  it("PATCH description + system_prompt advances the pin AND updates the description column", async () => {
     const h = buildHarness();
     const boot = await bootInWorkspace(h, repo.path);
+    const beforeSha = pinSha(h, boot.workerRoleId);
 
     const res = await h.server.inject({
       method: "PATCH",
@@ -488,18 +502,17 @@ describe("PATCH /agent/roles/:idOrName", () => {
     const body = res.json() as {
       role_id: string;
       description?: string;
-      version?: number;
+      sha?: string;
     };
-    expect(body.version).toBe(2);
+    expect(body.sha).not.toBe(beforeSha);
     expect(body.description).toBe("new desc");
 
     const descRow = h.db
       .prepare("SELECT description FROM roles WHERE id = ?")
       .get(boot.workerRoleId) as { description: string };
     expect(descRow.description).toBe("new desc");
-
-    const after = readCurrentVersion(h, boot.workerRoleId);
-    expect(after.system_prompt).toBe("new prompt");
+    expect(committedContract(boot.workspaceId, body.sha!).systemPrompt).toBe("new prompt");
+    expect(versionRowCount(h, boot.workerRoleId)).toBe(0);
 
     await teardown(h);
   });
@@ -545,9 +558,9 @@ describe("PATCH /agent/roles/:idOrName", () => {
       payload: { system_prompt: "by name" },
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as { role_id: string; version: number };
+    const body = res.json() as { role_id: string; sha: string };
     expect(body.role_id).toBe(boot.workerRoleId);
-    expect(body.version).toBe(2);
+    expect(committedContract(boot.workspaceId, body.sha).systemPrompt).toBe("by name");
 
     await teardown(h);
   });
@@ -583,7 +596,7 @@ describe("PATCH /agent/roles/:idOrName", () => {
     await teardown(h);
   });
 
-  it("live session keeps its boot version after edit; new spawn uses the new version", async () => {
+  it("live session keeps its boot commit pin after edit; new spawn uses the advanced pin", async () => {
     const h = buildHarness();
     const boot = await bootInWorkspace(h, repo.path);
 
@@ -601,10 +614,10 @@ describe("PATCH /agent/roles/:idOrName", () => {
     const liveSpawn = liveSpawnRes.json() as { session_id: string };
 
     const livePinned = h.db
-      .prepare("SELECT role_version_id FROM sessions WHERE id = ?")
-      .get(liveSpawn.session_id) as { role_version_id: string } | null;
-    expect(livePinned).not.toBeNull();
-    const v1Id = livePinned!.role_version_id;
+      .prepare("SELECT role_commit_sha FROM sessions WHERE id = ?")
+      .get(liveSpawn.session_id) as { role_commit_sha: string | null };
+    expect(livePinned.role_commit_sha).not.toBeNull();
+    const bootSha = livePinned.role_commit_sha!;
 
     const editRes = await h.server.inject({
       method: "PATCH",
@@ -613,14 +626,15 @@ describe("PATCH /agent/roles/:idOrName", () => {
       payload: { system_prompt: "after edit" },
     });
     expect(editRes.statusCode).toBe(200);
-    const v2 = editRes.json() as { version_id: string; version: number };
-    expect(v2.version).toBe(2);
-    expect(v2.version_id).not.toBe(v1Id);
+    const edited = editRes.json() as { sha: string };
+    expect(edited.sha).not.toBe(bootSha);
 
+    // The live session's pin is frozen at boot — the edit does not retroactively
+    // move it.
     const livePinnedAfter = h.db
-      .prepare("SELECT role_version_id FROM sessions WHERE id = ?")
-      .get(liveSpawn.session_id) as { role_version_id: string };
-    expect(livePinnedAfter.role_version_id).toBe(v1Id);
+      .prepare("SELECT role_commit_sha FROM sessions WHERE id = ?")
+      .get(liveSpawn.session_id) as { role_commit_sha: string };
+    expect(livePinnedAfter.role_commit_sha).toBe(bootSha);
 
     const newSpawnRes = await h.server.inject({
       method: "POST",
@@ -635,9 +649,9 @@ describe("PATCH /agent/roles/:idOrName", () => {
     expect(newSpawnRes.statusCode).toBe(200);
     const newSpawn = newSpawnRes.json() as { session_id: string };
     const newPinned = h.db
-      .prepare("SELECT role_version_id FROM sessions WHERE id = ?")
-      .get(newSpawn.session_id) as { role_version_id: string };
-    expect(newPinned.role_version_id).toBe(v2.version_id);
+      .prepare("SELECT role_commit_sha FROM sessions WHERE id = ?")
+      .get(newSpawn.session_id) as { role_commit_sha: string };
+    expect(newPinned.role_commit_sha).toBe(edited.sha);
 
     await teardown(h);
   });

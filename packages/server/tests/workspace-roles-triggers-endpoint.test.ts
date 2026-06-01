@@ -1,4 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
+import { mkdtempSync as _mkdtempSync, rmSync as _rmSync } from "node:fs";
+import { tmpdir as _tmpdir } from "node:os";
+import { join as _joinPath, dirname as _dirname } from "node:path";
+import { loadRoleContractAtCommit } from "../src/role-repo.ts";
 import { createServer } from "../src/server.ts";
 import { createDatabase } from "../src/db.ts";
 import { createEventStore } from "../src/event-store.ts";
@@ -45,6 +49,7 @@ function buildHarness(): Harness {
     hookUrl: "http://test.invalid/hook",
     apiBase: "http://test.invalid",
     cliEntry: "/dummy/cli.ts",
+    roleRepoDir,
     dispatches: createTriggerDispatchStore(db),
     finalReportConsumerState: createFinalReportConsumerStateStore(db),
   });
@@ -64,14 +69,24 @@ function roleIdByName(h: Harness, workspaceId: string, name: string): string {
   return row.id;
 }
 
-function currentTriggers(h: Harness, roleId: string): { version: number; triggers: unknown } {
+// #414 — triggers now live in the role's git tree at the commit pin.
+function currentTriggers(h: Harness, roleId: string): unknown {
   const role = h.db
-    .prepare("SELECT current_version_id FROM roles WHERE id = ?")
-    .get(roleId) as { current_version_id: string };
-  const version = h.db
-    .prepare("SELECT version, triggers_json FROM role_versions WHERE id = ?")
-    .get(role.current_version_id) as { version: number; triggers_json: string };
-  return { version: version.version, triggers: JSON.parse(version.triggers_json) };
+    .prepare("SELECT workspace_id, current_commit_sha FROM roles WHERE id = ?")
+    .get(roleId) as { workspace_id: string; current_commit_sha: string | null };
+  if (role.current_commit_sha === null) {
+    throw new Error(`role ${roleId} is not commit-pinned`);
+  }
+  const clone = _joinPath(_dirname(roleRepoDir), "role-repos", role.workspace_id);
+  return loadRoleContractAtCommit(clone, role.current_commit_sha).triggers;
+}
+
+function versionRowCount(h: Harness, roleId: string): number {
+  return (
+    h.db
+      .prepare("SELECT COUNT(*) AS n FROM role_versions WHERE role_id = ?")
+      .get(roleId) as { n: number }
+  ).n;
 }
 
 async function createWorkspace(h: Harness, repoPath: string): Promise<string> {
@@ -85,13 +100,16 @@ async function createWorkspace(h: Harness, repoPath: string): Promise<string> {
 }
 
 let repo: RepoFixture;
+let roleRepoDir: string;
 
 beforeEach(() => {
   repo = makeRepoFixture("clobber-ws-roles-triggers-");
+  roleRepoDir = _mkdtempSync(_joinPath(_tmpdir(), "clobber-rolerepo-"));
 });
 
 afterEach(() => {
   repo.cleanup();
+  _rmSync(roleRepoDir, { recursive: true, force: true });
 });
 
 // PUT /workspaces/:wid/roles/:rid/triggers is the operator-level seam (#186) the
@@ -99,7 +117,7 @@ afterEach(() => {
 // session in the freshly-created workspace, so it cannot use the agent-scoped
 // PATCH /agent/roles/:id. No bearer token here on purpose.
 describe("PUT /workspaces/:wid/roles/:rid/triggers — operator trigger apply (#186)", () => {
-  it("applies the dogfood manager triggers to a fresh workspace's manager and bumps the version", async () => {
+  it("applies the dogfood manager triggers to a fresh workspace's manager and advances the pin", async () => {
     const h = buildHarness();
     const wid = await createWorkspace(h, repo.path);
     const managerId = roleIdByName(h, wid, "manager");
@@ -114,13 +132,16 @@ describe("PUT /workspaces/:wid/roles/:rid/triggers — operator trigger apply (#
       payload: { triggers },
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as { role_id: string; version: number; version_id: string };
+    const body = res.json() as { role_id: string; branch: string; sha: string; no_new_version: boolean };
     expect(body.role_id).toBe(managerId);
-    expect(body.version).toBe(2);
+    expect(body.no_new_version).toBe(true);
+    expect(body.sha.length).toBeGreaterThan(0);
 
-    const after = currentTriggers(h, managerId);
-    expect(after.version).toBe(2);
-    expect(after.triggers).toEqual(triggers);
+    // The contract canonicalizes triggers by id, so compare as an unordered set.
+    const got = currentTriggers(h, managerId) as unknown[];
+    expect(got).toHaveLength(triggers.length);
+    expect(got).toEqual(expect.arrayContaining(triggers));
+    expect(versionRowCount(h, managerId)).toBe(0);
 
     await teardown(h);
   });
