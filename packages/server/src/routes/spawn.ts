@@ -16,7 +16,7 @@ import type { RoleContractMigrator } from "../role-contract-compat.ts";
 import type { RoleContractRefusalStore } from "../role-contract-refusal-store.ts";
 import type { RoleContentCache } from "../role-content-cache.ts";
 import type { TriggerScheduler } from "../trigger-scheduler.ts";
-import { EffortLevelSchema } from "@clobber/shared";
+import { EffortLevelSchema, ModelSchema } from "@clobber/shared";
 import { executeSpawn } from "../spawn-pipeline.ts";
 import { normalizeSpawnLabel } from "./_spawn-label.ts";
 
@@ -26,6 +26,7 @@ const SpawnBodySchema = z.object({
   prompt: z.string().min(1),
   label: z.string().optional(),
   effort: EffortLevelSchema.optional(),
+  model: ModelSchema.optional(),
   // The selected opening move (#212). The minimal by-name seam — the richer
   // selection surfaces (CLI ergonomics / trigger map / office picker) are #213.
   wake_program: z.string().min(1).optional(),
@@ -64,7 +65,7 @@ export function registerSpawnRoutes(app: FastifyInstance, deps: SpawnRouteDeps):
       reply.code(400);
       return { error: "invalid spawn request", issues: parsed.error.issues };
     }
-    const { workspace_id, role_id, prompt, effort, wake_program } = parsed.data;
+    const { workspace_id, role_id, prompt, effort, model, wake_program } = parsed.data;
     const label = normalizeSpawnLabel(parsed.data.label);
     if (label === null) {
       reply.code(400);
@@ -89,6 +90,7 @@ export function registerSpawnRoutes(app: FastifyInstance, deps: SpawnRouteDeps):
       label,
       ...(wake_program === undefined ? {} : { wakeProgram: wake_program }),
       ...(effort === undefined ? {} : { effortOverride: effort }),
+      ...(model === undefined ? {} : { modelOverride: model }),
     });
     if (!result.ok) {
       const { ok: _ok, status, ...rest } = result;

@@ -181,4 +181,15 @@ describe("buildClaudeArgs", () => {
     const args = buildClaudeArgs({ sessionId: "abc" });
     expect(args).not.toContain("--effort");
   });
+
+  it("emits --model <value> when model is supplied", () => {
+    const args = buildClaudeArgs({ sessionId: "abc", model: "sonnet" });
+    expect(args).toContain("--model");
+    expect(args[args.indexOf("--model") + 1]).toBe("sonnet");
+  });
+
+  it("omits --model when model is not supplied (backward-compat: byte-identical to today)", () => {
+    const args = buildClaudeArgs({ sessionId: "abc" });
+    expect(args).not.toContain("--model");
+  });
 });

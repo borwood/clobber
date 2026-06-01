@@ -22,7 +22,7 @@ the branch and advance the pin. \`clobber roles discard\` throws the checkout aw
 | \`triggers/<slug>.json\` | One trigger (persistent roles only) |
 | \`allowed-tools.txt\` | Tool allow-list, one per line |
 | \`allowed-cli-commands.txt\` | CLI allow-list, one per line |
-| \`${ROLE_FILE}\` frontmatter | name / description / persistent / effort |
+| \`${ROLE_FILE}\` frontmatter | name / description / persistent / effort / model (optional) |
 
 \`hooks.json\` is engine instrumentation — it is not in your checkout and is not
 editable.

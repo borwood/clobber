@@ -4,7 +4,7 @@ import type {
   RoleBundleData,
   RuntimeSpawnOptions,
 } from "@clobber/runtime";
-import type { Agent, BootContext, BriefingPacket, ClobberPromptTag, EffortLevel, Role, Workspace } from "@clobber/shared";
+import type { Agent, BootContext, BriefingPacket, ClobberPromptTag, EffortLevel, Model, Role, Workspace } from "@clobber/shared";
 import { CALLER_SUPPLIED_KICK, resolveWakeProgram } from "@clobber/shared";
 import { ensureOffice } from "./office-store.ts";
 import { composeOfficeContext } from "./office-context.ts";
@@ -47,6 +47,9 @@ export interface PrepareSpawnContextInput {
   // role.effort. When omitted, role.effort applies (or claude's default if
   // neither is set).
   readonly effortOverride?: EffortLevel;
+  // Per-spawn override of the role's default model. Same precedence as effort:
+  // override > role.model > unset (no `--model` arg → claude's own default).
+  readonly modelOverride?: Model;
 }
 
 export interface SpawnContext {
@@ -84,6 +87,7 @@ export async function prepareSpawnContext(
     wakeProgram,
     briefing,
     effortOverride,
+    modelOverride,
   } = input;
 
   const bundle = embodyRole(role, pin, deps);
@@ -202,6 +206,7 @@ export async function prepareSpawnContext(
   };
 
   const effectiveEffort = effortOverride ?? role.effort;
+  const effectiveModel = modelOverride ?? role.model;
   // A worktree is agent-scoped: created on the agent's first attach, reused
   // thereafter. The agent having any session on record (this attach's row is
   // written later, in attachSessionToAgent) means this is not its first.
@@ -220,6 +225,7 @@ export async function prepareSpawnContext(
       ? {}
       : { allowedTools: effectiveBundle.allowedTools }),
     ...(effectiveEffort === undefined ? {} : { effort: effectiveEffort }),
+    ...(effectiveModel === undefined ? {} : { model: effectiveModel }),
     env,
     materialized,
     systemPrompt,

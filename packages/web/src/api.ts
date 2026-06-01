@@ -91,12 +91,15 @@ export interface Whiteboard {
 
 export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max";
 
+export type Model = "opus" | "sonnet" | "haiku";
+
 export interface SpawnRequest {
   readonly workspace_id: string;
   readonly role_id: string;
   readonly prompt: string;
   readonly label?: string;
   readonly effort?: EffortLevel;
+  readonly model?: Model;
 }
 
 export interface SpawnResponse {

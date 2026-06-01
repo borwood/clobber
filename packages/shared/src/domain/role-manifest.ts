@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { PermissionModeSchema } from "../hooks/payloads.ts";
-import { EffortLevelSchema, SdlcProfileSchema } from "./role.ts";
+import { EffortLevelSchema, ModelSchema, SdlcProfileSchema } from "./role.ts";
 import { SeedRefSchema } from "./seed.ts";
 import { WakeProgramSchema } from "./wake-program.ts";
 
@@ -29,6 +29,7 @@ export const RoleManifestSchema = z
     permissionMode: PermissionModeSchema.optional(),
     allowedTools: z.array(z.string().min(1)).readonly().optional(),
     effort: EffortLevelSchema.optional(),
+    model: ModelSchema.optional(),
     sdlc: SdlcProfileSchema.optional(),
     // Layer B — the role's default, ordered seed references. Each names a
     // catalog seed and carries its enable toggle; snapshotted into the role

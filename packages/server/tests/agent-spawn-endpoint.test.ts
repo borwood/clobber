@@ -379,4 +379,78 @@ describe("POST /agent/spawn", () => {
     expect(call.effort).toBeUndefined();
     await teardown(h);
   });
+
+  it("forwards the role's default model to the spawner when no override is supplied", async () => {
+    const h = buildHarness();
+    const ws = h.workspaces.create({ name: "ws", repo_path: repoPath });
+    const role = h.roles.create({ name: "manager", persistent: true, model: "opus" });
+    h.workspaceRoles.setCeiling(ws.id, role.id, 2);
+    const boot = await h.server.inject({
+      method: "POST",
+      url: "/spawn",
+      payload: { workspace_id: ws.id, role_id: role.id, prompt: "boot", label: "boot" },
+    });
+    expect(boot.statusCode).toBe(200);
+    const bootBody = boot.json() as { session_id: string };
+    const token = h.tokens.mint(bootBody.session_id);
+
+    const callsBefore = h.calls.length;
+    const res = await h.server.inject({
+      method: "POST",
+      url: "/agent/spawn",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { role: "manager", prompt: "design pass on auth.ts", label: "design" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(h.calls.length).toBe(callsBefore + 1);
+    const call = h.calls[h.calls.length - 1]!;
+    expect(call.model).toBe("opus");
+    await teardown(h);
+  });
+
+  it("per-spawn model override beats the role's default", async () => {
+    const h = buildHarness();
+    const ws = h.workspaces.create({ name: "ws", repo_path: repoPath });
+    const role = h.roles.create({ name: "manager", persistent: true, model: "opus" });
+    h.workspaceRoles.setCeiling(ws.id, role.id, 2);
+    const boot = await h.server.inject({
+      method: "POST",
+      url: "/spawn",
+      payload: { workspace_id: ws.id, role_id: role.id, prompt: "boot", label: "boot" },
+    });
+    expect(boot.statusCode).toBe(200);
+    const bootBody = boot.json() as { session_id: string };
+    const token = h.tokens.mint(bootBody.session_id);
+
+    const res = await h.server.inject({
+      method: "POST",
+      url: "/agent/spawn",
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        role: "manager",
+        prompt: "this lane is cheap; route to sonnet",
+        label: "cheap-lane",
+        model: "sonnet",
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const call = h.calls[h.calls.length - 1]!;
+    expect(call.model).toBe("sonnet");
+    await teardown(h);
+  });
+
+  it("omits model entirely when role default and override are both unset (claude default applies)", async () => {
+    const h = buildHarness();
+    const boot = await bootManager(h);
+    const res = await h.server.inject({
+      method: "POST",
+      url: "/agent/spawn",
+      headers: { authorization: `Bearer ${boot.managerToken}` },
+      payload: { role: "manager", prompt: "do x", label: "no-model" },
+    });
+    expect(res.statusCode).toBe(200);
+    const call = h.calls[h.calls.length - 1]!;
+    expect(call.model).toBeUndefined();
+    await teardown(h);
+  });
 });

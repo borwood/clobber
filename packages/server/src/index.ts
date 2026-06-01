@@ -54,6 +54,12 @@ const spawner: AgentSpawner = (req) => {
     ...(req.pluginDirs === undefined ? {} : { pluginDirs: req.pluginDirs }),
     ...(req.permissionMode === undefined ? {} : { permissionMode: req.permissionMode }),
     ...(req.allowedTools === undefined ? {} : { allowedTools: req.allowedTools }),
+    // The reasoning-depth + model knobs reach claude argv ONLY through here. Both
+    // ride the RuntimeSpawnRequest but were never forwarded to spawnAgent, so the
+    // role/spawn defaults were silently dropped before reaching the CLI — #423
+    // wires model through, and effort alongside it (same gap, same fix).
+    ...(req.effort === undefined ? {} : { effort: req.effort }),
+    ...(req.model === undefined ? {} : { model: req.model }),
     ...(req.appendSystemPrompt === undefined
       ? {}
       : { appendSystemPrompt: req.appendSystemPrompt }),

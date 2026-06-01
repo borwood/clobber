@@ -8,6 +8,14 @@ import { WakeProgramSchema } from "./wake-program.ts";
 export const EffortLevelSchema = z.enum(["low", "medium", "high", "xhigh", "max"]);
 export type EffortLevel = z.infer<typeof EffortLevelSchema>;
 
+// Model knob exposed by `claude --model <model>`. The closed set of aliases the
+// CLI accepts (verified against `claude --help`: e.g. 'sonnet', 'opus'); each
+// resolves to the latest model in that family. Unset → no `--model` arg → claude's
+// own default (backward-compat). Lets a workspace route execution lanes to a
+// cheaper model than the deep-design default. Mirrors EffortLevelSchema.
+export const ModelSchema = z.enum(["opus", "sonnet", "haiku"]);
+export type Model = z.infer<typeof ModelSchema>;
+
 // A role name is a git-branch-safe slug: roles ARE branches in the upstream
 // repo (#349), so every creation/fork/checkout site constrains the name to this
 // shape before it reaches git. The `ROLE.md` frontmatter codec (#216) and the
@@ -63,6 +71,7 @@ export const RoleSchema = z.object({
   permission_mode: PermissionModeSchema.optional(),
   allowed_tools: z.array(z.string().min(1)).optional(),
   effort: EffortLevelSchema.optional(),
+  model: ModelSchema.optional(),
   persistent: z.boolean(),
   workspace_id: z.string().uuid().optional(),
   // A role is pinned EITHER by a `role_versions` row (current_version_id, the
@@ -199,6 +208,7 @@ export const CreateRoleRequestSchema = z.object({
   permission_mode: PermissionModeSchema.optional(),
   allowed_tools: z.array(z.string().min(1)).optional(),
   effort: EffortLevelSchema.optional(),
+  model: ModelSchema.optional(),
   persistent: z.boolean(),
 });
 export type CreateRoleRequest = z.infer<typeof CreateRoleRequestSchema>;

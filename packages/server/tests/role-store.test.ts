@@ -20,6 +20,7 @@ const fullySpecified: CreateRoleRequest = {
   permission_mode: "acceptEdits",
   allowed_tools: ["Bash", "Read", "Write"],
   effort: "xhigh",
+  model: "opus",
   persistent: true,
 };
 
@@ -52,6 +53,7 @@ describe("role store", () => {
     expect(created.permission_mode).toBe("acceptEdits");
     expect(created.allowed_tools).toEqual(["Bash", "Read", "Write"]);
     expect(created.effort).toBe("xhigh");
+    expect(created.model).toBe("opus");
     expect(created.persistent).toBe(true);
 
     const fetched = store.get(created.id)!;
@@ -64,6 +66,13 @@ describe("role store", () => {
     const { db, store } = open();
     const created = store.create(minimal);
     expect(created.effort).toBeUndefined();
+    db.close();
+  });
+
+  it("leaves model undefined when not supplied on create", () => {
+    const { db, store } = open();
+    const created = store.create(minimal);
+    expect(created.model).toBeUndefined();
     db.close();
   });
 

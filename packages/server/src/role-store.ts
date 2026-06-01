@@ -5,6 +5,7 @@ import {
   RoleSchema,
   type CommitRef,
   type EffortLevel,
+  type Model,
   type Role,
   type CreateRoleRequest,
 } from "@clobber/shared";
@@ -34,6 +35,9 @@ export interface RoleManifestColumns {
   readonly description: string;
   readonly persistent: boolean;
   readonly effort: EffortLevel;
+  // Optional, unlike effort: a role pins no model by default (unset = today's
+  // behavior), so a model-less frontmatter syncs the column back to NULL.
+  readonly model?: Model;
 }
 
 interface Row {
@@ -42,6 +46,7 @@ interface Row {
   description: string | null;
   permission_mode: string | null;
   effort: string | null;
+  model: string | null;
   persistent: number;
   workspace_id: string | null;
   current_version_id: string | null;
@@ -65,6 +70,7 @@ function rowToRole(row: Row): Role {
     if (tools.length > 0) parsed["allowed_tools"] = tools;
   }
   if (row.effort !== null) parsed["effort"] = row.effort;
+  if (row.model !== null) parsed["model"] = row.model;
   if (row.workspace_id !== null) parsed["workspace_id"] = row.workspace_id;
   if (row.current_version_id !== null) parsed["current_version_id"] = row.current_version_id;
   if (row.current_commit_branch !== null && row.current_commit_sha !== null) {
@@ -78,7 +84,7 @@ function rowToRole(row: Row): Role {
 
 const ROLE_SELECT = `
   SELECT
-    r.id, r.name, r.description, r.permission_mode, r.effort,
+    r.id, r.name, r.description, r.permission_mode, r.effort, r.model,
     r.persistent, r.workspace_id, r.current_version_id,
     r.current_commit_branch, r.current_commit_sha, r.created_at,
     v.allowed_tools_json AS current_version_allowed_tools_json
@@ -90,7 +96,7 @@ export function createRoleStore(db: Database): RoleStore {
   const versions = createRoleVersionStore(db);
 
   const insertStmt = db.prepare(
-    "INSERT INTO roles (id, name, description, permission_mode, effort, persistent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO roles (id, name, description, permission_mode, effort, model, persistent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
   );
   const setVersionStmt = db.prepare(
     "UPDATE roles SET current_version_id = ? WHERE id = ?",
@@ -116,7 +122,7 @@ export function createRoleStore(db: Database): RoleStore {
     "UPDATE roles SET description = ? WHERE id = ?",
   );
   const syncManifestColumnsStmt = db.prepare(
-    "UPDATE roles SET description = ?, persistent = ?, effort = ? WHERE id = ?",
+    "UPDATE roles SET description = ?, persistent = ?, effort = ?, model = ? WHERE id = ?",
   );
 
   return {
@@ -126,12 +132,14 @@ export function createRoleStore(db: Database): RoleStore {
       const description = req.description === undefined ? null : req.description;
       const permission_mode = req.permission_mode === undefined ? null : req.permission_mode;
       const effort = req.effort === undefined ? null : req.effort;
+      const model = req.model === undefined ? null : req.model;
       insertStmt.run(
         id,
         req.name,
         description,
         permission_mode,
         effort,
+        model,
         req.persistent ? 1 : 0,
         created_at,
       );
@@ -192,6 +200,7 @@ export function createRoleStore(db: Database): RoleStore {
         manifest.description,
         manifest.persistent ? 1 : 0,
         manifest.effort,
+        manifest.model === undefined ? null : manifest.model,
         id,
       );
     },

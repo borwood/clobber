@@ -78,6 +78,49 @@ describe("migration harness — populated existing-DB upgrade", () => {
   });
 });
 
+describe("migration harness — per-role model column upgrade (#423)", () => {
+  it("re-adds the roles.model column on an existing populated DB and preserves rows", () => {
+    const dir = mkdtempSync(join(tmpdir(), "clobber-model-"));
+    const path = join(dir, "existing.db");
+    try {
+      buildAndRegress({
+        path,
+        seed: (db) => {
+          const roles = createRoleStore(db);
+          roles.create({ name: "manager", persistent: true, model: "opus" });
+          roles.create({ name: "worker", persistent: false });
+        },
+        // Simulate a database predating the per-role model knob (#423): drop the
+        // column so reopening must re-add it and leave every row intact.
+        regress: (db) => {
+          db.exec("ALTER TABLE roles DROP COLUMN model");
+        },
+      });
+
+      let db!: ReturnType<typeof createDatabase>;
+      expect(() => {
+        db = createDatabase(path);
+      }).not.toThrow();
+
+      const cols = (
+        db.prepare("PRAGMA table_info(roles)").all() as Array<{ name: string }>
+      ).map((r) => r.name);
+      expect(cols).toContain("model");
+
+      // The rows survived the upgrade; the dropped column comes back NULL (unset
+      // = today's behavior), never resurrecting the pre-regress value.
+      const store = createRoleStore(db);
+      const all = store.list();
+      expect(all.length).toBe(2);
+      for (const r of all) expect(r.model).toBeUndefined();
+
+      db.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("migration harness — dry-run against a copy", () => {
   it("reports the pending migration's diff and never writes the source file", () => {
     const dir = mkdtempSync(join(tmpdir(), "clobber-dryrun-"));

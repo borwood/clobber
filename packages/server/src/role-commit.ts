@@ -70,6 +70,7 @@ export function finalizeRoleCommit(
     description: input.manifest.description,
     persistent: input.manifest.persistent,
     effort: input.manifest.effort,
+    ...(input.manifest.model === undefined ? {} : { model: input.manifest.model }),
   });
   cfg.roleContentCache.getOrLoad(newRef.sha, input.repoDir);
   if (input.manifest.persistent && JSON.stringify(input.contract.triggers) !== baseTriggers) {
@@ -85,6 +86,7 @@ export function finalizeRoleCommit(
       description: input.manifest.description,
       persistent: input.manifest.persistent,
       effort: input.manifest.effort,
+      ...(input.manifest.model === undefined ? {} : { model: input.manifest.model }),
       no_new_version: true,
     },
   };

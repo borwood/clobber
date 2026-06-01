@@ -111,6 +111,9 @@ export function manifestFromRole(role: Role): RoleEditManifest {
     description: role.description,
     persistent: role.persistent,
     effort: role.effort,
+    // Optional (unlike effort): a role with no model default renders no `model:`
+    // frontmatter line, so its ROLE.md round-trips unchanged.
+    ...(role.model === undefined ? {} : { model: role.model }),
   };
 }
 

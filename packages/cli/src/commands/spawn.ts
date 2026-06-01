@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
-import { EffortLevelSchema, type BriefingFile, type EffortLevel } from "@clobber/shared";
+import { EffortLevelSchema, ModelSchema, type BriefingFile, type EffortLevel, type Model } from "@clobber/shared";
 import type { Command } from "../commands.ts";
 import { request } from "../http.ts";
 import { CliUsageError } from "../usage-error.ts";
@@ -18,6 +18,7 @@ interface ParsedArgs {
   readonly briefingDir?: string;
   readonly briefingPairs: readonly { readonly name: string; readonly path: string }[];
   readonly effort?: EffortLevel;
+  readonly model?: Model;
   readonly wakeProgram?: string;
 }
 
@@ -49,6 +50,7 @@ export function parseSpawnArgs(args: readonly string[]): ParsedArgs {
   let label: string | undefined;
   let briefingDir: string | undefined;
   let effort: EffortLevel | undefined;
+  let model: Model | undefined;
   let wakeProgram: string | undefined;
   const briefingPairs: { name: string; path: string }[] = [];
 
@@ -75,6 +77,16 @@ export function parseSpawnArgs(args: readonly string[]): ParsedArgs {
         );
       }
       effort = parsed.data;
+      i++;
+    } else if (tok === "--model") {
+      const raw = takeValue(args, i, "--model");
+      const parsed = ModelSchema.safeParse(raw);
+      if (!parsed.success) {
+        throw new CliUsageError(
+          `--model must be one of opus|sonnet|haiku, got: ${raw}`,
+        );
+      }
+      model = parsed.data;
       i++;
     } else if (tok === "--wake-program") {
       wakeProgram = takeValue(args, i, "--wake-program");
@@ -109,6 +121,7 @@ export function parseSpawnArgs(args: readonly string[]): ParsedArgs {
     ...(briefingDir === undefined ? {} : { briefingDir }),
     briefingPairs,
     ...(effort === undefined ? {} : { effort }),
+    ...(model === undefined ? {} : { model }),
     ...(wakeProgram === undefined ? {} : { wakeProgram }),
   };
 }
@@ -144,7 +157,7 @@ function walkDir(root: string, dir: string, out: BriefingFile[]): void {
   }
 }
 
-const SPAWN_USAGE = `usage: clobber spawn <role> --prompt <text> --label <slug> [--briefing-dir <path>] [--briefing <name:path>...] [--effort <level>] [--wake-program <name>]
+const SPAWN_USAGE = `usage: clobber spawn <role> --prompt <text> --label <slug> [--briefing-dir <path>] [--briefing <name:path>...] [--effort <level>] [--model <model>] [--wake-program <name>]
 
 Spawn a worker agent into the current workspace. The role must already
 exist in this workspace (see \`clobber roles list\`). Prints the new
@@ -164,6 +177,9 @@ Flags:
       --effort <level>           Reasoning depth: low|medium|high|xhigh|max.
                                  Overrides the role's default for this spawn.
                                  Omit to use the role default.
+      --model <model>            Model: opus|sonnet|haiku. Overrides the role's
+                                 default for this spawn. Omit to use the role
+                                 default (or claude's default if neither is set).
       --wake-program <name>      The opening move: composes that program's
                                  layer-C system addon and fires its kick. Use
                                  \`task\` for a worker that should read its desk
@@ -199,6 +215,9 @@ export const spawnCommand: Command = {
     }
     if (parsed.effort !== undefined) {
       body["effort"] = parsed.effort;
+    }
+    if (parsed.model !== undefined) {
+      body["model"] = parsed.model;
     }
     if (parsed.wakeProgram !== undefined) {
       body["wake_program"] = parsed.wakeProgram;
