@@ -4,9 +4,11 @@ import {
   parseRoleManifest,
   ROLE_FILE,
   ROLE_NAME_RE,
+  type Role,
   type RoleEditManifest,
   type Session,
 } from "@clobber/shared";
+import { commitResolves } from "./role-pin-audit.ts";
 import { deserializeRoleTree } from "./role-tree.ts";
 import {
   commitOnBranch,
@@ -39,6 +41,16 @@ import {
 // tools. `commit` advances the branch + pin with NO new role_versions row — the
 // no-demotion guarantee that closes #396.
 
+// #411 — surface a degraded checkout as a reasoned 4xx, logging the underlying
+// cause server-side so the failure is not a black box. The residual states this
+// guards (after #412 made `--apply` produce resolvable pins) all share one
+// remedy: an operator repins via `role-cutover --apply`. We never auto-repair.
+function degrade(status: number, message: string, cause: unknown): RouteResult {
+  if (cause instanceof Error) console.error(`[role-checkout] ${message}`, cause.stack);
+  else console.error(`[role-checkout] ${message}`);
+  return { status, body: { error: message } };
+}
+
 export function openCheckout(
   deps: RoleCheckoutDeps,
   session: Session,
@@ -55,9 +67,25 @@ export function openCheckout(
 
   // Lazy per-role cutover: a still-row-backed role is committed onto a <name>
   // branch on first edit, so the flow works whether or not the global cutover
-  // (#395) has run.
-  const role = ensureCommitPinned(deps, cfg, found, session.workspace_id);
-  const commit = role.current_commit!;
+  // (#395) has run. A role with no pin and no version to migrate from can't be
+  // repaired here — surface it as a reasoned 422, not a bare 500.
+  let role: Role;
+  try {
+    role = ensureCommitPinned(deps, cfg, found, session.workspace_id);
+  } catch (err) {
+    return degrade(
+      422,
+      `role ${found.name} has no resolvable commit pin: ${(err as Error).message}; run \`clobber roles role-cutover --apply\` to repin`,
+      err,
+    );
+  }
+
+  // Explicit guard replacing the `!`: ensureCommitPinned's contract guarantees a
+  // pin, so reaching here is a reasoned 422 — never a TypeError on `commit.sha`.
+  const commit = role.current_commit;
+  if (commit === undefined) {
+    return degrade(422, `role ${role.name} resolved without a commit pin`, undefined);
+  }
 
   const deskDir = deskFor(deps, session);
   const open = readSidecar(deskDir);
@@ -70,11 +98,32 @@ export function openCheckout(
     };
   }
 
+  let repoDir: string;
+  try {
+    repoDir = repoDirOf(deps, role);
+  } catch (err) {
+    return degrade(
+      422,
+      `no fork-repo is available for role ${role.name}; run \`clobber roles role-cutover --apply\` to provision it`,
+      err,
+    );
+  }
+
+  // The #412 disconnect's residual state: the DB pin's sha is absent from the
+  // on-disk fork-repo (repo regenerated, or pin minted elsewhere). The git ops
+  // below would bare-500 on it; classify it first with the audit's resolve check.
+  if (!commitResolves(repoDir, commit.sha)) {
+    return degrade(
+      409,
+      `role ${role.name} is pinned to ${commit.sha} but that commit does not resolve in its fork-repo (${repoDir}); run \`clobber roles role-cutover --apply\` to repin`,
+      undefined,
+    );
+  }
+
   // The working copy is edited on a LOCAL `<name>` branch (the design's editable
   // line, distinct from the shared `<name>-default` upstream ancestor). A seeded
   // role pinned to `<name>-default` gets its local `<name>` branch established
   // here at the pinned sha; `commit` advances it and repins the role to it.
-  const repoDir = repoDirOf(deps, role);
   const branch = role.name;
   ensureEditBranch(repoDir, branch, commit.sha);
 
