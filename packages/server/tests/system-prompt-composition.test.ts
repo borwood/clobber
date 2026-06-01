@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildHarness, teardown, turnProvider, type Harness } from "./_spawn-harness.ts";
 import { createRoleVersionStore } from "../src/role-version-store.ts";
-import { editRole } from "../src/edit-role.ts";
+import { writeRoleVersion } from "./_role-version-fixture.ts";
 
 // #210 — durable framing (layer A identity + relocated layer-B context) is
 // composed into the system prompt; the opening user message carries only the
@@ -60,5 +60,5 @@ function refSeed(h: Harness, roleId: string, name: string): void {
   const versions = createRoleVersionStore(h.db);
   const role = h.roles.get(roleId)!;
   const current = versions.get(role.current_version_id!)!;
-  editRole(h.db, role, current, { seedRefs: [{ name, enabled: true }] });
+  writeRoleVersion(h.db, role, current, { seedRefs: [{ name, enabled: true }] });
 }

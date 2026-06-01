@@ -6,17 +6,20 @@ import {
   SeedRefSchema,
   WakeProgramSchema,
 } from "@clobber/shared";
-import { type RoleEditPatch } from "../edit-role.ts";
-import { applyRoleEdit, triggersRequirePersistent } from "../apply-role-edit.ts";
+import { patchRoleThroughPin, triggersRequirePersistent } from "../role-commit.ts";
+import { deskFor } from "../role-checkout-context.ts";
+import type { RoleTreeContract } from "../role-tree.ts";
 import { resolveRoleByIdOrName } from "../resolve-role.ts";
-import { resolveCurrentRoleVersion } from "../resolve-role-content.ts";
 import { withAgentAuth } from "./_with-agent-auth.ts";
 import type { AgentRolesRouteDeps } from "./agent-roles.ts";
 
-// #216/#236 — `roles edit`: patch a role's content. system_prompt / skills /
-// allowed_tools / triggers / seed_refs / wake_programs bump a version row;
-// description is metadata-only and does not. Split out of agent-roles.ts to keep
-// each route module under the file-size ceiling.
+// #216/#236/#414 — `roles edit`: a non-interactive one-shot patch of a role's
+// content. It is the same git-pin substrate as `checkout`→`commit`, just without
+// the working-copy round-trip: the patch fields are applied to the role's current
+// contract in-memory and committed onto its branch (advancing the pin, NO new
+// version row, NO demotion). `description` is metadata-only and updates the
+// `roles` row without advancing the pin. Split out of agent-roles.ts to keep each
+// route module under the file-size ceiling.
 
 const EditBodySchema = z
   .object({
@@ -64,14 +67,15 @@ export function registerAgentRoleEditRoute(
           reply.code(400);
           return { error: "invalid edit request", issues: parsed.error.issues };
         }
-        const versionBumping =
-          parsed.data.system_prompt !== undefined ||
-          parsed.data.skills !== undefined ||
-          parsed.data.allowed_tools !== undefined ||
-          parsed.data.triggers !== undefined ||
-          parsed.data.seed_refs !== undefined ||
-          parsed.data.wake_programs !== undefined;
-        if (!versionBumping && parsed.data.description === undefined) {
+        const patch = parsed.data;
+        const advancesPin =
+          patch.system_prompt !== undefined ||
+          patch.skills !== undefined ||
+          patch.allowed_tools !== undefined ||
+          patch.triggers !== undefined ||
+          patch.seed_refs !== undefined ||
+          patch.wake_programs !== undefined;
+        if (!advancesPin && patch.description === undefined) {
           reply.code(400);
           return {
             error:
@@ -84,52 +88,42 @@ export function registerAgentRoleEditRoute(
           reply.code(404);
           return { error: `role not found: ${idOrName}` };
         }
-        if (triggersRequirePersistent(role, parsed.data.triggers)) {
+        if (triggersRequirePersistent(role, patch.triggers)) {
           reply.code(422);
           return { error: "triggers are only allowed on persistent roles" };
         }
-        if (parsed.data.description !== undefined) {
-          deps.roles.updateDescription(role.id, parsed.data.description);
-        }
-        const response: {
-          role_id: string;
-          version_id?: string;
-          version?: number;
-          description?: string;
-        } = { role_id: role.id };
-        if (parsed.data.description !== undefined) {
-          response.description = parsed.data.description;
-        }
-        if (versionBumping) {
-          const currentVersion = resolveCurrentRoleVersion(role, deps);
-          if (currentVersion === null) {
-            reply.code(500);
-            return { error: "role has no current version" };
+
+        // Metadata-only: `description` lives in the `roles` row, not the git tree,
+        // so a description-only edit updates it without advancing the pin.
+        if (!advancesPin) {
+          const description = patch.description;
+          if (description === undefined) {
+            throw new Error("unreachable: non-pin-advancing edit without a description");
           }
-          const patch: RoleEditPatch = {
-            ...(parsed.data.system_prompt === undefined
-              ? {}
-              : { system_prompt: parsed.data.system_prompt }),
-            ...(parsed.data.skills === undefined ? {} : { skills: parsed.data.skills }),
-            ...(parsed.data.allowed_tools === undefined
-              ? {}
-              : { allowed_tools: parsed.data.allowed_tools }),
-            ...(parsed.data.triggers === undefined
-              ? {}
-              : { triggers: parsed.data.triggers }),
-            ...(parsed.data.seed_refs === undefined
-              ? {}
-              : { seedRefs: parsed.data.seed_refs }),
-            ...(parsed.data.wake_programs === undefined
-              ? {}
-              : { wakePrograms: parsed.data.wake_programs }),
-          };
-          const result = applyRoleEdit(deps.db, deps.scheduler, role, currentVersion, patch);
-          response.version_id = result.version_id;
-          response.version = result.version;
+          deps.roles.updateDescription(role.id, description);
+          reply.code(200);
+          return { role_id: role.id, description };
         }
-        reply.code(200);
-        return response;
+
+        const deskDir = session.agent_id === undefined ? undefined : deskFor(deps, session);
+        const result = patchRoleThroughPin(deps, {
+          role,
+          workspaceId: session.workspace_id,
+          ...(deskDir === undefined ? {} : { deskDir }),
+          apply: (current: RoleTreeContract): RoleTreeContract => ({
+            ...current,
+            ...(patch.system_prompt === undefined ? {} : { systemPrompt: patch.system_prompt }),
+            ...(patch.skills === undefined ? {} : { skills: patch.skills }),
+            ...(patch.allowed_tools === undefined ? {} : { allowedTools: patch.allowed_tools }),
+            ...(patch.triggers === undefined ? {} : { triggers: patch.triggers }),
+            ...(patch.seed_refs === undefined ? {} : { seedRefs: patch.seed_refs }),
+            ...(patch.wake_programs === undefined ? {} : { wakePrograms: patch.wake_programs }),
+          }),
+          ...(patch.description === undefined ? {} : { description: patch.description }),
+          message: `edit ${role.name} via roles edit`,
+        });
+        reply.code(result.status);
+        return result.body;
       },
     ),
   );

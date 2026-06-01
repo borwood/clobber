@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
+import { mkdtempSync as _mkdtempSync, rmSync as _rmSync } from "node:fs";
+import { tmpdir as _tmpdir } from "node:os";
+import { join as _joinPath } from "node:path";
 import { PassThrough } from "node:stream";
 import { makeRepoFixture, type RepoFixture } from "./repo-fixture.ts";
 import { createServer } from "../src/server.ts";
@@ -32,7 +35,10 @@ function makeStdin(): NodeJS.WritableStream {
   return s;
 }
 
-function buildHarness(): Harness {
+// `withRepo` decides the substrate: WITHOUT a role repo a seeded role stays
+// row-backed (its `current_version` provenance is surfaced in the picker); WITH
+// one, seeding pins commits and edits go through the git pin (#414).
+function buildHarness({ withRepo = false }: { withRepo?: boolean } = {}): Harness {
   const db = createDatabase(":memory:");
   const tokens = createSessionTokenStore(db);
   let pidCounter = 9500;
@@ -66,7 +72,7 @@ function buildHarness(): Harness {
     hookUrl: "http://test.invalid/hook",
     apiBase: "http://test.invalid",
     cliEntry: "/dummy/cli.ts",
-  
+    ...(withRepo ? { roleRepoDir } : {}),
     dispatches: createTriggerDispatchStore(db),
     finalReportConsumerState: createFinalReportConsumerStateStore(db),
   });
@@ -79,13 +85,16 @@ async function teardown(h: Harness): Promise<void> {
 }
 
 let repo: RepoFixture;
+let roleRepoDir: string;
 
 beforeEach(() => {
   repo = makeRepoFixture("clobber-role-version-ui-");
+  roleRepoDir = _mkdtempSync(_joinPath(_tmpdir(), "clobber-rolerepo-"));
 });
 
 afterEach(() => {
   repo.cleanup();
+  _rmSync(roleRepoDir, { recursive: true, force: true });
 });
 
 interface Booted {
@@ -156,8 +165,8 @@ describe("GET /workspaces/:wid/roles surfaces current_version for the picker", (
     await teardown(h);
   });
 
-  it("reflects a bumped version after PATCH /agent/roles/:id", async () => {
-    const h = buildHarness();
+  it("a git-backed edit keeps the role commit-pinned; the picker omits current_version (provenance is the git pin)", async () => {
+    const h = buildHarness({ withRepo: true });
     const boot = await bootInWorkspace(h);
 
     const editRes = await h.server.inject({
@@ -173,11 +182,14 @@ describe("GET /workspaces/:wid/roles surfaces current_version for the picker", (
       url: `/workspaces/${boot.workspaceId}/roles`,
     });
     const assignments = list.json() as Array<{
-      role: { name: string };
+      role: { name: string; current_version_id?: string };
       current_version?: { version: number };
     }>;
     const worker = assignments.find((a) => a.role.name === "worker");
-    expect(worker!.current_version!.version).toBe(2);
+    expect(worker).toBeDefined();
+    // Commit-pinned: no version row, so the picker surfaces no version provenance.
+    expect(worker!.current_version).toBeUndefined();
+    expect(worker!.role.current_version_id).toBeUndefined();
 
     await teardown(h);
   });
@@ -213,8 +225,8 @@ describe("GET /sessions surfaces pinned + current role versions", () => {
     await teardown(h);
   });
 
-  it("pinned version stays at v1 after editing the role; current advances to v2", async () => {
-    const h = buildHarness();
+  it("a commit-pinned session omits version provenance; a git-backed edit does not disturb it", async () => {
+    const h = buildHarness({ withRepo: true });
     const boot = await bootInWorkspace(h);
 
     const spawnRes = await h.server.inject({
@@ -230,12 +242,13 @@ describe("GET /sessions surfaces pinned + current role versions", () => {
     expect(spawnRes.statusCode).toBe(200);
     const spawn = spawnRes.json() as { session_id: string };
 
-    await h.server.inject({
+    const editRes = await h.server.inject({
       method: "PATCH",
       url: `/agent/roles/${boot.workerRoleId}`,
       headers: { authorization: `Bearer ${boot.managerToken}` },
       payload: { system_prompt: "after edit" },
     });
+    expect(editRes.statusCode).toBe(200);
 
     const list = await h.server.inject({
       method: "GET",
@@ -248,8 +261,10 @@ describe("GET /sessions surfaces pinned + current role versions", () => {
     }>;
     const live = sessions.find((s) => s.session_id === spawn.session_id);
     expect(live).toBeDefined();
-    expect(live!.role_version!.version).toBe(1);
-    expect(live!.role_current_version!.version).toBe(2);
+    // A commit-pinned session carries no role_versions row, so the version
+    // provenance fields are absent; the git pin (role_commit_sha) is its lineage.
+    expect(live!.role_version).toBeUndefined();
+    expect(live!.role_current_version).toBeUndefined();
 
     await teardown(h);
   });

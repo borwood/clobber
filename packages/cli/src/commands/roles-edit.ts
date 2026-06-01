@@ -9,8 +9,11 @@ import { CliUsageError } from "../usage-error.ts";
 
 interface EditResponse {
   readonly role_id: string;
-  readonly version_id?: string;
-  readonly version?: number;
+  // #414 — a content edit advances the git pin (no version row). A
+  // description-only edit is metadata: it returns just role_id + description.
+  readonly branch?: string;
+  readonly sha?: string;
+  readonly no_new_version?: boolean;
   readonly description?: string;
 }
 
@@ -299,8 +302,8 @@ export async function runEdit(
     return 0;
   }
   const parts: string[] = [`edited ${flags.target}`];
-  if (result.version !== undefined && result.version_id !== undefined) {
-    parts.push(`-> v${result.version} (id: ${result.role_id}, version_id: ${result.version_id})`);
+  if (result.sha !== undefined && result.branch !== undefined) {
+    parts.push(`-> ${result.sha.slice(0, 8)} (branch ${result.branch})`);
   } else {
     parts.push(`(id: ${result.role_id})`);
   }

@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { PassThrough } from "node:stream";
 import { createServer } from "@clobber/server/server.ts";
+import { loadRoleContractAtCommit } from "@clobber/server/role-repo.ts";
 import { createDatabase } from "@clobber/server/db.ts";
 import { createEventStore } from "@clobber/server/event-store.ts";
 import { createWorkspaceStore } from "@clobber/server/workspace-store.ts";
@@ -33,6 +34,7 @@ interface Harness {
   baseUrl: string;
   repoPath: string;
   configDir: string;
+  roleRepoDir: string;
 }
 
 let harness: Harness;
@@ -40,6 +42,7 @@ let harness: Harness;
 beforeAll(async () => {
   const repoPath = mkdtempSync(join(tmpdir(), "clobber-ws-create-repo-"));
   writeFileSync(join(repoPath, ".git"), "gitdir: stub\n");
+  const roleRepoDir = mkdtempSync(join(tmpdir(), "clobber-ws-create-rolerepo-"));
 
   const db = createDatabase(":memory:");
   const app = createServer({
@@ -63,6 +66,7 @@ beforeAll(async () => {
     hookUrl: "http://test.invalid/hook",
     apiBase: "http://test.invalid",
     cliEntry: "/dummy/cli.ts",
+    roleRepoDir,
     dispatches: createTriggerDispatchStore(db),
     finalReportConsumerState: createFinalReportConsumerStateStore(db),
   });
@@ -86,7 +90,7 @@ beforeAll(async () => {
     readFileSync(join(EXAMPLE_DIR, "manager-triggers.json"), "utf8"),
   );
 
-  harness = { app, db, baseUrl, repoPath, configDir };
+  harness = { app, db, baseUrl, repoPath, configDir, roleRepoDir };
 });
 
 afterAll(async () => {
@@ -94,6 +98,7 @@ afterAll(async () => {
   harness.db.close();
   rmSync(harness.repoPath, { recursive: true, force: true });
   rmSync(harness.configDir, { recursive: true, force: true });
+  rmSync(harness.roleRepoDir, { recursive: true, force: true });
 });
 
 function captureStreams() {
@@ -116,17 +121,24 @@ function env(): NodeJS.ProcessEnv {
   return { CLOBBER_API_BASE: harness.baseUrl, CLOBBER_SESSION_TOKEN: "operator" };
 }
 
-function managerTriggers(): { version: number; triggers: unknown } {
+// #414 — the loader applies manager triggers through the git pin (no version
+// row); read them back from the contract at the manager's commit.
+function managerTriggers(): { commitPinned: boolean; triggers: readonly unknown[] } {
   const ws = harness.db
     .prepare("SELECT id FROM workspaces WHERE name = ?")
     .get("clobber-on-clobber") as { id: string };
   const role = harness.db
-    .prepare("SELECT current_version_id FROM roles WHERE name = ? AND workspace_id = ?")
-    .get("manager", ws.id) as { current_version_id: string };
-  const version = harness.db
-    .prepare("SELECT version, triggers_json FROM role_versions WHERE id = ?")
-    .get(role.current_version_id) as { version: number; triggers_json: string };
-  return { version: version.version, triggers: JSON.parse(version.triggers_json) };
+    .prepare(
+      "SELECT current_commit_sha AS sha, current_version_id AS versionId FROM roles WHERE name = ? AND workspace_id = ?",
+    )
+    .get("manager", ws.id) as { sha: string | null; versionId: string | null };
+  if (role.sha === null) throw new Error("manager is not commit-pinned");
+  const clone = join(dirname(harness.roleRepoDir), "role-repos", ws.id);
+  const dir = existsSync(join(clone, ".git")) ? clone : harness.roleRepoDir;
+  return {
+    commitPinned: role.versionId === null,
+    triggers: loadRoleContractAtCommit(dir, role.sha).triggers,
+  };
 }
 
 describe("clobber CLI — workspace create --config (#181)", () => {
@@ -146,15 +158,18 @@ describe("clobber CLI — workspace create --config (#181)", () => {
       .get("clobber-on-clobber") as { id: string } | null;
     expect(ws).not.toBeNull();
 
-    // Seam 2: manager-triggers.json applied onto the manager role-instance,
-    // bumping it off the seeded v1.
+    // Seam 2: manager-triggers.json applied onto the manager role through the git
+    // pin — the role stays commit-pinned (no demotion to a version row).
     const after = managerTriggers();
-    expect(after.version).toBe(2);
-    expect(after.triggers).toEqual([
-      { kind: "workspace-open", wake_program: "idle" },
-      { kind: "cron", expr: "0 9 * * *" },
-      { kind: "worker-done" },
-      { kind: "session-ended" },
-    ]);
+    expect(after.commitPinned).toBe(true);
+    expect(after.triggers).toEqual(
+      expect.arrayContaining([
+        { kind: "workspace-open", wake_program: "idle" },
+        { kind: "cron", expr: "0 9 * * *" },
+        { kind: "worker-done" },
+        { kind: "session-ended" },
+      ]),
+    );
+    expect(after.triggers).toHaveLength(4);
   });
 });

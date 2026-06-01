@@ -1,4 +1,7 @@
 import { PassThrough } from "node:stream";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { RoleTrigger } from "@clobber/shared";
 import { createServer } from "../src/server.ts";
 import { createDatabase } from "../src/db.ts";
@@ -38,9 +41,13 @@ export interface Harness {
   dispatches: ReturnType<typeof createTriggerDispatchStore>;
   clock: TestClock;
   spawns: SpawnLog[];
+  roleRepoDir: string;
 }
 
 export function buildHarness(initial: Date): Harness {
+  // #414 — `bootManager` PATCHes triggers, which now commits onto the role's git
+  // pin; the write-side requires git-as-truth (a role repo) to be configured.
+  const roleRepoDir = mkdtempSync(join(tmpdir(), "clobber-completion-wake-repo-"));
   const db = createDatabase(":memory:");
   const workspaces = createWorkspaceStore(db);
   const roles = createRoleStore(db);
@@ -92,14 +99,16 @@ export function buildHarness(initial: Date): Harness {
     dispatches,
     finalReportConsumerState,
     clock,
+    roleRepoDir,
   });
 
-  return { server, db, tokens, dispatches, clock, spawns };
+  return { server, db, tokens, dispatches, clock, spawns, roleRepoDir };
 }
 
 export async function teardown(h: Harness): Promise<void> {
   await h.server.close();
   h.db.close();
+  rmSync(h.roleRepoDir, { recursive: true, force: true });
 }
 
 export interface Booted {

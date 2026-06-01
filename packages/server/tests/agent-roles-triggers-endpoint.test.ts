@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
+import { mkdtempSync as _mkdtempSync, rmSync as _rmSync } from "node:fs";
+import { tmpdir as _tmpdir } from "node:os";
+import { join as _joinPath } from "node:path";
 import { PassThrough } from "node:stream";
 import { makeRepoFixture, type RepoFixture } from "./repo-fixture.ts";
 import { createServer } from "../src/server.ts";
@@ -72,6 +75,7 @@ function buildHarness(): Harness {
     hookUrl: "http://test.invalid/hook",
     apiBase: "http://test.invalid",
     cliEntry: "/dummy/cli.ts",
+    roleRepoDir,
   
     dispatches: createTriggerDispatchStore(db),
     finalReportConsumerState: createFinalReportConsumerStateStore(db),
@@ -85,13 +89,16 @@ async function teardown(h: Harness): Promise<void> {
 }
 
 let repo: RepoFixture;
+let roleRepoDir: string;
 
 beforeEach(() => {
   repo = makeRepoFixture("clobber-roles-triggers-");
+  roleRepoDir = _mkdtempSync(_joinPath(_tmpdir(), "clobber-rolerepo-"));
 });
 
 afterEach(() => {
   repo.cleanup();
+  _rmSync(roleRepoDir, { recursive: true, force: true });
 });
 
 interface Booted {
@@ -137,7 +144,7 @@ async function bootInWorkspace(h: Harness, repoPath: string): Promise<Booted> {
 }
 
 describe("PATCH /agent/roles/:idOrName — triggers", () => {
-  it("PATCH triggers on a persistent role bumps version and persists triggers", async () => {
+  it("PATCH triggers on a persistent role advances the pin and persists triggers", async () => {
     const h = buildHarness();
     const boot = await bootInWorkspace(h, repo.path);
 
@@ -152,8 +159,9 @@ describe("PATCH /agent/roles/:idOrName — triggers", () => {
       payload: { triggers },
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as { version: number; version_id: string };
-    expect(body.version).toBe(2);
+    const body = res.json() as { branch: string; sha: string; no_new_version: boolean };
+    expect(body.no_new_version).toBe(true);
+    expect(body.sha.length).toBeGreaterThan(0);
 
     const showRes = await h.server.inject({
       method: "GET",
@@ -243,9 +251,9 @@ describe("PATCH /agent/roles/:idOrName — triggers", () => {
       headers: { authorization: `Bearer ${boot.managerToken}` },
     });
     const detail = showRes.json() as {
-      current_version: { version: number; triggers: unknown; system_prompt: string };
+      current_version: { triggers: unknown; system_prompt: string };
     };
-    expect(detail.current_version.version).toBe(3);
+    // Editing system_prompt carries the existing triggers over (no field loss).
     expect(detail.current_version.triggers).toEqual(triggers);
     expect(detail.current_version.system_prompt).toBe("new prompt");
 

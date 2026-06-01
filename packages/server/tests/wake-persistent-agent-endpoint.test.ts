@@ -21,7 +21,7 @@ import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
 import { createFinalReportConsumerStateStore } from "../src/final-report-consumer.ts";
 import { seedWorkspaceRoles } from "../src/seed-workspace-roles.ts";
-import { editRole } from "../src/edit-role.ts";
+import { writeRoleVersion } from "./_role-version-fixture.ts";
 import type { WakeProgram } from "@clobber/shared";
 import type { AgentSpawner, AgentSpawnRequest } from "../src/types.ts";
 
@@ -307,5 +307,5 @@ function setManagerWakePrograms(
   const versions = createRoleVersionStore(h.db);
   const role = h.roles.get(roleId)!;
   const current = versions.get(role.current_version_id!)!;
-  editRole(h.db, role, current, { wakePrograms: programs });
+  writeRoleVersion(h.db, role, current, { wakePrograms: programs });
 }

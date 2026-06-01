@@ -11,13 +11,12 @@ import {
 import { commitResolves } from "./role-pin-audit.ts";
 import { deserializeRoleTree } from "./role-tree.ts";
 import {
-  commitOnBranch,
   ensureEditBranch,
   materializeCheckout,
   readCheckout,
 } from "./role-checkout-repo.ts";
 import { revParse } from "./role-git.ts";
-import { loadRoleContractAtCommit } from "./role-repo.ts";
+import { finalizeRoleCommit } from "./role-commit.ts";
 import { resolveRoleByIdOrName } from "./resolve-role.ts";
 import {
   baselineTree,
@@ -232,41 +231,19 @@ export function commitCheckout(
   } catch (err) {
     return { status: 400, body: { error: `invalid role tree: ${(err as Error).message}` } };
   }
-  if (contract.triggers.length > 0 && !manifest.persistent) {
-    return { status: 422, body: { error: "triggers are only allowed on persistent roles" } };
-  }
-
-  const baseTriggers = JSON.stringify(loadRoleContractAtCommit(repoDir, sidecar.base_sha).triggers);
   const message = opts.message ?? `edit ${role.name} via working copy`;
-  const newRef = commitOnBranch(repoDir, sidecar.branch, contract, message);
-
-  // Re-sync the pin + index/cache immediately after the commit returns the sha,
-  // so a failure after this point leaves a coherent row. pinCommit is idempotent
-  // (re-running finalize from the tip is safe).
-  deps.roles.pinCommit(role.id, newRef);
-  deps.roles.syncManifestColumns(role.id, {
-    description: manifest.description,
-    persistent: manifest.persistent,
-    effort: manifest.effort,
+  const result = finalizeRoleCommit(deps, cfg, {
+    role,
+    repoDir,
+    branch: sidecar.branch,
+    baseSha: sidecar.base_sha,
+    contract,
+    manifest,
+    message,
   });
-  cfg.roleContentCache.getOrLoad(newRef.sha, repoDir);
-  if (manifest.persistent && JSON.stringify(contract.triggers) !== baseTriggers) {
-    deps.scheduler.reloadRole(role.id);
-  }
 
-  clearCheckout(deskDir);
-  return {
-    status: 200,
-    body: {
-      role_id: role.id,
-      branch: newRef.branch,
-      sha: newRef.sha,
-      description: manifest.description,
-      persistent: manifest.persistent,
-      effort: manifest.effort,
-      no_new_version: true,
-    },
-  };
+  if (result.status === 200) clearCheckout(deskDir);
+  return result;
 }
 
 export function discardCheckout(deps: RoleCheckoutDeps, session: Session): RouteResult {

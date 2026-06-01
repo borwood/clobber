@@ -301,6 +301,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     roleVersions: opts.roleVersions,
     workspaces: opts.workspaces,
     agentStatusLog: opts.agentStatusLog,
+    scheduler,
     ...roleEmbodiment,
   });
   registerAgentAskRoutes(app, {

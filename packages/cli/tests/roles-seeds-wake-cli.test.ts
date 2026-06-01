@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { PassThrough } from "node:stream";
 import { createServer } from "@clobber/server/server.ts";
+import { loadRoleContractAtCommit } from "@clobber/server/role-repo.ts";
 import { createDatabase } from "@clobber/server/db.ts";
 import { createEventStore } from "@clobber/server/event-store.ts";
 import { createWorkspaceStore } from "@clobber/server/workspace-store.ts";
@@ -33,6 +34,7 @@ interface Harness {
   workerRoleId: string;
   repoPath: string;
   tmpDir: string;
+  roleRepoDir: string;
 }
 
 let harness: Harness;
@@ -47,6 +49,7 @@ beforeAll(async () => {
   const repoPath = mkdtempSync(join(tmpdir(), "clobber-roles-seeds-cli-"));
   writeFileSync(join(repoPath, ".git"), "gitdir: stub\n");
   const tmpDir = mkdtempSync(join(tmpdir(), "clobber-roles-seeds-files-"));
+  const roleRepoDir = mkdtempSync(join(tmpdir(), "clobber-roles-seeds-repo-"));
   const db = createDatabase(":memory:");
   const workspaces = createWorkspaceStore(db);
   const roles = createRoleStore(db);
@@ -88,6 +91,7 @@ beforeAll(async () => {
     hookUrl: "http://test.invalid/hook",
     apiBase: "http://test.invalid",
     cliEntry: "/dummy/cli.ts",
+    roleRepoDir,
     dispatches: createTriggerDispatchStore(db),
     finalReportConsumerState: createFinalReportConsumerStateStore(db),
   });
@@ -132,6 +136,7 @@ beforeAll(async () => {
     workerRoleId: workerRow.id,
     repoPath,
     tmpDir,
+    roleRepoDir,
   };
 });
 
@@ -140,6 +145,7 @@ afterAll(async () => {
   harness.db.close();
   rmSync(harness.repoPath, { recursive: true, force: true });
   rmSync(harness.tmpDir, { recursive: true, force: true });
+  rmSync(harness.roleRepoDir, { recursive: true, force: true });
 });
 
 function captureStreams() {
@@ -164,22 +170,22 @@ function envFor(token: string): NodeJS.ProcessEnv {
   };
 }
 
-function readWorker(): { version: number; seed_refs: SeedRef[]; wake_programs: WakeProgram[] } {
+// #414 — the worker is commit-pinned; seed/wake-program edits advance the pin.
+// Read seed_refs + wake_programs from the contract at the current pin (the clone
+// once it exists, else the upstream repo at the seeded sha).
+function readWorker(): {
+  sha: string;
+  seed_refs: readonly SeedRef[];
+  wake_programs: readonly WakeProgram[];
+} {
   const row = harness.db
-    .prepare(
-      `SELECT v.version, v.seed_refs_json, v.wake_programs_json
-       FROM role_versions v JOIN roles r ON r.current_version_id = v.id
-       WHERE r.id = ?`,
-    )
-    .get(harness.workerRoleId) as
-    | { version: number; seed_refs_json: string; wake_programs_json: string }
-    | null;
-  if (row === null) throw new Error("no version row");
-  return {
-    version: row.version,
-    seed_refs: JSON.parse(row.seed_refs_json) as SeedRef[],
-    wake_programs: JSON.parse(row.wake_programs_json) as WakeProgram[],
-  };
+    .prepare("SELECT current_commit_sha AS sha FROM roles WHERE id = ?")
+    .get(harness.workerRoleId) as { sha: string | null };
+  if (row.sha === null) throw new Error("worker is not commit-pinned");
+  const clone = join(dirname(harness.roleRepoDir), "role-repos", harness.workspaceId);
+  const dir = existsSync(join(clone, ".git")) ? clone : harness.roleRepoDir;
+  const contract = loadRoleContractAtCommit(dir, row.sha);
+  return { sha: row.sha, seed_refs: contract.seedRefs, wake_programs: contract.wakePrograms };
 }
 
 async function cli(args: readonly string[]) {
@@ -194,13 +200,13 @@ async function cli(args: readonly string[]) {
 }
 
 describe("clobber CLI — roles seeds", () => {
-  it("adds a seed ref and bumps the version", async () => {
+  it("adds a seed ref and advances the pin", async () => {
     const before = readWorker();
     const r = await cli(["roles", "seeds", "worker", "add", "office-manifest"]);
     expect(r.code).toBe(0);
 
     const after = readWorker();
-    expect(after.version).toBe(before.version + 1);
+    expect(after.sha).not.toBe(before.sha);
     expect(after.seed_refs).toContainEqual({ name: "office-manifest", enabled: true });
   });
 
@@ -252,7 +258,7 @@ describe("clobber CLI — roles wake-programs", () => {
     expect(r.code).toBe(0);
 
     const after = readWorker();
-    expect(after.version).toBe(before.version + 1);
+    expect(after.sha).not.toBe(before.sha);
     expect(after.wake_programs).toContainEqual({
       name: "triage",
       system: "Regardless of the first message, triage the queue first.",

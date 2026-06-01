@@ -22,6 +22,7 @@ import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
 import { createFinalReportConsumerStateStore } from "../src/final-report-consumer.ts";
 import { loadRoleContractAtCommit } from "../src/role-repo.ts";
+import { roleContractToSnapshot } from "../src/role-tree.ts";
 import { commitOnBranch } from "../src/role-checkout-repo.ts";
 import { revParse } from "../src/role-git.ts";
 import type { AgentSpawner, SpawnedAgentInfo } from "../src/types.ts";
@@ -131,6 +132,25 @@ function cacheHas(h: Harness, sha: string): boolean {
 
 function cloneDirFor(wsId: string): string {
   return join(dirname(roleRepoDir), "role-repos", wsId);
+}
+
+// #414 — edits no longer demote, so to exercise the lazy cutover we synthesize a
+// pre-#395 row-backed role directly: snapshot its committed content into a
+// version row and clear the commit pin (the state a not-yet-migrated role is in).
+function demoteToRowBacked(h: Harness, workerId: string): void {
+  const sha = pinState(h, workerId).sha;
+  if (sha === null) throw new Error("expected a seeded commit pin to snapshot from");
+  const snapshot = roleContractToSnapshot(loadRoleContractAtCommit(roleRepoDir, sha));
+  const created = createRoleVersionStore(h.db).create({
+    role_id: workerId,
+    version: 1,
+    ...snapshot,
+  });
+  h.db
+    .prepare(
+      "UPDATE roles SET current_version_id = ?, current_commit_branch = NULL, current_commit_sha = NULL WHERE id = ?",
+    )
+    .run(created.id, workerId);
 }
 
 async function createWorkspace(h: Harness, repoPath: string): Promise<string> {
@@ -304,14 +324,8 @@ describe("#216 role working-copy commit (closes #396)", () => {
     const workerId = roleId(h, "worker", wsId);
     const { token } = await spawnSession(h, wsId, roleId(h, "manager", wsId));
 
-    // Demote the worker to row-backed via the existing edit path, then check out.
-    const edit = await h.server.inject({
-      method: "PATCH",
-      url: `/agent/roles/${workerId}`,
-      headers: { authorization: `Bearer ${token}` },
-      payload: { system_prompt: "row-backed prompt" },
-    });
-    expect(edit.statusCode).toBe(200);
+    // Put the worker into the pre-#395 row-backed state, then check out.
+    demoteToRowBacked(h, workerId);
     expect(pinState(h, workerId).versionId).not.toBeNull();
     expect(pinState(h, workerId).sha).toBeNull();
 

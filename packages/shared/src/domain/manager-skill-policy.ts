@@ -34,11 +34,13 @@ export const SelfSkillsListResponseSchema = z.object({
 export type SelfSkillsListResponse = z.infer<typeof SelfSkillsListResponseSchema>;
 
 // Response shape of POST /agent/self-skills and DELETE
-// /agent/self-skills/:name. Both bump the role to a new version and
-// return the post-mutation granted list.
+// /agent/self-skills/:name. #414 — both ADVANCE THE GIT PIN (commit on the role
+// branch, no new version row) and return the post-mutation granted list.
 export const SelfSkillsMutationResponseSchema = z.object({
   role_id: z.string().uuid(),
-  version: z.number().int().positive(),
+  branch: z.string().min(1),
+  sha: z.string().min(1),
+  no_new_version: z.literal(true),
   granted: z.array(RoleSkillSchema),
 });
 export type SelfSkillsMutationResponse = z.infer<

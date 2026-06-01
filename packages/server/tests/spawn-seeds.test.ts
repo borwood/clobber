@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { SeedDefinition, SeedRef } from "@clobber/shared";
 import { buildHarness, teardown, turnProvider, type Harness } from "./_spawn-harness.ts";
 import { createRoleVersionStore } from "../src/role-version-store.ts";
-import { editRole } from "../src/edit-role.ts";
+import { writeRoleVersion } from "./_role-version-fixture.ts";
 
 // #211 — layer B is a real seed subsystem: role-scoped, ordered, per-seed
 // toggleable references resolving against a workspace seed catalog. A static
@@ -22,7 +22,7 @@ function setSeedRefs(h: Harness, roleId: string, refs: readonly SeedRef[]): void
   const versions = createRoleVersionStore(h.db);
   const role = h.roles.get(roleId)!;
   const current = versions.get(role.current_version_id!)!;
-  editRole(h.db, role, current, { seedRefs: refs });
+  writeRoleVersion(h.db, role, current, { seedRefs: refs });
 }
 
 async function spawnAndReadSystem(h: Harness, roleId: string): Promise<string> {

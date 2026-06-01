@@ -8,8 +8,10 @@ import { CliUsageError } from "../usage-error.ts";
 
 interface PatchResult {
   readonly role_id: string;
-  readonly version_id?: string;
-  readonly version?: number;
+  // #414 — seed edits advance the git pin (no version row).
+  readonly branch: string;
+  readonly sha: string;
+  readonly no_new_version: boolean;
 }
 
 async function fetchSeedRefs(
@@ -96,7 +98,7 @@ export async function runSeeds(
 
   const result = await patchSeedRefs(ctx, target, next);
   ctx.stdout.write(
-    `roles seeds ${action} ${name} -> v${result.version} (${target})\n`,
+    `roles seeds ${action} ${name} -> ${result.sha.slice(0, 8)} (${target})\n`,
   );
   return 0;
 }

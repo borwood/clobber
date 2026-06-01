@@ -21,7 +21,7 @@ import { createRoleContractRefusalStore } from "../src/role-contract-refusal-sto
 import { EMPTY_ROLE_CONTRACT_MIGRATOR } from "../src/role-contract-compat.ts";
 import { createTriggerScheduler } from "../src/trigger-scheduler.ts";
 import { createTestClock, type TestClock } from "../src/clock.ts";
-import { editRole } from "../src/edit-role.ts";
+import { writeRoleVersion } from "./_role-version-fixture.ts";
 import { seedWorkspaceRoles } from "../src/seed-workspace-roles.ts";
 import { ensureUpstreamRoleRepo, commitContractOnBranch } from "../src/role-repo.ts";
 import { createRoleContentCache } from "../src/role-content-cache.ts";
@@ -199,19 +199,19 @@ function getCurrentVersion(h: Harness, roleId: string): RoleVersion {
 function setManagerCron(h: Harness, expr: string): void {
   const role = h.roles.get(h.managerRoleId) as Role;
   const cur = getCurrentVersion(h, h.managerRoleId);
-  editRole(h.db, role, cur, { triggers: [{ kind: "cron", expr }] });
+  writeRoleVersion(h.db, role, cur, { triggers: [{ kind: "cron", expr }] });
 }
 
 function setManagerWebhook(h: Harness, path: string): void {
   const role = h.roles.get(h.managerRoleId) as Role;
   const cur = getCurrentVersion(h, h.managerRoleId);
-  editRole(h.db, role, cur, { triggers: [{ kind: "webhook", path }] });
+  writeRoleVersion(h.db, role, cur, { triggers: [{ kind: "webhook", path }] });
 }
 
 function setManagerWorkspaceOpen(h: Harness, debounceMs?: number): void {
   const role = h.roles.get(h.managerRoleId) as Role;
   const cur = getCurrentVersion(h, h.managerRoleId);
-  editRole(h.db, role, cur, {
+  writeRoleVersion(h.db, role, cur, {
     triggers: [
       debounceMs === undefined
         ? { kind: "workspace-open" }
@@ -455,7 +455,7 @@ describe("TriggerScheduler — cron firing", () => {
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
     const role = h.roles.get(h.managerRoleId) as Role;
     const cur = getCurrentVersion(h, h.managerRoleId);
-    editRole(h.db, role, cur, {
+    writeRoleVersion(h.db, role, cur, {
       triggers: [
         { kind: "file-watch", glob: "**/*.ts" },
         { kind: "issue-assigned" },
@@ -533,7 +533,7 @@ describe("TriggerScheduler — per-workspace trigger overrides", () => {
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
     const role = h.roles.get(h.managerRoleId) as Role;
     const cur = getCurrentVersion(h, h.managerRoleId);
-    editRole(h.db, role, cur, {
+    writeRoleVersion(h.db, role, cur, {
       triggers: [
         { kind: "cron", expr: "0 9 * * *" },
         { kind: "cron", expr: "0 10 * * *" },
@@ -617,7 +617,7 @@ describe("TriggerScheduler — webhook firing", () => {
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
     const role = h.roles.get(h.managerRoleId) as Role;
     const cur = getCurrentVersion(h, h.managerRoleId);
-    editRole(h.db, role, cur, {
+    writeRoleVersion(h.db, role, cur, {
       triggers: [{ kind: "webhook", path: "/hooks/x" }],
     });
 
@@ -641,7 +641,7 @@ describe("TriggerScheduler — webhook firing", () => {
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
     const role = h.roles.get(h.managerRoleId) as Role;
     const cur = getCurrentVersion(h, h.managerRoleId);
-    editRole(h.db, role, cur, {
+    writeRoleVersion(h.db, role, cur, {
       triggers: [{ kind: "webhook", path: "/hooks/x" }],
     });
 
@@ -658,7 +658,7 @@ describe("TriggerScheduler — webhook firing", () => {
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
     const role = h.roles.get(h.managerRoleId) as Role;
     const cur = getCurrentVersion(h, h.managerRoleId);
-    editRole(h.db, role, cur, {
+    writeRoleVersion(h.db, role, cur, {
       triggers: [{ kind: "webhook", path: "/hooks/x" }],
     });
 
@@ -703,7 +703,7 @@ describe("TriggerScheduler — webhook firing", () => {
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
     const role = h.roles.get(h.managerRoleId) as Role;
     const cur = getCurrentVersion(h, h.managerRoleId);
-    editRole(h.db, role, cur, {
+    writeRoleVersion(h.db, role, cur, {
       triggers: [{ kind: "webhook", path: "/hooks/x" }],
     });
     const secondAgent = h.agents.create({
@@ -747,7 +747,7 @@ describe("TriggerScheduler — webhook firing", () => {
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
     const role = h.roles.get(h.managerRoleId) as Role;
     const cur = getCurrentVersion(h, h.managerRoleId);
-    editRole(h.db, role, cur, {
+    writeRoleVersion(h.db, role, cur, {
       triggers: [{ kind: "webhook", path: "/hooks/gh-pr" }],
     });
 
@@ -774,7 +774,7 @@ describe("TriggerScheduler — webhook firing", () => {
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
     const role = h.roles.get(h.managerRoleId) as Role;
     const cur = getCurrentVersion(h, h.managerRoleId);
-    editRole(h.db, role, cur, {
+    writeRoleVersion(h.db, role, cur, {
       triggers: [{ kind: "webhook", path: "/hooks/gh-pr" }],
     });
 
@@ -1086,13 +1086,13 @@ describe("TriggerScheduler — workspace-open firing", () => {
 function setManagerWakePrograms(h: Harness, programs: readonly WakeProgram[]): void {
   const role = h.roles.get(h.managerRoleId) as Role;
   const cur = getCurrentVersion(h, h.managerRoleId);
-  editRole(h.db, role, cur, { wakePrograms: programs });
+  writeRoleVersion(h.db, role, cur, { wakePrograms: programs });
 }
 
 function setManagerCronWithProgram(h: Harness, expr: string, wakeProgram: string): void {
   const role = h.roles.get(h.managerRoleId) as Role;
   const cur = getCurrentVersion(h, h.managerRoleId);
-  editRole(h.db, role, cur, { triggers: [{ kind: "cron", expr, wake_program: wakeProgram }] });
+  writeRoleVersion(h.db, role, cur, { triggers: [{ kind: "cron", expr, wake_program: wakeProgram }] });
 }
 
 describe("TriggerScheduler — wake-program mapping (#213)", () => {
@@ -1165,7 +1165,7 @@ describe("TriggerScheduler — wake-program mapping (#213)", () => {
 
     const h = makeHarness(new Date("2026-05-05T09:00:00.000Z"));
     const role = h.roles.get(h.managerRoleId) as Role;
-    editRole(h.db, role, getCurrentVersion(h, h.managerRoleId), { triggers: [workspaceOpen] });
+    writeRoleVersion(h.db, role, getCurrentVersion(h, h.managerRoleId), { triggers: [workspaceOpen] });
     h.scheduler.start();
 
     const result = await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined);

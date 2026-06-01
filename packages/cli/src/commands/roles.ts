@@ -125,7 +125,7 @@ export const rolesCommand: Command = {
     "  roles list [--json]                          List workspace roles with version metadata.\n" +
     "  roles show <name|id> [--json]                Show full role + current version + history.\n" +
     "  roles fork <source-name|id> <new-name> [--json]  Alias for `checkout -b <new-name> --from <source>`.\n" +
-    "  roles edit <name|id> [flags] [--json]        Patch a role; system_prompt/skills/allowed_tools/triggers bump version, description does not.\n" +
+    "  roles edit <name|id> [flags] [--json]        One-shot patch a role; system_prompt/skills/allowed_tools/triggers/seeds/wake-programs advance the git pin (no version row), description is metadata-only.\n" +
     "  roles delete <name|id> [--force] [--json]    Remove a role + its fork-branch + config refs. Refused for persistent / spawned-agent roles (use --force); a live session is a hard stop (reap it first).\n" +
     "  roles ceiling <name|id> <max> [--json]       Set the spawn ceiling for this role in this workspace.\n" +
     "  roles seeds <name|id> [add|enable|disable <seed> [--disabled]]  List a role's seed refs, or add/toggle one.\n" +
@@ -143,7 +143,7 @@ export const rolesCommand: Command = {
     "  --allowed-tools tool1,tool2    Replace the allowed tool list.\n" +
     "  --add-skill name=FILE          Add (or replace) a skill (repeatable).\n" +
     "  --remove-skill name            Remove a skill by name (repeatable).\n" +
-    "  --description TEXT             Replace the role description (does not bump version).\n" +
+    "  --description TEXT             Replace the role description (metadata-only; does not advance the pin).\n" +
     "  --description-file FILE        Replace the role description from a file.\n" +
     "  --triggers JSON                Replace triggers (JSON array of trigger objects, persistent roles only).\n" +
     "  --triggers-file FILE           Replace triggers from a JSON file.\n\n" +
