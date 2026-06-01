@@ -144,13 +144,13 @@ describe("GET /fs/browse", () => {
     expect(readme.isDir).toBe(false);
   });
 
-  it("includeFiles=true does not change dir-only behavior when false (default unchanged)", async () => {
+  it("default (no includeFiles param) remains dir-only — files not returned", async () => {
     mkdirSync(join(scratch, "subdir"));
     writeFileSync(join(scratch, "readme.md"), "hello");
 
     const res = await app.inject({
       method: "GET",
-      url: `/fs/browse?path=${encodeURIComponent(scratch)}&includeFiles=false`,
+      url: `/fs/browse?path=${encodeURIComponent(scratch)}`,
     });
     expect(res.statusCode).toBe(200);
     const body = res.json() as BrowseDirResponse;

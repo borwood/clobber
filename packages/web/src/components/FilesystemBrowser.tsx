@@ -28,7 +28,7 @@ export function FilesystemBrowser(props: Props) {
     setLoading(true);
     setError(null);
     try {
-      const next = await api.browseFs(path, true);
+      const next = await api.browseFs(path, props.mode === "file");
       setData(next);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
