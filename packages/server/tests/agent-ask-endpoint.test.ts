@@ -39,7 +39,7 @@ function makeStdin(): NodeJS.WritableStream {
   return s;
 }
 
-function buildHarness(askTimeoutMs = 5_000): Harness {
+function buildHarness(askPollWindowMs = 5_000): Harness {
   const db = createDatabase(":memory:");
   const workspaces = createWorkspaceStore(db);
   const roles = createRoleStore(db);
@@ -78,7 +78,7 @@ const roleVersions = createRoleVersionStore(db);
     agentStatusLog,
     agentQuestions: questions,
     agentQuestionWaiter: questionWaiter,
-    askTimeoutMs,
+    askPollWindowMs,
     spawner,
     hookUrl: "http://test.invalid/hook",
     apiBase: "http://test.invalid",
@@ -202,7 +202,7 @@ describe("POST /agent/ask", () => {
     await teardown(h);
   });
 
-  it("returns a structured timeout response when the deadline passes", async () => {
+  it("does NOT expire: a poll window with no answer returns resolution=pending and leaves the question open", async () => {
     const h = buildHarness(50);
     const boot = await bootAgent(h);
 
@@ -213,11 +213,85 @@ describe("POST /agent/ask", () => {
       payload: { question: "anyone home?" },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json() as unknown).toEqual({ resolution: "timed_out" });
+    const body = res.json() as { resolution: string; question_id?: string };
+    expect(body.resolution).toBe("pending");
+    expect(typeof body.question_id).toBe("string");
 
-    // Row was flipped to timed_out so the UI doesn't show a stale prompt.
+    // The question is STILL open (never flipped to timed_out) — the human can
+    // answer it whenever they get to it.
     const openAfter = h.questions.getOpenForSession(boot.sessionId);
-    expect(openAfter).toBeNull();
+    expect(openAfter).not.toBeNull();
+    expect(openAfter!.status).toBe("pending");
+    expect(openAfter!.id).toBe(body.question_id!);
+    await teardown(h);
+  });
+
+  it("a late answer (after the poll window) still resolves via GET /agent/ask/:id (no expiry)", async () => {
+    const h = buildHarness(50);
+    const boot = await bootAgent(h);
+
+    // POST returns pending once the 50ms window elapses with no answer.
+    const postRes = await h.server.inject({
+      method: "POST",
+      url: "/agent/ask",
+      headers: { authorization: `Bearer ${boot.token}` },
+      payload: { question: "ship?", options: ["yes", "no"] },
+    });
+    const { resolution, question_id } = postRes.json() as {
+      resolution: string;
+      question_id: string;
+    };
+    expect(resolution).toBe("pending");
+
+    // The human answers well after the window passed — it must NOT fire into the void.
+    await Bun.sleep(120);
+    const answerRes = await h.server.inject({
+      method: "POST",
+      url: `/sessions/${boot.sessionId}/answer`,
+      payload: { question_id, answer: "yes" },
+    });
+    expect(answerRes.statusCode).toBe(200);
+
+    // The CLI's next poll picks the late answer straight up.
+    const pollRes = await h.server.inject({
+      method: "GET",
+      url: `/agent/ask/${question_id}`,
+      headers: { authorization: `Bearer ${boot.token}` },
+    });
+    expect(pollRes.statusCode).toBe(200);
+    expect(pollRes.json() as unknown).toEqual({ resolution: "answered", answer: "yes" });
+    await teardown(h);
+  });
+
+  it("GET /agent/ask/:id 404s when the question belongs to another session", async () => {
+    const h = buildHarness(50);
+    const a = await bootAgent(h);
+
+    const postRes = await h.server.inject({
+      method: "POST",
+      url: "/agent/ask",
+      headers: { authorization: `Bearer ${a.token}` },
+      payload: { question: "?" },
+    });
+    const { question_id } = postRes.json() as { question_id: string };
+
+    // A second agent must not be able to poll the first agent's question.
+    const otherRole = h.roles.create({ name: "worker", persistent: false });
+    h.workspaceRoles.setCeiling(a.workspaceId, otherRole.id, 5);
+    const spawnRes = await h.server.inject({
+      method: "POST",
+      url: "/spawn",
+      payload: { workspace_id: a.workspaceId, role_id: otherRole.id, prompt: "go", label: "boot" },
+    });
+    const otherId = (spawnRes.json() as { session_id: string }).session_id;
+    const otherToken = h.tokens.mint(otherId);
+
+    const res = await h.server.inject({
+      method: "GET",
+      url: `/agent/ask/${question_id}`,
+      headers: { authorization: `Bearer ${otherToken}` },
+    });
+    expect(res.statusCode).toBe(404);
     await teardown(h);
   });
 

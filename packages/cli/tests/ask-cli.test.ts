@@ -91,7 +91,7 @@ const roleVersions = createRoleVersionStore(db);
     agentStatusLog,
     agentQuestions: questions,
     agentQuestionWaiter: createAgentQuestionWaiter(),
-    askTimeoutMs: 200,
+    askPollWindowMs: 80,
     spawner,
     hookUrl: "http://test.invalid/hook",
     apiBase: "http://test.invalid",
@@ -208,17 +208,45 @@ describe("clobber CLI — ask", () => {
     expect(s.out().trim()).toBe("merge");
   });
 
-  it("exits 1 with a stderr hint when the wait times out (no human answer)", async () => {
+  it("does NOT expire: a late answer (well after a poll window) still resolves, exit 0 with the answer", async () => {
     const s = captureStreams();
-    const code = await run({
+    const askPromise = run({
       argv: ["ask", "anyone awake?"],
       env: env(),
       stdout: s.stdout,
       stderr: s.stderr,
     });
-    expect(code).toBe(1);
-    expect(s.out()).toBe("");
-    expect(s.err()).toMatch(/timed out/i);
+    // Answer only after several server poll windows (80ms each) have elapsed —
+    // under the old timeout this would have already failed with exit 1.
+    await Bun.sleep(300);
+    await answerOpenQuestion("eventually yes");
+    const code = await askPromise;
+    expect(code).toBe(0);
+    expect(s.out().trim()).toBe("eventually yes");
+    expect(s.err()).toBe("");
+  });
+
+  it("a genuinely undeliverable ask returns a structured, trustable result (exit 0, NOT a bare error exit)", async () => {
+    // Point the CLI at a dead address so the ask can never be delivered. With a
+    // tiny retry budget it gives up quickly and must NOT poison the channel: no
+    // exit 1, no thrown error — a clear notice telling the agent the channel is
+    // fine and it may proceed.
+    const s = captureStreams();
+    const code = await run({
+      argv: ["ask", "is anyone there?"],
+      env: {
+        CLOBBER_API_BASE: "http://127.0.0.1:1",
+        CLOBBER_SESSION_TOKEN: "dummy-token",
+        CLOBBER_ASK_RETRY_BUDGET_MS: "120",
+        CLOBBER_ASK_RETRY_INTERVAL_MS: "20",
+      },
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(0);
+    const out = s.out().toLowerCase();
+    expect(out).toMatch(/no answer/);
+    expect(out).toMatch(/not a tool failure|channel/);
   });
 
   it("exits 2 when the question argument is missing", async () => {

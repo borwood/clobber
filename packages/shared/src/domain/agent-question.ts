@@ -71,6 +71,19 @@ export const AgentAnswerRequestSchema = z.object({
 export type AgentAnswerRequest = z.infer<typeof AgentAnswerRequestSchema>;
 
 /**
+ * The wire shape of a blocking-ask poll. A blocking ask never expires (#241):
+ * `pending` means "still waiting — re-poll", carrying the durable question id
+ * the CLI re-attaches to; `answered`/`cancelled` are the two terminals. There is
+ * deliberately no `timed_out` here — a poll window elapsing is not a failure.
+ */
+export const AgentAskResponseSchema = z.discriminatedUnion("resolution", [
+  z.object({ resolution: z.literal("answered"), answer: z.string().min(1) }),
+  z.object({ resolution: z.literal("cancelled") }),
+  z.object({ resolution: z.literal("pending"), question_id: z.string().min(1) }),
+]);
+export type AgentAskResponse = z.infer<typeof AgentAskResponseSchema>;
+
+/**
  * One question's answer as the human submitted it. `raw` is the same encoding
  * the single-question widget has always used (a bare label, a JSON array of
  * labels for multi-select, or free text). `notes` carries optional free-text

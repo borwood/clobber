@@ -6,7 +6,7 @@ import {
   type PreToolUsePayload,
 } from "@clobber/shared";
 import {
-  askAndAwaitAnswer,
+  awaitAnswerBlocking,
   type AskResolution,
 } from "./agent-question-blocking.ts";
 import type { AgentQuestionStore } from "./agent-question-store.ts";
@@ -49,8 +49,17 @@ export interface AskBridgeResponse {
 export interface AskBridgeDeps {
   readonly agentQuestions: AgentQuestionStore;
   readonly agentQuestionWaiter: AgentQuestionWaiter;
-  readonly askTimeoutMs: number;
+  readonly askPollWindowMs: number;
 }
+
+// Handed to the agent verbatim when an ask resolves without an answer (the
+// session ended or a newer ask superseded it). The whole point of #241: a
+// delivery hiccup must never read as a broken tool, so this is a calm, trustable
+// instruction — not an error.
+const NO_ANSWER_NOTE =
+  "No answer is available — the ask was closed (the session ended or a newer ask replaced it). " +
+  "The ask channel is healthy; this is not a tool failure and your question was not lost. " +
+  "Proceed using your best judgment, and ask again if you still need a decision.";
 
 export async function bridgeAskUserQuestion(
   payload: PreToolUsePayload,
@@ -68,9 +77,9 @@ export async function bridgeAskUserQuestion(
     multi_select: q.multiSelect === true,
   }));
 
-  const resolution = await askAndAwaitAnswer(
+  const resolution = await awaitAnswerBlocking(
     { session_id: payload.session_id, questions },
-    deps.askTimeoutMs,
+    deps.askPollWindowMs,
     deps,
   );
 
@@ -137,7 +146,11 @@ function renderContext(
     ...(q.header === undefined ? {} : { header: q.header }),
     multi_select: q.multi_select,
   }));
-  return JSON.stringify({ status: resolution.status, questions: echoed });
+  return JSON.stringify({
+    status: resolution.status,
+    note: NO_ANSWER_NOTE,
+    questions: echoed,
+  });
 }
 
 function parseSelections(

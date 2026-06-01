@@ -151,7 +151,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
         : opts.resolveSessionHabits,
     random: opts.habitRandom === undefined ? Math.random : opts.habitRandom,
     runBash: opts.habitRunBash === undefined ? runHabitBash : opts.habitRunBash,
-    ...(opts.askTimeoutMs === undefined ? {} : { askBridgeTimeoutMs: opts.askTimeoutMs }),
+    ...(opts.askPollWindowMs === undefined ? {} : { askBridgePollWindowMs: opts.askPollWindowMs }),
   });
   registerEventRoutes(app, { store: opts.store });
   registerSessionRoutes(app, {
@@ -310,7 +310,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     roleVersions: opts.roleVersions,
     agentQuestions: opts.agentQuestions,
     agentQuestionWaiter: opts.agentQuestionWaiter,
-    ...(opts.askTimeoutMs === undefined ? {} : { askTimeoutMs: opts.askTimeoutMs }),
+    ...(opts.askPollWindowMs === undefined ? {} : { askPollWindowMs: opts.askPollWindowMs }),
     ...roleEmbodiment,
   });
 

@@ -14,21 +14,19 @@ function fakeQuestion(overrides: Partial<AgentQuestion> = {}): AgentQuestion {
 }
 
 describe("agent question waiter", () => {
-  it("resolves with the notified question when notify() is called", async () => {
+  it("resolves status=notified with the question when notify() is called", async () => {
     const waiter = createAgentQuestionWaiter();
     const promise = waiter.wait("q1", 5_000);
     const resolved = fakeQuestion({ status: "answered", answer: "yes", answered_at: 2 });
     waiter.notify(resolved);
-    expect(await promise).toEqual(resolved);
+    expect(await promise).toEqual({ status: "notified", question: resolved });
   });
 
-  it("rejects with QuestionTimeoutError when no notify arrives before the deadline", async () => {
+  it("resolves status=still_waiting when the window elapses with no notify (no expiry — the ask is NOT failed)", async () => {
     const waiter = createAgentQuestionWaiter();
     const start = Date.now();
-    await expect(waiter.wait("q1", 30)).rejects.toMatchObject({
-      name: "QuestionTimeoutError",
-      questionId: "q1",
-    });
+    const outcome = await waiter.wait("q1", 30);
+    expect(outcome).toEqual({ status: "still_waiting" });
     expect(Date.now() - start).toBeGreaterThanOrEqual(25);
   });
 
@@ -37,12 +35,11 @@ describe("agent question waiter", () => {
     expect(() => waiter.notify(fakeQuestion({ id: "nope" }))).not.toThrow();
   });
 
-  it("notify after a timeout has fired is a no-op (no late resolution)", async () => {
+  it("notify after the window has elapsed is a no-op (no late resolution)", async () => {
     const waiter = createAgentQuestionWaiter();
-    const promise = waiter.wait("q1", 20).catch((e) => e);
-    const err = await promise;
-    expect(err).toMatchObject({ name: "QuestionTimeoutError" });
-    // Late notify should not throw and not produce an unhandled rejection.
+    const outcome = await waiter.wait("q1", 20);
+    expect(outcome).toEqual({ status: "still_waiting" });
+    // Late notify must not throw and must not produce an unhandled rejection.
     waiter.notify(fakeQuestion({ id: "q1", status: "answered", answer: "late" }));
   });
 
@@ -52,9 +49,13 @@ describe("agent question waiter", () => {
     const pB = waiter.wait("b", 5_000);
 
     waiter.notify(fakeQuestion({ id: "b", status: "answered", answer: "B!" }));
-    expect((await pB).answer).toBe("B!");
+    const b = await pB;
+    expect(b.status).toBe("notified");
+    if (b.status === "notified") expect(b.question.answer).toBe("B!");
 
     waiter.notify(fakeQuestion({ id: "a", status: "cancelled", answered_at: 9 }));
-    expect((await pA).status).toBe("cancelled");
+    const a = await pA;
+    expect(a.status).toBe("notified");
+    if (a.status === "notified") expect(a.question.status).toBe("cancelled");
   });
 });
