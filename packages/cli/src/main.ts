@@ -14,6 +14,7 @@ import { messageCommand } from "./commands/message.ts";
 import { replyCommand } from "./commands/reply.ts";
 import { rolesCommand } from "./commands/roles.ts";
 import { workspaceCommand } from "./commands/workspace.ts";
+import { promptModulesCommand } from "./commands/prompt-modules.ts";
 import { selfSkillsCommand } from "./commands/self-skills.ts";
 import { dbDryRunCommand } from "./commands/db-dryrun.ts";
 import { roleCutoverCommand } from "./commands/role-cutover.ts";
@@ -47,6 +48,7 @@ function buildRegistry(): CommandRegistry {
   registry.register(replyCommand);
   registry.register(rolesCommand);
   registry.register(workspaceCommand);
+  registry.register(promptModulesCommand);
   registry.register(selfSkillsCommand);
   registry.register(dbDryRunCommand);
   registry.register(roleCutoverCommand);

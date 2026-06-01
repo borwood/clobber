@@ -3,6 +3,46 @@ import { join } from "node:path";
 import { PromptModuleDefinitionSchema, type PromptModule } from "@clobber/shared";
 import { enumerateDefaultPromptModules } from "@clobber/runtime";
 
+// Source of a resolved catalog entry. Used by the authoring routes to surface
+// where a module came from and whether an edit would shadow a default.
+export type PromptModuleSource = "shipped-default" | "workspace" | "shadows-default";
+
+export interface PromptModuleWithSource extends PromptModule {
+  readonly source: PromptModuleSource;
+}
+
+// Like resolvePromptModuleCatalog but annotates each entry with its source.
+// Co-located here so both consumers share the same FS read logic.
+export function resolvePromptModuleCatalogWithSources(
+  repoPath: string,
+): PromptModuleWithSource[] {
+  const defaultNames = new Set(enumerateDefaultPromptModules().map((m) => m.name));
+
+  const workspaceNames = new Set<string>();
+  const dir = join(repoPath, CATALOG_SUBDIR);
+  if (existsSync(dir)) {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      if (existsSync(join(dir, entry.name, MODULE_FILE))) {
+        workspaceNames.add(entry.name);
+      }
+    }
+  }
+
+  const resolved = resolvePromptModuleCatalog(repoPath);
+  return resolved.map((mod) => {
+    const inWorkspace = workspaceNames.has(mod.name);
+    const inDefaults = defaultNames.has(mod.name);
+    const source: PromptModuleSource =
+      inWorkspace && inDefaults
+        ? "shadows-default"
+        : inWorkspace
+          ? "workspace"
+          : "shipped-default";
+    return { ...mod, source };
+  });
+}
+
 // The workspace prompt-module catalog = the shipped defaults overlaid by the
 // filesystem catalog at <repo>/.clobber/prompt-modules/<name>/prompt-module.json.
 // A filesystem entry shadows a default of the same name. Mirrors
