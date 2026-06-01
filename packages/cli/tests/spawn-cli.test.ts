@@ -58,7 +58,7 @@ const roleVersions = createRoleVersionStore(db);
 
   const ws = workspaces.create({ name: "ws", repo_path: repoPath });
   const managerRole = roles.create({ name: "manager", persistent: true });
-  workspaceRoles.setCeiling(ws.id, managerRole.id, 5);
+  workspaceRoles.setCeiling(ws.id, managerRole.id, 20);
 
   const spawnerCalls: AgentSpawnRequest[] = [];
   const spawner: AgentSpawner = (req): SpawnedAgentInfo => {
@@ -327,6 +327,63 @@ describe("clobber CLI — spawn", () => {
     expect(call.model).toBe("sonnet");
   });
 
+  it.each(["default", "best", "sonnet[1m]", "opus[1m]", "opusplan"])(
+    "accepts extended model alias: %s",
+    async (alias) => {
+      const s = captureStreams();
+      const before = harness.spawnerCalls.length;
+      const code = await run({
+        argv: [
+          "spawn",
+          "manager",
+          "--prompt",
+          "x",
+          "--label",
+          `alias-${alias.replace(/[\[\]]/g, "")}`,
+          "--model",
+          alias,
+        ],
+        env: {
+          CLOBBER_API_BASE: harness.baseUrl,
+          CLOBBER_SESSION_TOKEN: harness.managerToken,
+        },
+        stdout: s.stdout,
+        stderr: s.stderr,
+      });
+      expect(code).toBe(0);
+      expect(harness.spawnerCalls.length).toBe(before + 1);
+      const call = harness.spawnerCalls[harness.spawnerCalls.length - 1]!;
+      expect(call.model).toBe(alias);
+    },
+  );
+
+  it("accepts a full claude-* API model name (e.g. claude-opus-4-8)", async () => {
+    const s = captureStreams();
+    const before = harness.spawnerCalls.length;
+    const code = await run({
+      argv: [
+        "spawn",
+        "manager",
+        "--prompt",
+        "x",
+        "--label",
+        "full-api-name",
+        "--model",
+        "claude-opus-4-8",
+      ],
+      env: {
+        CLOBBER_API_BASE: harness.baseUrl,
+        CLOBBER_SESSION_TOKEN: harness.managerToken,
+      },
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(0);
+    expect(harness.spawnerCalls.length).toBe(before + 1);
+    const call = harness.spawnerCalls[harness.spawnerCalls.length - 1]!;
+    expect(call.model).toBe("claude-opus-4-8");
+  });
+
   it("rejects --model values outside the model enum", async () => {
     const s = captureStreams();
     const code = await run({
@@ -349,6 +406,32 @@ describe("clobber CLI — spawn", () => {
     });
     expect(code).toBe(2);
     expect(s.err()).toMatch(/--model/);
+  });
+
+  it("error message on bad model value names all aliases and the claude-* shape", async () => {
+    const s = captureStreams();
+    const code = await run({
+      argv: [
+        "spawn",
+        "manager",
+        "--prompt",
+        "x",
+        "--label",
+        "bad-model-msg",
+        "--model",
+        "claud-opus",
+      ],
+      env: {
+        CLOBBER_API_BASE: harness.baseUrl,
+        CLOBBER_SESSION_TOKEN: harness.managerToken,
+      },
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(2);
+    const errText = s.err();
+    expect(errText).toMatch(/opusplan/);
+    expect(errText).toMatch(/claude-\*/);
   });
 
   it("rejects --effort values outside the claude --effort enum", async () => {
