@@ -170,6 +170,7 @@ function baseContract(base: BaseLayer): RoleTreeContract {
     seedRefs: [],
     wakePrograms: [],
     defaultWakeProgram: null,
+    habits: [],
   };
 }
 

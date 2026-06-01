@@ -1,9 +1,11 @@
 import {
+  HabitSchema,
   RoleSkillSchema,
   RoleTriggerSchema,
   SeedRefsSchema,
   WakeProgramsSchema,
   triggerId,
+  type Habit,
   type RoleSkill,
   type RoleTrigger,
   type SeedRef,
@@ -40,6 +42,7 @@ import type { RoleVersionSnapshot } from "./role-version-snapshot.ts";
 //   wake-programs/<name>/system.md  a program's layer-C     file-per-program
 //   wake-programs/<name>/user.md    a program's kick        ABSENT ⇒ null kick
 //   triggers/<slug>.json            one trigger             file-per-trigger
+//   habits/<category>/<event>/<name>.json   one habit       file-per-habit (#398/#407)
 //
 // The engine base preamble (CLOBBER_TAG_INTERPRETATION_GUIDANCE) is composed at
 // runtime, not stored per role, so the stored prompt is exactly these two layer
@@ -57,6 +60,10 @@ export interface RoleTreeContract {
   readonly seedRefs: readonly SeedRef[];
   readonly wakePrograms: readonly WakeProgram[];
   readonly defaultWakeProgram: string | null;
+  // #398/#407 — habits live in the role git tree, file-per-habit. They are NOT
+  // (yet) flattened into a role-version column, so the snapshot ↔ contract
+  // converters carry an empty set; the git tree is the only store in Phase 0.
+  readonly habits: readonly Habit[];
 }
 
 // A role's tree is a flat map of repo-relative path → file content. Keeping it
@@ -77,6 +84,12 @@ const byTriggerId = (a: RoleTrigger, b: RoleTrigger): number => {
   return ia < ib ? -1 : ia > ib ? 1 : 0;
 };
 
+// Habits are identified by (path, name) — the same tuple their file path encodes.
+const byHabit = (a: Habit, b: Habit): number => {
+  if (a.path !== b.path) return a.path < b.path ? -1 : 1;
+  return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+};
+
 // Sets resolved by name/identity are normalized so the contract has one
 // canonical form: skills and wake-programs by name, triggers by trigger id.
 // seedRefs and the allow-lists keep their order — there order is meaning.
@@ -86,6 +99,7 @@ function canonicalize(c: RoleTreeContract): RoleTreeContract {
     skills: [...c.skills].sort(byName),
     wakePrograms: [...c.wakePrograms].sort(byName),
     triggers: [...c.triggers].sort(byTriggerId),
+    habits: [...c.habits].sort(byHabit),
   };
 }
 
@@ -101,6 +115,8 @@ export function roleSnapshotToContract(snapshot: RoleVersionSnapshot): RoleTreeC
     seedRefs: SeedRefsSchema.parse(JSON.parse(snapshot.seed_refs_json)),
     wakePrograms: WakeProgramsSchema.parse(JSON.parse(snapshot.wake_programs_json)),
     defaultWakeProgram: snapshot.default_wake_program,
+    // Phase 0: habits are git-tree-only; the role-version snapshot has no column.
+    habits: [],
   });
 }
 
@@ -178,7 +194,23 @@ export function serializeRoleTree(contract: RoleTreeContract): RoleTree {
     tree.set(`triggers/${slug}.json`, toJsonFile(trigger));
   }
 
+  // habits/<category>/<event>/<name>.json — the file path is derived from the
+  // habit's own (path, name), so two habits on different events never share a
+  // file and a git merge of independent additions is clean.
+  for (const habit of contract.habits) {
+    const file = habitFile(habit);
+    if (tree.has(file)) {
+      throw new Error(`habit file collision: ${file}`);
+    }
+    tree.set(file, toJsonFile(habit));
+  }
+
   return tree;
+}
+
+function habitFile(habit: Habit): string {
+  const [category, event] = habit.path.split(".");
+  return `habits/${category}/${event}/${habit.name}.json`;
 }
 
 function requireFile(tree: RoleTree, path: string): string {
@@ -227,6 +259,15 @@ function readTriggers(tree: RoleTree): RoleTrigger[] {
   return triggers.sort(byTriggerId);
 }
 
+function readHabits(tree: RoleTree): Habit[] {
+  const habits: Habit[] = [];
+  for (const [path, content] of tree) {
+    if (!/^habits\/[^/]+\/[^/]+\/[^/]+\.json$/.test(path)) continue;
+    habits.push(HabitSchema.parse(JSON.parse(content)));
+  }
+  return habits.sort(byHabit);
+}
+
 export function deserializeRoleTree(tree: RoleTree): RoleTreeContract {
   const defaultWakeProgram = tree.get("default-wake-program");
   return {
@@ -239,6 +280,7 @@ export function deserializeRoleTree(tree: RoleTree): RoleTreeContract {
     skills: readSkills(tree),
     wakePrograms: readWakePrograms(tree),
     triggers: readTriggers(tree),
+    habits: readHabits(tree),
     defaultWakeProgram: defaultWakeProgram === undefined ? null : defaultWakeProgram,
   };
 }

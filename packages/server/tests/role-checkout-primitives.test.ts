@@ -126,6 +126,7 @@ describe("pre-ROLE.md commit deserializes unchanged (#216)", () => {
       seedRefs: [],
       wakePrograms: [],
       defaultWakeProgram: null,
+      habits: [],
     };
     const tree = serializeRoleTree(contract);
     expect(tree.has("ROLE.md")).toBe(false);

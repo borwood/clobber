@@ -9,6 +9,7 @@ export * from "./role-manifest/index.ts";
 export * from "./role-md.ts";
 export * from "./materialize-bundle.ts";
 export * from "./sdlc-profiles.ts";
+export * from "./habit-master-template.ts";
 export { loadRoleBundle, enumerateShippedRoles } from "./role-bundles.ts";
 export { enumerateDefaultSeeds } from "./default-seeds.ts";
 export { baseRole } from "../roles/base/manifest.ts";

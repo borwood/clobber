@@ -74,6 +74,7 @@ describe("role ↔ git-tree round-trip", () => {
       seedRefs: [],
       wakePrograms: [],
       defaultWakeProgram: null,
+      habits: [],
     };
     const tree = serializeRoleTree(contract);
     const triggerFiles = [...tree.keys()].filter((k) => k.startsWith("triggers/"));
