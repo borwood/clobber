@@ -126,7 +126,7 @@ async function bootManager(): Promise<{ token: string; workspaceId: string }> {
 describe("POST /agent/spawn — briefing packet", () => {
   it("writes briefing files to .clobber/agents/<id>/desk/ and exposes CLOBBER_DESK_DIR before the spawner runs", async () => {
     const { token } = await bootManager();
-    const seedTodos = JSON.stringify([
+    const bootTasks = JSON.stringify([
       { content: "research #82", status: "in_progress", activeForm: "researching" },
     ]);
     const callsBefore = h.calls.length;
@@ -140,7 +140,7 @@ describe("POST /agent/spawn — briefing packet", () => {
         label: "issue-82",
         briefing: {
           files: [
-            { name: "seed-todos.json", content: seedTodos },
+            { name: "boot-tasks.json", content: bootTasks },
             { name: "assignment.md", content: "# Assignment\n\nShip issue 82." },
           ],
         },
@@ -157,7 +157,7 @@ describe("POST /agent/spawn — briefing packet", () => {
       "desk",
     );
     expect(existsSync(deskDir)).toBe(true);
-    expect(readFileSync(join(deskDir, "seed-todos.json"), "utf8")).toBe(seedTodos);
+    expect(readFileSync(join(deskDir, "boot-tasks.json"), "utf8")).toBe(bootTasks);
     expect(readFileSync(join(deskDir, "assignment.md"), "utf8")).toMatch(/Ship issue 82/);
 
     expect(h.calls.length).toBe(callsBefore + 1);

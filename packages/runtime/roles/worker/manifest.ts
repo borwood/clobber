@@ -38,7 +38,7 @@ export const workerRole = defineRole({
         system: taskProgramSystem,
         user:
           "You've been assigned work. Before anything else, run your desk protocol: " +
-          "read your desk, lay down the seed-todos phase plan, read the assignment, " +
+          "read your desk, lay down the boot-tasks phase plan, read the assignment, " +
           "then walk the SDLC to a merge-ready PR.",
       },
     ],

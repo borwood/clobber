@@ -72,7 +72,7 @@ PR's blast radius). Otherwise, run `/assignment` once per issue.
 
    ```
    /tmp/briefing-<label>/
-     seed-todos.json         # the JSON array above
+     boot-tasks.json         # the JSON array above
      assignment.md           # human-readable summary of the issue + your notes
      context.md              # OPTIONAL: workspace conventions, prior decisions
    ```
@@ -127,7 +127,7 @@ PR's blast radius). Otherwise, run `/assignment` once per issue.
 ## Bundling multiple issues
 
 When invoked as `/assignment #65 #66 ...`, build *one* combined briefing
-packet: a single `seed-todos.json` that walks both issues in dep order,
+packet: a single `boot-tasks.json` that walks both issues in dep order,
 and an `assignment.md` whose top section frames *why these issues belong
 together* and whose body has one section per issue. The worker spawns
 once, walks the combined plan, opens one PR that closes both.

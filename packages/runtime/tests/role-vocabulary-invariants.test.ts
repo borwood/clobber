@@ -13,6 +13,8 @@ const forbiddenTokens = [
   "worker" + "-bee",
   "worker" + "Bee",
   "Worker" + "Bee",
+  "seed" + "-todos",
+  "seed" + "Todos",
 ];
 
 describe("role vocabulary invariants (#144)", () => {

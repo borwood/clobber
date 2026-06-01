@@ -39,7 +39,7 @@ function makeStdin(): NodeJS.WritableStream {
 beforeAll(async () => {
   repoPath = mkdtempSync(join(tmpdir(), "clobber-spawn-brief-cli-"));
   briefingDir = mkdtempSync(join(tmpdir(), "clobber-brief-input-"));
-  writeFileSync(join(briefingDir, "seed-todos.json"), '[{"content":"x","status":"pending","activeForm":"y"}]');
+  writeFileSync(join(briefingDir, "boot-tasks.json"), '[{"content":"x","status":"pending","activeForm":"y"}]');
   writeFileSync(join(briefingDir, "assignment.md"), "# Goal\nship #82.\n");
   mkdirSync(join(briefingDir, "context"), { recursive: true });
   writeFileSync(join(briefingDir, "context", "conventions.md"), "squash merges only");
@@ -149,7 +149,7 @@ describe("clobber CLI — spawn --briefing-dir / --briefing", () => {
     expect(code).toBe(0);
     const parsed = JSON.parse(s.out()) as { agent_id: string };
     const desk = join(repoPath, ".clobber", "agents", parsed.agent_id, "desk");
-    expect(readFileSync(join(desk, "seed-todos.json"), "utf8")).toContain("activeForm");
+    expect(readFileSync(join(desk, "boot-tasks.json"), "utf8")).toContain("activeForm");
     expect(readFileSync(join(desk, "assignment.md"), "utf8")).toMatch(/ship #82/);
     expect(readFileSync(join(desk, "context", "conventions.md"), "utf8")).toBe(
       "squash merges only",

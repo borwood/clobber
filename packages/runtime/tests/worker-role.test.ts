@@ -46,7 +46,7 @@ describe("workerRole", () => {
     const task = workerRole.manifest.wakePrograms?.find((p) => p.name === "task");
     expect(task).toBeDefined();
     expect(task!.system).toMatch(/CLOBBER_DESK_DIR/);
-    expect(task!.system).toMatch(/seed-todos\.json/);
+    expect(task!.system).toMatch(/boot-tasks\.json/);
     expect(task!.system).toMatch(/assignment\.md/);
     expect(task!.user).not.toBeNull();
     // The durable system prompt no longer carries the desk protocol.
