@@ -96,23 +96,22 @@ export function clearCheckout(deskDir: string): void {
   rmSync(sidecarPathOf(deskDir), { force: true });
 }
 
-// The role's canonical metadata, projected for the ROLE.md frontmatter. A role
-// edited through a checkout must already carry both (every shipped/forked role
-// does); a role lacking them can't render a frontmatter — surface it.
+// The role's canonical metadata, projected for the ROLE.md frontmatter. Description
+// is genuinely required (non-optional in the schema); a role lacking it can't render
+// a frontmatter and must surface the error. Effort is optional — absent on migrated
+// roles predating the field — and is spread conditionally like model.
 export function manifestFromRole(role: Role): RoleEditManifest {
   if (role.description === undefined) {
     throw new Error(`role ${role.name} has no description; set one before editing it`);
-  }
-  if (role.effort === undefined) {
-    throw new Error(`role ${role.name} has no effort; set one before editing it`);
   }
   return {
     name: role.name,
     description: role.description,
     persistent: role.persistent,
-    effort: role.effort,
-    // Optional (unlike effort): a role with no model default renders no `model:`
-    // frontmatter line, so its ROLE.md round-trips unchanged.
+    // Optional: absent on roles predating the effort field; omitted from the
+    // frontmatter so an effort-less ROLE.md round-trips unchanged.
+    ...(role.effort === undefined ? {} : { effort: role.effort }),
+    // Optional: a role with no model default renders no `model:` frontmatter line.
     ...(role.model === undefined ? {} : { model: role.model }),
   };
 }
