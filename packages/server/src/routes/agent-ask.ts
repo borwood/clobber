@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import {
   AgentAskRequestSchema,
   normalizeAskOptions,
+  type AgentAskResponse,
   type AskQuestion,
 } from "@clobber/shared";
 import type { SessionTokenStore } from "../session-token-store.ts";
@@ -11,10 +12,18 @@ import type { RoleVersionStore } from "../role-version-store.ts";
 import type { RoleContentCache } from "../role-content-cache.ts";
 import type { AgentQuestionStore } from "../agent-question-store.ts";
 import type { AgentQuestionWaiter } from "../agent-question-waiter.ts";
-import { askAndAwaitAnswer } from "../agent-question-blocking.ts";
+import {
+  awaitExistingAnswer,
+  createAndAwaitAnswer,
+  type AskResolution,
+} from "../agent-question-blocking.ts";
 import { withAgentAuth } from "./_with-agent-auth.ts";
 
-const DEFAULT_ASK_TIMEOUT_MS = 30 * 60 * 1000;
+// A blocking ask never expires (#241). This is the server-side long-poll
+// heartbeat: each request parks for at most this long before returning
+// `pending`, and the CLI re-polls the durable question. It is a cadence knob,
+// not a deadline — the ask outlives any number of windows.
+const DEFAULT_ASK_POLL_WINDOW_MS = 25 * 1000;
 
 export interface AgentAskRouteDeps {
   readonly sessionTokens: SessionTokenStore;
@@ -27,14 +36,25 @@ export interface AgentAskRouteDeps {
   readonly roleRepoDir?: string;
   readonly agentQuestions: AgentQuestionStore;
   readonly agentQuestionWaiter: AgentQuestionWaiter;
-  readonly askTimeoutMs?: number;
+  readonly askPollWindowMs?: number;
+}
+
+function toResponse(
+  resolution: AskResolution,
+  questionId: string,
+): AgentAskResponse {
+  if (resolution.status === "answered") {
+    return { resolution: "answered", answer: resolution.answer };
+  }
+  if (resolution.status === "cancelled") return { resolution: "cancelled" };
+  return { resolution: "pending", question_id: questionId };
 }
 
 export function registerAgentAskRoutes(
   app: FastifyInstance,
   deps: AgentAskRouteDeps,
 ): void {
-  const timeoutMs = deps.askTimeoutMs ?? DEFAULT_ASK_TIMEOUT_MS;
+  const windowMs = deps.askPollWindowMs ?? DEFAULT_ASK_POLL_WINDOW_MS;
 
   app.post(
     "/agent/ask",
@@ -52,16 +72,29 @@ export function registerAgentAskRoutes(
         ...(parsed.data.header === undefined ? {} : { header: parsed.data.header }),
         ...(options === undefined ? {} : { options: [...options] }),
       };
-      const resolution = await askAndAwaitAnswer(
+      const { resolution, questionId } = await createAndAwaitAnswer(
         { session_id: session.id, questions: [question] },
-        timeoutMs,
+        windowMs,
         deps,
       );
+      return toResponse(resolution, questionId);
+    }),
+  );
 
-      if (resolution.status === "answered") {
-        return { resolution: "answered", answer: resolution.answer };
+  // Re-poll an already-created ask. The CLI re-attaches here each window while a
+  // blocking ask is `pending`, so a dropped connection just reconnects rather
+  // than converting "still waiting" into "failed".
+  app.get<{ Params: { id: string } }>(
+    "/agent/ask/:id",
+    withAgentAuth<{ Params: { id: string } }>("ask", deps, async (request, reply, { session }) => {
+      const questionId = request.params.id;
+      const existing = deps.agentQuestions.get(questionId);
+      if (existing === null || existing.session_id !== session.id) {
+        reply.code(404);
+        return { error: "question not found for session" };
       }
-      return { resolution: resolution.status };
+      const resolution = await awaitExistingAnswer(questionId, windowMs, deps);
+      return toResponse(resolution, questionId);
     }),
   );
 }

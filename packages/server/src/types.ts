@@ -58,7 +58,7 @@ export interface ServerOptions {
   readonly roleContractRefusals?: RoleContractRefusalStore;
   readonly agentQuestions: AgentQuestionStore;
   readonly agentQuestionWaiter: AgentQuestionWaiter;
-  readonly askTimeoutMs?: number;
+  readonly askPollWindowMs?: number;
   // The #237 contract-gate migration seam. Optional with an internal default
   // (the empty migrator) so existing callers are untouched; #238 / a fork can
   // inject a populated one.

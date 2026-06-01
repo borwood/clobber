@@ -1,20 +1,23 @@
 import type { AgentQuestion } from "@clobber/shared";
 
-export class QuestionTimeoutError extends Error {
-  constructor(public readonly questionId: string) {
-    super(`question ${questionId} timed out`);
-    this.name = "QuestionTimeoutError";
-  }
-}
+/**
+ * The outcome of one bounded wait. `notified` carries the resolved question (a
+ * human answered, or the ask was cancelled/superseded). `still_waiting` means
+ * the poll window elapsed with no resolution — the ask is NOT failed; the row
+ * stays pending and the caller re-arms. A blocking ask has no deadline (#241),
+ * so the wait window is a long-poll heartbeat, never an expiry.
+ */
+export type WaitOutcome =
+  | { readonly status: "notified"; readonly question: AgentQuestion }
+  | { readonly status: "still_waiting" };
 
 interface Waiter {
-  resolve: (q: AgentQuestion) => void;
-  reject: (err: Error) => void;
+  resolve: (outcome: WaitOutcome) => void;
   timer: ReturnType<typeof setTimeout>;
 }
 
 export interface AgentQuestionWaiter {
-  wait(id: string, timeoutMs: number): Promise<AgentQuestion>;
+  wait(id: string, windowMs: number): Promise<WaitOutcome>;
   notify(question: AgentQuestion): void;
 }
 
@@ -22,13 +25,13 @@ export function createAgentQuestionWaiter(): AgentQuestionWaiter {
   const waiters = new Map<string, Waiter>();
 
   return {
-    wait(id, timeoutMs) {
-      return new Promise<AgentQuestion>((resolve, reject) => {
+    wait(id, windowMs) {
+      return new Promise<WaitOutcome>((resolve) => {
         const timer = setTimeout(() => {
           waiters.delete(id);
-          reject(new QuestionTimeoutError(id));
-        }, timeoutMs);
-        waiters.set(id, { resolve, reject, timer });
+          resolve({ status: "still_waiting" });
+        }, windowMs);
+        waiters.set(id, { resolve, timer });
       });
     },
 
@@ -37,7 +40,7 @@ export function createAgentQuestionWaiter(): AgentQuestionWaiter {
       if (w === undefined) return;
       waiters.delete(question.id);
       clearTimeout(w.timer);
-      w.resolve(question);
+      w.resolve({ status: "notified", question });
     },
   };
 }

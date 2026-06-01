@@ -38,7 +38,7 @@ interface Harness {
   readonly questions: ReturnType<typeof createAgentQuestionStore>;
 }
 
-function buildHarness(askTimeoutMs = 5_000): Harness {
+function buildHarness(askPollWindowMs = 5_000): Harness {
   const db = createDatabase(":memory:");
   const workspaces = createWorkspaceStore(db);
   const roles = createRoleStore(db);
@@ -60,7 +60,7 @@ function buildHarness(askTimeoutMs = 5_000): Harness {
     agentStatusLog: createAgentStatusLogStore(db),
     agentQuestions: questions,
     agentQuestionWaiter: createAgentQuestionWaiter(),
-    askTimeoutMs,
+    askPollWindowMs,
     spawner: () => stubSpawnedAgent({ pid: 9999 }),
     hookUrl: "http://test.invalid/hook",
     apiBase: "http://test.invalid",
@@ -344,26 +344,58 @@ describe("PreToolUse bridge for AskUserQuestion", () => {
     await teardown(h);
   });
 
-  it("returns status=timed_out echoing every question when no answer arrives", async () => {
-    const h = buildHarness(50);
+  it("never expires: with no answer the bridge stays parked (the question stays open across windows)", async () => {
+    // A tiny poll window proves the bridge re-arms instead of resolving to a
+    // failure: after several windows with no answer, the hook is still pending
+    // and the question is still open for the human to answer.
+    const h = buildHarness(20);
     const { sessionId } = seedSession(h);
-    const questions = [
-      { question: "First?", header: "First", options: [{ label: "a" }, { label: "b" }], multiSelect: false },
-      { question: "Second?", header: "Second", options: [{ label: "x" }, { label: "y" }], multiSelect: true },
-    ];
-    const res = await h.server.inject({ method: "POST", url: "/hook", payload: hookPayload(sessionId, questions) });
-    const ctx = JSON.parse(parseBridgeOutput(res.body).additionalContext) as {
-      status: string;
-      questions: Array<{ question: string; header?: string; multi_select: boolean }>;
-    };
-    expect(ctx).toEqual({
-      status: "timed_out",
-      questions: [
-        { question: "First?", header: "First", multi_select: false },
-        { question: "Second?", header: "Second", multi_select: true },
-      ],
+    let settled = false;
+    const hookPromise = h.server
+      .inject({ method: "POST", url: "/hook", payload: hookPayload(sessionId) })
+      .then((r) => {
+        settled = true;
+        return r;
+      });
+    await waitForOpenQuestion(h, sessionId);
+    await Bun.sleep(120); // ~6 poll windows
+    expect(settled).toBe(false);
+    expect(h.questions.getOpenForSession(sessionId)).not.toBeNull();
+
+    // A late answer still lands and unblocks the parked hook.
+    const open = h.questions.getOpenForSession(sessionId)!;
+    await h.server.inject({
+      method: "POST",
+      url: `/sessions/${sessionId}/answer`,
+      payload: { question_id: open.id, answer: "Roll forward" },
     });
-    expect(h.questions.getOpenForSession(sessionId)).toBeNull();
+    const ctx = JSON.parse(parseBridgeOutput((await hookPromise).body).additionalContext) as AnsweredCtx;
+    expect(ctx.status).toBe("answered");
+    await teardown(h);
+  });
+
+  it("surfaces a trustable, structured non-answer (status=cancelled + note) when the session ends — never a bare error", async () => {
+    const h = buildHarness();
+    const { sessionId } = seedSession(h);
+    const hookPromise = h.server.inject({ method: "POST", url: "/hook", payload: hookPayload(sessionId) });
+    await waitForOpenQuestion(h, sessionId);
+
+    // The session is torn down before the human answers — a genuine
+    // undeliverable. The bridge must hand the agent a structured, trustable
+    // result, not a thrown/error shape that reads as a broken channel.
+    await h.server.inject({ method: "POST", url: `/sessions/${sessionId}/end` });
+
+    const out = parseBridgeOutput((await hookPromise).body);
+    expect(out.permissionDecision).toBe("deny");
+    const ctx = JSON.parse(out.additionalContext) as {
+      status: string;
+      note: string;
+      questions: Array<{ question: string; multi_select: boolean }>;
+    };
+    expect(ctx.status).toBe("cancelled");
+    expect(ctx.note.length).toBeGreaterThan(0);
+    expect(ctx.note.toLowerCase()).not.toContain("error");
+    expect(ctx.questions[0]!.question).toBe("Pick a release strategy");
     await teardown(h);
   });
 

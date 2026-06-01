@@ -20,7 +20,9 @@ import { bridgeAskUserQuestion } from "../ask-user-question-bridge.ts";
 import { buildFileSizeReminder } from "../file-size-reminder.ts";
 import type { TriggerScheduler } from "../trigger-scheduler.ts";
 
-const DEFAULT_ASK_BRIDGE_TIMEOUT_MS = 30 * 60 * 1000;
+// The bridge re-arms each window and never expires the ask (#241); this is the
+// long-poll heartbeat, not a deadline.
+const DEFAULT_ASK_BRIDGE_POLL_WINDOW_MS = 25 * 1000;
 
 export interface RegisterHookRoutesDeps {
   store: EventStore;
@@ -35,7 +37,7 @@ export interface RegisterHookRoutesDeps {
   agentQuestionWaiter: AgentQuestionWaiter;
   agentStatusLog: AgentStatusLogStore;
   scheduler: Pick<TriggerScheduler, "fireSessionEnded" | "flushPendingWakes">;
-  askBridgeTimeoutMs?: number;
+  askBridgePollWindowMs?: number;
   // #271 — the self.* habit seam: resolve the firing session's habits + the
   // injectable evaluator dependencies (RNG sampling, bash enrichment).
   resolveSessionHabits: HabitReceiverDeps["resolveSessionHabits"];
@@ -47,7 +49,7 @@ export function registerHookRoutes(
   app: FastifyInstance,
   deps: RegisterHookRoutesDeps,
 ): void {
-  const askBridgeTimeoutMs = deps.askBridgeTimeoutMs ?? DEFAULT_ASK_BRIDGE_TIMEOUT_MS;
+  const askBridgePollWindowMs = deps.askBridgePollWindowMs ?? DEFAULT_ASK_BRIDGE_POLL_WINDOW_MS;
   app.post("/hook", async (request, reply) => {
     const parsed = HookPayloadSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -65,7 +67,7 @@ export function registerHookRoutes(
       const bridged = await bridgeAskUserQuestion(payload, {
         agentQuestions: deps.agentQuestions,
         agentQuestionWaiter: deps.agentQuestionWaiter,
-        askTimeoutMs: askBridgeTimeoutMs,
+        askPollWindowMs: askBridgePollWindowMs,
       });
       if (bridged !== null) return bridged;
     }
