@@ -25,7 +25,16 @@ import {
   type DispatchResult,
 } from "./trigger-dispatch.ts";
 import type { AttachSessionFn } from "./trigger-attach.ts";
+import { createNotificationDispatcher, type NotificationDispatcher } from "./notification-dispatch.ts";
+import { createNotificationStore } from "./notification-store.ts";
 import { defaultSynthesizePrompt } from "./trigger-synthesize.ts";
+import {
+  UNSUPPORTED_KINDS,
+  DEFAULT_WORKSPACE_OPEN_DEBOUNCE_MS,
+  type ScheduledWebhook,
+  type ScheduledWorkspaceOpen,
+  type FireCompletionWake,
+} from "./trigger-scheduler-types.ts";
 import { createCronScheduler } from "./trigger-cron-scheduler.ts";
 import { createCompletionWakeSchedulers } from "./completion-wake-schedulers.ts";
 import {
@@ -47,6 +56,9 @@ export interface TriggerSchedulerDeps {
   readonly dispatches: TriggerDispatchStore;
   readonly agentStatusLog: AgentStatusLogStore;
   readonly attachSession: AttachSessionFn;
+  // The notification spine the trigger emitter records onto; defaulted from the
+  // scheduler's own db+clock when a caller doesn't share one.
+  readonly dispatcher?: NotificationDispatcher;
   readonly synthesizePrompt?: (trigger: RoleTrigger, payload: unknown) => string;
   // #385 — present iff git-as-truth is configured. The manager's wake path
   // resolves its triggers through these, so a commit-pinned manager still wakes.
@@ -66,37 +78,15 @@ export interface TriggerScheduler {
   flushPendingWakes(agentId: string): Promise<void>;
 }
 
-// A completion-wake fire entry point: wakes persistent agents in the workspace
-// declaring the corresponding kind for the finished session.
-export type FireCompletionWake = (
-  workspaceId: string,
-  finishedSessionId: string,
-) => Promise<DispatchResult>;
-
-interface ScheduledWebhook extends AgentBinding {
-  readonly trigger: { kind: "webhook"; path: string };
-}
-
-interface ScheduledWorkspaceOpen extends AgentBinding {
-  readonly trigger: { kind: "workspace-open"; debounce_ms?: number | undefined };
-  readonly debounceMs: number;
-  lastFiredAt: number | null;
-}
-
-const UNSUPPORTED_KINDS: ReadonlySet<RoleTrigger["kind"]> = new Set([
-  "file-watch",
-  "issue-assigned",
-]);
-
-const DEFAULT_WORKSPACE_OPEN_DEBOUNCE_MS = 10_000;
-
 export function createTriggerScheduler(
   deps: TriggerSchedulerDeps,
 ): TriggerScheduler {
   const synthesize =
-    deps.synthesizePrompt === undefined
-      ? defaultSynthesizePrompt
-      : deps.synthesizePrompt;
+    deps.synthesizePrompt === undefined ? defaultSynthesizePrompt : deps.synthesizePrompt;
+  const dispatcher =
+    deps.dispatcher === undefined
+      ? createNotificationDispatcher(createNotificationStore(deps.db), deps.clock)
+      : deps.dispatcher;
   const dispatchDeps: DispatchDeps = {
     clock: deps.clock,
     agents: deps.agents,
@@ -107,6 +97,7 @@ export function createTriggerScheduler(
     runtimeProvider: deps.runtimeProvider,
     dispatches: deps.dispatches,
     attachSession: deps.attachSession,
+    dispatcher,
     synthesize,
   };
   const webhooksByAgent = new Map<string, Set<ScheduledWebhook>>();

@@ -1,0 +1,145 @@
+import type { RuntimeProvider } from "@clobber/runtime";
+import type { CreateNotification, Notification } from "@clobber/shared";
+import type { AgentStore } from "./agent-store.ts";
+import type { RoleStore } from "./role-store.ts";
+import type { WorkspaceStore } from "./workspace-store.ts";
+import type { SessionStore } from "./session-store.ts";
+import type { AgentRegistry } from "./agent-registry.ts";
+import type { Clock } from "./clock.ts";
+import type { AttachOutcome, AttachSessionFn } from "./trigger-attach.ts";
+import type { NotificationStore } from "./notification-store.ts";
+
+// The actions the recipient-state router can take — the existing trigger-dispatch
+// outcomes, lifted verbatim so the audit row stays byte-identical.
+export type DeliveryAction =
+  | "spawned"
+  | "injected"
+  | "queued"
+  | "skipped-busy"
+  | "errored";
+
+export interface DeliveryOutcome {
+  readonly action: DeliveryAction;
+  readonly sessionId?: string;
+  readonly error?: string;
+  // Carried only by transports that answer an HTTP caller (the #93 message
+  // route): the status/detail to surface when delivery fails.
+  readonly status?: number;
+  readonly detail?: string;
+}
+
+// What to do when the recipient is alive but busy (or its child has died but not
+// yet reaped). `drop` records skipped-busy; `enqueue` hands the notification to a
+// substrate that flushes it when the recipient goes idle (#171 completion wakes).
+export type EnqueuePolicy =
+  | { readonly kind: "drop" }
+  | { readonly kind: "enqueue"; readonly enqueue: (n: Notification) => void };
+
+export interface DeliverDeps {
+  readonly agents: AgentStore;
+  readonly roles: RoleStore;
+  readonly workspaces: WorkspaceStore;
+  readonly sessions: SessionStore;
+  readonly registry: AgentRegistry;
+  readonly runtimeProvider: RuntimeProvider;
+  readonly attachSession: AttachSessionFn;
+}
+
+// The recipient-state → action router, extracted from `dispatchTrigger` and
+// generalized to a `Notification` (any recipient, any source). Maps the
+// recipient's lifecycle state to a delivery action and performs it. Recipient
+// existence is the emitter's precondition: by the time deliver runs the agent is
+// known to exist, so a missing agent/role/workspace here is an invariant breach
+// and throws (Engineering Rule 3 — unexpected data is never swallowed).
+export async function deliver(
+  deps: DeliverDeps,
+  n: Notification,
+  busyPolicy: EnqueuePolicy,
+): Promise<DeliveryOutcome> {
+  if (n.recipient.kind !== "agent") {
+    throw new Error(`deliver: recipient kind "${n.recipient.kind}" is not deliverable in this phase`);
+  }
+  const agentId = n.recipient.agent_id;
+  const agent = deps.agents.get(agentId);
+  if (agent === null) throw new Error(`deliver: agent ${agentId} not found`);
+  const role = deps.roles.get(agent.role_id);
+  const workspace = deps.workspaces.get(agent.workspace_id);
+  if (role === null) throw new Error(`deliver: role ${agent.role_id} not found`);
+  if (workspace === null) throw new Error(`deliver: workspace ${agent.workspace_id} not found`);
+
+  const activeForAgent = deps.sessions
+    .listActiveForWorkspace(agent.workspace_id)
+    .filter((s) => s.agent_id === agentId);
+
+  if (activeForAgent.length === 0) {
+    const wakeProgram = readWakeProgram(n);
+    let result: AttachOutcome;
+    try {
+      result = await deps.attachSession({
+        workspace,
+        role,
+        agent,
+        prompt: n.payload.body,
+        promptTag: n.payload.tag,
+        ...(wakeProgram === undefined ? {} : { wakeProgram }),
+      });
+    } catch (err) {
+      return { action: "errored", error: err instanceof Error ? err.message : String(err) };
+    }
+    if (result.ok) return { action: "spawned", sessionId: result.session_id };
+    return { action: "errored", error: result.error };
+  }
+
+  const live = deps.registry.get(activeForAgent[0]!.id);
+  if (live === null || live.busy) {
+    if (live !== null && busyPolicy.kind === "enqueue") {
+      busyPolicy.enqueue(n);
+      return { action: "queued", sessionId: live.sessionId };
+    }
+    return { action: "skipped-busy" };
+  }
+
+  if (!deps.runtimeProvider.capabilities.livePromptInjection) {
+    return { action: "errored", error: "runtime does not support live prompt injection" };
+  }
+
+  live.stdin.write(deps.runtimeProvider.serializeUserPrompt(n.payload.body, n.payload.tag));
+  deps.registry.setBusy(live.sessionId, true);
+  return { action: "injected", sessionId: live.sessionId };
+}
+
+// The wake-program rides on metadata (#213) so resume re-composes it for free.
+// Absent → the synthesized opening kick stays the opening turn.
+function readWakeProgram(n: Notification): string | undefined {
+  const wp = n.metadata["wake_program"];
+  if (wp === undefined) return undefined;
+  if (typeof wp !== "string") {
+    throw new Error(`deliver: metadata.wake_program must be a string, got ${typeof wp}`);
+  }
+  return wp;
+}
+
+export interface NotificationDispatcher {
+  // The spine entry point: persist the durable record, then deliver it through
+  // the supplied transport, advancing the record to `delivered` iff it landed.
+  emit(
+    req: CreateNotification,
+    transport: (n: Notification) => Promise<DeliveryOutcome>,
+  ): Promise<{ notification: Notification; outcome: DeliveryOutcome }>;
+}
+
+export function createNotificationDispatcher(
+  store: NotificationStore,
+  clock: Clock,
+): NotificationDispatcher {
+  return {
+    async emit(req, transport) {
+      const notification = store.create(req, clock.now().getTime());
+      const outcome = await transport(notification);
+      if (outcome.action === "spawned" || outcome.action === "injected") {
+        store.markDelivered(notification.id, clock.now().getTime());
+      }
+      return { notification, outcome };
+    },
+  };
+}

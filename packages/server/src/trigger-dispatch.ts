@@ -1,16 +1,25 @@
 import type { RuntimeProvider } from "@clobber/runtime";
-import { triggerId, type Agent, type ClobberPromptTag, type Role, type RoleTrigger, type Workspace } from "@clobber/shared";
+import {
+  triggerId,
+  type ClobberPromptTag,
+  type CreateNotification,
+  type RoleTrigger,
+  type Workspace,
+} from "@clobber/shared";
 import type { AgentStore } from "./agent-store.ts";
 import type { RoleStore } from "./role-store.ts";
 import type { WorkspaceStore } from "./workspace-store.ts";
 import type { SessionStore } from "./session-store.ts";
 import type { AgentRegistry } from "./agent-registry.ts";
 import type { Clock } from "./clock.ts";
-import type {
-  TriggerDispatchStore,
-  DispatchOutcome,
-} from "./trigger-dispatch-store.ts";
-import type { AttachOutcome, AttachSessionFn } from "./trigger-attach.ts";
+import type { TriggerDispatchStore } from "./trigger-dispatch-store.ts";
+import type { AttachSessionFn } from "./trigger-attach.ts";
+import {
+  deliver,
+  type DeliverDeps,
+  type EnqueuePolicy,
+  type NotificationDispatcher,
+} from "./notification-dispatch.ts";
 
 export interface AgentBinding {
   readonly agentId: string;
@@ -52,14 +61,16 @@ export interface DispatchDeps {
   readonly runtimeProvider: RuntimeProvider;
   readonly dispatches: TriggerDispatchStore;
   readonly attachSession: AttachSessionFn;
+  readonly dispatcher: NotificationDispatcher;
   readonly synthesize: (trigger: RoleTrigger, payload: unknown) => string;
 }
 
-// Centralized fire-to-session flow shared by every trigger kind. Spawns a
-// fresh session if the agent is idle, injects into a live+idle session, or
-// records skipped-busy / errored otherwise. Returns true if the dispatch
-// landed in the audit log; false if the agent / role / workspace went away
-// between trigger registration and fire.
+// A trigger fire is the dispatcher's founding emitter: it builds a `trigger`
+// notification, routes it through the shared `deliver()` core, and records the
+// outcome in the trigger-dispatch audit. The recipient-state → action routing
+// (idle→spawn, live-idle→inject, busy→enqueue/skip) lives in deliver(), not
+// here. Returns true if the dispatch landed in the audit log; false if the
+// agent / role / workspace went away between trigger registration and fire.
 export async function dispatchTrigger(
   deps: DispatchDeps,
   binding: AgentBinding,
@@ -73,91 +84,41 @@ export async function dispatchTrigger(
   const role = deps.roles.get(binding.roleId);
   const workspace = deps.workspaces.get(binding.workspaceId);
   if (role === null || workspace === null) return false;
+
   const prompt = deps.synthesize(trigger, payload);
-  const promptTag: ClobberPromptTag = {
-    kind: "trigger",
-    attrs: { via: trigger.kind },
+  const promptTag: ClobberPromptTag = { kind: "trigger", attrs: { via: trigger.kind } };
+  const wakeProgram = resolveTriggerWakeProgram(workspace, binding.roleId, trigger);
+
+  const req: CreateNotification = {
+    type: "trigger",
+    recipient: { kind: "agent", agent_id: binding.agentId },
+    priority: "low",
+    payload: { body: prompt, tag: promptTag },
+    provenance: { source_kind: "trigger", source_id: trigger.kind },
+    metadata: wakeProgram === undefined ? {} : { wake_program: wakeProgram },
   };
 
-  const activeForAgent = deps.sessions
-    .listActiveForWorkspace(binding.workspaceId)
-    .filter((s) => s.agent_id === binding.agentId);
+  // Adapt the trigger-facing busy policy (which closes over binding/trigger/
+  // payload for completion-wake's enqueue) to deliver's recipient-agnostic form.
+  const enqueuePolicy: EnqueuePolicy =
+    busyPolicy.kind === "drop"
+      ? { kind: "drop" }
+      : { kind: "enqueue", enqueue: () => busyPolicy.enqueue(binding, trigger, payload) };
 
-  if (activeForAgent.length === 0) {
-    // attachSession can now throw — a configured boot-context provider that
-    // fails (Engineering Rule 3) propagates out of spawn-context. On a fire-
-    // and-forget trigger path there's no caller to surface a 500 to, so we
-    // translate the throw into an errored dispatch (the same audit outcome a
-    // non-ok result produces) rather than crashing the cron timer. This is
-    // not a Rule-3 swallow: the failure is recorded loudly in the dispatch
-    // log with its message, not discarded. Trigger-path semantics per #166.
-    const wakeProgram = resolveTriggerWakeProgram(workspace, binding.roleId, trigger);
-    const attached = await attachOutcome(deps, {
-      workspace,
-      role,
-      agent,
-      prompt,
-      promptTag,
-      ...(wakeProgram === undefined ? {} : { wakeProgram }),
-    });
-    deps.dispatches.append({
-      workspace_id: binding.workspaceId,
-      role_id: binding.roleId,
-      agent_id: binding.agentId,
-      trigger_kind: trigger.kind,
-      trigger_payload: trigger,
-      fired_at: firedAt,
-      dispatch_outcome: attached.outcome,
-      ...(attached.sessionId === undefined ? {} : { session_id: attached.sessionId }),
-      ...(attached.error === undefined ? {} : { error: attached.error }),
-    });
-    return true;
-  }
+  const deliverDeps: DeliverDeps = {
+    agents: deps.agents,
+    roles: deps.roles,
+    workspaces: deps.workspaces,
+    sessions: deps.sessions,
+    registry: deps.registry,
+    runtimeProvider: deps.runtimeProvider,
+    attachSession: deps.attachSession,
+  };
 
-  const live = deps.registry.get(activeForAgent[0]!.id);
-  if (live === null || live.busy) {
-    if (live !== null && busyPolicy.kind === "enqueue") {
-      busyPolicy.enqueue(binding, trigger, payload);
-      deps.dispatches.append({
-        workspace_id: binding.workspaceId,
-        role_id: binding.roleId,
-        agent_id: binding.agentId,
-        trigger_kind: trigger.kind,
-        trigger_payload: trigger,
-        fired_at: firedAt,
-        dispatch_outcome: "queued",
-        session_id: live.sessionId,
-      });
-      return true;
-    }
-    deps.dispatches.append({
-      workspace_id: binding.workspaceId,
-      role_id: binding.roleId,
-      agent_id: binding.agentId,
-      trigger_kind: trigger.kind,
-      trigger_payload: trigger,
-      fired_at: firedAt,
-      dispatch_outcome: "skipped-busy",
-    });
-    return true;
-  }
+  const { outcome } = await deps.dispatcher.emit(req, (n) =>
+    deliver(deliverDeps, n, enqueuePolicy),
+  );
 
-  if (!deps.runtimeProvider.capabilities.livePromptInjection) {
-    deps.dispatches.append({
-      workspace_id: binding.workspaceId,
-      role_id: binding.roleId,
-      agent_id: binding.agentId,
-      trigger_kind: trigger.kind,
-      trigger_payload: trigger,
-      fired_at: firedAt,
-      dispatch_outcome: "errored",
-      error: "runtime does not support live prompt injection",
-    });
-    return true;
-  }
-
-  live.stdin.write(deps.runtimeProvider.serializeUserPrompt(prompt, promptTag));
-  deps.registry.setBusy(live.sessionId, true);
   deps.dispatches.append({
     workspace_id: binding.workspaceId,
     role_id: binding.roleId,
@@ -165,16 +126,11 @@ export async function dispatchTrigger(
     trigger_kind: trigger.kind,
     trigger_payload: trigger,
     fired_at: firedAt,
-    dispatch_outcome: "injected",
-    session_id: live.sessionId,
+    dispatch_outcome: outcome.action,
+    ...(outcome.sessionId === undefined ? {} : { session_id: outcome.sessionId }),
+    ...(outcome.error === undefined ? {} : { error: outcome.error }),
   });
   return true;
-}
-
-interface AttachOutcomeResult {
-  readonly outcome: DispatchOutcome;
-  readonly sessionId?: string;
-  readonly error?: string;
 }
 
 // Resolves a fired trigger to its wake-program: a workspace per-trigger override
@@ -189,20 +145,6 @@ function resolveTriggerWakeProgram(
 ): string | undefined {
   const override = workspace.trigger_overrides[roleId]?.wake_programs?.[triggerId(trigger)];
   return override === undefined ? trigger.wake_program : override;
-}
-
-async function attachOutcome(
-  deps: Pick<DispatchDeps, "attachSession">,
-  input: { workspace: Workspace; role: Role; agent: Agent; prompt: string; promptTag?: ClobberPromptTag; wakeProgram?: string },
-): Promise<AttachOutcomeResult> {
-  let result: AttachOutcome;
-  try {
-    result = await deps.attachSession(input);
-  } catch (err) {
-    return { outcome: "errored", error: err instanceof Error ? err.message : String(err) };
-  }
-  if (result.ok) return { outcome: "spawned", sessionId: result.session_id };
-  return { outcome: "errored", error: result.error };
 }
 
 export function recordUnsupportedTrigger(

@@ -25,7 +25,7 @@ async function spawnWith(
   session: string;
   system: string;
   prompt: string | undefined;
-  promptTag: { kind: string; attrs?: Record<string, string> } | undefined;
+  promptTag: { kind: string; attrs?: Record<string, string> | undefined } | undefined;
 }> {
   const ws = h.workspaces.create({
     name: `ws-${roleId.slice(0, 8)}-${h.records.length}`,

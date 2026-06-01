@@ -22,6 +22,7 @@ import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import type { AgentSpawner } from "../src/types.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
 import { createFinalReportConsumerStateStore } from "../src/final-report-consumer.ts";
+import { createNotificationStore } from "../src/notification-store.ts";
 import { seedWorkspaceRoles } from "../src/seed-workspace-roles.ts";
 
 interface StubAgent {
@@ -226,6 +227,35 @@ describe("POST /agent/messages — manager → worker send", () => {
     expect(logRow).not.toBeNull();
     expect(logRow!.state).toBe("sent");
     expect(logRow!.agent_id).toBe(manager.agentId);
+
+    await teardown(h);
+  });
+
+  it("records the message as a durable high-priority notification (#425 spine)", async () => {
+    const h = buildHarness();
+    const ws = makeWorkspace(h);
+    const manager = await spawn(h, ws, "manager", "mgr");
+    const worker = await spawn(h, ws, "worker", "wkr");
+    await fireStop(h, worker.sessionId);
+
+    const res = await h.server.inject({
+      method: "POST",
+      url: "/agent/messages",
+      headers: bearer(manager.token),
+      payload: { recipient_agent_id: worker.agentId, body: "ping" },
+    });
+    expect(res.statusCode).toBe(200);
+    const out = res.json() as { token: string; message_id: string };
+
+    const store = createNotificationStore(h.db);
+    const notifs = store.listForAgent(worker.agentId);
+    expect(notifs).toHaveLength(1);
+    expect(notifs[0]!.type).toBe("message");
+    expect(notifs[0]!.priority).toBe("high");
+    expect(notifs[0]!.state).toBe("delivered");
+    expect(notifs[0]!.recipient).toEqual({ kind: "agent", agent_id: worker.agentId });
+    expect(notifs[0]!.payload.body).toBe("ping");
+    expect(notifs[0]!.metadata["reply_capability"]).toBe(out.token);
 
     await teardown(h);
   });
