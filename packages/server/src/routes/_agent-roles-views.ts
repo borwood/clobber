@@ -29,14 +29,12 @@ export function buildListEntry(
     persistent: role.persistent,
     version: version.version,
     created_at: role.created_at,
+    allowed_tools: JSON.parse(version.allowed_tools_json) as string[],
     ...(role.current_version_id === undefined
       ? {}
       : { current_version_id: role.current_version_id }),
     ...(role.current_commit === undefined ? {} : { current_commit: role.current_commit }),
     ...(role.description === undefined ? {} : { description: role.description }),
-    ...(role.allowed_tools === undefined
-      ? {}
-      : { allowed_tools: [...role.allowed_tools] }),
   };
 }
 

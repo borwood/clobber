@@ -18,6 +18,7 @@ import type { AgentStatusStore } from "./agent-status-store.ts";
 import type { AgentStatusLogStore } from "./agent-status-log-store.ts";
 import type { RoleContractMigrator } from "./role-contract-compat.ts";
 import type { RoleContractRefusalStore } from "./role-contract-refusal-store.ts";
+import type { RoleContentCache } from "./role-content-cache.ts";
 import type { AgentQuestionStore } from "./agent-question-store.ts";
 import type { AgentQuestionWaiter } from "./agent-question-waiter.ts";
 import type { TriggerDispatchStore } from "./trigger-dispatch-store.ts";
@@ -79,6 +80,10 @@ export interface ServerOptions {
   // into. Optional: when set, the server boots the commit-pinned read path
   // (materialize + content cache); when absent, embodiment stays row-backed.
   readonly roleRepoDir?: string;
+  // Test seam: inject a pre-built content cache. When provided, git
+  // materialization is skipped — the injected cache is used as-is. Consistent
+  // with the roleContractMigrator / roleContractRefusals override pattern.
+  readonly roleContentCache?: RoleContentCache;
   // #271 — the self.* habit resolver seam. Defaults to embodying the firing
   // session's role and reading its habits; injectable so a test can drive the
   // receiver/gate with a fixed habit set without standing up the git role repo.

@@ -3,6 +3,7 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
+import { randomUUID } from "node:crypto";
 import { createServer } from "@clobber/server/server.ts";
 import { createDatabase } from "@clobber/server/db.ts";
 import { createEventStore } from "@clobber/server/event-store.ts";
@@ -18,21 +19,39 @@ import { createAgentStatusStore } from "@clobber/server/agent-status-store.ts";
 import { createAgentStatusLogStore } from "@clobber/server/agent-status-log-store.ts";
 import { createAgentQuestionStore } from "@clobber/server/agent-question-store.ts";
 import { createAgentQuestionWaiter } from "@clobber/server/agent-question-waiter.ts";
-import type { AgentSpawner, SpawnedAgentInfo } from "@clobber/server/types.ts";
 import { createTriggerDispatchStore } from "@clobber/server/trigger-dispatch-store.ts";
 import { createFinalReportConsumerStateStore } from "@clobber/server/final-report-consumer.ts";
-import { run, runWithExit } from "../src/main.ts";
+import { createRoleContentCache } from "@clobber/server/role-content-cache.ts";
+import type { AgentSpawner, SpawnedAgentInfo } from "@clobber/server/types.ts";
+import { ENGINE_CONTRACT_VERSION } from "@clobber/shared";
+import { run } from "../src/main.ts";
+
+// A minimal RoleTreeContract with non-empty allowedTools — used to pre-seed
+// the materialized_role_cache so getOrLoad hits the cache and never touches git.
+const PINNED_SHA = "abcdef012345678";
+const PINNED_BRANCH = "main";
+const PINNED_TOOLS = ["Bash", "Read", "Edit"];
+const PINNED_CONTRACT = {
+  framing: "You are a test role.",
+  systemPrompt: "Test system prompt.",
+  skills: [],
+  allowedTools: PINNED_TOOLS,
+  allowedCliCommands: [],
+  hooks: "{}",
+  triggers: [],
+  seedRefs: [],
+  wakePrograms: [],
+  defaultWakeProgram: null,
+  habits: [],
+};
 
 interface Harness {
   app: ReturnType<typeof createServer>;
   db: ReturnType<typeof createDatabase>;
   baseUrl: string;
   managerToken: string;
-  managerSessionId: string;
-  workspaceId: string;
-  workerRoleId: string;
-  managerRoleId: string;
   repoPath: string;
+  pinnedRoleId: string;
 }
 
 let harness: Harness;
@@ -44,9 +63,18 @@ function makeStdin(): NodeJS.WritableStream {
 }
 
 beforeAll(async () => {
-  const repoPath = mkdtempSync(join(tmpdir(), "clobber-roles-cli-"));
+  const repoPath = mkdtempSync(join(tmpdir(), "clobber-roles-pin-"));
   writeFileSync(join(repoPath, ".git"), "gitdir: stub\n");
   const db = createDatabase(":memory:");
+
+  // Pre-seed the materialized_role_cache so a commit-pinned role resolves
+  // without touching a real git repo.
+  db.prepare(
+    "INSERT INTO materialized_role_cache (sha, contract_json, contract_version, created_at) VALUES (?, ?, ?, ?)",
+  ).run(PINNED_SHA, JSON.stringify(PINNED_CONTRACT), ENGINE_CONTRACT_VERSION, 0);
+
+  const roleContentCache = createRoleContentCache(db);
+
   const workspaces = createWorkspaceStore(db);
   const roles = createRoleStore(db);
   const roleVersions = createRoleVersionStore(db);
@@ -55,7 +83,7 @@ beforeAll(async () => {
   const sessions = createSessionStore(db);
   const tokens = createSessionTokenStore(db);
 
-  let pidCounter = 8000;
+  let pidCounter = 9000;
   const spawner: AgentSpawner = (req): SpawnedAgentInfo => {
     pidCounter += 1;
     if (req.sessionId === undefined) throw new Error("expected sessionId");
@@ -87,9 +115,11 @@ beforeAll(async () => {
     hookUrl: "http://test.invalid/hook",
     apiBase: "http://test.invalid",
     cliEntry: "/dummy/cli.ts",
-  
     dispatches: createTriggerDispatchStore(db),
     finalReportConsumerState: createFinalReportConsumerStateStore(db),
+    // Inject the pre-built cache so commit-pinned roles resolve without git.
+    roleContentCache,
+    roleRepoDir: "/fake-role-repo",
   });
   await app.listen({ port: 0, host: "127.0.0.1" });
   const addr = app.server.address();
@@ -99,7 +129,7 @@ beforeAll(async () => {
   const wsRes = await app.inject({
     method: "POST",
     url: "/workspaces",
-    payload: { name: "ws", repo_path: repoPath },
+    payload: { name: "ws-pin", repo_path: repoPath },
   });
   if (wsRes.statusCode !== 201) throw new Error(`create ws: ${wsRes.body}`);
   const ws = wsRes.json() as { id: string };
@@ -107,12 +137,7 @@ beforeAll(async () => {
   const managerRow = db
     .prepare("SELECT id FROM roles WHERE name = ? AND workspace_id = ?")
     .get("manager", ws.id) as { id: string } | null;
-  const workerRow = db
-    .prepare("SELECT id FROM roles WHERE name = ? AND workspace_id = ?")
-    .get("worker", ws.id) as { id: string } | null;
-  if (managerRow === null || workerRow === null) {
-    throw new Error("seed missing manager/worker");
-  }
+  if (managerRow === null) throw new Error("seed missing manager");
 
   const bootRes = await app.inject({
     method: "POST",
@@ -123,16 +148,21 @@ beforeAll(async () => {
   const boot = bootRes.json() as { session_id: string };
   const managerToken = tokens.mint(boot.session_id);
 
+  // Insert a commit-pinned role directly into the DB. The role has no
+  // role_versions row — embodiment reads its content from the cache.
+  const pinnedRoleId = randomUUID();
+  db.prepare(
+    `INSERT INTO roles (id, name, persistent, workspace_id, current_commit_branch, current_commit_sha, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ).run(pinnedRoleId, "pinned-role", 0, ws.id, PINNED_BRANCH, PINNED_SHA, 0);
+
   harness = {
     app,
     db,
     baseUrl,
     managerToken,
-    managerSessionId: boot.session_id,
-    workspaceId: ws.id,
-    workerRoleId: workerRow.id,
-    managerRoleId: managerRow.id,
     repoPath,
+    pinnedRoleId,
   };
 });
 
@@ -164,8 +194,8 @@ function envFor(token: string): NodeJS.ProcessEnv {
   };
 }
 
-describe("clobber CLI — roles list", () => {
-  it("prints a table with manager + worker rows by default", async () => {
+describe("clobber CLI — roles list — commit pin + tools columns", () => {
+  it("table has COMMIT header, not VERSION", async () => {
     const s = captureStreams();
     const code = await run({
       argv: ["roles", "list"],
@@ -175,13 +205,41 @@ describe("clobber CLI — roles list", () => {
     });
     expect(code).toBe(0);
     const out = s.out();
-    expect(out).toContain("manager");
-    expect(out).toContain("worker");
-    expect(out.toLowerCase()).toContain("name");
-    expect(out.toLowerCase()).toContain("commit");
+    expect(out.toUpperCase()).toContain("COMMIT");
+    expect(out.toUpperCase()).not.toContain("VERSION");
   });
 
-  it("prints JSON when --json is passed", async () => {
+  it("table shows branch@sha7 for the commit-pinned role", async () => {
+    const s = captureStreams();
+    const code = await run({
+      argv: ["roles", "list"],
+      env: envFor(harness.managerToken),
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(0);
+    const out = s.out();
+    const expected = `${PINNED_BRANCH}@${PINNED_SHA.slice(0, 7)}`;
+    expect(out).toContain(expected);
+  });
+
+  it("table shows TOOLS for the commit-pinned role on the same line as its name", async () => {
+    const s = captureStreams();
+    const code = await run({
+      argv: ["roles", "list"],
+      env: envFor(harness.managerToken),
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(0);
+    const out = s.out();
+    // Find the pinned-role row and assert its TOOLS column is non-empty.
+    const pinnedLine = out.split("\n").find((l) => l.includes("pinned-role"));
+    expect(pinnedLine).toBeDefined();
+    expect(pinnedLine).toContain("Bash");
+  });
+
+  it("--json includes current_commit and allowed_tools for commit-pinned role", async () => {
     const s = captureStreams();
     const code = await run({
       argv: ["roles", "list", "--json"],
@@ -191,126 +249,34 @@ describe("clobber CLI — roles list", () => {
     });
     expect(code).toBe(0);
     const parsed = JSON.parse(s.out()) as {
-      roles: Array<{ name: string; persistent: boolean; version: number }>;
+      roles: Array<{
+        name: string;
+        current_commit?: { branch: string; sha: string };
+        allowed_tools?: string[];
+      }>;
     };
-    expect(Array.isArray(parsed.roles)).toBe(true);
-    const names = parsed.roles.map((r) => r.name).sort();
-    expect(names).toEqual(["manager", "worker"]);
-    const manager = parsed.roles.find((r) => r.name === "manager");
-    expect(manager!.persistent).toBe(true);
-    expect(manager!.version).toBe(1);
+    const pinned = parsed.roles.find((r) => r.name === "pinned-role");
+    expect(pinned).toBeDefined();
+    expect(pinned!.current_commit).toEqual({ branch: PINNED_BRANCH, sha: PINNED_SHA });
+    expect(pinned!.allowed_tools).toEqual(PINNED_TOOLS);
   });
 
-  it("prints help and exits 0 when no subcommand is given", async () => {
+  it("--json includes allowed_tools for row-backed roles (seeded manager)", async () => {
     const s = captureStreams();
     const code = await run({
-      argv: ["roles"],
-      env: envFor(harness.managerToken),
-      stdout: s.stdout,
-      stderr: s.stderr,
-    });
-    expect(code).toBe(0);
-    expect(s.out()).toMatch(/usage: clobber roles/);
-  });
-
-  it("exits 2 for an unknown subcommand", async () => {
-    const s = captureStreams();
-    const code = await run({
-      argv: ["roles", "nope"],
-      env: envFor(harness.managerToken),
-      stdout: s.stdout,
-      stderr: s.stderr,
-    });
-    expect(code).toBe(2);
-    expect(s.err()).toMatch(/nope/);
-  });
-});
-
-describe("clobber CLI — roles show", () => {
-  it("prints a markdown view of the role by name", async () => {
-    const s = captureStreams();
-    const code = await run({
-      argv: ["roles", "show", "worker"],
-      env: envFor(harness.managerToken),
-      stdout: s.stdout,
-      stderr: s.stderr,
-    });
-    expect(code).toBe(0);
-    const out = s.out();
-    expect(out).toContain("worker");
-    expect(out.toLowerCase()).toContain("system prompt");
-    expect(out.toLowerCase()).toContain("version 1");
-  });
-
-  it("looks up the role by id", async () => {
-    const s = captureStreams();
-    const code = await run({
-      argv: ["roles", "show", harness.workerRoleId],
-      env: envFor(harness.managerToken),
-      stdout: s.stdout,
-      stderr: s.stderr,
-    });
-    expect(code).toBe(0);
-    expect(s.out()).toContain("worker");
-  });
-
-  it("prints JSON when --json is passed", async () => {
-    const s = captureStreams();
-    const code = await run({
-      argv: ["roles", "show", "worker", "--json"],
+      argv: ["roles", "list", "--json"],
       env: envFor(harness.managerToken),
       stdout: s.stdout,
       stderr: s.stderr,
     });
     expect(code).toBe(0);
     const parsed = JSON.parse(s.out()) as {
-      id: string;
-      name: string;
-      current_version: { version: number; system_prompt: string };
-      version_history: Array<{ version: number }>;
+      roles: Array<{ name: string; allowed_tools?: string[] }>;
     };
-    expect(parsed.name).toBe("worker");
-    expect(parsed.id).toBe(harness.workerRoleId);
-    expect(parsed.current_version.version).toBe(1);
-    expect(parsed.current_version.system_prompt.length).toBeGreaterThan(0);
-    expect(parsed.version_history).toHaveLength(1);
-  });
-
-  it("exits 2 when no name/id is given", async () => {
-    const s = captureStreams();
-    const code = await run({
-      argv: ["roles", "show"],
-      env: envFor(harness.managerToken),
-      stdout: s.stdout,
-      stderr: s.stderr,
-    });
-    expect(code).toBe(2);
-    expect(s.err()).toMatch(/name|id/i);
-  });
-
-  it("returns a non-zero exit when the role does not exist", async () => {
-    const s = captureStreams();
-    const code = await runWithExit({
-      argv: ["roles", "show", "ghost-role-that-does-not-exist"],
-      env: envFor(harness.managerToken),
-      stdout: s.stdout,
-      stderr: s.stderr,
-    });
-    expect(code).not.toBe(0);
-    expect(s.err()).toContain("not found");
-  });
-
-  it("renders a Triggers section with (none) when the role has no triggers", async () => {
-    const s = captureStreams();
-    const code = await run({
-      argv: ["roles", "show", "worker"],
-      env: envFor(harness.managerToken),
-      stdout: s.stdout,
-      stderr: s.stderr,
-    });
-    expect(code).toBe(0);
-    const out = s.out();
-    expect(out).toContain("## Triggers");
-    expect(out).toMatch(/## Triggers\n\(none\)/);
+    const manager = parsed.roles.find((r) => r.name === "manager");
+    expect(manager).toBeDefined();
+    // Manager inherits allowedTools from base — must be non-empty after fix.
+    expect(Array.isArray(manager!.allowed_tools)).toBe(true);
+    expect(manager!.allowed_tools!.length).toBeGreaterThan(0);
   });
 });
