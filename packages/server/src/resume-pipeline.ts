@@ -177,6 +177,9 @@ async function performResume(
   // The prompt is re-composed every wake; keep the row honest about the
   // rendered prompt this resume actually ran with (#253).
   deps.sessions.updateComposedSystemPrompt(session.id, ctx.spawnOptions.systemPrompt);
+  // Re-capture model/effort so the header reflects the actual values for this
+  // wake — they may change if a role's defaults were updated between wakes (#468).
+  deps.sessions.updateModelEffort(session.id, ctx.spawnOptions.model, ctx.spawnOptions.effort);
   // #366: the resume kick is suppressed (gated on mode === "resume"), so a turn
   // is in flight only when this resume carried an explicit prompt. A bare resume
   // (the UI resume button) runs no turn and emits no `Stop` — register it idle so

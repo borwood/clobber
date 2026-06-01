@@ -13,6 +13,7 @@ import { migrateRoleAllowedToolsColumnDrop } from "./role-allowed-tools-column-d
 import { migrateRoleContractVersion } from "./role-contract-version-migration.ts";
 import { migrateRoleCommitPin } from "./role-commit-pin-migration.ts";
 import { migrateWorkspaceTheme } from "./theme-migration.ts";
+import { migrateSessionModelEffort } from "./session-model-effort-migration.ts";
 
 export function createDatabase(path: string): Database {
   const db = new Database(path);
@@ -38,6 +39,7 @@ export function createDatabase(path: string): Database {
   migrateRoleAllowedToolsColumnDrop(db);
   migrateRoleCommitPin(db);
   migrateWorkspaceTheme(db);
+  migrateSessionModelEffort(db);
   return db;
 }
 

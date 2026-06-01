@@ -47,6 +47,8 @@ export interface SessionSummary {
   readonly role_version?: RoleVersionRef;
   readonly role_current_version?: RoleVersionRef;
   readonly busy?: boolean;
+  readonly model?: string;
+  readonly effort?: string;
 }
 
 export interface OfficePeek {

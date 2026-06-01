@@ -228,6 +228,10 @@ export async function attachSessionToAgent(
     // Capture the rendered prompt this wake was spawned with so the transcript
     // can surface exactly what the agent was told (#253).
     composed_system_prompt: ctx.spawnOptions.systemPrompt,
+    // Capture the resolved model/effort so the header shows actuals, not role
+    // defaults that can differ under per-dispatch overrides (#468).
+    ...(ctx.spawnOptions.model === undefined ? {} : { model: ctx.spawnOptions.model }),
+    ...(ctx.spawnOptions.effort === undefined ? {} : { effort: ctx.spawnOptions.effort }),
   });
   // A fresh attach always delivers the opening kick (or prompt), so a turn is in
   // flight — register busy until its `Stop`.

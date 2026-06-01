@@ -35,6 +35,8 @@ export interface SessionSummary {
   readonly open_question?: OpenSessionQuestion;
   readonly role_version?: RoleVersionRef;
   readonly role_current_version?: RoleVersionRef;
+  readonly model?: string;
+  readonly effort?: string;
 }
 
 export interface WorkspaceSessionSummaries {
@@ -62,6 +64,8 @@ interface Row {
   pinned_version_number: number | null;
   current_version_id: string | null;
   current_version_number: number | null;
+  model: string | null;
+  effort: string | null;
 }
 
 function pickVersionRef(
@@ -133,7 +137,9 @@ export function createWorkspaceSessionSummaries(db: Database): WorkspaceSessionS
       pv.id         AS pinned_version_id,
       pv.version    AS pinned_version_number,
       cv.id         AS current_version_id,
-      cv.version    AS current_version_number
+      cv.version    AS current_version_number,
+      s.model       AS model,
+      s.effort      AS effort
     FROM sessions s
     JOIN roles r                ON r.id          = s.role_id
     LEFT JOIN agents a          ON a.id          = s.agent_id
@@ -181,6 +187,8 @@ export function createWorkspaceSessionSummaries(db: Database): WorkspaceSessionS
           ...(open_question === undefined ? {} : { open_question }),
           ...(role_version === undefined ? {} : { role_version }),
           ...(role_current_version === undefined ? {} : { role_current_version }),
+          ...(row.model === null ? {} : { model: row.model }),
+          ...(row.effort === null ? {} : { effort: row.effort }),
         };
       });
     },

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CommitRefSchema } from "./role.ts";
+import { CommitRefSchema, EffortLevelSchema, ModelSchema } from "./role.ts";
 
 export const SessionSchema = z.object({
   id: z.string().min(1),
@@ -29,6 +29,11 @@ export const SessionSchema = z.object({
   // with — the rendered prompt, not the role-version template. Re-captured on
   // each wake so per-session deltas are auditable (#253).
   composed_system_prompt: z.string().min(1).optional(),
+  // The resolved (effective) model and effort at spawn time. Captured so the
+  // session header shows the actual values used, not the role's current defaults
+  // which can differ under per-dispatch overrides (#468).
+  model: ModelSchema.optional(),
+  effort: EffortLevelSchema.optional(),
 });
 export type Session = z.infer<typeof SessionSchema>;
 
@@ -46,5 +51,7 @@ export const CreateSessionRequestSchema = z.object({
   pid: z.number().int().positive(),
   transcript_path: z.string().min(1).optional(),
   composed_system_prompt: z.string().min(1).optional(),
+  model: ModelSchema.optional(),
+  effort: EffortLevelSchema.optional(),
 });
 export type CreateSessionRequest = z.infer<typeof CreateSessionRequestSchema>;
