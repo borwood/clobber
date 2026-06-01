@@ -20,6 +20,7 @@ import { registerPersistentAgentsRoutes } from "./routes/persistent-agents.ts";
 import { registerWhiteboardRoutes } from "./routes/whiteboard.ts";
 import { registerWebhookTriggersRoutes } from "./routes/webhook-triggers.ts";
 import { registerLayoutEventRoutes } from "./routes/layout-events.ts";
+import { registerWorkspacePromptModuleRoutes } from "./routes/workspace-prompt-modules.ts";
 import { createAgentRegistry } from "./agent-registry.ts";
 import { createToolTokenStore } from "./tool-token-store.ts";
 import type { ToolTokenGateDeps } from "./tool-token-gate.ts";
@@ -237,6 +238,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
   });
   registerWebhookTriggersRoutes(app, { scheduler });
   registerLayoutEventRoutes(app, { layoutEvents });
+  registerWorkspacePromptModuleRoutes(app, { db: opts.db, workspaces: opts.workspaces });
   registerFsRoutes(app);
   registerPersistentAgentsRoutes(app, {
     workspaces: opts.workspaces,
