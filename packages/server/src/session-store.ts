@@ -19,6 +19,8 @@ export interface SessionStore {
   // Re-capture the composed prompt on resume so the row reflects the latest
   // wake's rendered `appendSystemPrompt` (#253).
   updateComposedSystemPrompt(id: string, prompt: string): boolean;
+  // Re-capture the resolved model/effort on resume (#468).
+  updateModelEffort(id: string, model: string | undefined, effort: string | undefined): boolean;
   updateProviderThreadId(id: string, providerThreadId: string): boolean;
   updateTranscriptPath(id: string, path: string): boolean;
   listForWorkspace(workspaceId: string): Session[];
@@ -44,6 +46,8 @@ interface Row {
   transcript_path: string | null;
   was_live_at_shutdown: number;
   composed_system_prompt: string | null;
+  model: string | null;
+  effort: string | null;
 }
 
 function rowToSession(row: Row): Session {
@@ -71,14 +75,16 @@ function rowToSession(row: Row): Session {
   if (row.composed_system_prompt !== null) {
     input["composed_system_prompt"] = row.composed_system_prompt;
   }
+  if (row.model !== null) input["model"] = row.model;
+  if (row.effort !== null) input["effort"] = row.effort;
   return SessionSchema.parse(input);
 }
 
 export function createSessionStore(db: Database): SessionStore {
   const insertStmt = db.prepare(
     `INSERT INTO sessions
-       (id, agent_id, workspace_id, role_id, role_version_id, role_commit_branch, role_commit_sha, runtime_provider, provider_thread_id, wake_program, label, pid, started_at, ended_at, transcript_path, composed_system_prompt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+       (id, agent_id, workspace_id, role_id, role_version_id, role_commit_branch, role_commit_sha, runtime_provider, provider_thread_id, wake_program, label, pid, started_at, ended_at, transcript_path, composed_system_prompt, model, effort)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
   );
   const getStmt = db.prepare("SELECT * FROM sessions WHERE id = ?");
   const latestForAgentStmt = db.prepare(
@@ -101,6 +107,9 @@ export function createSessionStore(db: Database): SessionStore {
   );
   const updateComposedPromptStmt = db.prepare(
     "UPDATE sessions SET composed_system_prompt = ? WHERE id = ?",
+  );
+  const updateModelEffortStmt = db.prepare(
+    "UPDATE sessions SET model = ?, effort = ? WHERE id = ?",
   );
   const updateProviderThreadIdStmt = db.prepare(
     "UPDATE sessions SET provider_thread_id = ? WHERE id = ? AND ended_at IS NULL",
@@ -137,6 +146,8 @@ export function createSessionStore(db: Database): SessionStore {
         req.transcript_path === undefined ? null : req.transcript_path;
       const composed_system_prompt =
         req.composed_system_prompt === undefined ? null : req.composed_system_prompt;
+      const model = req.model === undefined ? null : req.model;
+      const effort = req.effort === undefined ? null : req.effort;
       insertStmt.run(
         req.id,
         req.agent_id,
@@ -153,6 +164,8 @@ export function createSessionStore(db: Database): SessionStore {
         started_at,
         transcript_path,
         composed_system_prompt,
+        model,
+        effort,
       );
       const out: Record<string, unknown> = {
         id: req.id,
@@ -174,6 +187,8 @@ export function createSessionStore(db: Database): SessionStore {
       if (req.composed_system_prompt !== undefined) {
         out["composed_system_prompt"] = req.composed_system_prompt;
       }
+      if (req.model !== undefined) out["model"] = req.model;
+      if (req.effort !== undefined) out["effort"] = req.effort;
       return SessionSchema.parse(out);
     },
 
@@ -214,6 +229,15 @@ export function createSessionStore(db: Database): SessionStore {
 
     updateComposedSystemPrompt(id, prompt) {
       const result = updateComposedPromptStmt.run(prompt, id);
+      return result.changes > 0;
+    },
+
+    updateModelEffort(id, model, effort) {
+      const result = updateModelEffortStmt.run(
+        model === undefined ? null : model,
+        effort === undefined ? null : effort,
+        id,
+      );
       return result.changes > 0;
     },
 

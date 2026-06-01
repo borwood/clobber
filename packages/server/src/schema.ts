@@ -107,6 +107,8 @@ export const SCHEMA = `
     transcript_path TEXT,
     was_live_at_shutdown INTEGER NOT NULL DEFAULT 0,
     composed_system_prompt TEXT,
+    model  TEXT,
+    effort TEXT,
     FOREIGN KEY (agent_id)        REFERENCES agents(id)        ON DELETE SET NULL,
     FOREIGN KEY (workspace_id)    REFERENCES workspaces(id)    ON DELETE CASCADE,
     FOREIGN KEY (role_id)         REFERENCES roles(id)         ON DELETE CASCADE,

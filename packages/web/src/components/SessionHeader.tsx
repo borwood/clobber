@@ -27,6 +27,7 @@ export function SessionHeader({ session }: Props) {
           {session.role_name}
         </span>
         <RoleVersionBadge session={session} />
+        <ModelEffortBadges session={session} />
         {session.label !== undefined && (
           <span className="text-sm text-text font-medium truncate min-w-0">
             {session.label}
@@ -45,6 +46,24 @@ export function SessionHeader({ session }: Props) {
         </div>
       )}
     </div>
+  );
+}
+
+function ModelEffortBadges({ session }: { session: SessionSummary }) {
+  if (session.model === undefined && session.effort === undefined) return null;
+  return (
+    <>
+      {session.model !== undefined && (
+        <span className="px-1.5 py-0.5 rounded bg-elevated text-text-soft text-[10px] font-mono shrink-0">
+          {session.model}
+        </span>
+      )}
+      {session.effort !== undefined && (
+        <span className="px-1.5 py-0.5 rounded bg-elevated text-text-soft text-[10px] font-mono shrink-0">
+          {session.effort}
+        </span>
+      )}
+    </>
   );
 }
 
