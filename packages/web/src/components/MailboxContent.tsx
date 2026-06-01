@@ -82,6 +82,7 @@ export function MailboxContent(props: MailboxContentProps) {
             sessionId={selectedSession}
             disabled={selected.ended_at !== undefined}
             busy={selected.busy === true}
+            transcript={transcript}
             onSend={async (prompt) => {
               await api.sendPrompt(selectedSession, prompt);
             }}
