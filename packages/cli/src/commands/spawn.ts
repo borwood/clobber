@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
-import { EffortLevelSchema, ModelSchema, type BriefingFile, type EffortLevel, type Model } from "@clobber/shared";
+import { EffortLevelSchema, MODEL_ALIASES, ModelSchema, type BriefingFile, type EffortLevel, type Model } from "@clobber/shared";
 import type { Command } from "../commands.ts";
 import { request } from "../http.ts";
 import { CliUsageError } from "../usage-error.ts";
@@ -83,7 +83,7 @@ export function parseSpawnArgs(args: readonly string[]): ParsedArgs {
       const parsed = ModelSchema.safeParse(raw);
       if (!parsed.success) {
         throw new CliUsageError(
-          `--model must be one of opus|sonnet|haiku, got: ${raw}`,
+          `--model must be one of ${MODEL_ALIASES.join("|")}, or a full claude-* model name, got: ${raw}`,
         );
       }
       model = parsed.data;
@@ -177,9 +177,12 @@ Flags:
       --effort <level>           Reasoning depth: low|medium|high|xhigh|max.
                                  Overrides the role's default for this spawn.
                                  Omit to use the role default.
-      --model <model>            Model: opus|sonnet|haiku. Overrides the role's
-                                 default for this spawn. Omit to use the role
-                                 default (or claude's default if neither is set).
+      --model <model>            Model alias (default|best|opus|sonnet|haiku|
+                                 opus[1m]|sonnet[1m]|opusplan) or a full
+                                 claude-* API name (e.g. claude-opus-4-8).
+                                 Overrides the role's default for this spawn.
+                                 Omit to use the role default (or claude's
+                                 default if neither is set).
       --wake-program <name>      The opening move: composes that program's
                                  layer-C system addon and fires its kick. Use
                                  \`task\` for a worker that should read its desk
