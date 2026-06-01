@@ -56,6 +56,7 @@ function turnProvider(opts: {
       livePromptInjection: false,
       interrupt: false,
       resume: true,
+      inSessionHabits: false,
     },
     initialProviderThreadId(sessionId) {
       return opts.initialThreadId === undefined

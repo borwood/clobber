@@ -14,6 +14,8 @@ import type { WorkspaceStore } from "../workspace-store.ts";
 import { endSession } from "../session-lifecycle.ts";
 import { applyTaskEvent } from "../task-event-handler.ts";
 import { guardOfficeBoundary } from "../office-boundary-guard.ts";
+import { guardHabitEdit } from "../guard-habit-edit.ts";
+import { evaluateSelfHabits, type HabitReceiverDeps } from "../habit-receiver.ts";
 import { bridgeAskUserQuestion } from "../ask-user-question-bridge.ts";
 import { buildFileSizeReminder } from "../file-size-reminder.ts";
 import type { TriggerScheduler } from "../trigger-scheduler.ts";
@@ -34,6 +36,11 @@ export interface RegisterHookRoutesDeps {
   agentStatusLog: AgentStatusLogStore;
   scheduler: Pick<TriggerScheduler, "fireSessionEnded" | "flushPendingWakes">;
   askBridgeTimeoutMs?: number;
+  // #271 — the self.* habit seam: resolve the firing session's habits + the
+  // injectable evaluator dependencies (RNG sampling, bash enrichment).
+  resolveSessionHabits: HabitReceiverDeps["resolveSessionHabits"];
+  random: HabitReceiverDeps["random"];
+  runBash: HabitReceiverDeps["runBash"];
 }
 
 export function registerHookRoutes(
@@ -53,6 +60,8 @@ export function registerHookRoutes(
     if (payload.hook_event_name === "PreToolUse") {
       const denial = guardOfficeBoundary(payload, deps);
       if (denial !== null) return denial;
+      const habitDenial = guardHabitEdit(payload, deps);
+      if (habitDenial !== null) return habitDenial;
       const bridged = await bridgeAskUserQuestion(payload, {
         agentQuestions: deps.agentQuestions,
         agentQuestionWaiter: deps.agentQuestionWaiter,
@@ -65,6 +74,12 @@ export function registerHookRoutes(
       const reminder = buildFileSizeReminder(payload, deps);
       if (reminder !== null) return reminder;
     }
+    // The self.* habit injection rides every event the compile side wired. It
+    // returns additionalContext, so it runs after the gates/bridges that may
+    // short-circuit the turn, and falls through to {continue:true} when no habit
+    // fires — leaving the baseline IPC contract intact.
+    const injection = evaluateSelfHabits(payload, deps);
+    if (injection !== null) return injection;
     return { continue: true };
   });
 }

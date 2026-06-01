@@ -150,6 +150,7 @@ export function bundleFromContract(
       ? {}
       : { defaultWakeProgram: contract.defaultWakeProgram }),
     hooksJson: contract.hooks,
+    habits: contract.habits,
   };
 }
 

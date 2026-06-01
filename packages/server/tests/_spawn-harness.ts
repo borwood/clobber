@@ -53,6 +53,7 @@ export function turnProvider(): RuntimeProvider {
       livePromptInjection: false,
       interrupt: false,
       resume: true,
+      inSessionHabits: false,
     },
     initialProviderThreadId(sessionId) {
       return `thread-${sessionId}`;

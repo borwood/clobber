@@ -1,4 +1,9 @@
-import type { ClobberPromptTag, EffortLevel, PermissionMode } from "@clobber/shared";
+import type {
+  ClobberPromptTag,
+  EffortLevel,
+  InSessionHabitsCapability,
+  PermissionMode,
+} from "@clobber/shared";
 import {
   buildClaudeArgs,
   type HookSettings,
@@ -24,7 +29,10 @@ export interface RuntimeCommand {
   readonly stdoutEventFormat?: RuntimeStdoutEventFormat;
 }
 
-export interface RuntimeProviderCapabilities {
+// #337/#271 — `inSessionHabits` (from Phase 0's InSessionHabitsCapability) joins
+// the capability set: does this runtime emit the in-session reactive hooks that
+// `self.*` habits compile to? claude: true · codex (turn-based, no hooks): false.
+export interface RuntimeProviderCapabilities extends InSessionHabitsCapability {
   readonly processLifetime: RuntimeProcessLifetime;
   readonly livePromptInjection: boolean;
   readonly interrupt: boolean;
@@ -102,9 +110,10 @@ export const claudeRuntimeProvider: RuntimeProvider = {
     livePromptInjection: true,
     interrupt: true,
     resume: true,
+    inSessionHabits: true,
   },
   prepareBundle(opts) {
-    return materializeBundle(opts);
+    return materializeBundle({ ...opts, inSessionHabits: true });
   },
   buildSpawnRequest(opts) {
     return {
@@ -152,9 +161,10 @@ export const codexRuntimeProvider: RuntimeProvider = {
     livePromptInjection: false,
     interrupt: false,
     resume: true,
+    inSessionHabits: false,
   },
   prepareBundle(opts) {
-    return materializeBundle(opts);
+    return materializeBundle({ ...opts, inSessionHabits: false });
   },
   buildSpawnRequest(opts) {
     return buildCodexRequest(opts, {

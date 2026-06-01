@@ -24,6 +24,7 @@ import type { TriggerDispatchStore } from "./trigger-dispatch-store.ts";
 import type { FinalReportConsumerStateStore } from "./final-report-consumer.ts";
 import type { LayoutEventStore } from "./layout-event-store.ts";
 import type { Clock } from "./clock.ts";
+import type { Habit, Session } from "@clobber/shared";
 
 export type AgentSpawnRequest = RuntimeSpawnRequest;
 
@@ -78,4 +79,13 @@ export interface ServerOptions {
   // into. Optional: when set, the server boots the commit-pinned read path
   // (materialize + content cache); when absent, embodiment stays row-backed.
   readonly roleRepoDir?: string;
+  // #271 — the self.* habit resolver seam. Defaults to embodying the firing
+  // session's role and reading its habits; injectable so a test can drive the
+  // receiver/gate with a fixed habit set without standing up the git role repo.
+  readonly resolveSessionHabits?: (session: Session) => readonly Habit[];
+  // The receiver's [0,1) `rand` sampler and `inject.bash` runner. Default to
+  // Math.random / a real `execSync`; injectable so probabilistic and shell-
+  // enriched habits are deterministically testable.
+  readonly habitRandom?: () => number;
+  readonly habitRunBash?: (command: string, cwd: string) => string;
 }
