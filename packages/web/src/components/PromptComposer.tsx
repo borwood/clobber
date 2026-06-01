@@ -2,6 +2,8 @@ import { useState, type KeyboardEvent } from "react";
 import { classifyComposerKey } from "./composer-key.ts";
 import { computeContextLength } from "../context-length.ts";
 import type { TranscriptLine } from "../api.ts";
+import { FilesystemBrowser } from "./FilesystemBrowser.tsx";
+import { api } from "../api.ts";
 
 interface Props {
   readonly sessionId: string;
@@ -11,6 +13,8 @@ interface Props {
   readonly onSend: (prompt: string) => Promise<void>;
   readonly onInterrupt: () => Promise<void>;
 }
+
+type FileBrowserState = { readonly path: string; readonly label: string } | null;
 
 export function PromptComposer({
   sessionId,
@@ -24,6 +28,7 @@ export function PromptComposer({
   const [sending, setSending] = useState(false);
   const [interrupting, setInterrupting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fileBrowser, setFileBrowser] = useState<FileBrowserState>(null);
 
   const canSend = !disabled && !sending && prompt.trim().length > 0;
   const canInterrupt = !disabled && busy && !interrupting;
@@ -53,6 +58,21 @@ export function PromptComposer({
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setInterrupting(false);
+    }
+  }
+
+  async function openFileBrowser(target: "desk" | "office") {
+    setError(null);
+    try {
+      const locations = await api.getSessionLocations(sessionId);
+      const path = target === "desk" ? locations.desk_path : locations.office_path;
+      if (path === null) {
+        setError("No office for this agent");
+        return;
+      }
+      setFileBrowser({ path, label: target === "desk" ? "Desk" : "Office" });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -93,7 +113,7 @@ export function PromptComposer({
         rows={3}
         className="w-full resize-none rounded border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-faint focus:outline-none focus:border-border-strong disabled:opacity-50"
       />
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 relative">
         <span className="text-xs text-text-faint font-mono truncate">
           {sessionId.slice(0, 8)}
         </span>
@@ -120,15 +140,38 @@ export function PromptComposer({
         )}
         <button
           type="button"
-          onClick={() => void send()}
-          disabled={!canSend}
+          onClick={() => void openFileBrowser("desk")}
+          title="Browse agent desk"
           className={
-            "px-3 py-1.5 text-xs rounded bg-accent-strong text-white hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed " +
+            "px-2 py-1.5 text-xs rounded border border-border text-text-soft hover:text-text hover:border-border-strong " +
             (canInterrupt ? "" : "ml-auto")
           }
         >
+          Desk
+        </button>
+        <button
+          type="button"
+          onClick={() => void openFileBrowser("office")}
+          title="Browse agent office"
+          className="px-2 py-1.5 text-xs rounded border border-border text-text-soft hover:text-text hover:border-border-strong"
+        >
+          Office
+        </button>
+        <button
+          type="button"
+          onClick={() => void send()}
+          disabled={!canSend}
+          className="px-3 py-1.5 text-xs rounded bg-accent-strong text-white hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed"
+        >
           {sending ? "Sending…" : "Send"}
         </button>
+        {fileBrowser !== null && (
+          <FilesystemBrowser
+            mode="file"
+            initialPath={fileBrowser.path}
+            onCancel={() => setFileBrowser(null)}
+          />
+        )}
       </div>
     </div>
   );

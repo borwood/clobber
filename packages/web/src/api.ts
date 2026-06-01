@@ -6,6 +6,8 @@ import type {
   LatestAgentStatus,
   RoleVersionRef,
   BrowseDirResponse,
+  FileReadResponse,
+  SessionLocationsResponse,
   UpdateWorkspaceConfigRequest,
   AskQuestion,
   SequencedLayoutEvent,
@@ -195,9 +197,18 @@ export const api = {
       `/sessions/${encodeURIComponent(sessionId)}/answer`,
       { question_id: questionId, answer },
     ),
-  browseFs: (path?: string) =>
-    getJson<BrowseDirResponse>(
-      path === undefined ? "/fs/browse" : `/fs/browse?path=${encodeURIComponent(path)}`,
+  browseFs: (path?: string, includeFiles?: boolean) => {
+    const params = new URLSearchParams();
+    if (path !== undefined) params.set("path", path);
+    if (includeFiles === true) params.set("includeFiles", "true");
+    const qs = params.toString();
+    return getJson<BrowseDirResponse>(qs.length > 0 ? `/fs/browse?${qs}` : "/fs/browse");
+  },
+  readFile: (path: string) =>
+    getJson<FileReadResponse>(`/fs/read?path=${encodeURIComponent(path)}`),
+  getSessionLocations: (sessionId: string) =>
+    getJson<SessionLocationsResponse>(
+      `/sessions/${encodeURIComponent(sessionId)}/locations`,
     ),
   updateWorkspaceConfig: (id: string, body: UpdateWorkspaceConfigRequest) =>
     patchJson<Workspace>(`/workspaces/${encodeURIComponent(id)}`, body),

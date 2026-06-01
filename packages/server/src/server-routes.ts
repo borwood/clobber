@@ -18,6 +18,7 @@ import { registerWebhookTriggersRoutes } from "./routes/webhook-triggers.ts";
 import { registerLayoutEventRoutes } from "./routes/layout-events.ts";
 import { registerToolTokenTestRoutes } from "./routes/tool-token-test.ts";
 import { registerWorkspacePromptModuleRoutes } from "./routes/workspace-prompt-modules.ts";
+import { registerSessionLocationsRoutes } from "./routes/session-locations.ts";
 import type { ServerOptions } from "./types.ts";
 import type { ServerDeps } from "./server-deps.ts";
 
@@ -123,6 +124,12 @@ export function registerAllRoutes(
   registerLayoutEventRoutes(app, { layoutEvents });
   registerWorkspacePromptModuleRoutes(app, { db: opts.db, workspaces: opts.workspaces });
   registerFsRoutes(app);
+  registerSessionLocationsRoutes(app, {
+    sessions: opts.sessions,
+    agents: opts.agents,
+    roles: opts.roles,
+    workspaces: opts.workspaces,
+  });
   registerPersistentAgentsRoutes(app, {
     workspaces: opts.workspaces,
     agents: opts.agents,
