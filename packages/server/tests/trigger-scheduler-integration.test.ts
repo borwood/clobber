@@ -177,8 +177,11 @@ describe("TriggerScheduler — HTTP integration wiring", () => {
     });
     expect(patchRes.statusCode).toBe(200);
 
-    // Boot session is registered busy by default — cron fires into a live-busy agent
+    // Boot session is registered busy by default — cron fires into a live-busy agent.
+    // The fire-and-forget cron dispatch now routes through the async notification
+    // spine (emit → deliver), so drain its macrotask tail before reading the audit.
     h.clock.advance(60_000);
+    for (let i = 0; i < 8; i += 1) await Bun.sleep(0);
 
     const audit = h.dispatches.listForAgent(boot.managerAgentId);
     expect(audit.length).toBe(1);
@@ -246,8 +249,10 @@ describe("TriggerScheduler — HTTP integration wiring", () => {
     expect(spawn2.statusCode).toBe(200);
     const spawn2Body = spawn2.json() as { agent_id: string };
 
-    // Advance to 10:00 UTC — second manager's cron should fire (skipped-busy because live)
+    // Advance to 10:00 UTC — second manager's cron should fire (skipped-busy because live).
+    // Drain the async spine dispatch's macrotask tail before reading the audit.
     h.clock.advance(61 * 60 * 1000);
+    for (let i = 0; i < 8; i += 1) await Bun.sleep(0);
 
     const audit = h.dispatches.listForAgent(spawn2Body.agent_id);
     expect(audit.length).toBe(1);

@@ -182,13 +182,14 @@ function makeHarness(initial: Date, opts: { roleRepoDir?: string } = {}): Harnes
 
 // A cron-triggered spawn now runs an async boot-context provider, so the
 // cron timer dispatches fire-and-forget; advancing the fake clock kicks off
-// that async work but does not await it. Yielding to a real macrotask drains
-// the pending microtasks so the dispatch (spawn + audit) settles before we
+// that async work but does not await it. The fired dispatch routes through the
+// async notification spine (emit → deliver → attachSession's fs writes), whose
+// tail spans several macrotask turns, so settle a handful of them before we
 // assert. (The webhook / workspace-open fire paths return a promise the test
 // awaits directly, so they don't need this.)
 async function flushAfter(clock: TestClock, ms: number): Promise<void> {
   clock.advance(ms);
-  await Bun.sleep(0);
+  for (let i = 0; i < 8; i += 1) await Bun.sleep(0);
 }
 
 function getCurrentVersion(h: Harness, roleId: string): RoleVersion {

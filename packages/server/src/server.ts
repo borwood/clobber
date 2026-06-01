@@ -11,6 +11,8 @@ import { registerWorkspaceRoleRoutes } from "./routes/workspace-roles.ts";
 import { registerAgentRoutes } from "./routes/agent.ts";
 import { registerAgentMessagesRoutes } from "./routes/agent-messages.ts";
 import { createAgentMessageStore } from "./agent-message-store.ts";
+import { createNotificationStore } from "./notification-store.ts";
+import { createNotificationDispatcher } from "./notification-dispatch.ts";
 import { registerAgentRolesRoutes } from "./routes/agent-roles.ts";
 import { registerAgentSelfSkillsRoutes } from "./routes/agent-self-skills.ts";
 import { registerAgentAskRoutes } from "./routes/agent-ask.ts";
@@ -57,6 +59,12 @@ export function createServer(opts: ServerOptions): FastifyInstance {
   const layoutEvents =
     opts.layoutEvents === undefined ? createLayoutEventStore() : opts.layoutEvents;
   const clock = opts.clock === undefined ? createSystemClock() : opts.clock;
+  // The notification spine (#425): one dispatcher shared by the trigger emitter
+  // and the #93 message route so every cross-agent signal lands on one record.
+  const notificationDispatcher = createNotificationDispatcher(
+    createNotificationStore(opts.db),
+    clock,
+  );
   const runtimeProvider =
     opts.runtimeProvider === undefined ? claudeRuntimeProvider : opts.runtimeProvider;
   // The #237 contract gate's migration seam, filled by the #238 framework.
@@ -126,6 +134,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     runtimeProvider,
     dispatches: opts.dispatches,
     agentStatusLog: opts.agentStatusLog,
+    dispatcher: notificationDispatcher,
     attachSession: (input) => attachSessionToAgent(spawnPipelineDeps, input),
     // #385 — the manager's wake path resolves triggers through the commit-pin
     // view, so a git-backed (commit-pinned) manager still registers and wakes.
@@ -281,6 +290,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     ...injectDeps,
     agentStatusLog: opts.agentStatusLog,
     agentMessages: createAgentMessageStore(opts.db),
+    dispatcher: notificationDispatcher,
   });
   registerAgentRolesRoutes(app, {
     db: opts.db,

@@ -1,10 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import type { Session } from "@clobber/shared";
+import type { ClobberPromptTag, Session } from "@clobber/shared";
 import { injectPrompt, type InjectPromptDeps } from "../inject-prompt.ts";
 import type { AgentStore } from "../agent-store.ts";
 import type { AgentStatusLogStore } from "../agent-status-log-store.ts";
 import type { AgentMessageStore } from "../agent-message-store.ts";
+import type { NotificationDispatcher } from "../notification-dispatch.ts";
 import { withAgentAuth, type WithAgentAuthDeps } from "./_with-agent-auth.ts";
 
 export type AgentMessagesRouteDeps = WithAgentAuthDeps &
@@ -12,6 +13,7 @@ export type AgentMessagesRouteDeps = WithAgentAuthDeps &
     readonly agents: AgentStore;
     readonly agentStatusLog: AgentStatusLogStore;
     readonly agentMessages: AgentMessageStore;
+    readonly dispatcher: NotificationDispatcher;
   };
 
 const MessageBodySchema = z.object({
@@ -76,15 +78,43 @@ export function registerAgentMessagesRoutes(
         originator_session_id: session.id,
         recipient_session_id: recipientSession.id,
       });
-      const result = await injectPrompt(recipientSession.id, parsed.data.body, deps, {
+      const tag: ClobberPromptTag = {
         kind: "message",
         attrs: { from: senderLabel(session, deps), token: issued.token },
-      });
-      if (!result.ok) {
-        reply.code(result.status);
-        return result.detail === undefined
-          ? { error: result.error }
-          : { error: result.error, detail: result.detail };
+      };
+      // A message is a notification: a high-priority, reply-capable signal on the
+      // #425 spine. The durable record is created here; the transport stays the
+      // existing injectPrompt path so delivery is byte-unchanged.
+      const { outcome } = await deps.dispatcher.emit(
+        {
+          type: "message",
+          recipient: { kind: "agent", agent_id: recipientAgent.id },
+          priority: "high",
+          payload: { body: parsed.data.body, tag },
+          provenance: {
+            source_kind: "message",
+            source_id: issued.message_id,
+            emitter_agent_id: session.agent_id!,
+          },
+          metadata: {
+            reply_capability: issued.token,
+            recipient_session_id: recipientSession.id,
+            message_id: issued.message_id,
+          },
+        },
+        async () => {
+          const result = await injectPrompt(recipientSession.id, parsed.data.body, deps, tag);
+          if (result.ok) return { action: "injected", sessionId: recipientSession.id };
+          return result.detail === undefined
+            ? { action: "errored", error: result.error, status: result.status }
+            : { action: "errored", error: result.error, status: result.status, detail: result.detail };
+        },
+      );
+      if (outcome.action === "errored") {
+        reply.code(outcome.status!);
+        return outcome.detail === undefined
+          ? { error: outcome.error }
+          : { error: outcome.error, detail: outcome.detail };
       }
 
       deps.agentStatusLog.append({

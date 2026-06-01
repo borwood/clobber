@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 /**
  * Provenance tag for a user turn that clobber synthesized (rather than typed by
  * a human at the composer). Wrapping happens at the serialize chokepoint
@@ -6,21 +8,37 @@
  *
  * `via` carries trigger-kind for `type="trigger"` so the enum stays small.
  */
-export type UserTurnKind =
-  | "wake-kick"
-  | "trigger"
-  | "ask-answer"
-  | "spawn-prompt"
-  | "live-inject"
-  | "interrupt-notice"
-  | "tool-token"
-  | "message"
-  | "message-reply";
+export const USER_TURN_KINDS = [
+  "wake-kick",
+  "trigger",
+  "ask-answer",
+  "spawn-prompt",
+  "live-inject",
+  "interrupt-notice",
+  "tool-token",
+  "message",
+  "message-reply",
+] as const;
 
-export interface ClobberPromptTag {
-  readonly kind: UserTurnKind;
-  readonly attrs?: Readonly<Record<string, string>>;
-}
+export const UserTurnKindSchema = z.enum(USER_TURN_KINDS);
+export type UserTurnKind = z.infer<typeof UserTurnKindSchema>;
+
+export const ClobberPromptTagSchema = z.object({
+  kind: UserTurnKindSchema,
+  attrs: z.record(z.string(), z.string()).optional(),
+});
+export type ClobberPromptTag = z.infer<typeof ClobberPromptTagSchema>;
+
+/**
+ * A complete `<clobber type=…>…</clobber>` turn ready to deliver: the message
+ * body plus the provenance tag that wraps it. The unit the notification
+ * dispatcher (#425) persists as a payload and hands to the transport.
+ */
+export const ClobberTurnSchema = z.object({
+  body: z.string(),
+  tag: ClobberPromptTagSchema,
+});
+export type ClobberTurn = z.infer<typeof ClobberTurnSchema>;
 
 /** Wraps `content` in `<clobber type="kind" k="v">…</clobber>`. */
 export function wrapClobberTag(content: string, tag: ClobberPromptTag): string {
