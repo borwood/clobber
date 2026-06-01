@@ -2,7 +2,6 @@ import { describe, it, expect } from "bun:test";
 import { mkdtempSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ENGINE_CONTRACT_VERSION } from "@clobber/shared";
 import { createDatabase } from "../src/db.ts";
 import { createRoleStore } from "../src/role-store.ts";
 import {
@@ -64,8 +63,11 @@ describe("migration harness — populated existing-DB upgrade", () => {
         )
         .all() as Array<{ role_name: string; cv: number; wp: string }>;
       expect(versions.length).toBe(2);
-      // Every row recovered a contract stamp on the upgrade path.
-      for (const v of versions) expect(v.cv).toBe(ENGINE_CONTRACT_VERSION);
+      // Every row recovered a contract stamp on the upgrade path. The backfill
+      // freezes it at the historical 1 (DEFAULT 1), NOT the live
+      // ENGINE_CONTRACT_VERSION (now 2 after #432) — a later boot sweep migrates
+      // these v1 rows forward; the backfill never re-stamps them.
+      for (const v of versions) expect(v.cv).toBe(1);
       // The worker bundle declares wake programs; the upgrade backfills them
       // from the shipped manifest rather than leaving the default '[]'.
       const worker = versions.find((v) => v.role_name === "worker")!;

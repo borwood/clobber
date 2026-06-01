@@ -59,10 +59,24 @@ export function createRoleContractMigrator(
   };
 }
 
-// The production registry. v1 has never bumped the contract, so there are zero
-// real steps yet — every mismatch declines, exactly as the empty seam did. A
-// real step is added here the first time `ENGINE_CONTRACT_VERSION` advances.
-export const ROLE_CONTRACT_MIGRATION_STEPS: readonly RoleContractMigrationStep[] = [];
+// 1→2: the `habits` field (#408/#409) advanced the engine contract (#432).
+// habits are git-tree-only (file-per-habit, #398/#407) and were NEVER flattened
+// into a `role_versions` column — `roleSnapshotToContract`, `roleContractToSnapshot`
+// and `loadAsBundle` all carry `habits: []`. So the frozen RoleVersion column shape
+// is invariant across this bump: a v1-authored row already IS the contract-2 shape.
+// The transform is therefore identity — its job is to mark v1 rows forward-carryable
+// so the boot sweep MIGRATES them instead of refusing one per adopted version (the
+// refusal-flood). The habits delta lives in the materialized RoleTreeContract cache,
+// healed there by the version-gate eviction + git re-read, not by this step.
+const HABITS_1_TO_2: RoleContractMigrationStep = {
+  from: 1,
+  migrate: (version) => version,
+};
+
+// The production registry — one N→N+1 step per contract advance, in order.
+export const ROLE_CONTRACT_MIGRATION_STEPS: readonly RoleContractMigrationStep[] = [
+  HABITS_1_TO_2,
+];
 
 // The real migrator the spawn pipeline wires in, replacing the empty seam.
 export const ROLE_CONTRACT_MIGRATOR: RoleContractMigrator = createRoleContractMigrator(

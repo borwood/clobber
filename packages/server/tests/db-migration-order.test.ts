@@ -2,7 +2,6 @@ import { describe, it, expect } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ENGINE_CONTRACT_VERSION } from "@clobber/shared";
 import { createDatabase } from "../src/db.ts";
 import { createRoleStore } from "../src/role-store.ts";
 
@@ -39,7 +38,10 @@ describe("createDatabase migration ordering (existing-DB upgrade)", () => {
       const stamp = db
         .prepare("SELECT contract_version AS c FROM role_versions WHERE id = ?")
         .get(versionId) as { c: number };
-      expect(stamp.c).toBe(ENGINE_CONTRACT_VERSION);
+      // Backfill freezes the legacy row at the historical contract 1 (DEFAULT 1),
+      // not the live ENGINE_CONTRACT_VERSION (2 after #432); the boot sweep carries
+      // such v1 rows forward via its 1→2 step.
+      expect(stamp.c).toBe(1);
       db.close();
     } finally {
       rmSync(dir, { recursive: true, force: true });

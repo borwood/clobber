@@ -23,10 +23,21 @@
 //     `role-manifest.ts` and the `allowed_*_json` columns.
 //   - The workspace contracts a role invokes — `boot_context_provider` and
 //     `final_report_callback` in `workspace.ts`.
+//   - Self-habits — the `Habit` schema in `habit.ts` and the self.* → Claude
+//     event mapping in `compile-self-habits.ts`. Habits are git-tree-only
+//     (file-per-habit, #398/#407): NOT a frozen `role_versions` column, so they
+//     reach the engine through the materialized `RoleTreeContract` cache, not the
+//     version-row JSON. Adding the field (#408/#409) reshaped that contract — the
+//     cache row gained a `habits` key — which is why it was a contract-affecting
+//     change even though no version column moved.
 
-// A single monotonic integer for v1 — the contract surfaces above do not
-// version independently yet (per-surface versioning is a forward migration if
-// they ever diverge). It is its OWN counter, NOT derived from the engine
-// semver: most releases do not touch the contract, so deriving from semver
-// would lie. Bump this by one ONLY on a contract-affecting change.
-export const ENGINE_CONTRACT_VERSION = 1;
+// A monotonic integer — the contract surfaces above do not version independently
+// yet (per-surface versioning is a forward migration if they ever diverge). It is
+// its OWN counter, NOT derived from the engine semver: most releases do not touch
+// the contract, so deriving from semver would lie. Bump this by one ONLY on a
+// contract-affecting change.
+//   - v1: the original frozen surface.
+//   - v2: `habits` (#408/#409) — the field added to the role contract surface
+//     without a bump, which left the #430 cache gate inert and re-crashed resume
+//     on pre-habits rows (#432).
+export const ENGINE_CONTRACT_VERSION = 2;

@@ -67,7 +67,7 @@ describe("migrateRoleContractVersion (#236)", () => {
     return db;
   }
 
-  it("adds the column and backfills existing rows to the current contract version", () => {
+  it("adds the column and backfills existing rows to the frozen historical contract version 1", () => {
     const db = legacyDb();
     db.prepare(
       `INSERT INTO role_versions
@@ -83,7 +83,11 @@ describe("migrateRoleContractVersion (#236)", () => {
     const row = db
       .prepare("SELECT contract_version FROM role_versions WHERE id = ?")
       .get("v-legacy") as { contract_version: number };
-    expect(row.contract_version).toBe(ENGINE_CONTRACT_VERSION);
+    // The backfill freezes legacy rows at contract 1 — the only contract that
+    // existed before the stamp — NOT the live ENGINE_CONTRACT_VERSION (now 2 after
+    // #432). Such a v1 row is later carried forward by the boot sweep's 1→2 step,
+    // never re-stamped by the backfill (#236 provenance).
+    expect(row.contract_version).toBe(1);
     db.close();
   });
 

@@ -117,7 +117,7 @@ describe("forward-only role-contract migration framework (#238)", () => {
     expect(verdict.outcome).toBe("incompatible");
   });
 
-  it("ships zero real steps — every mismatch declines through the production registry", () => {
+  it("ships the real 1→2 step — a v1 row migrates (not refuses) at engine 2 (#432)", () => {
     const verdict = checkRoleContractCompat({
       version: versionStampedAt(1),
       roleName: "worker",
@@ -125,6 +125,11 @@ describe("forward-only role-contract migration framework (#238)", () => {
       migrator: ROLE_CONTRACT_MIGRATOR,
     });
 
-    expect(verdict.outcome).toBe("incompatible");
+    expect(verdict.outcome).toBe("migrated");
+    // The 1→2 step is identity (habits is git-tree-only, never a version column),
+    // and the authored stamp rides through untouched (#236 provenance).
+    if (verdict.outcome === "migrated") {
+      expect(verdict.version.contract_version).toBe(1);
+    }
   });
 });
