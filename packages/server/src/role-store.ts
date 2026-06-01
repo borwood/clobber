@@ -34,9 +34,11 @@ export interface RoleStore {
 export interface RoleManifestColumns {
   readonly description: string;
   readonly persistent: boolean;
-  readonly effort: EffortLevel;
-  // Optional, unlike effort: a role pins no model by default (unset = today's
-  // behavior), so a model-less frontmatter syncs the column back to NULL.
+  // Optional: absent on roles predating the effort field; syncs the column back
+  // to NULL so an effort-less commit round-trips unchanged.
+  readonly effort?: EffortLevel;
+  // Optional: a role pins no model by default (unset = today's behavior), so a
+  // model-less frontmatter syncs the column back to NULL.
   readonly model?: Model;
 }
 
@@ -199,7 +201,7 @@ export function createRoleStore(db: Database): RoleStore {
       syncManifestColumnsStmt.run(
         manifest.description,
         manifest.persistent ? 1 : 0,
-        manifest.effort,
+        manifest.effort === undefined ? null : manifest.effort,
         manifest.model === undefined ? null : manifest.model,
         id,
       );

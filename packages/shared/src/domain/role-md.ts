@@ -24,8 +24,11 @@ export const RoleEditManifestSchema = z
     name: RoleNameSchema,
     description: z.string().min(1),
     persistent: z.boolean(),
-    effort: EffortLevelSchema,
-    // Optional, unlike effort: unset = no role-default model = today's behavior.
+    // Optional: absent when the role predates the effort field or has no explicit
+    // reasoning depth set. Omitted from the frontmatter when unset so an
+    // effort-less ROLE.md round-trips unchanged (mirrors model below).
+    effort: EffortLevelSchema.optional(),
+    // Optional: unset = no role-default model = today's behavior.
     // Absent from the frontmatter when the role pins no model; the render below
     // omits the line entirely so a model-less ROLE.md round-trips unchanged.
     model: ModelSchema.optional(),
@@ -43,8 +46,8 @@ export function renderRoleManifest(manifest: RoleEditManifest, body: string): st
     `name: ${validated.name}`,
     `description: ${validated.description}`,
     `persistent: ${validated.persistent}`,
-    `effort: ${validated.effort}`,
   ];
+  if (validated.effort !== undefined) lines.push(`effort: ${validated.effort}`);
   if (validated.model !== undefined) lines.push(`model: ${validated.model}`);
   const frontmatter = lines.join("\n");
   return `${FENCE}\n${frontmatter}\n${FENCE}\n\n${body}`;
@@ -80,7 +83,9 @@ export function parseRoleManifest(content: string): RoleEditManifest {
     name: raw["name"],
     description: raw["description"],
     persistent: parseBool(raw["persistent"]),
-    effort: raw["effort"],
+    // Absent when the role predates the effort field — `.optional()` accepts
+    // undefined, so a pre-effort frontmatter (no `effort:` line) parses unchanged.
+    ...(raw["effort"] === undefined ? {} : { effort: raw["effort"] }),
     // Absent when the role pins no model — `.optional()` accepts undefined, so a
     // pre-#423 frontmatter (no `model:` line) parses unchanged.
     ...(raw["model"] === undefined ? {} : { model: raw["model"] }),

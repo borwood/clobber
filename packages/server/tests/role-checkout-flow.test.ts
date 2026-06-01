@@ -369,6 +369,61 @@ describe("#216 role working-copy commit (closes #396)", () => {
     await teardown(h);
   });
 
+  it("#437 effort-less role (migrated shape): checkout succeeds, ROLE.md omits effort: line, round-trips unchanged", async () => {
+    const h = buildHarness();
+    const wsId = await createWorkspace(h, repo.path);
+    const workerId = roleId(h, "worker", wsId);
+    const { token } = await spawnSession(h, wsId, roleId(h, "manager", wsId));
+
+    // Simulate a migrated role: effort column cleared (the pre-effort shape).
+    h.db.prepare("UPDATE roles SET effort = NULL WHERE id = ?").run(workerId);
+
+    // Must not 500 — the dead-end gate this PR closes.
+    const co = await checkout(h, token, "worker");
+
+    // The rendered ROLE.md must have NO effort: line.
+    const rolemd = readFileSync(join(co.checkout_dir, "ROLE.md"), "utf8");
+    expect(rolemd).not.toMatch(/^effort:/m);
+
+    // Round-trip: parse → commit unchanged (no effort in, no effort out).
+    const commit = await h.server.inject({
+      method: "POST",
+      url: "/agent/role-checkout/commit",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { message: "regression: effort-less round-trip" },
+    });
+    expect(commit.statusCode, commit.body).toBe(200);
+
+    // The roles row still has no effort after the commit.
+    const row = h.db.prepare("SELECT effort FROM roles WHERE id = ?").get(workerId) as { effort: string | null };
+    expect(row.effort).toBeNull();
+
+    await teardown(h);
+  });
+
+  it("#437 role WITH effort still renders + round-trips effort: line", async () => {
+    const h = buildHarness();
+    const wsId = await createWorkspace(h, repo.path);
+    const { token } = await spawnSession(h, wsId, roleId(h, "manager", wsId));
+
+    const co = await checkout(h, token, "worker");
+
+    // Worker is seeded with effort: high — the line must appear.
+    const rolemd = readFileSync(join(co.checkout_dir, "ROLE.md"), "utf8");
+    expect(rolemd).toMatch(/^effort: high$/m);
+
+    // Round-trip: parse the frontmatter and re-render — must be unchanged.
+    const commit = await h.server.inject({
+      method: "POST",
+      url: "/agent/role-checkout/commit",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { message: "regression: with-effort round-trip" },
+    });
+    expect(commit.statusCode, commit.body).toBe(200);
+
+    await teardown(h);
+  });
+
   it("a stale-tip commit refuses without --force, succeeds with it", async () => {
     const h = buildHarness();
     const wsId = await createWorkspace(h, repo.path);

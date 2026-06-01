@@ -69,7 +69,7 @@ export function finalizeRoleCommit(
   deps.roles.syncManifestColumns(input.role.id, {
     description: input.manifest.description,
     persistent: input.manifest.persistent,
-    effort: input.manifest.effort,
+    ...(input.manifest.effort === undefined ? {} : { effort: input.manifest.effort }),
     ...(input.manifest.model === undefined ? {} : { model: input.manifest.model }),
   });
   cfg.roleContentCache.getOrLoad(newRef.sha, input.repoDir);
@@ -85,7 +85,7 @@ export function finalizeRoleCommit(
       sha: newRef.sha,
       description: input.manifest.description,
       persistent: input.manifest.persistent,
-      effort: input.manifest.effort,
+      ...(input.manifest.effort === undefined ? {} : { effort: input.manifest.effort }),
       ...(input.manifest.model === undefined ? {} : { model: input.manifest.model }),
       no_new_version: true,
     },
