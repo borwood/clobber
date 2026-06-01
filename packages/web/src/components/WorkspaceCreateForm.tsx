@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { api, type Workspace } from "../api.ts";
 import { FolderPicker } from "./FolderPicker.tsx";
 
@@ -16,6 +16,7 @@ export function WorkspaceCreateForm({ onCreated, onCancel }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const browseButtonRef = useRef<HTMLButtonElement>(null);
 
   async function submit() {
     if (name.trim().length === 0 || repoPath.trim().length === 0) return;
@@ -49,6 +50,7 @@ export function WorkspaceCreateForm({ onCreated, onCancel }: Props) {
       />
       <div className="flex items-center gap-1">
         <button
+          ref={browseButtonRef}
           type="button"
           onClick={() => setPickerOpen((open) => !open)}
           className="px-2 py-1 rounded text-xs text-text-soft hover:text-text border border-border hover:border-border-strong"
@@ -76,9 +78,10 @@ export function WorkspaceCreateForm({ onCreated, onCancel }: Props) {
           cancel
         </button>
       </div>
-      {pickerOpen && (
+      {pickerOpen && browseButtonRef.current !== null && (
         <FolderPicker
           {...(repoPath.trim().length > 0 ? { initialPath: repoPath } : {})}
+          triggerRect={browseButtonRef.current.getBoundingClientRect()}
           onSelect={(absolutePath) => {
             setRepoPath(absolutePath);
             setPickerOpen(false);
