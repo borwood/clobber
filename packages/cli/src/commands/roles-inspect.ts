@@ -12,11 +12,13 @@ import { pad } from "./roles-args.ts";
 
 function renderListTable(roles: readonly RoleListEntry[]): string {
   if (roles.length === 0) return "(no roles)\n";
-  const headers = ["NAME", "PERSISTENT", "VERSION", "TOOLS"];
+  const headers = ["NAME", "PERSISTENT", "COMMIT", "TOOLS"];
   const rows = roles.map((r) => [
     r.name,
     r.persistent ? "yes" : "no",
-    `v${r.version}`,
+    r.current_commit !== undefined
+      ? `${r.current_commit.branch}@${r.current_commit.sha.slice(0, 7)}`
+      : `v${r.version}`,
     r.allowed_tools === undefined ? "" : r.allowed_tools.join(","),
   ]);
   const widths = headers.map((h, i) =>

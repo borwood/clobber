@@ -72,15 +72,23 @@ export function createServer(opts: ServerOptions): FastifyInstance {
       : opts.roleContractRefusals;
 
   // Boot-time role wiring (before routes): #239 contract sweep + #349 git-as-truth.
-  const roleEmbodiment = bootServerRoles({
-    db: opts.db,
-    roleRepoDir: opts.roleRepoDir,
-    workspaces: opts.workspaces,
-    workspaceRoles: opts.workspaceRoles,
-    roleVersions: opts.roleVersions,
-    roleContractRefusals,
-    migrator: roleContractMigrator,
-  });
+  // When a roleContentCache override is injected, skip git materialization so
+  // tests can pre-seed the cache without a real role repo (mirrors the
+  // roleContractMigrator / roleContractRefusals override pattern).
+  const roleEmbodiment = {
+    ...bootServerRoles({
+      db: opts.db,
+      roleRepoDir: opts.roleContentCache !== undefined ? undefined : opts.roleRepoDir,
+      workspaces: opts.workspaces,
+      workspaceRoles: opts.workspaceRoles,
+      roleVersions: opts.roleVersions,
+      roleContractRefusals,
+      migrator: roleContractMigrator,
+    }),
+    ...(opts.roleContentCache !== undefined
+      ? { roleContentCache: opts.roleContentCache, roleRepoDir: opts.roleRepoDir }
+      : {}),
+  };
 
   // Declared before construction so onSessionEnded can reference it without a
   // circular dependency — the scheduler closes over spawnPipelineDeps in turn.
