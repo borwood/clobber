@@ -12,3 +12,15 @@ export const BrowseDirResponseSchema = z.object({
   entries: z.array(DirEntrySchema),
 });
 export type BrowseDirResponse = z.infer<typeof BrowseDirResponseSchema>;
+
+export const FileReadResponseSchema = z.object({
+  path: z.string(),
+  content: z.string(),
+});
+export type FileReadResponse = z.infer<typeof FileReadResponseSchema>;
+
+export const SessionLocationsResponseSchema = z.object({
+  desk_path: z.string(),
+  office_path: z.string().nullable(),
+});
+export type SessionLocationsResponse = z.infer<typeof SessionLocationsResponseSchema>;

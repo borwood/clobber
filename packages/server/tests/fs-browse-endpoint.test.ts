@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Fastify from "fastify";
 import { registerFsRoutes } from "../src/routes/fs.ts";
-import type { BrowseDirResponse } from "@clobber/shared";
+import type { BrowseDirResponse, FileReadResponse } from "@clobber/shared";
 
 let app: ReturnType<typeof Fastify>;
 let scratch: string;
@@ -121,5 +121,81 @@ describe("GET /fs/browse", () => {
     });
     expect(res.statusCode).toBe(400);
     expect((res.json() as { error: string }).error).toMatch(/directory/);
+  });
+
+  it("includeFiles=true returns files alongside dirs with correct isDir flag", async () => {
+    mkdirSync(join(scratch, "subdir"));
+    writeFileSync(join(scratch, "readme.md"), "hello");
+    writeFileSync(join(scratch, "notes.txt"), "world");
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/fs/browse?path=${encodeURIComponent(scratch)}&includeFiles=true`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as BrowseDirResponse;
+    const names = body.entries.map((e) => e.name);
+    expect(names).toContain("subdir");
+    expect(names).toContain("readme.md");
+    expect(names).toContain("notes.txt");
+    const subdir = body.entries.find((e) => e.name === "subdir")!;
+    expect(subdir.isDir).toBe(true);
+    const readme = body.entries.find((e) => e.name === "readme.md")!;
+    expect(readme.isDir).toBe(false);
+  });
+
+  it("includeFiles=true does not change dir-only behavior when false (default unchanged)", async () => {
+    mkdirSync(join(scratch, "subdir"));
+    writeFileSync(join(scratch, "readme.md"), "hello");
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/fs/browse?path=${encodeURIComponent(scratch)}&includeFiles=false`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as BrowseDirResponse;
+    expect(body.entries.map((e) => e.name)).toEqual(["subdir"]);
+  });
+});
+
+describe("GET /fs/read", () => {
+  it("returns the text content of a file", async () => {
+    const filePath = join(scratch, "brief.md");
+    writeFileSync(filePath, "# Hello\nworld");
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/fs/read?path=${encodeURIComponent(filePath)}`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as FileReadResponse;
+    expect(body.path).toBe(filePath);
+    expect(body.content).toBe("# Hello\nworld");
+  });
+
+  it("returns 400 when path is not absolute", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/fs/read?path=relative.txt",
+    });
+    expect(res.statusCode).toBe(400);
+    expect((res.json() as { error: string }).error).toMatch(/absolute/);
+  });
+
+  it("returns 404 when the file does not exist", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: `/fs/read?path=${encodeURIComponent("/does/not/exist.txt")}`,
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("returns 400 when the path is a directory, not a file", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: `/fs/read?path=${encodeURIComponent(scratch)}`,
+    });
+    expect(res.statusCode).toBe(400);
+    expect((res.json() as { error: string }).error).toMatch(/file/);
   });
 });
