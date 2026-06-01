@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import { PromptModuleDefinitionSchema } from "@clobber/shared";
+import { PromptModuleDefinitionSchema, PromptModuleRefsSchema } from "@clobber/shared";
 import { enumerateDefaultPromptModules } from "@clobber/runtime";
 import type { WorkspaceStore } from "../workspace-store.ts";
 import {
@@ -69,7 +69,9 @@ function rolesReferencingModule(
   const result: Array<{ id: string; name: string }> = [];
 
   for (const row of rowBacked) {
-    const refs = JSON.parse(row.seed_refs_json) as Array<{ name: string }>;
+    // Validate at the boundary (#431, flagged by the #459 adversary): parse the
+    // row-backed refs through the domain schema instead of a raw cast.
+    const refs = PromptModuleRefsSchema.parse(JSON.parse(row.seed_refs_json));
     if (refs.some((r) => r.name === moduleName)) {
       result.push({ id: row.id, name: row.name });
     }
