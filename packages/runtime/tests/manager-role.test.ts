@@ -60,7 +60,7 @@ describe("managerRole", () => {
     const skillPath = join(pluginRoot, "skills", "assignment", "SKILL.md");
     expect(existsSync(skillPath)).toBe(true);
     const body = readFileSync(skillPath, "utf8");
-    expect(body).toMatch(/seed-todos\.json/);
+    expect(body).toMatch(/boot-tasks\.json/);
     expect(body).toMatch(/--briefing-dir/);
     expect(body).toMatch(/clobber spawn worker\b/);
   });

@@ -12,7 +12,7 @@ prompt; the prompt does not override the protocol.
 1. List the desk: `ls "$CLOBBER_DESK_DIR"`. If the directory is missing or
    empty, the manager spawned you without a packet — only then proceed from
    the user prompt alone.
-2. **`seed-todos.json`** — if present, **lay down its phase plan via the
+2. **`boot-tasks.json`** — if present, **lay down its phase plan via the
    harness's task tool before any other tool call.** This is a hard contract,
    not a suggestion. The file is a tool-agnostic JSON array of phases
    (`content` / `status` / `activeForm` per entry); translate it into
@@ -24,7 +24,7 @@ prompt; the prompt does not override the protocol.
    Either tool may be deferred, so load its schema first if it isn't already
    callable (e.g. `ToolSearch(select:TaskCreate,TaskUpdate)`, or
    `ToolSearch(select:TodoWrite)`). Do **not** paraphrase or merely describe
-   `seed-todos.json` — embody it as tasks.
+   `boot-tasks.json` — embody it as tasks.
 3. **`assignment.md`** — if present, this is the issue (or bundle of issues)
    you're shipping. Read it before research; it's denser than the user prompt
    you receive in the conversation.
