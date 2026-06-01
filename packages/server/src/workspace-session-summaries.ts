@@ -1,11 +1,15 @@
 import type { Database } from "bun:sqlite";
-import type {
-  AgentState,
-  AskQuestion,
-  LatestAgentStatus,
-  QuestionStatus,
-  RoleVersionRef,
+import { z } from "zod";
+import {
+  AskQuestionSchema,
+  type AgentState,
+  type AskQuestion,
+  type LatestAgentStatus,
+  type QuestionStatus,
+  type RoleVersionRef,
 } from "@clobber/shared";
+
+const AskQuestionsSchema = z.array(AskQuestionSchema);
 
 export interface OpenSessionQuestion {
   readonly id: string;
@@ -86,7 +90,12 @@ function pickOpenQuestion(row: Row): OpenSessionQuestion | undefined {
   if (row.question_status === null) return undefined;
   return {
     id: row.question_id,
-    questions: JSON.parse(row.question_questions_json) as readonly AskQuestion[],
+    // Validate at the boundary (#431): this is a second reader of
+    // agent_questions.questions_json (agent-question-store validates via
+    // AgentQuestionSchema; this join read did not). A raw cast would re-hydrate a
+    // question persisted before an AskQuestion field existed with that field
+    // `undefined` and surface a corrupt question to the floor view.
+    questions: AskQuestionsSchema.parse(JSON.parse(row.question_questions_json)),
     asked_at: row.question_asked_at,
     status: row.question_status as Extract<QuestionStatus, "pending" | "timed_out">,
   };

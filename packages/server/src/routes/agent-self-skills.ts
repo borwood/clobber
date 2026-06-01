@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { Database } from "bun:sqlite";
 import { z } from "zod";
-import type { RoleSkill, Session } from "@clobber/shared";
+import { RoleSkillSchema, type RoleSkill, type Session } from "@clobber/shared";
 import type { SessionTokenStore } from "../session-token-store.ts";
 import type { SessionStore } from "../session-store.ts";
 import type { RoleStore } from "../role-store.ts";
@@ -86,7 +86,12 @@ function resolveSelfSkillsContext(
     ok: true,
     ctx: {
       roleId: role.id,
-      currentSkills: JSON.parse(version.skills_json) as RoleSkill[],
+      // Validate at the boundary (#431): a row-backed role's skills_json is read
+      // here without going through role-version-store's loadAsBundle validation.
+      // A raw cast would re-hydrate a skill persisted before a RoleSkill field
+      // existed with that field `undefined`; parsing through the schema rejects
+      // the stale shape at the boundary instead of serving a corrupt skill.
+      currentSkills: z.array(RoleSkillSchema).parse(JSON.parse(version.skills_json)),
       workspace,
     },
   };
