@@ -31,12 +31,17 @@ export function createRoleContentCache(db: Database): RoleContentCache {
     "SELECT contract_json, contract_version FROM materialized_role_cache WHERE sha = ?",
   );
   const putStmt = db.prepare(
-    "INSERT OR IGNORE INTO materialized_role_cache (sha, contract_json, contract_version, created_at) VALUES (?, ?, ?, ?)",
+    "INSERT OR REPLACE INTO materialized_role_cache (sha, contract_json, contract_version, created_at) VALUES (?, ?, ?, ?)",
   );
 
   function get(sha: string): CachedRoleContract | null {
     const row = getStmt.get(sha) as Row | null;
     if (row === null) return null;
+    // Stale contract: a row cached before a field existed re-hydrates with that
+    // field `undefined` (unvalidated JSON.parse cast). Treat as a miss so the
+    // caller reloads fresh via loadRoleContractAtCommit, which normalizes through
+    // deserializeRoleTree and stamps the current version.
+    if (row.contract_version < ENGINE_CONTRACT_VERSION) return null;
     return {
       contract: JSON.parse(row.contract_json) as RoleTreeContract,
       contractVersion: row.contract_version,
