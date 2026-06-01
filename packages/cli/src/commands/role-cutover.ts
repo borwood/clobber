@@ -9,6 +9,7 @@ import {
   roleRepoDirForDb,
   type CutoverInvariants,
 } from "@clobber/server/role-state-cutover.ts";
+import { auditRolePins, type RolePinAudit } from "@clobber/server/role-pin-audit.ts";
 import type { Command, CommandContext } from "../commands.ts";
 import { CliUsageError } from "../usage-error.ts";
 
@@ -58,33 +59,44 @@ function renderInvariants(inv: CutoverInvariants): string {
   return lines.join("\n");
 }
 
-function gate(inv: CutoverInvariants): string {
-  return inv.violations.length === 0
-    ? "ALL INVARIANTS HELD"
-    : `INVARIANTS VIOLATED:\n${inv.violations.map((v) => `  - ${v}`).join("\n")}`;
+function renderAudit(audit: RolePinAudit): string {
+  return [
+    `  roles checked: ${audit.checked}`,
+    `  commit-pinned: ${audit.pinned}/${audit.checked}`,
+    `  pins that resolve on disk: ${audit.resolved}/${audit.checked}`,
+  ].join("\n");
 }
 
-// Rehearse the cutover against an isolated copy + throwaway role-repo dir. The
-// live db is opened read-only (VACUUM INTO) and the production role-repo dirs
-// beside it are never touched.
+function gate(violations: readonly string[]): string {
+  return violations.length === 0
+    ? "ALL INVARIANTS HELD"
+    : `INVARIANTS VIOLATED:\n${violations.map((v) => `  - ${v}`).join("\n")}`;
+}
+
+// The dry-run is a LIVE pin↔repo audit, not a migration rehearsal: it asserts
+// that every live role row is commit-pinned AND its sha resolves in its on-disk
+// fork-repo. The live db is opened read-only (VACUUM INTO a copy) and the
+// production role-repo dirs beside it are read, never written or created — so a
+// missing repo or a stale pin surfaces as a violation instead of being papered
+// over by re-migrating a throwaway clone (#412).
 function runDryRun(ctx: CommandContext, livePath: string): number {
   const tmp = mkdtempSync(join(tmpdir(), "clobber-cutover-"));
   try {
     const copyPath = join(tmp, "clobber-copy.db");
     snapshotDatabase(livePath, copyPath);
-    const roleRepoDir = join(tmp, "clobber-role-repo");
     const db = createDatabase(copyPath);
-    let outcome;
+    let audit;
     try {
-      outcome = runRoleStateCutover(db, roleRepoDir);
+      audit = auditRolePins(db, roleRepoDirForDb(livePath));
     } finally {
       db.close();
     }
-    const held = outcome.invariants.violations.length === 0;
+    const held = audit.violations.length === 0;
     ctx.stdout.write(
-      `Dry-run cutover against a copy of ${livePath}\n` +
-        `(the live file was opened read-only and never modified)\n\n` +
-        `${renderInvariants(outcome.invariants)}\n\n${gate(outcome.invariants)}\n`,
+      `Pin↔repo audit against a copy of ${livePath}\n` +
+        `(the live file was opened read-only and never modified; on-disk` +
+        ` fork-repos were read, never written)\n\n` +
+        `${renderAudit(audit)}\n\n${gate(audit.violations)}\n`,
     );
     return held ? 0 : 1;
   } finally {
@@ -92,9 +104,11 @@ function runDryRun(ctx: CommandContext, livePath: string): number {
   }
 }
 
-// Mutate the real db. Back it up FIRST, run, then VERIFY the post-state; on any
-// violation point at the recovery prompt. The role-repo dirs are the production
-// ones (beside the db), so this is the irreversible human-gated step.
+// Mutate the real db. Back it up FIRST, run, then VERIFY the post-state against
+// the production fork-repos; on any violation point at the recovery prompt. The
+// migration's forward-only invariants and the pin↔repo resolve audit are both
+// gated, so an apply that pins a row to a sha its repo cannot resolve FAILS
+// rather than reporting a hollow success.
 function runApply(ctx: CommandContext, livePath: string): number {
   const stamp = new Date().toISOString().replaceAll(":", "-");
   const backupPath = join(dirname(livePath), `clobber.db.backup-${stamp}`);
@@ -104,16 +118,21 @@ function runApply(ctx: CommandContext, livePath: string): number {
   const roleRepoDir = roleRepoDirForDb(livePath);
   const db = createDatabase(livePath);
   let outcome;
+  let audit;
   try {
     outcome = runRoleStateCutover(db, roleRepoDir);
+    audit = auditRolePins(db, roleRepoDir);
   } finally {
     db.close();
   }
 
+  const violations = [...outcome.invariants.violations, ...audit.violations];
   ctx.stdout.write(
-    `\nApplied cutover to ${livePath}\n\n${renderInvariants(outcome.invariants)}\n\n${gate(outcome.invariants)}\n`,
+    `\nApplied cutover to ${livePath}\n\n` +
+      `${renderInvariants(outcome.invariants)}\n${renderAudit(audit)}\n\n` +
+      `${gate(violations)}\n`,
   );
-  if (outcome.invariants.violations.length > 0) {
+  if (violations.length > 0) {
     ctx.stderr.write(
       `\nPost-state verification FAILED. The pre-cutover db is at ${backupPath}.\n` +
         `Recovery instructions: ${RECOVERY_PROMPT}.\n`,
@@ -146,13 +165,15 @@ export const roleCutoverCommand: Command = {
     "Runs the #393 forward-only migration that commit-pins every role into its",
     "per-workspace fork repo, using the SAME wiring the server boots.",
     "",
-    "Default (dry-run): snapshots the live clobber.db to a temp copy and a",
-    "throwaway role-repo dir, runs the migration against the copy, and asserts the",
-    "forward-only invariants (role_versions retained; every row-backed role ends",
-    "commit-pinned). The live db and production role-repos are never written.",
+    "Default (dry-run): a LIVE pin↔repo audit. Reads the live rows (via a",
+    "read-only copy) and the production fork-repos on disk, and FAILS unless every",
+    "role row is commit-pinned AND its sha resolves in its fork-repo. The live db",
+    "and the role-repos are read, never written. A null pin or a stale sha (the",
+    "pin↔repo disconnect behind the checkout-500) reports a violation.",
     "",
-    "  --apply   Run against the real db (backs it up first, then verifies the",
-    "            post-state). The irreversible, human-gated cutover.",
+    "  --apply   Run the migration against the real db (backs it up first), then",
+    "            verify BOTH the forward-only invariants and the pin↔repo audit.",
+    "            The irreversible, human-gated cutover.",
     "  --db <path>   Database to operate on (default: <repo-root>/clobber.db,",
     "                or $CLOBBER_DB if set).",
   ].join("\n"),

@@ -16,56 +16,113 @@ function collect(stream: PassThrough): { text: () => string } {
 }
 
 // Build a live db on disk carrying a workspace whose roles are row-backed (no
-// forks passed → seeded onto `current_version_id`, the pre-#349 shape the
-// cutover migrates). Closed before returning so the file is the only handle.
+// forks passed → seeded onto `current_version_id`, the pre-#349 unpinned shape).
+// Closed before returning so the file is the only handle.
 function buildLiveDb(dbPath: string): void {
   const db = createDatabase(dbPath);
   const ws = createWorkspaceStore(db).create({ name: "w", repo_path: "/tmp/x" });
-  seedWorkspaceRoles(db, ws.id); // no forks → row-backed
+  seedWorkspaceRoles(db, ws.id); // no forks → row-backed, unpinned
   const role = createRoleStore(db).findInWorkspace(ws.id, "manager")!;
   expect(role.current_version_id).toBeDefined();
   expect(role.current_commit).toBeUndefined();
   db.close();
 }
 
+async function cutover(
+  dbPath: string,
+  extra: readonly string[],
+): Promise<{ code: number; text: string; errText: string }> {
+  const stdout = new PassThrough();
+  const stderr = new PassThrough();
+  const out = collect(stdout);
+  const err = collect(stderr);
+  // No CLOBBER_API_BASE / SESSION_TOKEN: a local dev command runs without the
+  // agent env.
+  const code = await run({
+    argv: ["role-cutover", "--db", dbPath, ...extra],
+    env: {},
+    stdout,
+    stderr,
+  });
+  return { code, text: out.text(), errText: err.text() };
+}
+
+// #412 — the dry-run is a LIVE pin↔repo audit: it reports HELD iff every live
+// role row is commit-pinned AND its sha resolves in the on-disk fork-repo. The
+// regression that motivated this: the old dry-run rehearsed the migration on a
+// COPY and reported "INVARIANTS HELD" while the live rows were null. A detector
+// that can't fail on a broken baseline is worse than none — so we disconfirm
+// BOTH directions (wisdom 2026-05-30).
 describe("clobber role-cutover", () => {
-  it("dry-run (default) reproduces the forward-only invariants on a copy and never writes the live db", async () => {
+  it("dry-run FAILS when live rows are unpinned (a null pin must report FAIL, not HELD)", async () => {
     const dir = mkdtempSync(join(tmpdir(), "clobber-cutover-cli-"));
     const dbPath = join(dir, "clobber.db");
     try {
       buildLiveDb(dbPath);
       const liveBefore = readFileSync(dbPath);
 
-      const stdout = new PassThrough();
-      const stderr = new PassThrough();
-      const out = collect(stdout);
+      const { code, text } = await cutover(dbPath, []);
 
-      // No CLOBBER_API_BASE / SESSION_TOKEN: a local dev command must run
-      // without the agent env. No --apply: dry-run is the DEFAULT.
-      const code = await run({
-        argv: ["role-cutover", "--db", dbPath],
-        env: {},
-        stdout,
-        stderr,
-      });
+      // The broken baseline must trip the gate.
+      expect(code).toBe(1);
+      expect(text).toMatch(/VIOLAT/i);
+      expect(text).toMatch(/not commit-pinned|null/i);
+      // Names the offending roles, not just a count.
+      expect(text).toContain("manager");
 
-      expect(code).toBe(0);
-      const text = out.text();
-      // It rehearsed against a copy, read-only on the source.
-      expect(text).toContain("never modified");
-      // role_versions row count is reported and unchanged (forward-only).
-      expect(text).toContain("role_versions");
-      // The row-backed workspace roles were migrated to commit pins.
-      expect(text).toMatch(/workspace roles? .*commit-pinned/i);
-      // The invariant gate passed.
-      expect(text).toContain("INVARIANTS HELD");
-
-      // HARD CONSTRAINT: the live file is byte-identical after the dry-run, and
-      // production role-repo dirs were never created beside it.
+      // HARD CONSTRAINT: the dry-run reads the live file read-only and never
+      // creates production role-repo dirs beside it.
       const liveAfter = readFileSync(dbPath);
       expect(Buffer.compare(liveBefore, liveAfter)).toBe(0);
       expect(existsSync(join(dir, "clobber-role-repo"))).toBe(false);
       expect(existsSync(join(dir, "role-repos"))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("dry-run reports HELD after a real --apply (every live row pinned + resolves on disk)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "clobber-cutover-cli-"));
+    const dbPath = join(dir, "clobber.db");
+    try {
+      buildLiveDb(dbPath);
+
+      // --apply migrates every row-backed role into its fork-repo and pins it.
+      const applied = await cutover(dbPath, ["--apply"]);
+      expect(applied.code, applied.errText).toBe(0);
+      expect(applied.text).toContain("INVARIANTS HELD");
+
+      // Now the live rows are genuinely pinned + resolvable: the audit holds.
+      const { code, text } = await cutover(dbPath, []);
+      expect(code, text).toBe(0);
+      expect(text).toContain("INVARIANTS HELD");
+      expect(text).toMatch(/resolve/i);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("dry-run FAILS when a row's pin sha is missing from the on-disk fork-repo (stale pin)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "clobber-cutover-cli-"));
+    const dbPath = join(dir, "clobber.db");
+    try {
+      buildLiveDb(dbPath);
+      const applied = await cutover(dbPath, ["--apply"]);
+      expect(applied.code, applied.errText).toBe(0);
+
+      // Repoint manager to a well-formed but absent sha: the DB pin and the
+      // on-disk repo are now out of sync — exactly #411's observed 500 case.
+      const db = createDatabase(dbPath);
+      db.prepare("UPDATE roles SET current_commit_sha = ? WHERE name = 'manager'").run(
+        "0".repeat(40),
+      );
+      db.close();
+
+      const { code, text } = await cutover(dbPath, []);
+      expect(code).toBe(1);
+      expect(text).toMatch(/VIOLAT/i);
+      expect(text).toMatch(/resolve/i);
+      expect(text).toContain("manager");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
