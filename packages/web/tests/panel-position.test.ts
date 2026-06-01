@@ -6,7 +6,7 @@ function rect(top: number, bottom: number, left: number, right: number): DOMRect
 }
 
 describe("computePanelPosition", () => {
-  it("places panel below when there is room below", () => {
+  it("places panel below when there is room", () => {
     const r = rect(80, 100, 400, 600);
     const result = computePanelPosition(r, 200, 800, 1200);
     expect(result.placement).toBe("below");
@@ -27,7 +27,6 @@ describe("computePanelPosition", () => {
   });
 
   it("boundary: exactly fits below (spaceBelow === panelHeight + margin)", () => {
-    // viewportHeight=800, triggerBottom=596, spaceBelow=204, panelHeight=200, margin=4 → exactly fits
     const r = rect(576, 596, 400, 600);
     const result = computePanelPosition(r, 200, 800, 1200);
     expect(result.placement).toBe("below");
@@ -37,5 +36,20 @@ describe("computePanelPosition", () => {
     const r = rect(577, 597, 400, 600);
     const result = computePanelPosition(r, 200, 800, 1200);
     expect(result.placement).toBe("above");
+  });
+
+  it("clamps top to >= MARGIN when above-flip would go negative", () => {
+    // trigger near top: top=2, panelHeight=200 → raw above top = 2 - 200 - 4 = -202 → clamped to 4
+    const r = rect(2, 22, 400, 600);
+    const result = computePanelPosition(r, 200, 800, 1200);
+    expect(result.top).toBeGreaterThanOrEqual(4);
+  });
+
+  it("clamps top so panel bottom does not exceed viewport in below placement", () => {
+    // trigger at bottom=750, panelHeight=200, viewport=800 → raw top=754, panel bottom=954 > 800
+    // clamp: top = min(754, 800 - 200 - 4) = min(754, 596) = 596
+    const r = rect(730, 750, 400, 600);
+    const result = computePanelPosition(r, 200, 800, 1200);
+    expect(result.top + 200).toBeLessThanOrEqual(800 - 4);
   });
 });

@@ -14,10 +14,12 @@ export function computePanelPosition(
 ): PanelPosition {
   const spaceBelow = viewportHeight - triggerRect.bottom;
   const placement = spaceBelow >= panelHeight + MARGIN ? "below" : "above";
-  const top =
+  let top =
     placement === "below"
       ? triggerRect.bottom + MARGIN
       : triggerRect.top - panelHeight - MARGIN;
+  // Clamp so panel never goes off-screen (top or bottom).
+  top = Math.max(MARGIN, Math.min(top, viewportHeight - panelHeight - MARGIN));
   const right = viewportWidth - triggerRect.right;
   return { top, right, placement };
 }

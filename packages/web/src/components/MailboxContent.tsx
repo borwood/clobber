@@ -80,7 +80,6 @@ export function MailboxContent(props: MailboxContentProps) {
           <PromptComposer
             key={selectedSession}
             sessionId={selectedSession}
-            disabled={false}
             ended={selected.ended_at !== undefined}
             busy={selected.busy === true}
             transcript={transcript}

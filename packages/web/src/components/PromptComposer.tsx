@@ -7,7 +7,6 @@ import { api } from "../api.ts";
 
 interface Props {
   readonly sessionId: string;
-  readonly disabled: boolean;
   readonly ended: boolean;
   readonly busy: boolean;
   readonly transcript?: readonly TranscriptLine[];
@@ -20,7 +19,6 @@ type FileBrowserState = { readonly path: string; readonly label: string; readonl
 
 export function PromptComposer({
   sessionId,
-  disabled,
   ended,
   busy,
   transcript,
@@ -37,8 +35,8 @@ export function PromptComposer({
   const officeButtonRef = useRef<HTMLButtonElement>(null);
 
   const hasText = prompt.trim().length > 0;
-  const canSend = !disabled && !ended && !sending && hasText;
-  const canInterrupt = !disabled && !ended && busy && !interrupting;
+  const canSend = !ended && !sending && hasText;
+  const canInterrupt = !ended && busy && !interrupting;
   const contextTokens = transcript !== undefined ? computeContextLength(transcript) : undefined;
 
   async function send() {
@@ -113,7 +111,6 @@ export function PromptComposer({
       return;
     }
     if (action === "newline") {
-      // Default textarea behavior already inserts a newline; nothing to do.
       return;
     }
     if (action === "interrupt") {
@@ -158,11 +155,9 @@ export function PromptComposer({
         placeholder={
           ended
             ? "Optional prompt to send on resume…"
-            : disabled
-              ? "Session ended."
-              : busy
-                ? "Agent is working… (Ctrl+C to interrupt)"
-                : "Follow-up prompt… (Enter to send, Shift+Enter for newline)"
+            : busy
+              ? "Agent is working… (Ctrl+C to interrupt)"
+              : "Follow-up prompt… (Enter to send, Shift+Enter for newline)"
         }
         rows={3}
         className="w-full resize-none rounded border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-faint focus:outline-none focus:border-border-strong disabled:opacity-50"
