@@ -22,6 +22,7 @@ import {
   BriefingPacketSchema,
   EffortLevelSchema,
   FinalReportSchema,
+  ModelSchema,
   summarizeFinalReport,
 } from "@clobber/shared";
 import { executeSpawn } from "../spawn-pipeline.ts";
@@ -73,6 +74,7 @@ const AgentSpawnBodySchema = z.object({
   label: z.string().optional(),
   briefing: BriefingPacketSchema.optional(),
   effort: EffortLevelSchema.optional(),
+  model: ModelSchema.optional(),
   // The selected opening move (#212); the minimal by-name seam.
   wake_program: z.string().min(1).optional(),
 });
@@ -158,6 +160,9 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
         ...(parsed.data.effort === undefined
           ? {}
           : { effortOverride: parsed.data.effort }),
+        ...(parsed.data.model === undefined
+          ? {}
+          : { modelOverride: parsed.data.model }),
       });
       if (!result.ok) {
         const { ok: _ok, status, ...rest } = result;

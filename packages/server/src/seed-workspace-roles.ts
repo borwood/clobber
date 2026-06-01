@@ -23,8 +23,8 @@ export function seedWorkspaceRoles(
   const versions = createRoleVersionStore(db);
 
   const insertRole = db.prepare(
-    `INSERT INTO roles (id, name, description, permission_mode, effort, persistent, workspace_id, current_version_id, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO roles (id, name, description, permission_mode, effort, model, persistent, workspace_id, current_version_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const setVersion = db.prepare("UPDATE roles SET current_version_id = ? WHERE id = ?");
   const pinCommit = db.prepare(
@@ -85,6 +85,7 @@ function seedSingleRole(
   const description = shipped.manifest.description;
   const permissionMode = shipped.permissionMode === undefined ? null : shipped.permissionMode;
   const effort = shipped.manifest.effort === undefined ? null : shipped.manifest.effort;
+  const model = shipped.manifest.model === undefined ? null : shipped.manifest.model;
 
   deps.insertRole.run(
     id,
@@ -92,6 +93,7 @@ function seedSingleRole(
     description,
     permissionMode,
     effort,
+    model,
     shipped.manifest.persistent ? 1 : 0,
     workspaceId,
     null,

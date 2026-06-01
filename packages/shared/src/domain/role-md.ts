@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { EffortLevelSchema, RoleNameSchema } from "./role.ts";
+import { EffortLevelSchema, ModelSchema, RoleNameSchema } from "./role.ts";
 
 // #216 — the `ROLE.md` sidecar codec. A role's checkout root carries a `ROLE.md`
 // with YAML-style frontmatter (the role's canonical, per-role metadata) above an
@@ -25,6 +25,10 @@ export const RoleEditManifestSchema = z
     description: z.string().min(1),
     persistent: z.boolean(),
     effort: EffortLevelSchema,
+    // Optional, unlike effort: unset = no role-default model = today's behavior.
+    // Absent from the frontmatter when the role pins no model; the render below
+    // omits the line entirely so a model-less ROLE.md round-trips unchanged.
+    model: ModelSchema.optional(),
   })
   .strict();
 
@@ -35,12 +39,14 @@ const FENCE = "---";
 // Render the manifest as a `ROLE.md` file: frontmatter fence + the given body.
 export function renderRoleManifest(manifest: RoleEditManifest, body: string): string {
   const validated = RoleEditManifestSchema.parse(manifest);
-  const frontmatter = [
+  const lines = [
     `name: ${validated.name}`,
     `description: ${validated.description}`,
     `persistent: ${validated.persistent}`,
     `effort: ${validated.effort}`,
-  ].join("\n");
+  ];
+  if (validated.model !== undefined) lines.push(`model: ${validated.model}`);
+  const frontmatter = lines.join("\n");
   return `${FENCE}\n${frontmatter}\n${FENCE}\n\n${body}`;
 }
 
@@ -75,6 +81,9 @@ export function parseRoleManifest(content: string): RoleEditManifest {
     description: raw["description"],
     persistent: parseBool(raw["persistent"]),
     effort: raw["effort"],
+    // Absent when the role pins no model — `.optional()` accepts undefined, so a
+    // pre-#423 frontmatter (no `model:` line) parses unchanged.
+    ...(raw["model"] === undefined ? {} : { model: raw["model"] }),
   });
 }
 

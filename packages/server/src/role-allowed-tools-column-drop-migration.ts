@@ -19,6 +19,7 @@ export function migrateRoleAllowedToolsColumnDrop(db: Database): void {
       description        TEXT,
       permission_mode    TEXT,
       effort             TEXT,
+      model              TEXT,
       persistent         INTEGER NOT NULL,
       workspace_id       TEXT,
       current_version_id TEXT,
@@ -26,8 +27,8 @@ export function migrateRoleAllowedToolsColumnDrop(db: Database): void {
       UNIQUE (workspace_id, name),
       FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
     );
-    INSERT INTO roles_new (id, name, description, permission_mode, effort, persistent, workspace_id, current_version_id, created_at)
-      SELECT id, name, description, permission_mode, effort, persistent, workspace_id, current_version_id, created_at FROM roles;
+    INSERT INTO roles_new (id, name, description, permission_mode, effort, model, persistent, workspace_id, current_version_id, created_at)
+      SELECT id, name, description, permission_mode, effort, model, persistent, workspace_id, current_version_id, created_at FROM roles;
     DROP TABLE roles;
     ALTER TABLE roles_new RENAME TO roles;
     CREATE INDEX IF NOT EXISTS idx_roles_created   ON roles(created_at DESC);

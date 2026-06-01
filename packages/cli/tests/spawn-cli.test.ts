@@ -300,6 +300,57 @@ describe("clobber CLI — spawn", () => {
     expect(call.effort).toBe("max");
   });
 
+  it("forwards --model to the spawner so a manager can route a worker to a cheaper model", async () => {
+    const s = captureStreams();
+    const before = harness.spawnerCalls.length;
+    const code = await run({
+      argv: [
+        "spawn",
+        "manager",
+        "--prompt",
+        "mechanical transcription, route to sonnet",
+        "--label",
+        "cheap-lane",
+        "--model",
+        "sonnet",
+      ],
+      env: {
+        CLOBBER_API_BASE: harness.baseUrl,
+        CLOBBER_SESSION_TOKEN: harness.managerToken,
+      },
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(0);
+    expect(harness.spawnerCalls.length).toBe(before + 1);
+    const call = harness.spawnerCalls[harness.spawnerCalls.length - 1]!;
+    expect(call.model).toBe("sonnet");
+  });
+
+  it("rejects --model values outside the model enum", async () => {
+    const s = captureStreams();
+    const code = await run({
+      argv: [
+        "spawn",
+        "manager",
+        "--prompt",
+        "x",
+        "--label",
+        "bad-model",
+        "--model",
+        "gpt-4",
+      ],
+      env: {
+        CLOBBER_API_BASE: harness.baseUrl,
+        CLOBBER_SESSION_TOKEN: harness.managerToken,
+      },
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(2);
+    expect(s.err()).toMatch(/--model/);
+  });
+
   it("rejects --effort values outside the claude --effort enum", async () => {
     const s = captureStreams();
     const code = await run({

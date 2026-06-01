@@ -50,15 +50,17 @@ export function forkRole(
   const description = source.description === undefined ? null : source.description;
   const permissionMode = source.permission_mode === undefined ? null : source.permission_mode;
   const effort = source.effort === undefined ? null : source.effort;
+  const model = source.model === undefined ? null : source.model;
   db.prepare(
-    `INSERT INTO roles (id, name, description, permission_mode, effort, persistent, workspace_id, current_version_id, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+    `INSERT INTO roles (id, name, description, permission_mode, effort, model, persistent, workspace_id, current_version_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
   ).run(
     id,
     newName,
     description,
     permissionMode,
     effort,
+    model,
     source.persistent ? 1 : 0,
     workspaceId,
     createdAt,

@@ -2,6 +2,7 @@ import type {
   ClobberPromptTag,
   EffortLevel,
   InSessionHabitsCapability,
+  Model,
   PermissionMode,
 } from "@clobber/shared";
 import {
@@ -57,6 +58,7 @@ export interface RuntimeSpawnOptions {
   readonly permissionMode?: PermissionMode;
   readonly allowedTools?: readonly string[];
   readonly effort?: EffortLevel;
+  readonly model?: Model;
   readonly env: NodeJS.ProcessEnv;
   readonly materialized: MaterializedBundle;
   readonly systemPrompt: string;
@@ -79,6 +81,7 @@ export interface RuntimeSpawnRequest {
   readonly permissionMode?: PermissionMode;
   readonly allowedTools?: readonly string[];
   readonly effort?: EffortLevel;
+  readonly model?: Model;
   readonly env: NodeJS.ProcessEnv;
   readonly pluginDirs?: readonly string[];
   readonly appendSystemPrompt?: string;
@@ -127,6 +130,7 @@ export const claudeRuntimeProvider: RuntimeProvider = {
         : { permissionMode: opts.permissionMode }),
       ...(opts.allowedTools === undefined ? {} : { allowedTools: opts.allowedTools }),
       ...(opts.effort === undefined ? {} : { effort: opts.effort }),
+      ...(opts.model === undefined ? {} : { model: opts.model }),
       env: opts.env,
       pluginDirs: [opts.materialized.pluginDir],
       appendSystemPrompt: opts.systemPrompt,
@@ -250,6 +254,7 @@ export function buildClaudeRuntimeArgs(opts: {
   readonly permissionMode?: PermissionMode;
   readonly allowedTools?: readonly string[];
   readonly effort?: EffortLevel;
+  readonly model?: Model;
   readonly appendSystemPrompt?: string;
   readonly displayName?: string;
 }): string[] {

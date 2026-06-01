@@ -5,6 +5,7 @@ import { migrateWorkspaceConfig } from "./workspace-config-migration.ts";
 import { migrateSessionRuntime } from "./session-runtime-migration.ts";
 import { migrateAgentQuestions } from "./agent-question-migration.ts";
 import { migrateRoleEffort } from "./role-effort-migration.ts";
+import { migrateRoleModel } from "./role-model-migration.ts";
 import { migrateSessionWasLive } from "./session-was-live-migration.ts";
 import { migrateSessionComposedPrompt } from "./session-composed-prompt-migration.ts";
 import { migrateRoleAllowedToolsColumnDrop } from "./role-allowed-tools-column-drop-migration.ts";
@@ -44,6 +45,7 @@ const SCHEMA = `
     description        TEXT,
     permission_mode    TEXT,
     effort             TEXT,
+    model              TEXT,
     persistent         INTEGER NOT NULL,
     workspace_id       TEXT,
     current_version_id TEXT,
@@ -266,6 +268,9 @@ export function createDatabase(path: string): Database {
   migrateWorkspaceConfig(db);
   migrateAgentQuestions(db);
   migrateRoleEffort(db);
+  // Must run before the column-drop rebuild below, which carries `model` through
+  // its roles_new copy — mirrors migrateRoleEffort's placement.
+  migrateRoleModel(db);
   migrateSessionWasLive(db);
   migrateSessionComposedPrompt(db);
   migrateRoleAllowedToolsColumnDrop(db);
