@@ -488,6 +488,78 @@ describe("DELETE /workspaces/:id/prompt-modules/:name (delete)", () => {
     expect(existsSync(moduleFilePath(harness.repo.path, "repo-sdlc"))).toBe(false);
   });
 
+  it("refuses with 409 when a commit-pinned role refs the module; succeeds with --force", async () => {
+    // Exercises the commitPinned branch in rolesReferencingModule:
+    // current_version_id IS NULL, current_commit_sha set, materialized_role_cache row present.
+    writeWorkspaceModule(harness.repo.path, "cp-ref-test", { kind: "static", text: "x" });
+
+    const workerRow = harness.db
+      .prepare("SELECT id FROM roles WHERE workspace_id = ? AND name = ?")
+      .get(harness.wsId, "worker") as { id: string };
+    const testSha = "deadbeef000000000000000000000001";
+    harness.db
+      .prepare("UPDATE roles SET current_commit_sha = ?, current_version_id = NULL WHERE id = ?")
+      .run(testSha, workerRow.id);
+    harness.db
+      .prepare(
+        "INSERT INTO materialized_role_cache (sha, contract_json, contract_version, created_at) VALUES (?, ?, ?, ?)",
+      )
+      .run(
+        testSha,
+        JSON.stringify({ seedRefs: [{ name: "cp-ref-test", enabled: true }] }),
+        1,
+        Date.now(),
+      );
+
+    // Without --force → 409 and the worker appears in blocking_roles
+    const blocked = await harness.server.inject({
+      method: "DELETE",
+      url: `/workspaces/${harness.wsId}/prompt-modules/cp-ref-test`,
+    });
+    expect(blocked.statusCode).toBe(409);
+    const body = blocked.json() as { blocking_roles: Array<{ name: string }> };
+    expect(body.blocking_roles.some((r) => r.name === "worker")).toBe(true);
+    expect(existsSync(moduleFilePath(harness.repo.path, "cp-ref-test"))).toBe(true);
+
+    // With --force → 200, workspace file removed
+    const forced = await harness.server.inject({
+      method: "DELETE",
+      url: `/workspaces/${harness.wsId}/prompt-modules/cp-ref-test?force=true`,
+    });
+    expect(forced.statusCode).toBe(200);
+    expect(existsSync(moduleFilePath(harness.repo.path, "cp-ref-test"))).toBe(false);
+  });
+
+  it("catalog still resolves a name via shipped default after its workspace shadow is deleted", async () => {
+    // A role refs repo-sdlc (seeded manager already does). Deleting the workspace
+    // shadow removes the override but the shipped default remains — the ref is
+    // still satisfied, the catalog still returns the name, and the source flips
+    // back to shipped-default.
+    writeWorkspaceModule(harness.repo.path, "repo-sdlc", { kind: "static", text: "shadow" });
+
+    const before = await harness.server.inject({
+      method: "GET",
+      url: `/workspaces/${harness.wsId}/prompt-modules/repo-sdlc`,
+    });
+    expect((before.json() as { source: string }).source).toBe("shadows-default");
+
+    const del = await harness.server.inject({
+      method: "DELETE",
+      url: `/workspaces/${harness.wsId}/prompt-modules/repo-sdlc`,
+    });
+    expect(del.statusCode).toBe(200);
+
+    // The catalog still resolves repo-sdlc — the role's ref remains satisfied.
+    const after = await harness.server.inject({
+      method: "GET",
+      url: `/workspaces/${harness.wsId}/prompt-modules/repo-sdlc`,
+    });
+    expect(after.statusCode).toBe(200);
+    const afterBody = after.json() as { name: string; source: string };
+    expect(afterBody.name).toBe("repo-sdlc");
+    expect(afterBody.source).toBe("shipped-default");
+  });
+
   it("returns 404 for an unknown module (not in defaults or workspace)", async () => {
     const res = await harness.server.inject({
       method: "DELETE",
