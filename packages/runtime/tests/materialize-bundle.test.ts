@@ -37,6 +37,7 @@ const sampleBundle: RoleBundleData = {
   seedRefs: [],
   wakePrograms: [],
   hooksJson: HOOKS_TEMPLATE,
+  habits: [],
 };
 
 describe("materializeBundle", () => {
@@ -46,6 +47,7 @@ describe("materializeBundle", () => {
       repoPath,
       hookUrl: "http://127.0.0.1:3300/hook",
       cliEntry: "/abs/cli/index.ts",
+      inSessionHabits: true,
     });
 
     expect(result.pluginDir).toBe(join(repoPath, ".clobber", "roles", "manager"));
@@ -65,6 +67,7 @@ describe("materializeBundle", () => {
       repoPath,
       hookUrl: "http://x/hook",
       cliEntry: "/abs/cli/index.ts",
+      inSessionHabits: true,
     });
 
     expect(result.pluginDir).toBe(join(repoPath, ".clobber", "roles", "auditor"));
@@ -80,6 +83,7 @@ describe("materializeBundle", () => {
       repoPath,
       hookUrl: "http://127.0.0.1:3300/hook",
       cliEntry: "/abs/cli/index.ts",
+      inSessionHabits: true,
     });
     expect(existsSync(join(repoPath, ".claude"))).toBe(false);
   });
@@ -90,6 +94,7 @@ describe("materializeBundle", () => {
       repoPath,
       hookUrl: "http://127.0.0.1:3300/hook",
       cliEntry: "/abs/cli/index.ts",
+      inSessionHabits: true,
     });
 
     const hooksPath = join(result.pluginDir, "hooks", "hooks.json");
@@ -106,6 +111,7 @@ describe("materializeBundle", () => {
       repoPath,
       hookUrl: "http://x/hook",
       cliEntry: "/abs/cli/index.ts",
+      inSessionHabits: true,
     });
 
     const shim = join(result.binDir, "clobber");
@@ -122,12 +128,14 @@ describe("materializeBundle", () => {
       repoPath,
       hookUrl: "http://x/hook",
       cliEntry: "/abs/cli/index.ts",
+      inSessionHabits: true,
     });
     materializeBundle({
       bundle: sampleBundle,
       repoPath,
       hookUrl: "http://x/hook",
       cliEntry: "/abs/cli/index.ts",
+      inSessionHabits: true,
     });
     expect(
       existsSync(join(repoPath, ".clobber", "roles", "manager", "skills", "whoami", "SKILL.md")),

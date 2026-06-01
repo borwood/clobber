@@ -161,6 +161,10 @@ export function createRoleVersionStore(db: Database): RoleVersionStore {
           ? {}
           : { defaultWakeProgram: row.default_wake_program }),
         hooksJson: row.hooks_json,
+        // Phase 0 (#407) does not flatten habits into a role-version column — the
+        // git tree is their only store — so a row-backed bundle carries none. A
+        // habit-bearing role is commit-pinned, embodied via `bundleFromContract`.
+        habits: [],
       };
       return data;
     },

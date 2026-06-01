@@ -14,6 +14,7 @@ describe("claudeRuntimeProvider", () => {
       livePromptInjection: true,
       interrupt: true,
       resume: true,
+      inSessionHabits: true,
     });
   });
 
@@ -72,6 +73,7 @@ describe("codexRuntimeProvider", () => {
       livePromptInjection: false,
       interrupt: false,
       resume: true,
+      inSessionHabits: false,
     });
   });
 

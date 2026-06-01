@@ -32,6 +32,7 @@ import { createRoleContractRefusalStore } from "./role-contract-refusal-store.ts
 import { resumeSessionTurn, resumeEndedSession } from "./resume-pipeline.ts";
 import { bootServerRoles } from "./boot-server-roles.ts";
 import { createSystemClock } from "./clock.ts";
+import { createSessionHabitsResolver, runHabitBash } from "./resolve-session-habits.ts";
 
 export type {
   AgentSpawnRequest,
@@ -137,6 +138,12 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     runtimeProvider,
     agentStatusLog: opts.agentStatusLog,
     scheduler,
+    resolveSessionHabits:
+      opts.resolveSessionHabits === undefined
+        ? createSessionHabitsResolver({ roles: opts.roles, roleVersions: opts.roleVersions, ...roleEmbodiment })
+        : opts.resolveSessionHabits,
+    random: opts.habitRandom === undefined ? Math.random : opts.habitRandom,
+    runBash: opts.habitRunBash === undefined ? runHabitBash : opts.habitRunBash,
     ...(opts.askTimeoutMs === undefined ? {} : { askBridgeTimeoutMs: opts.askTimeoutMs }),
   });
   registerEventRoutes(app, { store: opts.store });
