@@ -177,10 +177,10 @@ export const api = {
       `/sessions/${encodeURIComponent(sessionId)}/end`,
       {},
     ),
-  resumeSession: (sessionId: string) =>
+  resumeSession: (sessionId: string, prompt?: string) =>
     postJson<{ ok: true; session_id: string; pid: number }>(
       `/sessions/${encodeURIComponent(sessionId)}/resume`,
-      {},
+      prompt !== undefined ? { prompt } : {},
     ),
   interruptSession: (sessionId: string) =>
     postJson<{ ok: true }>(

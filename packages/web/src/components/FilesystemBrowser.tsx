@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../api.ts";
 import type { BrowseDirResponse, FileReadResponse } from "@clobber/shared";
+import { Portal } from "./Portal.tsx";
+import { computePanelPosition } from "./panel-position.ts";
 
 interface DirModeProps {
   readonly mode: "dir";
@@ -15,7 +17,10 @@ interface FileModeProps {
 
 type Props = (DirModeProps | FileModeProps) & {
   readonly initialPath?: string;
+  readonly triggerRect: DOMRect;
 };
+
+const PANEL_HEIGHT_ESTIMATE = 320;
 
 export function FilesystemBrowser(props: Props) {
   const [data, setData] = useState<BrowseDirResponse | null>(null);
@@ -56,123 +61,146 @@ export function FilesystemBrowser(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const pos = computePanelPosition(
+    props.triggerRect,
+    PANEL_HEIGHT_ESTIMATE,
+    window.innerHeight,
+    window.innerWidth,
+  );
+  const panelStyle: React.CSSProperties = {
+    position: "fixed",
+    top: pos.top,
+    right: pos.right,
+    zIndex: 50,
+  };
+
   if (fileView !== null) {
     return (
-      <div className="absolute z-10 top-full right-0 mt-1 w-[32rem] bg-bg border border-border-strong rounded shadow-lg p-2 flex flex-col gap-2">
-        <div className="flex items-center gap-2">
+      <Portal>
+        <div
+          style={panelStyle}
+          className="w-[32rem] bg-bg border border-border-strong rounded shadow-lg p-2 flex flex-col gap-2"
+        >
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setFileView(null)}
+              className="px-2 py-1 rounded text-xs text-text-soft hover:text-text border border-border hover:border-border-strong"
+            >
+              ← back
+            </button>
+            <div
+              className="flex-1 px-2 py-1 text-xs font-mono text-text-soft bg-surface border border-border rounded truncate"
+              title={fileView.path}
+            >
+              {fileView.path.split("/").pop()}
+            </div>
+          </div>
+          <pre className="max-h-80 overflow-y-auto text-xs font-mono text-text bg-surface border border-border rounded p-2 whitespace-pre-wrap break-all">
+            {fileView.content}
+          </pre>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={props.onCancel}
+              className="px-2 py-1 rounded text-xs text-text-muted hover:text-text-dim"
+            >
+              close
+            </button>
+          </div>
+        </div>
+      </Portal>
+    );
+  }
+
+  return (
+    <Portal>
+      <div
+        style={panelStyle}
+        className="w-96 bg-bg border border-border-strong rounded shadow-lg p-2"
+      >
+        <div className="flex items-center gap-2 mb-2">
           <button
             type="button"
-            onClick={() => setFileView(null)}
-            className="px-2 py-1 rounded text-xs text-text-soft hover:text-text border border-border hover:border-border-strong"
+            onClick={() => data?.parent !== null && data?.parent !== undefined && void loadDir(data.parent)}
+            disabled={data === null || data.parent === null || loading}
+            className="px-2 py-1 rounded text-xs text-text-soft hover:text-text disabled:text-text-faint border border-border hover:border-border-strong disabled:border-surface"
+            title="Up one level"
           >
-            ← back
+            ↑
           </button>
           <div
             className="flex-1 px-2 py-1 text-xs font-mono text-text-soft bg-surface border border-border rounded truncate"
-            title={fileView.path}
+            title={data?.path ?? ""}
           >
-            {fileView.path.split("/").pop()}
+            {data?.path ?? (loading ? "loading…" : "")}
           </div>
         </div>
-        <pre className="max-h-80 overflow-y-auto text-xs font-mono text-text bg-surface border border-border rounded p-2 whitespace-pre-wrap break-all">
-          {fileView.content}
-        </pre>
-        <div className="flex justify-end">
+
+        <div className="max-h-64 overflow-y-auto border border-border rounded bg-surface">
+          {loading && data === null && (
+            <div className="px-2 py-1 text-xs text-text-subtle">loading…</div>
+          )}
+          {fileLoading && (
+            <div className="px-2 py-1 text-xs text-text-subtle">opening…</div>
+          )}
+          {error !== null && (
+            <div className="px-2 py-1 text-xs text-danger-text font-mono break-all">{error}</div>
+          )}
+          {data !== null && data.entries.length === 0 && (
+            <div className="px-2 py-1 text-xs text-text-subtle italic">(empty)</div>
+          )}
+          {data !== null &&
+            data.entries.map((entry) => {
+              const child = data.path === "/" ? `/${entry.name}` : `${data.path}/${entry.name}`;
+              if (entry.isDir) {
+                return (
+                  <button
+                    key={entry.name}
+                    type="button"
+                    onClick={() => void loadDir(child)}
+                    className="w-full text-left px-2 py-1 text-xs font-mono text-text-dim hover:bg-elevated"
+                  >
+                    📁 {entry.name}
+                  </button>
+                );
+              }
+              if (props.mode === "file") {
+                return (
+                  <button
+                    key={entry.name}
+                    type="button"
+                    onClick={() => void openFile(child)}
+                    className="w-full text-left px-2 py-1 text-xs font-mono text-text-dim hover:bg-elevated"
+                  >
+                    📄 {entry.name}
+                  </button>
+                );
+              }
+              return null;
+            })}
+        </div>
+
+        <div className="flex justify-end gap-2 mt-2">
           <button
             type="button"
             onClick={props.onCancel}
             className="px-2 py-1 rounded text-xs text-text-muted hover:text-text-dim"
           >
-            close
+            cancel
           </button>
+          {props.mode === "dir" && (
+            <button
+              type="button"
+              onClick={() => data !== null && props.onSelect(data.path)}
+              disabled={data === null}
+              className="px-2 py-1 rounded bg-accent-strong hover:bg-accent disabled:bg-elevated disabled:text-text-subtle text-xs"
+            >
+              select this folder
+            </button>
+          )}
         </div>
       </div>
-    );
-  }
-
-  return (
-    <div className="absolute z-10 top-full right-0 mt-1 w-96 bg-bg border border-border-strong rounded shadow-lg p-2">
-      <div className="flex items-center gap-2 mb-2">
-        <button
-          type="button"
-          onClick={() => data?.parent !== null && data?.parent !== undefined && void loadDir(data.parent)}
-          disabled={data === null || data.parent === null || loading}
-          className="px-2 py-1 rounded text-xs text-text-soft hover:text-text disabled:text-text-faint border border-border hover:border-border-strong disabled:border-surface"
-          title="Up one level"
-        >
-          ↑
-        </button>
-        <div
-          className="flex-1 px-2 py-1 text-xs font-mono text-text-soft bg-surface border border-border rounded truncate"
-          title={data?.path ?? ""}
-        >
-          {data?.path ?? (loading ? "loading…" : "")}
-        </div>
-      </div>
-
-      <div className="max-h-64 overflow-y-auto border border-border rounded bg-surface">
-        {loading && data === null && (
-          <div className="px-2 py-1 text-xs text-text-subtle">loading…</div>
-        )}
-        {fileLoading && (
-          <div className="px-2 py-1 text-xs text-text-subtle">opening…</div>
-        )}
-        {error !== null && (
-          <div className="px-2 py-1 text-xs text-danger-text font-mono break-all">{error}</div>
-        )}
-        {data !== null && data.entries.length === 0 && (
-          <div className="px-2 py-1 text-xs text-text-subtle italic">(empty)</div>
-        )}
-        {data !== null &&
-          data.entries.map((entry) => {
-            const child = data.path === "/" ? `/${entry.name}` : `${data.path}/${entry.name}`;
-            if (entry.isDir) {
-              return (
-                <button
-                  key={entry.name}
-                  type="button"
-                  onClick={() => void loadDir(child)}
-                  className="w-full text-left px-2 py-1 text-xs font-mono text-text-dim hover:bg-elevated"
-                >
-                  📁 {entry.name}
-                </button>
-              );
-            }
-            if (props.mode === "file") {
-              return (
-                <button
-                  key={entry.name}
-                  type="button"
-                  onClick={() => void openFile(child)}
-                  className="w-full text-left px-2 py-1 text-xs font-mono text-text-dim hover:bg-elevated"
-                >
-                  📄 {entry.name}
-                </button>
-              );
-            }
-            return null;
-          })}
-      </div>
-
-      <div className="flex justify-end gap-2 mt-2">
-        <button
-          type="button"
-          onClick={props.onCancel}
-          className="px-2 py-1 rounded text-xs text-text-muted hover:text-text-dim"
-        >
-          cancel
-        </button>
-        {props.mode === "dir" && (
-          <button
-            type="button"
-            onClick={() => data !== null && props.onSelect(data.path)}
-            disabled={data === null}
-            className="px-2 py-1 rounded bg-accent-strong hover:bg-accent disabled:bg-elevated disabled:text-text-subtle text-xs"
-          >
-            select this folder
-          </button>
-        )}
-      </div>
-    </div>
+    </Portal>
   );
 }

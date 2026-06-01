@@ -80,11 +80,14 @@ export function MailboxContent(props: MailboxContentProps) {
           <PromptComposer
             key={selectedSession}
             sessionId={selectedSession}
-            disabled={selected.ended_at !== undefined}
+            ended={selected.ended_at !== undefined}
             busy={selected.busy === true}
             transcript={transcript}
             onSend={async (prompt) => {
               await api.sendPrompt(selectedSession, prompt);
+            }}
+            onResume={async (prompt) => {
+              await api.resumeSession(selectedSession, prompt);
             }}
             onInterrupt={async () => {
               await api.interruptSession(selectedSession);

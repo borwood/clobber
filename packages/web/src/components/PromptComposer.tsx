@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 import { classifyComposerKey } from "./composer-key.ts";
 import { computeContextLength } from "../context-length.ts";
 import type { TranscriptLine } from "../api.ts";
@@ -7,21 +7,23 @@ import { api } from "../api.ts";
 
 interface Props {
   readonly sessionId: string;
-  readonly disabled: boolean;
+  readonly ended: boolean;
   readonly busy: boolean;
   readonly transcript?: readonly TranscriptLine[];
   readonly onSend: (prompt: string) => Promise<void>;
+  readonly onResume: (prompt?: string) => Promise<void>;
   readonly onInterrupt: () => Promise<void>;
 }
 
-type FileBrowserState = { readonly path: string; readonly label: string } | null;
+type FileBrowserState = { readonly path: string; readonly label: string; readonly triggerRect: DOMRect } | null;
 
 export function PromptComposer({
   sessionId,
-  disabled,
+  ended,
   busy,
   transcript,
   onSend,
+  onResume,
   onInterrupt,
 }: Props) {
   const [prompt, setPrompt] = useState("");
@@ -29,9 +31,12 @@ export function PromptComposer({
   const [interrupting, setInterrupting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fileBrowser, setFileBrowser] = useState<FileBrowserState>(null);
+  const deskButtonRef = useRef<HTMLButtonElement>(null);
+  const officeButtonRef = useRef<HTMLButtonElement>(null);
 
-  const canSend = !disabled && !sending && prompt.trim().length > 0;
-  const canInterrupt = !disabled && busy && !interrupting;
+  const hasText = prompt.trim().length > 0;
+  const canSend = !ended && !sending && hasText;
+  const canInterrupt = !ended && busy && !interrupting;
   const contextTokens = transcript !== undefined ? computeContextLength(transcript) : undefined;
 
   async function send() {
@@ -40,6 +45,19 @@ export function PromptComposer({
     setError(null);
     try {
       await onSend(prompt);
+      setPrompt("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function resume() {
+    setSending(true);
+    setError(null);
+    try {
+      await onResume(hasText ? prompt : undefined);
       setPrompt("");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -62,6 +80,8 @@ export function PromptComposer({
   }
 
   async function openFileBrowser(target: "desk" | "office") {
+    const ref = target === "desk" ? deskButtonRef : officeButtonRef;
+    const triggerRect = ref.current?.getBoundingClientRect();
     setError(null);
     try {
       const locations = await api.getSessionLocations(sessionId);
@@ -70,7 +90,8 @@ export function PromptComposer({
         setError("No office for this agent");
         return;
       }
-      setFileBrowser({ path, label: target === "desk" ? "Desk" : "Office" });
+      if (triggerRect === undefined) return;
+      setFileBrowser({ path, label: target === "desk" ? "Desk" : "Office", triggerRect });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -82,11 +103,14 @@ export function PromptComposer({
     });
     if (action === "send") {
       e.preventDefault();
-      void send();
+      if (ended) {
+        void resume();
+      } else {
+        void send();
+      }
       return;
     }
     if (action === "newline") {
-      // Default textarea behavior already inserts a newline; nothing to do.
       return;
     }
     if (action === "interrupt") {
@@ -96,16 +120,41 @@ export function PromptComposer({
     }
   }
 
+  function renderActionButton() {
+    if (ended) {
+      return (
+        <button
+          type="button"
+          onClick={() => void resume()}
+          disabled={sending}
+          className="px-3 py-1.5 text-xs rounded bg-accent-strong text-white hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {sending ? "Resuming…" : hasText ? "Resume + Send" : "Resume"}
+        </button>
+      );
+    }
+    return (
+      <button
+        type="button"
+        onClick={() => void send()}
+        disabled={!canSend}
+        className="px-3 py-1.5 text-xs rounded bg-accent-strong text-white hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        {sending ? "Sending…" : "Send"}
+      </button>
+    );
+  }
+
   return (
     <div className="border-t border-border bg-bg p-3 space-y-2">
       <textarea
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
         onKeyDown={onKey}
-        disabled={disabled || sending}
+        disabled={sending}
         placeholder={
-          disabled
-            ? "Session ended."
+          ended
+            ? "Optional prompt to send on resume…"
             : busy
               ? "Agent is working… (Ctrl+C to interrupt)"
               : "Follow-up prompt… (Enter to send, Shift+Enter for newline)"
@@ -139,6 +188,7 @@ export function PromptComposer({
           </button>
         )}
         <button
+          ref={deskButtonRef}
           type="button"
           onClick={() => void openFileBrowser("desk")}
           title="Browse agent desk"
@@ -150,6 +200,7 @@ export function PromptComposer({
           Desk
         </button>
         <button
+          ref={officeButtonRef}
           type="button"
           onClick={() => void openFileBrowser("office")}
           title="Browse agent office"
@@ -157,18 +208,12 @@ export function PromptComposer({
         >
           Office
         </button>
-        <button
-          type="button"
-          onClick={() => void send()}
-          disabled={!canSend}
-          className="px-3 py-1.5 text-xs rounded bg-accent-strong text-white hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {sending ? "Sending…" : "Send"}
-        </button>
+        {renderActionButton()}
         {fileBrowser !== null && (
           <FilesystemBrowser
             mode="file"
             initialPath={fileBrowser.path}
+            triggerRect={fileBrowser.triggerRect}
             onCancel={() => setFileBrowser(null)}
           />
         )}
