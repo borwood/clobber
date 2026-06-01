@@ -1,0 +1,180 @@
+import { claudeRuntimeProvider } from "@clobber/runtime";
+import { createAgentMessageStore } from "./agent-message-store.ts";
+import { createNotificationStore } from "./notification-store.ts";
+import { createNotificationDispatcher } from "./notification-dispatch.ts";
+import { createAgentRegistry } from "./agent-registry.ts";
+import { createToolTokenStore } from "./tool-token-store.ts";
+import type { ToolTokenGateDeps } from "./tool-token-gate.ts";
+import { injectPrompt } from "./inject-prompt.ts";
+import { createLayoutEventStore } from "./layout-event-store.ts";
+import { createTriggerScheduler } from "./trigger-scheduler.ts";
+import { createFinalReportConsumer } from "./final-report-consumer.ts";
+import { attachSessionToAgent, type SpawnPipelineDeps } from "./spawn-pipeline.ts";
+import { ROLE_CONTRACT_MIGRATOR } from "./role-contract-migration.ts";
+import { createRoleContractRefusalStore } from "./role-contract-refusal-store.ts";
+import { resumeSessionTurn, resumeEndedSession } from "./resume-pipeline.ts";
+import { bootServerRoles } from "./boot-server-roles.ts";
+import { createSystemClock } from "./clock.ts";
+import { createSessionHabitsResolver, runHabitBash } from "./resolve-session-habits.ts";
+import type { ServerOptions } from "./types.ts";
+
+export function buildServerDeps(opts: ServerOptions) {
+  const registry = createAgentRegistry();
+  const toolTokens = createToolTokenStore(opts.db);
+  const layoutEvents =
+    opts.layoutEvents === undefined ? createLayoutEventStore() : opts.layoutEvents;
+  const clock = opts.clock === undefined ? createSystemClock() : opts.clock;
+  // The notification spine (#425): one dispatcher shared by the trigger emitter
+  // and the #93 message route so every cross-agent signal lands on one record.
+  const notificationDispatcher = createNotificationDispatcher(
+    createNotificationStore(opts.db),
+    clock,
+  );
+  const runtimeProvider =
+    opts.runtimeProvider === undefined ? claudeRuntimeProvider : opts.runtimeProvider;
+  // The #237 contract gate's migration seam, filled by the #238 framework.
+  // Defaults to the real forward-only migrator (zero real steps at contract v1,
+  // so it still declines every mismatch today); a fork can inject its own.
+  const roleContractMigrator =
+    opts.roleContractMigrator === undefined
+      ? ROLE_CONTRACT_MIGRATOR
+      : opts.roleContractMigrator;
+  const roleContractRefusals =
+    opts.roleContractRefusals === undefined
+      ? createRoleContractRefusalStore(opts.db)
+      : opts.roleContractRefusals;
+
+  // Boot-time role wiring (before routes): #239 contract sweep + #349 git-as-truth.
+  // When a roleContentCache override is injected, skip git materialization so
+  // tests can pre-seed the cache without a real role repo (mirrors the
+  // roleContractMigrator / roleContractRefusals override pattern).
+  const roleEmbodiment = {
+    ...bootServerRoles({
+      db: opts.db,
+      roleRepoDir: opts.roleContentCache !== undefined ? undefined : opts.roleRepoDir,
+      workspaces: opts.workspaces,
+      workspaceRoles: opts.workspaceRoles,
+      roleVersions: opts.roleVersions,
+      roleContractRefusals,
+      migrator: roleContractMigrator,
+    }),
+    ...(opts.roleContentCache !== undefined
+      ? { roleContentCache: opts.roleContentCache, roleRepoDir: opts.roleRepoDir }
+      : {}),
+  };
+
+  // Declared before construction so onSessionEnded can reference it without a
+  // circular dependency — the scheduler closes over spawnPipelineDeps in turn.
+  let scheduler: ReturnType<typeof createTriggerScheduler>;
+  const onSessionEnded = (workspaceId: string, finishedSessionId: string): void => {
+    void scheduler.fireSessionEnded(workspaceId, finishedSessionId);
+  };
+  const onWorkerDone = (workspaceId: string, finishedSessionId: string): void => {
+    void scheduler.fireWorkerDone(workspaceId, finishedSessionId);
+  };
+
+  const spawnPipelineDeps: SpawnPipelineDeps = {
+    workspaces: opts.workspaces,
+    workspaceRoles: opts.workspaceRoles,
+    agents: opts.agents,
+    sessions: opts.sessions,
+    sessionTokens: opts.sessionTokens,
+    spawner: opts.spawner,
+    hookUrl: opts.hookUrl,
+    apiBase: opts.apiBase,
+    cliEntry: opts.cliEntry,
+    registry,
+    roles: opts.roles,
+    roleVersions: opts.roleVersions,
+    ...roleEmbodiment,
+    runtimeProvider,
+    agentQuestions: opts.agentQuestions,
+    agentQuestionWaiter: opts.agentQuestionWaiter,
+    roleContractRefusals: roleContractRefusals,
+    roleContractMigrator,
+    onSessionEnded,
+  };
+
+  scheduler = createTriggerScheduler({
+    db: opts.db,
+    clock,
+    workspaces: opts.workspaces,
+    roles: opts.roles,
+    roleVersions: opts.roleVersions,
+    agents: opts.agents,
+    sessions: opts.sessions,
+    registry,
+    runtimeProvider,
+    dispatches: opts.dispatches,
+    agentStatusLog: opts.agentStatusLog,
+    dispatcher: notificationDispatcher,
+    attachSession: (input) => attachSessionToAgent(spawnPipelineDeps, input),
+    // #385 — the manager's wake path resolves triggers through the commit-pin
+    // view, so a git-backed (commit-pinned) manager still registers and wakes.
+    ...roleEmbodiment,
+  });
+
+  // The tool-token primitive's first consumer (#321). The gate injects the
+  // repercussion brief into the bearer's transcript via the same `injectPrompt`
+  // path the session routes use; saved args replay on redemption.
+  const injectDeps = {
+    ...spawnPipelineDeps,
+    resumeTurn: (input: { sessionId: string; prompt: string }) =>
+      resumeSessionTurn(spawnPipelineDeps, input),
+  };
+  const toolTokenGate: ToolTokenGateDeps = {
+    tokens: toolTokens,
+    inject: (sessionId, content, tag) => injectPrompt(sessionId, content, injectDeps, tag),
+  };
+
+  const agentMessages = createAgentMessageStore(opts.db);
+  const resolveSessionHabits =
+    opts.resolveSessionHabits === undefined
+      ? createSessionHabitsResolver({
+          roles: opts.roles,
+          roleVersions: opts.roleVersions,
+          ...roleEmbodiment,
+        })
+      : opts.resolveSessionHabits;
+  const random = opts.habitRandom === undefined ? Math.random : opts.habitRandom;
+  const runBash = opts.habitRunBash === undefined ? runHabitBash : opts.habitRunBash;
+  const resumeTurn = (input: { sessionId: string; prompt: string }) =>
+    resumeSessionTurn(spawnPipelineDeps, input);
+  const resumeEnded = (input: { sessionId: string; prompt: string | undefined }) =>
+    resumeEndedSession(spawnPipelineDeps, input);
+
+  const finalReportConsumer = createFinalReportConsumer({
+    db: opts.db,
+    workspaces: opts.workspaces,
+    agentStatusLog: opts.agentStatusLog,
+    stateStore: opts.finalReportConsumerState,
+    clock,
+  });
+
+  return {
+    registry,
+    toolTokens,
+    layoutEvents,
+    clock,
+    notificationDispatcher,
+    runtimeProvider,
+    roleContractMigrator,
+    roleContractRefusals,
+    roleEmbodiment,
+    scheduler,
+    spawnPipelineDeps,
+    injectDeps,
+    toolTokenGate,
+    agentMessages,
+    resolveSessionHabits,
+    random,
+    runBash,
+    resumeTurn,
+    resumeEnded,
+    finalReportConsumer,
+    onSessionEnded,
+    onWorkerDone,
+  };
+}
+
+export type ServerDeps = ReturnType<typeof buildServerDeps>;
