@@ -5,7 +5,7 @@ import { takeJsonFlag } from "./roles-args.ts";
 import { runList, runShow } from "./roles-inspect.ts";
 import { runEdit } from "./roles-edit.ts";
 import { runDelete } from "./roles-delete.ts";
-import { runSeeds } from "./roles-seeds.ts";
+import { runPromptModules } from "./roles-prompt-modules.ts";
 import { runWakePrograms } from "./roles-wake-programs.ts";
 import {
   forkRoleBranch,
@@ -23,7 +23,7 @@ const SUBCOMMANDS = [
   "edit",
   "delete",
   "ceiling",
-  "seeds",
+  "prompt-modules",
   "wake-programs",
   "checkout",
   "status",
@@ -120,15 +120,15 @@ export const rolesCommand: Command = {
   name: "roles",
   summary: "List or inspect roles available in the current workspace.",
   usage:
-    "usage: clobber roles <list|show|fork|edit|delete|ceiling|seeds|wake-programs|checkout|status|diff|commit|discard> [args...]\n\n" +
+    "usage: clobber roles <list|show|fork|edit|delete|ceiling|prompt-modules|wake-programs|checkout|status|diff|commit|discard> [args...]\n\n" +
     "Subcommands:\n" +
     "  roles list [--json]                          List workspace roles with version metadata.\n" +
     "  roles show <name|id> [--json]                Show full role + current version + history.\n" +
     "  roles fork <source-name|id> <new-name> [--json]  Alias for `checkout -b <new-name> --from <source>`.\n" +
-    "  roles edit <name|id> [flags] [--json]        One-shot patch a role; system_prompt/skills/allowed_tools/triggers/seeds/wake-programs advance the git pin (no version row), description is metadata-only.\n" +
+    "  roles edit <name|id> [flags] [--json]        One-shot patch a role; system_prompt/skills/allowed_tools/triggers/prompt-modules/wake-programs advance the git pin (no version row), description is metadata-only.\n" +
     "  roles delete <name|id> [--force] [--json]    Remove a role + its fork-branch + config refs. Refused for persistent / spawned-agent roles (use --force); a live session is a hard stop (reap it first).\n" +
     "  roles ceiling <name|id> <max> [--json]       Set the spawn ceiling for this role in this workspace.\n" +
-    "  roles seeds <name|id> [add|enable|disable <seed> [--disabled]]  List a role's seed refs, or add/toggle one.\n" +
+    "  roles prompt-modules <name|id> [add|enable|disable <module> [--disabled]]  List a role's prompt-module refs, or add/toggle one.\n" +
     "  roles wake-programs <name|id> [show|add|edit|remove <name> ...]  List/show/author wake-programs (`idle` is the built-in).\n\n" +
     "Working-copy verbs (edit a role like code — commit advances the git pin, no new version row):\n" +
     "  roles checkout <name|id> [--json]            Materialize the role's branch into the desk; edit the files, then commit.\n" +
@@ -152,9 +152,9 @@ export const rolesCommand: Command = {
     "  --user TEXT | --no-user              Opening user-message kick, or none.\n\n" +
     "Example:\n" +
     "  clobber roles fork worker my-worker\n" +
-    "  clobber roles seeds my-worker add repo-sdlc\n" +
+    "  clobber roles prompt-modules my-worker add repo-sdlc\n" +
     "  clobber roles wake-programs my-worker add triage --system-file ./c.md --user \"Triage now.\"\n\n" +
-    "Skill: see manager:roles for fork/edit/seeds/wake-program patterns.\n",
+    "Skill: see manager:roles for fork/edit/prompt-modules/wake-program patterns.\n",
   subcommands: SUBCOMMANDS,
   async run(ctx) {
     const [sub, ...rest] = ctx.args;
@@ -167,8 +167,8 @@ export const rolesCommand: Command = {
     if (sub === "edit") {
       return runEdit(ctx, rest);
     }
-    if (sub === "seeds") {
-      return runSeeds(ctx, rest);
+    if (sub === "prompt-modules") {
+      return runPromptModules(ctx, rest);
     }
     if (sub === "wake-programs") {
       return runWakePrograms(ctx, rest);

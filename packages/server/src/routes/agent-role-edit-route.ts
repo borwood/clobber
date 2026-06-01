@@ -3,7 +3,7 @@ import { z } from "zod";
 import {
   RoleSkillSchema,
   RoleTriggerSchema,
-  SeedRefSchema,
+  PromptModuleRefSchema,
   WakeProgramSchema,
 } from "@clobber/shared";
 import { patchRoleThroughPin, triggersRequirePersistent } from "../role-commit.ts";
@@ -27,7 +27,7 @@ const EditBodySchema = z
     skills: z.array(RoleSkillSchema).optional(),
     allowed_tools: z.array(z.string().min(1)).optional(),
     triggers: z.array(RoleTriggerSchema).optional(),
-    seed_refs: z.array(SeedRefSchema).optional(),
+    prompt_module_refs: z.array(PromptModuleRefSchema).optional(),
     wake_programs: z.array(WakeProgramSchema).optional(),
     description: z.string().min(1).optional(),
   })
@@ -73,13 +73,13 @@ export function registerAgentRoleEditRoute(
           patch.skills !== undefined ||
           patch.allowed_tools !== undefined ||
           patch.triggers !== undefined ||
-          patch.seed_refs !== undefined ||
+          patch.prompt_module_refs !== undefined ||
           patch.wake_programs !== undefined;
         if (!advancesPin && patch.description === undefined) {
           reply.code(400);
           return {
             error:
-              "edit body must include at least one of system_prompt, skills, allowed_tools, triggers, seed_refs, wake_programs, description",
+              "edit body must include at least one of system_prompt, skills, allowed_tools, triggers, prompt_module_refs, wake_programs, description",
           };
         }
         const { idOrName } = request.params;
@@ -116,7 +116,7 @@ export function registerAgentRoleEditRoute(
             ...(patch.skills === undefined ? {} : { skills: patch.skills }),
             ...(patch.allowed_tools === undefined ? {} : { allowedTools: patch.allowed_tools }),
             ...(patch.triggers === undefined ? {} : { triggers: patch.triggers }),
-            ...(patch.seed_refs === undefined ? {} : { seedRefs: patch.seed_refs }),
+            ...(patch.prompt_module_refs === undefined ? {} : { seedRefs: patch.prompt_module_refs }),
             ...(patch.wake_programs === undefined ? {} : { wakePrograms: patch.wake_programs }),
           }),
           ...(patch.description === undefined ? {} : { description: patch.description }),

@@ -9,8 +9,8 @@ import { CALLER_SUPPLIED_KICK, resolveWakeProgram } from "@clobber/shared";
 import { ensureOffice } from "./office-store.ts";
 import { composeOfficeContext } from "./office-context.ts";
 import { composeSystemPrompt } from "./compose-system-prompt.ts";
-import { resolveSeedCatalog } from "./workspace-seed-catalog.ts";
-import { composeSeeds } from "./compose-seeds.ts";
+import { resolvePromptModuleCatalog } from "./workspace-prompt-module-catalog.ts";
+import { composePromptModules } from "./compose-prompt-modules.ts";
 import { OFFICE_NOTES_SKILL } from "./office-notes-skill.ts";
 import { deskDirFor, writeBriefingPacket } from "./desk-store.ts";
 import { generateTokenValue } from "./session-token-store.ts";
@@ -112,11 +112,11 @@ export async function prepareSpawnContext(
     ? bundle
     : injectOfficeNotesSkill(bundle);
 
-  // Layer B — the role's seeds (#211). The role declares an ordered, toggleable
-  // list of refs; each resolves against the workspace catalog (shipped defaults
-  // overlaid by <repo>/.clobber/seeds/) and composes its static text or its
-  // dynamic provider's stdout. Dynamic seeds get the spawn env below so a script
-  // can read its actual office/desk paths instead of reconstructing them.
+  // Layer B — the role's prompt-modules (#211). The role declares an ordered,
+  // toggleable list of refs; each resolves against the workspace catalog (shipped
+  // defaults overlaid by <repo>/.clobber/prompt-modules/) and composes its static
+  // text or its dynamic provider's stdout. Dynamic modules get the spawn env below
+  // so a script can read its actual office/desk paths instead of reconstructing them.
   const bootContext: BootContext = {
     workspace_id: workspace.id,
     agent_id: agent.id,
@@ -131,9 +131,9 @@ export async function prepareSpawnContext(
     ...(officeDir === null ? {} : { CLOBBER_OFFICE_DIR: officeDir }),
     ...(deskDir === null ? {} : { CLOBBER_DESK_DIR: deskDir }),
   };
-  const seeds = await composeSeeds(
-    effectiveBundle.seedRefs,
-    resolveSeedCatalog(workspace.repo_path),
+  const seeds = await composePromptModules(
+    effectiveBundle.promptModuleRefs,
+    resolvePromptModuleCatalog(workspace.repo_path),
     bootContext,
     seedEnv,
   );

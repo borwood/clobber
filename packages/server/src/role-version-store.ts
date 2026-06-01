@@ -5,7 +5,7 @@ import {
   ENGINE_CONTRACT_VERSION,
   RoleSkillSchema,
   RoleVersionSchema,
-  SeedRefsSchema,
+  PromptModuleRefsSchema,
   WakeProgramsSchema,
   type RoleVersion,
 } from "@clobber/shared";
@@ -141,7 +141,7 @@ export function createRoleVersionStore(db: Database): RoleVersionStore {
       if (roleRow === null) return null;
 
       const skills = SkillsArraySchema.parse(JSON.parse(row.skills_json));
-      const seedRefs = SeedRefsSchema.parse(JSON.parse(row.seed_refs_json));
+      const promptModuleRefs = PromptModuleRefsSchema.parse(JSON.parse(row.seed_refs_json));
       const wakePrograms = WakeProgramsSchema.parse(JSON.parse(row.wake_programs_json));
       const allowedTools = z
         .array(z.string().min(1))
@@ -155,7 +155,7 @@ export function createRoleVersionStore(db: Database): RoleVersionStore {
         systemPrompt: row.system_prompt,
         allowedTools,
         skills,
-        seedRefs,
+        promptModuleRefs,
         wakePrograms,
         ...(row.default_wake_program === null
           ? {}

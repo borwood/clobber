@@ -22,7 +22,7 @@ import { createAgentQuestionWaiter } from "@clobber/server/agent-question-waiter
 import type { AgentSpawner, SpawnedAgentInfo } from "@clobber/server/types.ts";
 import { createTriggerDispatchStore } from "@clobber/server/trigger-dispatch-store.ts";
 import { createFinalReportConsumerStateStore } from "@clobber/server/final-report-consumer.ts";
-import type { SeedRef, WakeProgram } from "@clobber/shared";
+import type { PromptModuleRef, WakeProgram } from "@clobber/shared";
 import { run } from "../src/main.ts";
 
 interface Harness {
@@ -170,12 +170,12 @@ function envFor(token: string): NodeJS.ProcessEnv {
   };
 }
 
-// #414 — the worker is commit-pinned; seed/wake-program edits advance the pin.
-// Read seed_refs + wake_programs from the contract at the current pin (the clone
+// #414 — the worker is commit-pinned; prompt-module/wake-program edits advance the pin.
+// Read prompt_module_refs + wake_programs from the contract at the current pin (the clone
 // once it exists, else the upstream repo at the seeded sha).
 function readWorker(): {
   sha: string;
-  seed_refs: readonly SeedRef[];
+  prompt_module_refs: readonly PromptModuleRef[];
   wake_programs: readonly WakeProgram[];
 } {
   const row = harness.db
@@ -185,7 +185,7 @@ function readWorker(): {
   const clone = join(dirname(harness.roleRepoDir), "role-repos", harness.workspaceId);
   const dir = existsSync(join(clone, ".git")) ? clone : harness.roleRepoDir;
   const contract = loadRoleContractAtCommit(dir, row.sha);
-  return { sha: row.sha, seed_refs: contract.seedRefs, wake_programs: contract.wakePrograms };
+  return { sha: row.sha, prompt_module_refs: contract.seedRefs, wake_programs: contract.wakePrograms };
 }
 
 async function cli(args: readonly string[]) {
@@ -202,40 +202,40 @@ async function cli(args: readonly string[]) {
 describe("clobber CLI — roles seeds", () => {
   it("adds a seed ref and advances the pin", async () => {
     const before = readWorker();
-    const r = await cli(["roles", "seeds", "worker", "add", "office-manifest"]);
+    const r = await cli(["roles", "prompt-modules", "worker", "add", "office-manifest"]);
     expect(r.code).toBe(0);
 
     const after = readWorker();
     expect(after.sha).not.toBe(before.sha);
-    expect(after.seed_refs).toContainEqual({ name: "office-manifest", enabled: true });
+    expect(after.prompt_module_refs).toContainEqual({ name: "office-manifest", enabled: true });
   });
 
   it("adds a disabled seed ref with --disabled", async () => {
-    const r = await cli(["roles", "seeds", "worker", "add", "wisdom-pointer", "--disabled"]);
+    const r = await cli(["roles", "prompt-modules", "worker", "add", "wisdom-pointer", "--disabled"]);
     expect(r.code).toBe(0);
     const after = readWorker();
-    expect(after.seed_refs).toContainEqual({ name: "wisdom-pointer", enabled: false });
+    expect(after.prompt_module_refs).toContainEqual({ name: "wisdom-pointer", enabled: false });
   });
 
   it("lists seeds with their enabled state", async () => {
-    const r = await cli(["roles", "seeds", "worker"]);
+    const r = await cli(["roles", "prompt-modules", "worker"]);
     expect(r.code).toBe(0);
     expect(r.out).toContain("office-manifest");
     expect(r.out).toContain("wisdom-pointer");
   });
 
   it("disable then enable toggles the ref", async () => {
-    const dis = await cli(["roles", "seeds", "worker", "disable", "repo-sdlc"]);
+    const dis = await cli(["roles", "prompt-modules", "worker", "disable", "repo-sdlc"]);
     expect(dis.code).toBe(0);
-    expect(readWorker().seed_refs).toContainEqual({ name: "repo-sdlc", enabled: false });
+    expect(readWorker().prompt_module_refs).toContainEqual({ name: "repo-sdlc", enabled: false });
 
-    const en = await cli(["roles", "seeds", "worker", "enable", "repo-sdlc"]);
+    const en = await cli(["roles", "prompt-modules", "worker", "enable", "repo-sdlc"]);
     expect(en.code).toBe(0);
-    expect(readWorker().seed_refs).toContainEqual({ name: "repo-sdlc", enabled: true });
+    expect(readWorker().prompt_module_refs).toContainEqual({ name: "repo-sdlc", enabled: true });
   });
 
   it("exits 2 when toggling a seed that is not on the role", async () => {
-    const r = await cli(["roles", "seeds", "worker", "enable", "no-such-seed"]);
+    const r = await cli(["roles", "prompt-modules", "worker", "enable", "no-such-seed"]);
     expect(r.code).toBe(2);
     expect(r.err).toMatch(/no-such-seed|not.*ref|not on/i);
   });

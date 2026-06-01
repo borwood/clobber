@@ -1,18 +1,19 @@
-import type { Seed } from "@clobber/shared";
+import type { PromptModule } from "@clobber/shared";
 
-// The seeds clobber ships. These are ordinary catalog entries — no engine
-// privilege, no special code path (epic #209 / #211 session-15 acceptance): a
-// manager-authored seed dropped into <repo>/.clobber/seeds/ is the same shape
-// and resolves through the same composition. A filesystem seed of the same
-// name shadows a default (see resolveSeedCatalog).
+// The prompt-modules clobber ships. These are ordinary catalog entries — no
+// engine privilege, no special code path (epic #209 / #211 session-15
+// acceptance): a manager-authored module dropped into
+// <repo>/.clobber/prompt-modules/ is the same shape and resolves through the
+// same composition. A filesystem module of the same name shadows a default
+// (see resolvePromptModuleCatalog).
 //
-//  - office-manifest: a dynamic seed that injects the agent's *actual* office
+//  - office-manifest: a dynamic module that injects the agent's *actual* office
 //    and desk paths plus a listing of its office notes, so a woken agent never
 //    reconstructs a filesystem layout it should have been told (#211 comment).
 //  - repo-sdlc: a static pointer at the repo's conventions.
 //  - wisdom-pointer: the migrated #166 boot-context pointer; refed by the
 //    manager role alone so workers no longer receive it.
-const DEFAULT_SEEDS: readonly Seed[] = [
+const DEFAULT_PROMPT_MODULES: readonly PromptModule[] = [
   {
     name: "office-manifest",
     definition: {
@@ -43,6 +44,6 @@ const DEFAULT_SEEDS: readonly Seed[] = [
   },
 ];
 
-export function enumerateDefaultSeeds(): readonly Seed[] {
-  return DEFAULT_SEEDS;
+export function enumerateDefaultPromptModules(): readonly PromptModule[] {
+  return DEFAULT_PROMPT_MODULES;
 }

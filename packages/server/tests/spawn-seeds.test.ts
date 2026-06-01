@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { SeedDefinition, SeedRef } from "@clobber/shared";
+import type { PromptModuleDefinition, PromptModuleRef } from "@clobber/shared";
 import { buildHarness, teardown, turnProvider, type Harness } from "./_spawn-harness.ts";
 import { createRoleVersionStore } from "../src/role-version-store.ts";
 import { writeRoleVersion } from "./_role-version-fixture.ts";
@@ -12,17 +12,17 @@ import { writeRoleVersion } from "./_role-version-fixture.ts";
 // with the spawn env present. Default refs route the wisdom-pointer to the
 // manager alone.
 
-function authorSeed(repoPath: string, name: string, definition: SeedDefinition): void {
-  const dir = join(repoPath, ".clobber", "seeds", name);
+function authorSeed(repoPath: string, name: string, definition: PromptModuleDefinition): void {
+  const dir = join(repoPath, ".clobber", "prompt-modules", name);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "seed.json"), JSON.stringify(definition));
+  writeFileSync(join(dir, "prompt-module.json"), JSON.stringify(definition));
 }
 
-function setSeedRefs(h: Harness, roleId: string, refs: readonly SeedRef[]): void {
+function setPromptModuleRefs(h: Harness, roleId: string, refs: readonly PromptModuleRef[]): void {
   const versions = createRoleVersionStore(h.db);
   const role = h.roles.get(roleId)!;
   const current = versions.get(role.current_version_id!)!;
-  writeRoleVersion(h.db, role, current, { seedRefs: refs });
+  writeRoleVersion(h.db, role, current, { promptModuleRefs: refs });
 }
 
 async function spawnAndReadSystem(h: Harness, roleId: string): Promise<string> {
@@ -48,7 +48,7 @@ describe("spawn — layer-B seed subsystem (#211)", () => {
     const h = buildHarness(turnProvider());
     authorSeed(h.repoPath, "welcome", { kind: "static", text: "STATIC-SEED-BODY" });
     const role = h.roles.create({ name: "worker", persistent: false });
-    setSeedRefs(h, role.id, [{ name: "welcome", enabled: true }]);
+    setPromptModuleRefs(h, role.id, [{ name: "welcome", enabled: true }]);
 
     const system = await spawnAndReadSystem(h, role.id);
     expect(system).toContain("STATIC-SEED-BODY");
@@ -66,7 +66,7 @@ describe("spawn — layer-B seed subsystem (#211)", () => {
       },
     });
     const role = h.roles.create({ name: "worker", persistent: false });
-    setSeedRefs(h, role.id, [{ name: "env-probe", enabled: true }]);
+    setPromptModuleRefs(h, role.id, [{ name: "env-probe", enabled: true }]);
 
     const system = await spawnAndReadSystem(h, role.id);
     expect(system).toContain("PROBE ROLE=worker");
@@ -81,7 +81,7 @@ describe("spawn — layer-B seed subsystem (#211)", () => {
     const role = h.roles.create({ name: "worker", persistent: false });
 
     // Order follows the ref list, not the seed name: bbb before aaa.
-    setSeedRefs(h, role.id, [
+    setPromptModuleRefs(h, role.id, [
       { name: "bbb", enabled: true },
       { name: "aaa", enabled: true },
     ]);
@@ -89,7 +89,7 @@ describe("spawn — layer-B seed subsystem (#211)", () => {
     expect(system.indexOf("SEED-BBB")).toBeLessThan(system.indexOf("SEED-AAA"));
 
     // Disable aaa — it drops out; bbb stays.
-    setSeedRefs(h, role.id, [
+    setPromptModuleRefs(h, role.id, [
       { name: "bbb", enabled: true },
       { name: "aaa", enabled: false },
     ]);

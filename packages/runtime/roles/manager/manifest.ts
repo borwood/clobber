@@ -30,7 +30,7 @@ export const managerRole = defineRole({
     // The manager alone receives the wisdom-pointer (the #166 boot-context
     // pointer, now a role-scoped seed): orchestration wisdom is a manager
     // concern, not a worker one.
-    seedRefs: [
+    promptModuleRefs: [
       { name: "office-manifest", enabled: true },
       { name: "repo-sdlc", enabled: true },
       { name: "wisdom-pointer", enabled: true },

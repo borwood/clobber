@@ -1,5 +1,5 @@
 // Argument helpers shared across the roles read-verbs (roles-inspect.ts) and
-// authoring-verbs (roles-edit.ts / roles-seeds.ts / roles-wake-programs.ts).
+// authoring-verbs (roles-edit.ts / roles-prompt-modules.ts / roles-wake-programs.ts).
 // Extracted because >=3 verb modules consume them — past the 3-caller bar.
 
 export function takeJsonFlag(args: readonly string[]): {

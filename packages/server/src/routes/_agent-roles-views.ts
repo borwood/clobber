@@ -56,7 +56,7 @@ export function buildDetail(
       allowed_tools: JSON.parse(version.allowed_tools_json),
       hooks: JSON.parse(version.hooks_json),
       triggers: JSON.parse(version.triggers_json),
-      seed_refs: JSON.parse(version.seed_refs_json),
+      prompt_module_refs: JSON.parse(version.seed_refs_json),
       wake_programs: JSON.parse(version.wake_programs_json),
       created_at: version.created_at,
       // Surface the row id only for a row-backed role; a commit-pinned role's

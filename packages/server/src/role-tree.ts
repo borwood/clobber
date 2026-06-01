@@ -1,14 +1,14 @@
 import {
   HabitSchema,
+  PromptModuleRefsSchema,
   RoleSkillSchema,
   RoleTriggerSchema,
-  SeedRefsSchema,
   WakeProgramsSchema,
   triggerId,
   type Habit,
+  type PromptModuleRef,
   type RoleSkill,
   type RoleTrigger,
-  type SeedRef,
   type WakeProgram,
 } from "@clobber/shared";
 import { z } from "zod";
@@ -57,7 +57,7 @@ export interface RoleTreeContract {
   readonly allowedCliCommands: readonly string[];
   readonly hooks: string;
   readonly triggers: readonly RoleTrigger[];
-  readonly seedRefs: readonly SeedRef[];
+  readonly seedRefs: readonly PromptModuleRef[];
   readonly wakePrograms: readonly WakeProgram[];
   readonly defaultWakeProgram: string | null;
   // #398/#407 — habits live in the role git tree, file-per-habit. They are NOT
@@ -112,7 +112,7 @@ export function roleSnapshotToContract(snapshot: RoleVersionSnapshot): RoleTreeC
     allowedCliCommands: ToolListSchema.parse(JSON.parse(snapshot.allowed_cli_commands_json)),
     hooks: snapshot.hooks_json,
     triggers: TriggersSchema.parse(JSON.parse(snapshot.triggers_json)),
-    seedRefs: SeedRefsSchema.parse(JSON.parse(snapshot.seed_refs_json)),
+    seedRefs: PromptModuleRefsSchema.parse(JSON.parse(snapshot.seed_refs_json)),
     wakePrograms: WakeProgramsSchema.parse(JSON.parse(snapshot.wake_programs_json)),
     defaultWakeProgram: snapshot.default_wake_program,
     // Phase 0: habits are git-tree-only; the role-version snapshot has no column.
@@ -276,7 +276,7 @@ export function deserializeRoleTree(tree: RoleTree): RoleTreeContract {
     hooks: requireFile(tree, "hooks.json"),
     allowedTools: fromLines(requireFile(tree, "allowed-tools.txt")),
     allowedCliCommands: fromLines(requireFile(tree, "allowed-cli-commands.txt")),
-    seedRefs: SeedRefsSchema.parse(JSON.parse(requireFile(tree, "seed-refs.json"))),
+    seedRefs: PromptModuleRefsSchema.parse(JSON.parse(requireFile(tree, "seed-refs.json"))),
     skills: readSkills(tree),
     wakePrograms: readWakePrograms(tree),
     triggers: readTriggers(tree),

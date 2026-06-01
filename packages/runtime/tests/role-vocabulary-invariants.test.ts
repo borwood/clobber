@@ -15,7 +15,43 @@ const forbiddenTokens = [
   "Worker" + "Bee",
   "seed" + "-todos",
   "seed" + "Todos",
+  // #442 — prompt-module rename: the old seed-sense compound tokens are banned.
+  // Assembled from parts so this file itself doesn't match.
+  "Seed" + "Refs",
+  "Seed" + "Ref",
+  "Seed" + "Definition",
+  "resolve" + "SeedCatalog",
+  "compose" + "Seeds",
+  "enumerate" + "DefaultSeeds",
+  "default" + "-seeds",
+  ".clobber" + "/seeds",
+  "seed" + ".json",
 ];
+
+// Files that may legitimately contain the forbidden tokens above because they
+// hold frozen historical encodings (codec literals that must not change) or
+// intentional legacy-fallback references documented in the assignment.
+//
+// Frozen codec sites (#442):
+//   seed_refs_json  — DB column literal; never ALTER TABLE
+//   seed-refs.json  — git-tree filename; writer keeps the old name
+//   RoleTreeContract.seedRefs — JSON cache key; no contract bump
+//
+// Legacy fallback:
+//   workspace-prompt-module-catalog.ts — tolerant resolver reads the new catalog
+//   path first, then falls back to the legacy subdir/filename so existing forks
+//   with authored modules still resolve without a migration step.
+const exemptFiles = new Set([
+  "packages/server/src/role-tree.ts",
+  "packages/server/src/role-version-store.ts",
+  "packages/server/src/role-version-snapshot.ts",
+  "packages/server/src/schema.ts",
+  "packages/server/src/migration-harness.ts",
+  "packages/server/src/role-version-migration.ts",
+  "packages/server/src/role-allowed-tools-column-drop-migration.ts",
+  "packages/server/src/role-state-git-migration.ts",
+  "packages/server/src/workspace-prompt-module-catalog.ts",
+]);
 
 describe("role vocabulary invariants (#144)", () => {
   it("active code, tests, and docs contain none of the sunset role-name tokens", () => {
@@ -33,6 +69,7 @@ describe("role vocabulary invariants (#144)", () => {
       throw e;
     }
     const matches = stdout.trim().split("\n").filter(Boolean);
-    expect(matches).toEqual([]);
+    const violations = matches.filter((f) => !exemptFiles.has(f));
+    expect(violations).toEqual([]);
   });
 });

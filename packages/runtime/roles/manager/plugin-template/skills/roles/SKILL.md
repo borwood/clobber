@@ -154,36 +154,36 @@ clobber roles edit repro-worker --add-skill bisect=./bisect.md
 clobber roles edit repro-worker --allowed-tools Bash,Read,Edit,Grep
 ```
 
-### `roles seeds <name|id> [add|enable|disable <seed> [--disabled]]`
+### `roles prompt-modules <name|id> [add|enable|disable <module> [--disabled]]`
 
-Seeds are layer-B compositional units of the system prompt — shareable,
-per-role-toggleable. With no action, lists the role's seed refs and whether
+Prompt-modules are layer-B compositional units of the system prompt — shareable,
+per-role-toggleable. With no action, lists the role's module refs and whether
 each is enabled. `add` appends a ref (enabled unless `--disabled`); `enable` /
 `disable` flip an existing ref. Every change advances the role like `edit` does
 — it takes effect on the next spawn, never mid-session.
 
 ```
-clobber roles seeds my-worker                       # list refs + enabled state
-clobber roles seeds my-worker add repo-sdlc         # ref an existing catalog seed
-clobber roles seeds my-worker add house-rules --disabled
-clobber roles seeds my-worker disable wisdom-pointer
+clobber roles prompt-modules my-worker                       # list refs + enabled state
+clobber roles prompt-modules my-worker add repo-sdlc         # ref an existing catalog module
+clobber roles prompt-modules my-worker add house-rules --disabled
+clobber roles prompt-modules my-worker disable wisdom-pointer
 ```
 
-A ref points at a **catalog seed by name**. The catalog is the shipped defaults
+A ref points at a **catalog module by name**. The catalog is the shipped defaults
 (`office-manifest`, `repo-sdlc`, `wisdom-pointer`) overlaid by the workspace's
-filesystem catalog at `<repo>/.clobber/seeds/<name>/seed.json`. A shipped
-default carries no privilege over one you author — both resolve through the same
-path at spawn.
+filesystem catalog at `<repo>/.clobber/prompt-modules/<name>/prompt-module.json`.
+A shipped default carries no privilege over one you author — both resolve through
+the same path at spawn.
 
-**Authoring a new seed definition** (static text or a dynamic script) means
-writing that catalog file, then ref'ing it with `roles seeds … add <name>`:
+**Authoring a new module definition** (static text or a dynamic script) means
+writing that catalog file, then ref'ing it with `roles prompt-modules … add <name>`:
 
 ```jsonc
-// <repo>/.clobber/seeds/house-rules/seed.json — a static seed
+// <repo>/.clobber/prompt-modules/house-rules/prompt-module.json — static
 { "kind": "static", "text": "House rule: never force-push shared branches." }
 ```
 ```jsonc
-// <repo>/.clobber/seeds/branch-status/seed.json — a dynamic seed.
+// <repo>/.clobber/prompt-modules/branch-status/prompt-module.json — dynamic.
 // The {exec|http|noop} provider's command/args ARE the script; its stdout is
 // composed into the prompt at spawn. A filesystem entry shadows a default of
 // the same name.
@@ -192,8 +192,8 @@ writing that catalog file, then ref'ing it with `roles seeds … add <name>`:
 ```
 
 There is no separate script file to register — the provider spec is the script,
-and `<repo>/.clobber/seeds/` is the one place it lives. The seed must exist in
-the catalog before you `add` a ref to it.
+and `<repo>/.clobber/prompt-modules/` is the one place it lives. The module must
+exist in the catalog before you `add` a ref to it.
 
 ### `roles wake-programs <name|id> [show|add|edit|remove <name> ...]`
 

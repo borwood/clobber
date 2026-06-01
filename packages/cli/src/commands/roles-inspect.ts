@@ -94,11 +94,11 @@ function renderShowMarkdown(role: RoleDetailResponse): string {
     }
   }
   lines.push("");
-  lines.push("## Seeds");
-  if (role.current_version.seed_refs.length === 0) {
+  lines.push("## Prompt-modules");
+  if (role.current_version.prompt_module_refs.length === 0) {
     lines.push("(none)");
   } else {
-    for (const ref of role.current_version.seed_refs) {
+    for (const ref of role.current_version.prompt_module_refs) {
       lines.push(`- ${ref.name} — ${ref.enabled ? "enabled" : "disabled"}`);
     }
   }

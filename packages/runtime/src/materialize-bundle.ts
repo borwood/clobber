@@ -1,6 +1,6 @@
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Habit, RoleSkill, SeedRef, WakeProgram } from "@clobber/shared";
+import type { Habit, PromptModuleRef, RoleSkill, WakeProgram } from "@clobber/shared";
 import { compileSelfHabits } from "./compile-self-habits.ts";
 import type { HookHandler } from "./spawn-config.ts";
 
@@ -11,7 +11,7 @@ export interface RoleBundleData {
   readonly systemPrompt: string;
   readonly allowedTools: readonly string[];
   readonly skills: readonly RoleSkill[];
-  readonly seedRefs: readonly SeedRef[];
+  readonly promptModuleRefs: readonly PromptModuleRef[];
   readonly wakePrograms: readonly WakeProgram[];
   // The default opening move for a fresh spawn that names none (#213). A program
   // name (or `idle`); undefined → idle.

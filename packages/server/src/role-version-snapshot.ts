@@ -33,7 +33,7 @@ export function snapshotShippedBundle(inputs: SnapshotInputs): RoleVersionSnapsh
     allowed_cli_commands_json: JSON.stringify([...loaded.manifest.allowedCliCommands]),
     hooks_json: loaded.hooksJson,
     triggers_json: "[]",
-    seed_refs_json: JSON.stringify(loaded.manifest.seedRefs ?? []),
+    seed_refs_json: JSON.stringify(loaded.manifest.promptModuleRefs ?? []),
     wake_programs_json: JSON.stringify(loaded.manifest.wakePrograms ?? []),
     default_wake_program: loaded.manifest.defaultWakeProgram ?? null,
   };
