@@ -78,6 +78,27 @@ export function materializeUpstreamRoleRepo(dir: string): UpstreamRoleRepo {
   return { dir, baseBranch: BASE_BRANCH, baseSha, forks };
 }
 
+// `base` and the engine's `<name>-default` branches are the clone's
+// upstream-tracking refs — shared lineage, not any one role's own fork. A role
+// still pinned to a `-default` branch (a seeded, never-edited role) thus has no
+// fork-branch residue to clean; only a role on its own `<name>` branch (a fork,
+// or a role edited through the working-copy flow) does.
+export function isProtectedRoleBranch(branch: string): boolean {
+  return branch === BASE_BRANCH || branch.endsWith("-default");
+}
+
+// Remove a fork's branch from a (workspace) role repo — the inverse of
+// commitContractOnBranch, used by `roles delete`. HEAD may sit on the branch
+// (a fork leaves it checked out), so we move to `base` before deleting. Callers
+// gate on isProtectedRoleBranch; the throw here is a defense-in-depth invariant.
+export function deleteForkBranch(dir: string, branch: string): void {
+  if (isProtectedRoleBranch(branch)) {
+    throw new Error(`refusing to delete protected role branch: ${branch}`);
+  }
+  git(dir, "checkout", "-q", BASE_BRANCH);
+  git(dir, "branch", "-D", branch);
+}
+
 // Branch `branch` off `fromRef`, commit `contract`'s serialized tree, and return
 // the resulting pin. The fork-materialization loop builds each shipped role's
 // default branch this way; it is also the seam a caller (or test) uses to commit

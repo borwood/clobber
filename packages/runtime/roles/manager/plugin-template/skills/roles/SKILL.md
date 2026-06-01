@@ -12,7 +12,7 @@ spawning, to evolve a role you've seen come up short, or to fork a new variant
 for a workflow that doesn't fit any existing role.
 
 ```
-clobber roles <list|show|checkout|diff|commit|discard|fork|edit|ceiling|seeds|wake-programs> [args...] [--json]
+clobber roles <list|show|checkout|diff|commit|discard|fork|edit|delete|ceiling|seeds|wake-programs> [args...] [--json]
 ```
 
 A role **is a git branch**. You edit one the way you edit code: `checkout` its
@@ -91,6 +91,31 @@ clobber roles fork worker repro-worker          # identical result
 
 Forking is cheap and reversible: it branches the source, never touches it.
 Reach for it whenever you want to try a variant without disturbing the parent.
+
+### `roles delete <name|id> [--force]`
+
+The inverse of `fork`: remove a role and its residue — the role row, its
+`<name>` fork-branch, and any workspace config refs (ceiling, trigger
+overrides) pointing at it. This is how a throwaway experiment-fork self-cleans
+instead of lingering forever at ceiling 0.
+
+```
+clobber roles delete repro-experiment        # an inert fork (ceiling 0, no sessions)
+clobber roles delete old-variant --force      # override the soft guards (below)
+```
+
+Deleting a role out from under the agents living it is the hazard, so delete
+is guarded:
+
+- **Live session → hard stop.** A role with an active session is refused
+  *even with* `--force` — the session embodies this role right now and would be
+  torn out with it. Reap the session first (`kill`), then delete.
+- **Persistent role / spawned agents under a non-zero ceiling → soft.** Refused
+  by default (deleting the manager, or a role with live desks, is rarely what
+  you mean), but `--force` overrides — a deliberate, recoverable choice.
+
+An inert fork — ceiling 0, no sessions, not persistent — deletes with no flag.
+`delete` is forward-only: there is no undo beyond re-forking from the source.
 
 ### `roles status`
 

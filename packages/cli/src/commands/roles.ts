@@ -4,6 +4,7 @@ import { CliUsageError } from "../usage-error.ts";
 import { takeJsonFlag } from "./roles-args.ts";
 import { runList, runShow } from "./roles-inspect.ts";
 import { runEdit } from "./roles-edit.ts";
+import { runDelete } from "./roles-delete.ts";
 import { runSeeds } from "./roles-seeds.ts";
 import { runWakePrograms } from "./roles-wake-programs.ts";
 import {
@@ -20,6 +21,7 @@ const SUBCOMMANDS = [
   "show",
   "fork",
   "edit",
+  "delete",
   "ceiling",
   "seeds",
   "wake-programs",
@@ -118,12 +120,13 @@ export const rolesCommand: Command = {
   name: "roles",
   summary: "List or inspect roles available in the current workspace.",
   usage:
-    "usage: clobber roles <list|show|fork|edit|ceiling|seeds|wake-programs|checkout|status|diff|commit|discard> [args...]\n\n" +
+    "usage: clobber roles <list|show|fork|edit|delete|ceiling|seeds|wake-programs|checkout|status|diff|commit|discard> [args...]\n\n" +
     "Subcommands:\n" +
     "  roles list [--json]                          List workspace roles with version metadata.\n" +
     "  roles show <name|id> [--json]                Show full role + current version + history.\n" +
     "  roles fork <source-name|id> <new-name> [--json]  Alias for `checkout -b <new-name> --from <source>`.\n" +
     "  roles edit <name|id> [flags] [--json]        Patch a role; system_prompt/skills/allowed_tools/triggers bump version, description does not.\n" +
+    "  roles delete <name|id> [--force] [--json]    Remove a role + its fork-branch + config refs. Refused for persistent / spawned-agent roles (use --force); a live session is a hard stop (reap it first).\n" +
     "  roles ceiling <name|id> <max> [--json]       Set the spawn ceiling for this role in this workspace.\n" +
     "  roles seeds <name|id> [add|enable|disable <seed> [--disabled]]  List a role's seed refs, or add/toggle one.\n" +
     "  roles wake-programs <name|id> [show|add|edit|remove <name> ...]  List/show/author wake-programs (`idle` is the built-in).\n\n" +
@@ -181,6 +184,9 @@ export const rolesCommand: Command = {
     }
     if (sub === "fork") {
       return runFork(ctx, json, subArgs);
+    }
+    if (sub === "delete") {
+      return runDelete(ctx, json, subArgs);
     }
     if (sub === "ceiling") {
       return runCeiling(ctx, json, subArgs);
