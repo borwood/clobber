@@ -21,8 +21,9 @@ export interface RolePinAudit {
 
 // Read-only: does `sha` name a commit object in `dir`? No side effects — never
 // clones, never creates the repo. A missing repo or absent object is a finding,
-// not an error to repair here.
-function commitResolves(dir: string, sha: string): boolean {
+// not an error to repair here. Reused by openCheckout (#411) to classify a
+// pin↔repo disconnect into a reasoned 4xx before the git ops would bare-500.
+export function commitResolves(dir: string, sha: string): boolean {
   if (!existsSync(join(dir, ".git"))) return false;
   const res = Bun.spawnSync(["git", "-C", dir, "cat-file", "-e", `${sha}^{commit}`], {
     stdout: "ignore",
