@@ -7,6 +7,7 @@ import { resumeCommand } from "./commands/resume.ts";
 import { cycleCommand } from "./commands/cycle.ts";
 import { transcriptCommand } from "./commands/transcript.ts";
 import { statusCommand } from "./commands/status.ts";
+import { findingCommand } from "./commands/finding.ts";
 import { reportCommand } from "./commands/report.ts";
 import { reportsCommand } from "./commands/reports.ts";
 import { askCommand } from "./commands/ask.ts";
@@ -41,6 +42,7 @@ function buildRegistry(): CommandRegistry {
   registry.register(cycleCommand);
   registry.register(transcriptCommand);
   registry.register(statusCommand);
+  registry.register(findingCommand);
   registry.register(reportCommand);
   registry.register(reportsCommand);
   registry.register(askCommand);

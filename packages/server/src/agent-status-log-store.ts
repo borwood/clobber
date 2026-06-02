@@ -6,7 +6,7 @@ export type AgentStatusLogKind =
   | "status"
   | "phase-transition"
   | "task-snapshot"
-  | "note"
+  | "finding"
   | "final-report"
   | "callback-error"
   | "skill-self-grant"
@@ -56,6 +56,8 @@ export interface AgentStatusLogStore {
   // via the sessions join (not agent_id) so reports from reaped ephemeral
   // agents stay visible — the manager's triage read interface (`clobber reports`).
   listFinalReportsForWorkspace(workspaceId: string): AgentStatusLogEntry[];
+  // findings and final-reports together for the triage reader (`clobber reports list`).
+  listFindingsAndReportsForWorkspace(workspaceId: string): AgentStatusLogEntry[];
 }
 
 interface Row {
@@ -171,6 +173,12 @@ export function createAgentStatusLogStore(db: Database): AgentStatusLogStore {
     WHERE log.kind = 'final-report' AND s.workspace_id = ?
     ORDER BY log.created_at DESC, log.id DESC
   `);
+  const findingsAndReportsForWorkspaceStmt = db.prepare(`
+    SELECT log.* FROM agent_status_log log
+    JOIN sessions s ON s.id = log.session_id
+    WHERE log.kind IN ('finding', 'final-report') AND s.workspace_id = ?
+    ORDER BY log.created_at DESC, log.id DESC
+  `);
   const sessionProvenanceStmt = db.prepare(`
     SELECT s.role_version_id, s.transcript_path, w.repo_path
     FROM sessions s
@@ -269,6 +277,11 @@ export function createAgentStatusLogStore(db: Database): AgentStatusLogStore {
 
     listFinalReportsForWorkspace(workspaceId) {
       const rows = finalReportsForWorkspaceStmt.all(workspaceId) as Row[];
+      return rows.map(rowToEntry);
+    },
+
+    listFindingsAndReportsForWorkspace(workspaceId) {
+      const rows = findingsAndReportsForWorkspaceStmt.all(workspaceId) as Row[];
       return rows.map(rowToEntry);
     },
   };

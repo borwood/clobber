@@ -120,7 +120,7 @@ PR's blast radius). Otherwise, run `/assignment` once per issue.
    If you find yourself reaching for `max` often, the lever to pull is
    usually a better brief, not a deeper worker.
 
-6. **Status emit.** After the spawn returns, post one `clobber note`
+6. **Status emit.** After the spawn returns, post one `clobber status`
    summarizing what you dispatched and to which session — the audit trail
    for the workspace board.
 
@@ -134,7 +134,7 @@ once, walks the combined plan, opens one PR that closes both.
 
 ## When to refuse
 
-If any of the following is true, write a `clobber note` explaining why and
+If any of the following is true, write a `clobber finding` explaining why and
 **don't spawn**:
 
 - The issue is missing `## Acceptance` and you can't infer one.

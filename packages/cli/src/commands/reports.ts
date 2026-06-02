@@ -3,6 +3,7 @@ import { request } from "../http.ts";
 import { CliUsageError } from "../usage-error.ts";
 
 interface ReportSummary {
+  readonly kind: string;
   readonly session_id: string;
   readonly role: string;
   readonly label?: string;
@@ -45,7 +46,7 @@ function renderList(reports: readonly ReportSummary[]): string {
   for (const r of reports) {
     const label = r.label === undefined ? "" : ` "${r.label}"`;
     lines.push("");
-    lines.push(`${r.session_id}  ${r.role}${label}  [${r.state}]  ${isoTime(r.created_at)}`);
+    lines.push(`[${r.kind}]  ${r.session_id}  ${r.role}${label}  [${r.state}]  ${isoTime(r.created_at)}`);
     lines.push(`  ${r.summary}`);
   }
   lines.push("");
@@ -105,13 +106,13 @@ async function runShow(ctx: CommandContext, rest: readonly string[]): Promise<nu
 const REPORTS_USAGE = `usage: clobber reports list [--json]
        clobber reports show <session-id> [--json]
 
-Read worker final reports for this workspace. Reports are the system of
-record (agent_status_log, kind=final-report) — this is the manager's triage
-read interface, the sibling of \`clobber transcript\`.
+Triage reader: lists findings (kind=finding) and final-reports (kind=final-report)
+for this workspace together, each labeled by kind. Newest first. \`show\` is
+scoped to final-reports; findings are freetext triage-drops.
 
 Subcommands:
-  list                 Recent final reports: session id, role, label, state,
-                       one-line summary, timestamp. Newest first.
+  list                 Findings + final-reports: kind, session id, role, label,
+                       state, one-line summary, timestamp. Newest first.
   show <session-id>    The full structured well/badly/useful for one report.
 
 Flags:

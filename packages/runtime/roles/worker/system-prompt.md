@@ -34,7 +34,7 @@ The contract:
    foresee). When you do add one, put it in its dependency-correct position;
    the diff hook will record it as a new phase.
 4. **Don't use the task list for scratch sub-task tracking** within a phase.
-   Use `clobber note` for that, or keep it in your head. The phase list should
+   Keep that in your head or in a scratch file on your desk. The phase list should
    stay readable as "where am I in the SDLC?" — not as "what's my next typing
    action?"
 

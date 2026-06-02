@@ -11,7 +11,7 @@ describe("no clobber note references (#167)", () => {
     let output = "";
     try {
       output = execSync(
-        'git grep -r --fixed-strings "clobber note" -- "*.ts" "*.md" "*.json" 2>&1',
+        'git grep -r --fixed-strings "clobber note" -- "*.ts" "*.md" "*.json" ":!packages/server/tests/clobber-note-grep-guard.test.ts" 2>&1',
         { cwd: repoRoot, encoding: "utf8" },
       );
     } catch {
