@@ -62,7 +62,7 @@ Refusals (and why):
 - `409 skill 'X' already granted` — idempotent: you already have it.
 
 When refused, **don't retry blindly**. The refusal is the workspace
-saying *not now* — note it (`clobber note`) and move on.
+saying *not now* — drop a `clobber finding` and move on.
 
 ### `self-skills release <name>`
 
@@ -91,7 +91,7 @@ PATCH-ing the role directly).
   skill you keep wishing you had) — `list`, then `grant` if the policy
   allows.
 - A skill is fighting you (its instructions don't match the workflow
-  you're walking) — `release` it, do the work raw, and `clobber note`
+  you're walking) — `release` it, do the work raw, and `clobber finding`
   the gap so the human can decide whether to evolve the skill.
 
 ## When not to use this skill
@@ -99,7 +99,7 @@ PATCH-ing the role directly).
 - The capability you need is not in the workspace catalog at all.
   Self-grant cannot synthesize skills — it can only pull from what the
   workspace has shipped under `<repo>/.clobber/skills/`. If the skill
-  doesn't exist, `clobber note` the gap so a human can ship one (or
+  doesn't exist, `clobber finding` the gap so a human can ship one (or
   fork a worker role with the skill via `roles fork` + `roles edit
   --add-skill`).
 - The skill you want to mutate belongs to another role (worker, etc.).

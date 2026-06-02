@@ -21,9 +21,7 @@ import {
   AgentStatusUpdateSchema,
   BriefingPacketSchema,
   EffortLevelSchema,
-  FinalReportSchema,
   ModelSchema,
-  summarizeFinalReport,
 } from "@clobber/shared";
 import { executeSpawn } from "../spawn-pipeline.ts";
 import type { ResumeEndedResult } from "../resume-pipeline.ts";
@@ -31,6 +29,7 @@ import { withAgentAuth } from "./_with-agent-auth.ts";
 import { normalizeSpawnLabel } from "./_spawn-label.ts";
 import { registerAgentSessionRoutes } from "./agent-sessions.ts";
 import { registerAgentCycleRoutes } from "./agent-cycle.ts";
+import { registerAgentReportsRoutes } from "./agent-reports.ts";
 import { listWorkspaceAgents, parseAgentStates } from "./_agents-listing.ts";
 import type { ToolTokenGateDeps } from "../tool-token-gate.ts";
 import type { LayoutEventStore } from "../layout-event-store.ts";
@@ -213,98 +212,7 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
     }),
   );
 
-  app.post(
-    "/agent/report",
-    withAgentAuth("report", deps, async (request, reply, { session }) => {
-      const parsed = FinalReportSchema.safeParse(request.body);
-      if (!parsed.success) {
-        reply.code(400);
-        return { error: "invalid final report", issues: parsed.error.issues };
-      }
-      const agentId = session.agent_id!;
-      const existing = deps.agentStatusLog
-        .listForAgent(agentId, { kind: "final-report" })
-        .filter((row) => row.session_id === session.id);
-      if (existing.length > 0) {
-        reply.code(409);
-        return { error: "final report already submitted for this session" };
-      }
-      deps.agentStatusLog.append({
-        agent_id: agentId,
-        session_id: session.id,
-        kind: "final-report",
-        state: "final",
-        summary: summarizeFinalReport(parsed.data),
-        details: parsed.data,
-      });
-      return { ok: true };
-    }),
-  );
-
-  app.get(
-    "/agent/reports",
-    withAgentAuth("reports", deps, async (_request, _reply, { session }) => {
-      const entries = deps.agentStatusLog.listFinalReportsForWorkspace(
-        session.workspace_id,
-      );
-      const reports = entries.map((entry) => {
-        const target = deps.sessions.get(entry.session_id);
-        if (target === null) {
-          throw new Error(`session missing for final-report ${entry.id}`);
-        }
-        const role = deps.roles.get(target.role_id);
-        if (role === null) {
-          throw new Error(`role missing for session ${target.id}`);
-        }
-        return {
-          session_id: entry.session_id,
-          role: role.name,
-          ...(target.label === undefined ? {} : { label: target.label }),
-          state: entry.state,
-          summary: entry.summary,
-          created_at: entry.created_at,
-        };
-      });
-      return { reports };
-    }),
-  );
-
-  app.get<{ Params: { id: string } }>(
-    "/agent/reports/:id",
-    withAgentAuth<{ Params: { id: string } }>(
-      "reports",
-      deps,
-      async (request, reply, { session }) => {
-        const target = deps.sessions.get(request.params.id);
-        if (target === null || target.workspace_id !== session.workspace_id) {
-          reply.code(404);
-          return { error: "session not found" };
-        }
-        const entry = deps.agentStatusLog.latestForSession(
-          target.id,
-          "final-report",
-        );
-        if (entry === null) {
-          reply.code(404);
-          return { error: "no final report for session" };
-        }
-        const role = deps.roles.get(target.role_id);
-        if (role === null) {
-          throw new Error(`role missing for session ${target.id}`);
-        }
-        return {
-          session_id: target.id,
-          role: role.name,
-          ...(target.label === undefined ? {} : { label: target.label }),
-          state: entry.state,
-          summary: entry.summary,
-          created_at: entry.created_at,
-          report: entry.details,
-        };
-      },
-    ),
-  );
-
+  registerAgentReportsRoutes(app, deps);
   registerAgentSessionRoutes(app, deps);
   registerAgentCycleRoutes(app, deps);
 }
