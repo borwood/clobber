@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { resolvePort } from "../server/src/port.ts";
+import { resolvePort } from "@clobber/shared";
 
 const serverPort = resolvePort(process.env["CLOBBER_PORT"], 3370);
 const webPort = resolvePort(process.env["CLOBBER_WEB_PORT"], 3470);

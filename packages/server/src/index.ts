@@ -4,7 +4,7 @@ import { claudeRuntimeProvider, codexRuntimeProvider, spawnAgent } from "@clobbe
 import { createServer, type AgentSpawner } from "./server.ts";
 import { createDatabase } from "./db.ts";
 import { resolveDatabasePath } from "./db-path.ts";
-import { resolvePort } from "./port.ts";
+import { resolvePort } from "@clobber/shared";
 import { createEventStore } from "./event-store.ts";
 import { createWorkspaceStore } from "./workspace-store.ts";
 import { createRoleStore } from "./role-store.ts";

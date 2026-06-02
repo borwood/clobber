@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { resolvePort } from "../src/port.ts";
+import { resolvePort } from "../src/domain/port.ts";
 
 describe("resolvePort", () => {
   it("returns default when env value is undefined", () => {
