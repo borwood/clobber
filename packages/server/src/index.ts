@@ -4,6 +4,7 @@ import { claudeRuntimeProvider, codexRuntimeProvider, spawnAgent } from "@clobbe
 import { createServer, type AgentSpawner } from "./server.ts";
 import { createDatabase } from "./db.ts";
 import { resolveDatabasePath } from "./db-path.ts";
+import { resolvePort } from "./port.ts";
 import { createEventStore } from "./event-store.ts";
 import { createWorkspaceStore } from "./workspace-store.ts";
 import { createRoleStore } from "./role-store.ts";
@@ -22,7 +23,7 @@ import { createTriggerDispatchStore } from "./trigger-dispatch-store.ts";
 import { createFinalReportConsumerStateStore } from "./final-report-consumer.ts";
 import { reapOrphanedSessions } from "./boot-reap.ts";
 
-const PORT = 3370;
+const PORT = resolvePort(process.env["CLOBBER_PORT"], 3370);
 const API_BASE = `http://127.0.0.1:${PORT}`;
 const HOOK_URL = `${API_BASE}/hook`;
 const DB_PATH = resolveDatabasePath({
