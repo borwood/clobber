@@ -165,7 +165,11 @@ describe("POST /agent/status — append-only log alongside snapshot (#69)", () =
     expect(row.kind).toBe("status");
     expect(row.state).toBe("working");
     expect(row.summary).toBe("refactoring auth");
-    expect(row.details_json).toBeNull();
+    // details_json may contain provenance metadata (provenance_error when the
+    // workspace repo path is not a git repo, as is the case in test fixtures).
+    const details = row.details_json === null ? {} : JSON.parse(row.details_json) as Record<string, unknown>;
+    const callerKeys = Object.keys(details).filter((k) => k !== "provenance_error" && k !== "transcript_anchor");
+    expect(callerKeys).toHaveLength(0);
     expect(row.event_id).toBeNull();
     expect(typeof row.created_at).toBe("number");
 
@@ -226,7 +230,7 @@ describe("POST /agent/status — append-only log alongside snapshot (#69)", () =
 
     const rows = readLog(h, boot.agentId);
     expect(rows).toHaveLength(1);
-    expect(JSON.parse(rows[0]!.details_json!)).toEqual({
+    expect(JSON.parse(rows[0]!.details_json!)).toMatchObject({
       issue: 42,
       options: ["a", "b"],
     });

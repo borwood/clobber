@@ -217,14 +217,14 @@ describe("PostToolUse(Task*) → agent_status_log (#169)", () => {
 
     const snapshots = readLog(h, boot.agentId, "task-snapshot");
     expect(snapshots).toHaveLength(1);
-    expect(JSON.parse(snapshots[0]!.details_json!)).toEqual({
+    expect(JSON.parse(snapshots[0]!.details_json!)).toMatchObject({
       tasks: [{ id: "1", content: "research", status: "pending", activeForm: "researching" }],
     });
 
     const transitions = readLog(h, boot.agentId, "phase-transition");
     expect(transitions).toHaveLength(1);
     expect(transitions[0]!.state).toBe("pending");
-    expect(JSON.parse(transitions[0]!.details_json!)).toEqual({
+    expect(JSON.parse(transitions[0]!.details_json!)).toMatchObject({
       phase: "research",
       prev_status: "(absent)",
       new_status: "pending",
@@ -247,7 +247,7 @@ describe("PostToolUse(Task*) → agent_status_log (#169)", () => {
 
     const last = transitions[transitions.length - 1]!;
     expect(last.state).toBe("in_progress");
-    expect(JSON.parse(last.details_json!)).toEqual({
+    expect(JSON.parse(last.details_json!)).toMatchObject({
       phase: "research",
       prev_status: "pending",
       new_status: "in_progress",
@@ -292,7 +292,7 @@ describe("PostToolUse(Task*) → agent_status_log (#169)", () => {
     const transitions = readLog(h, boot.agentId, "phase-transition");
     const removal = transitions.find((t) => t.state === "removed");
     expect(removal).toBeDefined();
-    expect(JSON.parse(removal!.details_json!)).toEqual({
+    expect(JSON.parse(removal!.details_json!)).toMatchObject({
       phase: "scratch",
       prev_status: "pending",
       new_status: "removed",

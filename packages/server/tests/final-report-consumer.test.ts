@@ -251,7 +251,7 @@ describe("FinalReportConsumer — exec callback", () => {
     expect(payload.session_id).toBe(sessionId);
     expect(payload.kind).toBe("final-report");
     expect(payload.summary).toBe("structured");
-    expect(payload.report).toEqual({ well: "alpha", badly: "beta" });
+    expect(payload.report).toMatchObject({ well: "alpha", badly: "beta" });
 
     teardown(h);
   });
@@ -391,7 +391,7 @@ describe("FinalReportConsumer — http callback", () => {
     expect(captured[0]!.headers["x-clobber-token"]).toBe("abc123");
     expect(captured[0]!.body.workspace_id).toBe(ws.id);
     expect(captured[0]!.body.session_id).toBe(sessionId);
-    expect(captured[0]!.body.report).toEqual({ useful: "auto-file as ticket" });
+    expect(captured[0]!.body.report).toMatchObject({ useful: "auto-file as ticket" });
 
     teardown(h);
   });
