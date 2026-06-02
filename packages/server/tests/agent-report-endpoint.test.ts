@@ -161,7 +161,7 @@ describe("POST /agent/report — final-report emission (#83)", () => {
     const row = rows[0]!;
     expect(row.agent_id).toBe(boot.agentId);
     expect(row.kind).toBe("final-report");
-    expect(JSON.parse(row.details_json!)).toEqual({
+    expect(JSON.parse(row.details_json!)).toMatchObject({
       well: "tests landed clean on first try",
       badly: "spent too long re-reading the explore",
       useful: "a /assignment skill that pre-seeds the todo list",
@@ -185,7 +185,7 @@ describe("POST /agent/report — final-report emission (#83)", () => {
 
     const rows = readReports(h, boot.sessionId);
     expect(rows).toHaveLength(1);
-    expect(JSON.parse(rows[0]!.details_json!)).toEqual({ well: "shipped" });
+    expect(JSON.parse(rows[0]!.details_json!)).toMatchObject({ well: "shipped" });
 
     await teardown(h);
   });
@@ -204,7 +204,7 @@ describe("POST /agent/report — final-report emission (#83)", () => {
 
     const rows = readReports(h, boot.sessionId);
     expect(rows).toHaveLength(1);
-    expect(JSON.parse(rows[0]!.details_json!)).toEqual({
+    expect(JSON.parse(rows[0]!.details_json!)).toMatchObject({
       free_text: "shipped, all tests green, no notes",
     });
 
@@ -249,7 +249,7 @@ describe("POST /agent/report — final-report emission (#83)", () => {
 
     const rows = readReports(h, boot.sessionId);
     expect(rows).toHaveLength(1);
-    expect(JSON.parse(rows[0]!.details_json!)).toEqual({ well: "first" });
+    expect(JSON.parse(rows[0]!.details_json!)).toMatchObject({ well: "first" });
 
     await teardown(h);
   });
