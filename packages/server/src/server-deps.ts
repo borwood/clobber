@@ -10,8 +10,6 @@ import { createLayoutEventStore } from "./layout-event-store.ts";
 import { createTriggerScheduler } from "./trigger-scheduler.ts";
 import { createFinalReportConsumer } from "./final-report-consumer.ts";
 import { attachSessionToAgent, type SpawnPipelineDeps } from "./spawn-pipeline.ts";
-import { ROLE_CONTRACT_MIGRATOR } from "./role-contract-migration.ts";
-import { createRoleContractRefusalStore } from "./role-contract-refusal-store.ts";
 import { resumeSessionTurn, resumeEndedSession } from "./resume-pipeline.ts";
 import { bootServerRoles } from "./boot-server-roles.ts";
 import { createSystemClock } from "./clock.ts";
@@ -32,31 +30,14 @@ export function buildServerDeps(opts: ServerOptions) {
   );
   const runtimeProvider =
     opts.runtimeProvider === undefined ? claudeRuntimeProvider : opts.runtimeProvider;
-  // The #237 contract gate's migration seam, filled by the #238 framework.
-  // Defaults to the real forward-only migrator (zero real steps at contract v1,
-  // so it still declines every mismatch today); a fork can inject its own.
-  const roleContractMigrator =
-    opts.roleContractMigrator === undefined
-      ? ROLE_CONTRACT_MIGRATOR
-      : opts.roleContractMigrator;
-  const roleContractRefusals =
-    opts.roleContractRefusals === undefined
-      ? createRoleContractRefusalStore(opts.db)
-      : opts.roleContractRefusals;
 
-  // Boot-time role wiring (before routes): #239 contract sweep + #349 git-as-truth.
+  // Boot-time role wiring (before routes): #349 git-as-truth.
   // When a roleContentCache override is injected, skip git materialization so
-  // tests can pre-seed the cache without a real role repo (mirrors the
-  // roleContractMigrator / roleContractRefusals override pattern).
+  // tests can pre-seed the cache without a real role repo.
   const roleEmbodiment = {
     ...bootServerRoles({
       db: opts.db,
       roleRepoDir: opts.roleContentCache !== undefined ? undefined : opts.roleRepoDir,
-      workspaces: opts.workspaces,
-      workspaceRoles: opts.workspaceRoles,
-      roleVersions: opts.roleVersions,
-      roleContractRefusals,
-      migrator: roleContractMigrator,
     }),
     ...(opts.roleContentCache !== undefined
       ? { roleContentCache: opts.roleContentCache, roleRepoDir: opts.roleRepoDir }
@@ -90,8 +71,6 @@ export function buildServerDeps(opts: ServerOptions) {
     runtimeProvider,
     agentQuestions: opts.agentQuestions,
     agentQuestionWaiter: opts.agentQuestionWaiter,
-    roleContractRefusals: roleContractRefusals,
-    roleContractMigrator,
     onSessionEnded,
   };
 
@@ -158,8 +137,6 @@ export function buildServerDeps(opts: ServerOptions) {
     clock,
     notificationDispatcher,
     runtimeProvider,
-    roleContractMigrator,
-    roleContractRefusals,
     roleEmbodiment,
     scheduler,
     spawnPipelineDeps,

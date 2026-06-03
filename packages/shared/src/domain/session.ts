@@ -6,10 +6,8 @@ export const SessionSchema = z.object({
   agent_id: z.string().uuid().optional(),
   workspace_id: z.string().uuid(),
   role_id: z.string().uuid(),
-  // The embodied pin, mirroring the role's two pin kinds (#349): a `role_versions`
-  // row id, OR a commit into the upstream role repo. Spawn captures whichever the
-  // role used so resume re-resolves the SAME content even if the role advances.
-  role_version_id: z.string().uuid().optional(),
+  // The embodied commit pin (#349): captures the sha spawned with so resume
+  // re-resolves the same content even if the role's current pointer advances.
   role_commit: CommitRefSchema.optional(),
   runtime_provider: z.string().min(1),
   provider_thread_id: z.string().min(1).optional(),
@@ -42,7 +40,6 @@ export const CreateSessionRequestSchema = z.object({
   agent_id: z.string().uuid(),
   workspace_id: z.string().uuid(),
   role_id: z.string().uuid(),
-  role_version_id: z.string().uuid().optional(),
   role_commit: CommitRefSchema.optional(),
   runtime_provider: z.string().min(1).optional(),
   provider_thread_id: z.string().min(1).optional(),

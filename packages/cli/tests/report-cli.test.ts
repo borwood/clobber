@@ -42,6 +42,11 @@ function makeStdin(): NodeJS.WritableStream {
 
 beforeAll(async () => {
   const repoPath = mkdtempSync(join(tmpdir(), "clobber-report-cli-"));
+  // Init a git repo so audit-row provenance (commit/branch stamping) doesn't fail.
+  Bun.spawnSync(["git", "init", "-q"], { cwd: repoPath });
+  Bun.spawnSync(["git", "config", "user.email", "test@test.com"], { cwd: repoPath });
+  Bun.spawnSync(["git", "config", "user.name", "Test"], { cwd: repoPath });
+  Bun.spawnSync(["git", "commit", "--allow-empty", "-m", "init", "-q"], { cwd: repoPath });
   const db = createDatabase(":memory:");
   const workspaces = createWorkspaceStore(db);
   const roles = createRoleStore(db);
@@ -186,6 +191,10 @@ describe("clobber CLI — report — fresh session", () => {
 
   beforeAll(async () => {
     const repoPath = mkdtempSync(join(tmpdir(), "clobber-report-cli2-"));
+    Bun.spawnSync(["git", "init", "-q"], { cwd: repoPath });
+    Bun.spawnSync(["git", "config", "user.email", "test@test.com"], { cwd: repoPath });
+    Bun.spawnSync(["git", "config", "user.name", "Test"], { cwd: repoPath });
+    Bun.spawnSync(["git", "commit", "--allow-empty", "-m", "init", "-q"], { cwd: repoPath });
     const db = createDatabase(":memory:");
     const workspaces = createWorkspaceStore(db);
     const roles = createRoleStore(db);

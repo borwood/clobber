@@ -26,8 +26,8 @@ export interface RoleStore {
   // refreshed on every working-copy commit so listings stay coherent without
   // materializing the commit.
   syncManifestColumns(id: string, manifest: RoleManifestColumns): void;
-  // #349 — pin a role to a commit in the upstream role repo (git-backed),
-  // clearing any row pointer. Embodiment then reads content from the tree at sha.
+  // #349 — pin a role to a commit in the upstream role repo (git-backed).
+  // Embodiment reads content from the tree at sha.
   pinCommit(id: string, commit: CommitRef): void;
 }
 
@@ -51,11 +51,10 @@ interface Row {
   model: string | null;
   persistent: number;
   workspace_id: string | null;
-  current_version_id: string | null;
   current_commit_branch: string | null;
   current_commit_sha: string | null;
   created_at: number;
-  current_version_allowed_tools_json: string | null;
+  latest_version_allowed_tools_json: string | null;
 }
 
 function rowToRole(row: Row): Role {
@@ -67,14 +66,13 @@ function rowToRole(row: Row): Role {
   };
   if (row.description !== null) parsed["description"] = row.description;
   if (row.permission_mode !== null) parsed["permission_mode"] = row.permission_mode;
-  if (row.current_version_allowed_tools_json !== null) {
-    const tools = JSON.parse(row.current_version_allowed_tools_json) as readonly string[];
+  if (row.latest_version_allowed_tools_json !== null) {
+    const tools = JSON.parse(row.latest_version_allowed_tools_json) as readonly string[];
     if (tools.length > 0) parsed["allowed_tools"] = tools;
   }
   if (row.effort !== null) parsed["effort"] = row.effort;
   if (row.model !== null) parsed["model"] = row.model;
   if (row.workspace_id !== null) parsed["workspace_id"] = row.workspace_id;
-  if (row.current_version_id !== null) parsed["current_version_id"] = row.current_version_id;
   if (row.current_commit_branch !== null && row.current_commit_sha !== null) {
     parsed["current_commit"] = {
       branch: row.current_commit_branch,
@@ -87,11 +85,13 @@ function rowToRole(row: Row): Role {
 const ROLE_SELECT = `
   SELECT
     r.id, r.name, r.description, r.permission_mode, r.effort, r.model,
-    r.persistent, r.workspace_id, r.current_version_id,
+    r.persistent, r.workspace_id,
     r.current_commit_branch, r.current_commit_sha, r.created_at,
-    v.allowed_tools_json AS current_version_allowed_tools_json
+    v.allowed_tools_json AS latest_version_allowed_tools_json
   FROM roles r
-  LEFT JOIN role_versions v ON v.id = r.current_version_id
+  LEFT JOIN role_versions v ON v.id = (
+    SELECT rv.id FROM role_versions rv WHERE rv.role_id = r.id ORDER BY rv.version DESC LIMIT 1
+  )
 `;
 
 export function createRoleStore(db: Database): RoleStore {
@@ -100,11 +100,8 @@ export function createRoleStore(db: Database): RoleStore {
   const insertStmt = db.prepare(
     "INSERT INTO roles (id, name, description, permission_mode, effort, model, persistent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
   );
-  const setVersionStmt = db.prepare(
-    "UPDATE roles SET current_version_id = ? WHERE id = ?",
-  );
   const pinCommitStmt = db.prepare(
-    "UPDATE roles SET current_commit_branch = ?, current_commit_sha = ?, current_version_id = NULL WHERE id = ?",
+    "UPDATE roles SET current_commit_branch = ?, current_commit_sha = ? WHERE id = ?",
   );
   const getStmt = db.prepare(`${ROLE_SELECT} WHERE r.id = ?`);
   const findByNameStmt = db.prepare(
@@ -146,18 +143,15 @@ export function createRoleStore(db: Database): RoleStore {
         created_at,
       );
 
+      // Write a role_versions row from the shipped bundle so embodyRole can
+      // resolve content via latestForRole when no commit pin is set. In
+      // production all roles are commit-pinned (#491) so this is a test-only
+      // fallback path; no current_version_id pointer is written (column dropped).
       const shipped = loadRoleBundle(req.name);
       if (shipped !== null) {
-        const snapshot = snapshotShippedBundle({
-          loaded: shipped,
-          allowedTools: req.allowed_tools === undefined ? [] : req.allowed_tools,
-        });
-        const version = versions.create({
-          role_id: id,
-          version: 1,
-          ...snapshot,
-        });
-        setVersionStmt.run(version.id, id);
+        const allowedTools = req.allowed_tools === undefined ? [] : req.allowed_tools;
+        const snapshot = snapshotShippedBundle({ loaded: shipped, allowedTools });
+        versions.create({ role_id: id, version: 1, ...snapshot });
       }
 
       return rowToRole(getStmt.get(id) as Row);

@@ -54,40 +54,26 @@ describe("role-state git migration (#351)", () => {
     });
   }
 
-  it("migrates a row-backed workspace role to a resolvable commit, keeping its version rows", () => {
+  it("skips unpinned workspace roles after #491 (no current_version_id to migrate from)", () => {
     const ws = createWorkspaceStore(db).create({ name: "w", repo_path: "/tmp/x" });
-    seedWorkspaceRoles(db, ws.id); // no forks → row-backed
+    seedWorkspaceRoles(db, ws.id); // no forks → no commit pin, has version rows
     const roles = createRoleStore(db);
     const before = roles.findInWorkspace(ws.id, "manager")!;
-    expect(before.current_version_id).toBeDefined();
-    const versionRows = db
+    // After #491: no current_version_id column; but version rows exist.
+    expect(before.current_commit).toBeUndefined();
+    const versionRows = (db
       .prepare("SELECT COUNT(*) n FROM role_versions WHERE role_id = ?")
-      .get(before.id) as { n: number };
+      .get(before.id) as { n: number }).n;
+    expect(versionRows).toBeGreaterThan(0);
 
+    // The migration skips non-commit-pinned roles (no version pointer to read from).
     const result = run();
-    expect(result.migrated).toBeGreaterThanOrEqual(1);
+    expect(result.skipped).toBeGreaterThanOrEqual(1);
+    expect(result.migrated).toBe(0);
 
+    // The role remains without a commit pin.
     const after = roles.findInWorkspace(ws.id, "manager")!;
-    expect(after.current_commit).toBeDefined();
-    expect(after.current_version_id).toBeUndefined();
-
-    // The pinned sha resolves from the workspace clone and its content matches
-    // what the row encoded (codec round-trip through real git).
-    const wsDir = join(reposBaseDir, ws.id);
-    const bundle = loadRoleBundleAtCommit(wsDir, after.current_commit!.sha, {
-      pluginName: "manager",
-    });
-    const shipped = enumerateShippedRoles().find((r) => r.manifest.name === "manager")!;
-    const expected = roleSnapshotToContract(
-      snapshotShippedBundle({ loaded: shipped, allowedTools: shipped.allowedTools }),
-    );
-    expect(bundle.systemPrompt).toBe(expected.systemPrompt);
-
-    // Forward-only: version rows are retained as the path back.
-    const versionRowsAfter = db
-      .prepare("SELECT COUNT(*) n FROM role_versions WHERE role_id = ?")
-      .get(after.id) as { n: number };
-    expect(versionRowsAfter.n).toBe(versionRows.n);
+    expect(after.current_commit).toBeUndefined();
   });
 
   it("pins a null-workspace global role to its upstream default fork (the ancestor)", () => {
@@ -95,12 +81,13 @@ describe("role-state git migration (#351)", () => {
     const shipped = enumerateShippedRoles().find((r) => r.manifest.name === "worker")!;
     const snapshot = snapshotShippedBundle({ loaded: shipped, allowedTools: shipped.allowedTools });
     const id = randomUUID();
+    // After #491: insert without current_version_id (column dropped).
     db.prepare(
-      `INSERT INTO roles (id, name, description, permission_mode, effort, persistent, workspace_id, current_version_id, created_at)
-       VALUES (?, 'worker', 'd', null, null, 0, null, null, ?)`,
+      `INSERT INTO roles (id, name, description, permission_mode, effort, persistent, workspace_id, created_at)
+       VALUES (?, 'worker', 'd', null, null, 0, null, ?)`,
     ).run(id, Date.now());
-    const v = roleVersions.create({ role_id: id, version: 1, ...snapshot });
-    db.prepare("UPDATE roles SET current_version_id = ? WHERE id = ?").run(v.id, id);
+    roleVersions.create({ role_id: id, version: 1, ...snapshot });
+    // No pointer update (column gone); pinNullWorkspaceToDefault uses upstream fork.
 
     const result = run();
     expect(result.pinnedToDefault).toBeGreaterThanOrEqual(1);
@@ -111,43 +98,36 @@ describe("role-state git migration (#351)", () => {
     expect(after.current_commit).toEqual({ branch: fork.branch, sha: fork.sha });
   });
 
-  it("embodiment resolves a migrated role from its clone — NOT the upstream (per-workspace routing is load-bearing)", () => {
+  it("after #491: unpinned workspace roles are skipped by migration; content comes from version row fallback", () => {
     const ws = createWorkspaceStore(db).create({ name: "w", repo_path: "/tmp/x" });
-    seedWorkspaceRoles(db, ws.id);
+    seedWorkspaceRoles(db, ws.id); // no forks → version rows, no commit pin
     const config = configureRoleEmbodiment(db, upstreamDir);
     const { roleRepoDir, workspaceRepos } = config;
     if (roleRepoDir === undefined || workspaceRepos === undefined) {
       throw new Error("expected a configured role repo");
     }
     const roleVersions = createRoleVersionStore(db);
-    migrateRoleStateToWorkspaceRepos({
+    const result = migrateRoleStateToWorkspaceRepos({
       roles: createRoleStore(db),
       roleVersions,
       upstream: ensureUpstreamRoleRepo(upstreamDir),
       workspaceRepos,
     });
+    // After #491: workspace roles are skipped (no version pointer to migrate from).
+    expect(result.skipped).toBeGreaterThanOrEqual(1);
+    expect(result.migrated).toBe(0);
+
     const role = createRoleStore(db).findInWorkspace(ws.id, "manager")!;
+    expect(role.current_commit).toBeUndefined();
 
-    // The content cache is a DB table keyed by sha, so the FIRST read of this
-    // sha decides whether disk routing is exercised. Probe the negative path
-    // first: without `workspaceRepos`, resolution falls back to the upstream —
-    // where the migrated commit does NOT exist — so it must throw rather than
-    // silently mis-resolve (and, throwing, it never populates the cache).
-    expect(() =>
-      resolveCurrentRoleVersion(role, {
-        roleVersions,
-        roleContentCache: createRoleContentCache(db),
-        roleRepoDir,
-      }),
-    ).toThrow();
-
-    // With per-workspace routing the same sha resolves from the clone.
+    // Resolution falls back to the version row via latestForRole — no throw.
     const resolved = resolveCurrentRoleVersion(role, {
       roleVersions,
       roleContentCache: createRoleContentCache(db),
       roleRepoDir,
       workspaceRepos,
     });
+    expect(resolved).not.toBeNull();
     expect(resolved!.system_prompt.length).toBeGreaterThan(0);
   });
 

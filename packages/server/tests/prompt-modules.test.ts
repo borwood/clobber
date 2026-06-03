@@ -426,19 +426,19 @@ describe("DELETE /workspaces/:id/prompt-modules/:name (delete)", () => {
 
   it("refuses with 409 when a row-backed role still refs the module", async () => {
     writeWorkspaceModule(harness.repo.path, "referenced", { kind: "static", text: "x" });
-    // Inject a seed_ref into the manager's role_version row
+    // Inject a seed_ref into the manager's latest role_version row
     const roleRow = harness.db
-      .prepare("SELECT id, current_version_id FROM roles WHERE workspace_id = ? AND name = ?")
-      .get(harness.wsId, "manager") as { id: string; current_version_id: string | null };
-    if (roleRow.current_version_id !== null) {
-      const current = harness.db
-        .prepare("SELECT seed_refs_json FROM role_versions WHERE id = ?")
-        .get(roleRow.current_version_id) as { seed_refs_json: string };
-      const refs = JSON.parse(current.seed_refs_json) as Array<{ name: string; enabled: boolean }>;
+      .prepare("SELECT id FROM roles WHERE workspace_id = ? AND name = ?")
+      .get(harness.wsId, "manager") as { id: string } | null;
+    const latestVersion = roleRow === null ? null : (harness.db
+      .prepare("SELECT id, seed_refs_json FROM role_versions WHERE role_id = ? ORDER BY version DESC LIMIT 1")
+      .get(roleRow.id) as { id: string; seed_refs_json: string } | null);
+    if (latestVersion !== null) {
+      const refs = JSON.parse(latestVersion.seed_refs_json) as Array<{ name: string; enabled: boolean }>;
       refs.push({ name: "referenced", enabled: true });
       harness.db
         .prepare("UPDATE role_versions SET seed_refs_json = ? WHERE id = ?")
-        .run(JSON.stringify(refs), roleRow.current_version_id);
+        .run(JSON.stringify(refs), latestVersion.id);
     }
     const res = await harness.server.inject({
       method: "DELETE",
@@ -453,17 +453,17 @@ describe("DELETE /workspaces/:id/prompt-modules/:name (delete)", () => {
   it("deletes when force=true even if a role refs it", async () => {
     writeWorkspaceModule(harness.repo.path, "force-deletable", { kind: "static", text: "x" });
     const roleRow = harness.db
-      .prepare("SELECT id, current_version_id FROM roles WHERE workspace_id = ? AND name = ?")
-      .get(harness.wsId, "manager") as { id: string; current_version_id: string | null };
-    if (roleRow.current_version_id !== null) {
-      const current = harness.db
-        .prepare("SELECT seed_refs_json FROM role_versions WHERE id = ?")
-        .get(roleRow.current_version_id) as { seed_refs_json: string };
-      const refs = JSON.parse(current.seed_refs_json) as Array<{ name: string; enabled: boolean }>;
+      .prepare("SELECT id FROM roles WHERE workspace_id = ? AND name = ?")
+      .get(harness.wsId, "manager") as { id: string } | null;
+    const latestVersion = roleRow === null ? null : (harness.db
+      .prepare("SELECT id, seed_refs_json FROM role_versions WHERE role_id = ? ORDER BY version DESC LIMIT 1")
+      .get(roleRow.id) as { id: string; seed_refs_json: string } | null);
+    if (latestVersion !== null) {
+      const refs = JSON.parse(latestVersion.seed_refs_json) as Array<{ name: string; enabled: boolean }>;
       refs.push({ name: "force-deletable", enabled: true });
       harness.db
         .prepare("UPDATE role_versions SET seed_refs_json = ? WHERE id = ?")
-        .run(JSON.stringify(refs), roleRow.current_version_id);
+        .run(JSON.stringify(refs), latestVersion.id);
     }
     const res = await harness.server.inject({
       method: "DELETE",
@@ -498,7 +498,7 @@ describe("DELETE /workspaces/:id/prompt-modules/:name (delete)", () => {
       .get(harness.wsId, "worker") as { id: string };
     const testSha = "deadbeef000000000000000000000001";
     harness.db
-      .prepare("UPDATE roles SET current_commit_sha = ?, current_version_id = NULL WHERE id = ?")
+      .prepare("UPDATE roles SET current_commit_sha = ? WHERE id = ?")
       .run(testSha, workerRow.id);
     harness.db
       .prepare(

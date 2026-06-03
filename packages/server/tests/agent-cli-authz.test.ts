@@ -23,7 +23,7 @@ import type { SpawnedAgentInfo } from "../src/types.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
 import { createFinalReportConsumerStateStore } from "../src/final-report-consumer.ts";
 import { seedWorkspaceRoles } from "../src/seed-workspace-roles.ts";
-import { loadRoleContractAtCommit } from "../src/role-repo.ts";
+import { loadRoleContractAtCommit, ensureUpstreamRoleRepo } from "../src/role-repo.ts";
 import { dirname } from "node:path";
 
 interface RoleSession {
@@ -60,7 +60,9 @@ function buildHarness(): Harness {
   const roleRepoDir = mkdtempSync(join(tmpdir(), "clobber-cli-authz-repo-"));
   const ws = workspaces.create({ name: "ws", repo_path: repoPath });
 
-  seedWorkspaceRoles(db, ws.id);
+  // Use the upstream role repo for commit-pinned seeding (needed for fork route).
+  const upstream = ensureUpstreamRoleRepo(roleRepoDir);
+  seedWorkspaceRoles(db, ws.id, upstream.forks);
   const managerRole = roles.findInWorkspace(ws.id, "manager");
   if (managerRole === null) throw new Error("manager role not seeded");
   const workerRole = roles.findInWorkspace(ws.id, "worker");

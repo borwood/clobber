@@ -96,15 +96,14 @@ function roleRow(
   h: Harness,
   name: string,
   wsId: string,
-): { id: string; branch: string | null; sha: string | null; versionId: string | null } {
+): { id: string; branch: string | null; sha: string | null } {
   const row = h.db
     .prepare(
-      `SELECT id, current_commit_branch AS branch, current_commit_sha AS sha,
-              current_version_id AS versionId
+      `SELECT id, current_commit_branch AS branch, current_commit_sha AS sha
          FROM roles WHERE name = ? AND workspace_id = ?`,
     )
     .get(name, wsId) as
-    | { id: string; branch: string | null; sha: string | null; versionId: string | null }
+    | { id: string; branch: string | null; sha: string | null }
     | null;
   if (row === null) throw new Error(`role ${name} not seeded`);
   return row;
@@ -153,7 +152,6 @@ describe("#385 part 1 — seed default flips to commit-pins", () => {
       const fork = upstream.forks.get(name)!;
       expect(row.branch).toBe(fork.branch);
       expect(row.sha).toBe(fork.sha);
-      expect(row.versionId).toBeNull();
     }
 
     await teardown(h);
@@ -164,9 +162,12 @@ describe("#385 part 1 — seed default flips to commit-pins", () => {
     const wsId = await createWorkspace(h, repo.path);
 
     const worker = roleRow(h, "worker", wsId);
-    expect(worker.versionId).not.toBeNull();
+    // After #491: current_version_id is dropped; roles still have version rows but no pointer.
     expect(worker.branch).toBeNull();
     expect(worker.sha).toBeNull();
+    // Version row exists (for test fallback via latestForRole).
+    const versionCount = (h.db.prepare("SELECT COUNT(*) n FROM role_versions WHERE role_id = ?").get(worker.id) as { n: number }).n;
+    expect(versionCount).toBeGreaterThan(0);
 
     await teardown(h);
   });

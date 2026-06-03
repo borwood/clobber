@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { WakeProgram } from "@clobber/shared";
 import { buildHarness, teardown, turnProvider, type Harness } from "./_spawn-harness.ts";
-import { createRoleVersionStore } from "../src/role-version-store.ts";
 import { writeRoleVersion } from "./_role-version-fixture.ts";
 
 // #212 — a wake-program is the opening move: it owns layer C (a system-prompt
@@ -11,9 +10,8 @@ import { writeRoleVersion } from "./_role-version-fixture.ts";
 // composes on resume.
 
 function setWakePrograms(h: Harness, roleId: string, programs: readonly WakeProgram[]): void {
-  const versions = createRoleVersionStore(h.db);
   const role = h.roles.get(roleId)!;
-  const current = versions.get(role.current_version_id!)!;
+  const current = h.roleVersions.latestForRole(roleId)!;
   writeRoleVersion(h.db, role, current, { wakePrograms: programs });
 }
 

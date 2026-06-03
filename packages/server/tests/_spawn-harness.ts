@@ -20,7 +20,6 @@ import { createWorkspaceSessionSummaries } from "../src/workspace-session-summar
 import { createSessionTokenStore } from "../src/session-token-store.ts";
 import { createAgentStatusStore } from "../src/agent-status-store.ts";
 import { createAgentStatusLogStore } from "../src/agent-status-log-store.ts";
-import { createRoleContractRefusalStore } from "../src/role-contract-refusal-store.ts";
 import { createAgentQuestionStore } from "../src/agent-question-store.ts";
 import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
@@ -37,6 +36,7 @@ export interface Harness {
   readonly db: ReturnType<typeof createDatabase>;
   readonly workspaces: ReturnType<typeof createWorkspaceStore>;
   readonly roles: ReturnType<typeof createRoleStore>;
+  readonly roleVersions: ReturnType<typeof createRoleVersionStore>;
   readonly workspaceRoles: ReturnType<typeof createWorkspaceRoleStore>;
   readonly sessions: ReturnType<typeof createSessionStore>;
   readonly sessionTokens: ReturnType<typeof createSessionTokenStore>;
@@ -68,6 +68,10 @@ export function turnProvider(): RuntimeProvider {
   };
 }
 
+// #491: roles created via `roles.create({ name: "worker" })` now get version rows
+// via the shipped bundle (latestForRole fallback). Spawn uses embodyRole which
+// falls back to latestForRole when no commit pin is set. No git setup needed in
+// the harness for version-row-backed tests.
 export function buildHarness(runtimeProvider: RuntimeProvider): Harness {
   const db = createDatabase(":memory:");
   const workspaces = createWorkspaceStore(db);
@@ -116,7 +120,6 @@ export function buildHarness(runtimeProvider: RuntimeProvider): Harness {
     sessionTokens,
     agentStatuses: createAgentStatusStore(db),
     agentStatusLog: createAgentStatusLogStore(db),
-    roleContractRefusals: createRoleContractRefusalStore(db),
     agentQuestions: createAgentQuestionStore(db),
     agentQuestionWaiter: createAgentQuestionWaiter(),
     runtimeProvider,
@@ -128,7 +131,7 @@ export function buildHarness(runtimeProvider: RuntimeProvider): Harness {
     finalReportConsumerState: createFinalReportConsumerStateStore(db),
   });
   const repoPath = mkdtempSync(join(tmpdir(), "clobber-prep-spawn-ctx-"));
-  return { server, db, workspaces, roles, workspaceRoles, sessions, sessionTokens, records, repoPath };
+  return { server, db, workspaces, roles, roleVersions, workspaceRoles, sessions, sessionTokens, records, repoPath };
 }
 
 export async function teardown(h: Harness): Promise<void> {

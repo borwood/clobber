@@ -5,15 +5,12 @@ import type { RoleContentCache } from "./role-content-cache.ts";
 import type { RoleVersionStore } from "./role-version-store.ts";
 import { resolveRoleRepoDir, type RoleRepoResolution } from "./resolve-role-repo-dir.ts";
 
-// #349 git-as-truth — the embodiment dispatch. A role/session is pinned EITHER by
-// a `role_versions` row (the pre-#349 store) OR by a commit into the upstream role
-// repo. This is the single chokepoint that turns a pin into the runtime bundle,
-// so every embodiment site (spawn, resume, whiteboard) reads content the same way
-// and the two pin kinds coexist with no data migration.
+// #349 git-as-truth — the embodiment dispatch. A role/session is pinned by a
+// commit into the upstream role repo. This is the single chokepoint that turns
+// a commit pin into the runtime bundle, so every embodiment site (spawn, resume,
+// whiteboard) reads content the same way.
 
-export type RolePin =
-  | { readonly kind: "version"; readonly versionId: string }
-  | { readonly kind: "commit"; readonly branch: string; readonly sha: string };
+export type RolePin = { readonly kind: "commit"; readonly branch: string; readonly sha: string };
 
 export interface RoleEmbodimentDeps extends RoleRepoResolution {
   readonly roleVersions: RoleVersionStore;
@@ -23,26 +20,19 @@ export interface RoleEmbodimentDeps extends RoleRepoResolution {
   readonly roleContentCache?: RoleContentCache;
 }
 
-// The role's live pin — prefers the commit ref (git-backed) over the row pointer.
+// The role's live pin — returns the commit ref or null if the role has no pin.
 export function rolePin(role: Role): RolePin | null {
   if (role.current_commit !== undefined) {
     return { kind: "commit", branch: role.current_commit.branch, sha: role.current_commit.sha };
-  }
-  if (role.current_version_id !== undefined) {
-    return { kind: "version", versionId: role.current_version_id };
   }
   return null;
 }
 
 // Resume's pin: the content the session was embodied with, so it re-resolves the
-// SAME commit even after the role's current pointer advances. Falls back to the
-// role's current pin only for sessions that predate pin-capture.
+// SAME commit even after the role's current pointer advances.
 export function sessionPin(session: Session, role: Role): RolePin | null {
   if (session.role_commit !== undefined) {
     return { kind: "commit", branch: session.role_commit.branch, sha: session.role_commit.sha };
-  }
-  if (session.role_version_id !== undefined) {
-    return { kind: "version", versionId: session.role_version_id };
   }
   return rolePin(role);
 }
@@ -52,17 +42,23 @@ export function embodyRole(
   pin: RolePin | null,
   deps: RoleEmbodimentDeps,
 ): RoleBundleData | null {
-  if (pin === null) return null;
-  if (pin.kind === "version") return deps.roleVersions.loadAsBundle(pin.versionId);
-  const repoDir = resolveRoleRepoDir(role, deps);
-  if (deps.roleContentCache === undefined || repoDir === undefined) {
-    throw new Error(
-      "commit-pinned role embodied without an upstream role repo configured",
-    );
+  if (pin !== null) {
+    const repoDir = resolveRoleRepoDir(role, deps);
+    if (deps.roleContentCache === undefined || repoDir === undefined) {
+      throw new Error(
+        "commit-pinned role embodied without an upstream role repo configured",
+      );
+    }
+    const { contract } = deps.roleContentCache.getOrLoad(pin.sha, repoDir);
+    return bundleFromContract(contract, {
+      pluginName: role.name,
+      ...(role.description === undefined ? {} : { description: role.description }),
+    });
   }
-  const { contract } = deps.roleContentCache.getOrLoad(pin.sha, repoDir);
-  return bundleFromContract(contract, {
-    pluginName: role.name,
-    ...(role.description === undefined ? {} : { description: role.description }),
-  });
+  // No commit pin — fall back to the latest version row. In production all roles
+  // are commit-pinned (#491), so this path is only reached in tests that create
+  // roles without a git-backed role repo.
+  const latest = deps.roleVersions.latestForRole(role.id);
+  if (latest === null) return null;
+  return deps.roleVersions.loadAsBundle(latest.id);
 }

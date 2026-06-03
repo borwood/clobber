@@ -21,6 +21,7 @@ import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import type { AgentSpawnRequest, AgentSpawner } from "../src/types.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
 import { createFinalReportConsumerStateStore } from "../src/final-report-consumer.ts";
+import { seedWorkspaceRoles } from "../src/seed-workspace-roles.ts";
 
 function tableColumns(db: ReturnType<typeof createDatabase>, table: string): readonly string[] {
   const rows = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
@@ -54,32 +55,33 @@ describe("role_versions schema (#23)", () => {
     db.close();
   });
 
-  it("adds current_version_id and workspace_id to roles", () => {
+  it("adds workspace_id to roles (current_version_id dropped in #491)", () => {
     const db = createDatabase(":memory:");
     const cols = tableColumns(db, "roles");
-    expect(cols).toContain("current_version_id");
     expect(cols).toContain("workspace_id");
+    expect(cols).not.toContain("current_version_id");
     db.close();
   });
 
-  it("adds role_version_id to sessions", () => {
+  it("sessions does not have role_version_id (dropped in #491)", () => {
     const db = createDatabase(":memory:");
     const cols = tableColumns(db, "sessions");
-    expect(cols).toContain("role_version_id");
+    expect(cols).not.toContain("role_version_id");
     db.close();
   });
 });
 
-describe("role auto-version on create (#23)", () => {
-  it("auto-creates a v1 role_versions row from the shipped manager bundle", () => {
+describe("role auto-version on create (#23 / #491)", () => {
+  it("createRoleStore.create() still creates version rows (test-only fallback) but no current_version_id pointer", () => {
     const db = createDatabase(":memory:");
     const roles = createRoleStore(db);
     const versions = createRoleVersionStore(db);
 
     const role = roles.create({ name: "manager", persistent: true });
-    expect(role.current_version_id).toBeDefined();
-
-    const v1 = versions.get(role.current_version_id!)!;
+    // After #491: no current_version_id field on Role type.
+    expect((role as Record<string, unknown>)["current_version_id"]).toBeUndefined();
+    // But version row exists for test-infrastructure (latestForRole fallback).
+    const v1 = versions.latestForRole(role.id)!;
     expect(v1.role_id).toBe(role.id);
     expect(v1.version).toBe(1);
     expect(v1.system_prompt.length).toBeGreaterThan(0);
@@ -95,26 +97,22 @@ describe("role auto-version on create (#23)", () => {
     db.close();
   });
 
-  it("leaves current_version_id undefined when the role name is not in the shipped registry", () => {
+  it("no version row is created for non-shipped names (unknown bundles)", () => {
     const db = createDatabase(":memory:");
     const roles = createRoleStore(db);
-    const versions = createRoleVersionStore(db);
 
     const role = roles.create({ name: "no-such-bundle", persistent: false });
-    expect(role.current_version_id).toBeUndefined();
-
     const all = db
       .prepare("SELECT COUNT(*) AS n FROM role_versions WHERE role_id = ?")
       .get(role.id) as { n: number };
     expect(all.n).toBe(0);
 
-    versions; // referenced for type-check
     db.close();
   });
 });
 
-describe("backfill on createDatabase (#23)", () => {
-  it("snapshots a pre-existing roles row missing current_version_id from the shipped bundle", () => {
+describe("backfill on createDatabase (#23 / #491)", () => {
+  it("snapshots a pre-existing roles row missing a version row from the shipped bundle", () => {
     const path = tmpDbPath("rv-backfill");
     try {
       const db1 = createDatabase(path);
@@ -126,16 +124,13 @@ describe("backfill on createDatabase (#23)", () => {
       db1.close();
 
       const db2 = createDatabase(path);
-      const role = db2
-        .prepare("SELECT current_version_id FROM roles WHERE name = 'manager'")
-        .get() as { current_version_id: string | null };
-      expect(role.current_version_id).not.toBeNull();
-
+      // After #491: no current_version_id column; instead query role_versions directly.
       const v = db2
-        .prepare("SELECT version, system_prompt FROM role_versions WHERE id = ?")
-        .get(role.current_version_id!) as { version: number; system_prompt: string };
-      expect(v.version).toBe(1);
-      expect(v.system_prompt.length).toBeGreaterThan(0);
+        .prepare("SELECT version, system_prompt FROM role_versions WHERE role_id = ? ORDER BY version DESC LIMIT 1")
+        .get("11111111-1111-4111-8111-111111111111") as { version: number; system_prompt: string } | null;
+      expect(v).not.toBeNull();
+      expect(v!.version).toBe(1);
+      expect(v!.system_prompt.length).toBeGreaterThan(0);
       db2.close();
     } finally {
       rmSync(path, { force: true });
@@ -172,7 +167,9 @@ describe("loadAsBundle (#23)", () => {
     const versions = createRoleVersionStore(db);
 
     const role = roles.create({ name: "manager", persistent: true });
-    const versionId = role.current_version_id!;
+    // create() writes a v1 row for the shipped bundle; get it via latestForRole.
+    const v1 = versions.latestForRole(role.id)!;
+    const versionId = v1.id;
 
     db.prepare("UPDATE role_versions SET system_prompt = ? WHERE id = ?").run(
       "MUTATED-VIA-DB",
@@ -197,8 +194,8 @@ describe("loadAsBundle (#23)", () => {
   });
 });
 
-describe("executeSpawn pins sessions.role_version_id (#23)", () => {
-  it("writes role_version_id = role.current_version_id on session create", async () => {
+describe("executeSpawn embodies version-row role (#23 / #491)", () => {
+  it("spawns a role with a version row (no-forks path) and session has no role_commit", async () => {
     const repoPath = mkdtempSync(join(tmpdir(), "clobber-rv-spawn-"));
     try {
       const db = createDatabase(":memory:");
@@ -247,8 +244,9 @@ describe("executeSpawn pins sessions.role_version_id (#23)", () => {
   });
       try {
         const ws = workspaces.create({ name: "ws", repo_path: repoPath });
-        const role = roles.create({ name: "manager", persistent: true });
-        workspaceRoles.setCeiling(ws.id, role.id, 1);
+        // Seed via seedWorkspaceRoles (no forks) to get a version row for embodiment.
+        seedWorkspaceRoles(db, ws.id);
+        const role = roles.list().find((r) => r.name === "manager" && r.workspace_id === ws.id)!;
 
         const res = await server.inject({
           method: "POST",
@@ -259,8 +257,9 @@ describe("executeSpawn pins sessions.role_version_id (#23)", () => {
         const body = res.json() as { session_id: string };
 
         const session = sessions.get(body.session_id)!;
-        expect(role.current_version_id).toBeDefined();
-        expect(session.role_version_id).toBe(role.current_version_id!);
+        // After #491 (no-forks path): role is version-row backed, no commit pin.
+        // Session has no role_commit and no role_version_id (column dropped).
+        expect(session.role_commit).toBeUndefined();
       } finally {
         await server.close();
         db.close();

@@ -162,7 +162,6 @@ beforeAll(async () => {
     agent_id: reviveAgent.id,
     workspace_id: ws.id,
     role_id: workerRole.id,
-    role_version_id: workerRole.current_version_id,
     provider_thread_id: reviveId,
     label: "revive",
     pid: 2,

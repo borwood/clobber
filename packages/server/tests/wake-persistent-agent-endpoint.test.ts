@@ -40,6 +40,7 @@ interface Harness {
   db: ReturnType<typeof createDatabase>;
   workspaces: ReturnType<typeof createWorkspaceStore>;
   roles: ReturnType<typeof createRoleStore>;
+  roleVersions: ReturnType<typeof createRoleVersionStore>;
   workspaceRoles: ReturnType<typeof createWorkspaceRoleStore>;
   agents: ReturnType<typeof createAgentStore>;
   sessions: ReturnType<typeof createSessionStore>;
@@ -93,7 +94,7 @@ function buildHarness(): Harness {
     dispatches: createTriggerDispatchStore(db),
     finalReportConsumerState: createFinalReportConsumerStateStore(db),
   });
-  return { server, db, workspaces, roles, workspaceRoles, agents, sessions, calls };
+  return { server, db, workspaces, roles, roleVersions, workspaceRoles, agents, sessions, calls };
 }
 
 async function teardown(h: Harness): Promise<void> {
@@ -304,8 +305,7 @@ function setManagerWakePrograms(
   roleId: string,
   programs: readonly WakeProgram[],
 ): void {
-  const versions = createRoleVersionStore(h.db);
   const role = h.roles.get(roleId)!;
-  const current = versions.get(role.current_version_id!)!;
+  const current = h.roleVersions.latestForRole(roleId)!;
   writeRoleVersion(h.db, role, current, { wakePrograms: programs });
 }

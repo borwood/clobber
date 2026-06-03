@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildHarness, teardown, turnProvider, type Harness } from "./_spawn-harness.ts";
-import { createRoleVersionStore } from "../src/role-version-store.ts";
 import { writeRoleVersion } from "./_role-version-fixture.ts";
 
 // #210 — durable framing (layer A identity + relocated layer-B context) is
@@ -57,8 +56,7 @@ describe("system-prompt composition (A/B/C)", () => {
 // Make the role reference one prompt-module by name (replacing its default refs)
 // so the composition under test is isolated to that module.
 function refModule(h: Harness, roleId: string, name: string): void {
-  const versions = createRoleVersionStore(h.db);
   const role = h.roles.get(roleId)!;
-  const current = versions.get(role.current_version_id!)!;
+  const current = h.roleVersions.latestForRole(roleId)!;
   writeRoleVersion(h.db, role, current, { promptModuleRefs: [{ name, enabled: true }] });
 }

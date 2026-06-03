@@ -1,6 +1,5 @@
 import { describe, expect, it } from "bun:test";
 import { PassThrough } from "node:stream";
-import { ENGINE_CONTRACT_VERSION } from "@clobber/shared";
 import { createServer } from "../src/server.ts";
 import { createDatabase } from "../src/db.ts";
 import { createEventStore } from "../src/event-store.ts";
@@ -14,7 +13,6 @@ import { createWorkspaceSessionSummaries } from "../src/workspace-session-summar
 import { createSessionTokenStore } from "../src/session-token-store.ts";
 import { createAgentStatusStore } from "../src/agent-status-store.ts";
 import { createAgentStatusLogStore } from "../src/agent-status-log-store.ts";
-import { createRoleContractRefusalStore } from "../src/role-contract-refusal-store.ts";
 import { createAgentQuestionStore } from "../src/agent-question-store.ts";
 import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
@@ -59,7 +57,6 @@ function buildStores() {
     sessionTokens: createSessionTokenStore(db),
     agentStatuses: createAgentStatusStore(db),
     agentStatusLog: createAgentStatusLogStore(db),
-    refusals: createRoleContractRefusalStore(db),
     agentQuestions: createAgentQuestionStore(db),
     agentQuestionWaiter: createAgentQuestionWaiter(),
     dispatches: createTriggerDispatchStore(db),
@@ -83,7 +80,6 @@ function boot(s: Stores) {
     sessionTokens: s.sessionTokens,
     agentStatuses: s.agentStatuses,
     agentStatusLog: s.agentStatusLog,
-    roleContractRefusals: s.refusals,
     agentQuestions: s.agentQuestions,
     agentQuestionWaiter: s.agentQuestionWaiter,
     runtimeProvider: turnProvider(),
@@ -96,61 +92,17 @@ function boot(s: Stores) {
   });
 }
 
-describe("boot-time role-contract compat sweep (#239)", () => {
-  it("incompatible adopted version → session-independent refusal row (agent_id NULL); compatible version untouched; boot not wedged", async () => {
-    const s = buildStores();
-    const ws = s.workspaces.create({ name: "ws", repo_path: "/tmp/x" });
-
-    // A freshly created version is stamped at the engine's contract version →
-    // compatible → no refusal.
-    const good = s.roles.create({ name: "worker", persistent: false });
-    s.workspaceRoles.setCeiling(ws.id, good.id, 1);
-
-    // The only schema-valid mismatch is a higher stamp (contract_version is a
-    // positive int; the engine ships v1), which the empty v1 migrator cannot
-    // bridge → incompatible.
-    const bad = s.roles.create({ name: "manager", persistent: true });
-    s.workspaceRoles.setCeiling(ws.id, bad.id, 1);
-    const badVersionId = bad.current_version_id!;
-    const badContract = ENGINE_CONTRACT_VERSION + 1;
-    s.db
-      .prepare("UPDATE role_versions SET contract_version = ? WHERE id = ?")
-      .run(badContract, badVersionId);
-
-    // Boot runs the sweep. It must NOT throw on the incompatible version.
-    const server = boot(s);
-
-    const refusals = s.refusals.listForWorkspace(ws.id);
-    expect(refusals).toHaveLength(1);
-    const refusal = refusals[0]!;
-    expect(refusal.role_id).toBe(bad.id);
-    expect(refusal.role_name).toBe("manager");
-    expect(refusal.role_version_id).toBe(badVersionId);
-    expect(refusal.authored_contract_version).toBe(badContract);
-    expect(refusal.engine_contract_version).toBe(ENGINE_CONTRACT_VERSION);
-    // The adopt boundary has no agent — the refusal is session-independent.
-    expect(refusal.agent_id).toBeNull();
-
-    // The compatible role produced nothing.
-    expect(refusals.some((r) => r.role_id === good.id)).toBe(false);
-
-    // Boot completed and the workspace is not wedged — the server still serves.
-    const res = await server.inject({ method: "GET", url: "/workspaces" });
-    expect(res.statusCode).toBe(200);
-
-    await server.close();
-    s.db.close();
-  });
-
-  it("all adopted versions compatible → no refusals; boot clean", async () => {
+// #491 — boot-time role-contract sweep is removed (all roles are commit-pinned
+// and current by construction; no version-row gate needed at boot).
+describe("boot-time role-contract sweep removed (#491)", () => {
+  it("boot does not crash even with version_rows present; no refusal rows written", async () => {
     const s = buildStores();
     const ws = s.workspaces.create({ name: "ws", repo_path: "/tmp/x" });
     const role = s.roles.create({ name: "worker", persistent: false });
     s.workspaceRoles.setCeiling(ws.id, role.id, 1);
 
+    // Boot must not crash even if version rows exist.
     const server = boot(s);
-
-    expect(s.refusals.listForWorkspace(ws.id)).toHaveLength(0);
     const res = await server.inject({ method: "GET", url: "/workspaces" });
     expect(res.statusCode).toBe(200);
 

@@ -57,7 +57,7 @@ function factsOf(role: Role): RoleFacts {
     id: role.id,
     name: role.name,
     inWorkspace: role.workspace_id !== undefined,
-    hadVersion: role.current_version_id !== undefined,
+    hadVersion: false,
     hadCommit: role.current_commit !== undefined,
   };
 }

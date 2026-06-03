@@ -100,7 +100,6 @@ function rowToEntry(row: Row): AgentStatusLogEntry {
 }
 
 interface SessionProvenanceRow {
-  role_version_id: string | null;
   role_commit_sha: string | null;
   role_commit_branch: string | null;
   transcript_path: string | null;
@@ -136,7 +135,7 @@ export function createAgentStatusLogStore(db: Database): AgentStatusLogStore {
     ORDER BY log.created_at DESC, log.id DESC
   `);
   const sessionProvenanceStmt = db.prepare(`
-    SELECT s.role_version_id, s.role_commit_sha, s.role_commit_branch,
+    SELECT s.role_commit_sha, s.role_commit_branch,
            s.transcript_path, w.repo_path
     FROM sessions s
     JOIN workspaces w ON w.id = s.workspace_id
@@ -164,7 +163,8 @@ export function createAgentStatusLogStore(db: Database): AgentStatusLogStore {
         if (prov === null) {
           provenanceError = `session not found: ${req.session_id}`;
         } else {
-          roleVersionId = prov.role_version_id;
+          // role_version_id on sessions is dropped (#491); always null now.
+          roleVersionId = null;
           roleCommitSha = prov.role_commit_sha;
           roleCommitBranch = prov.role_commit_branch;
 

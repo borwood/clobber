@@ -7,7 +7,6 @@ import { randomUUID } from "node:crypto";
 import { createDatabase } from "../src/db.ts";
 import { createWorkspaceStore } from "../src/workspace-store.ts";
 import { createRoleStore } from "../src/role-store.ts";
-import { createRoleVersionStore } from "../src/role-version-store.ts";
 import { createAgentStore } from "../src/agent-store.ts";
 import { createSessionStore } from "../src/session-store.ts";
 import { createAgentStatusLogStore } from "../src/agent-status-log-store.ts";
@@ -38,23 +37,9 @@ function addCommit(dir: string, msg: string): string {
   return execSync("git rev-parse HEAD", { cwd: dir }).toString().trim();
 }
 
-const EMPTY_JSON_ARRAY = "[]";
-const EMPTY_VERSION_INPUT = {
-  version: 1,
-  framing: "",
-  system_prompt: "placeholder",
-  skills_json: EMPTY_JSON_ARRAY,
-  allowed_tools_json: EMPTY_JSON_ARRAY,
-  allowed_cli_commands_json: EMPTY_JSON_ARRAY,
-  hooks_json: EMPTY_JSON_ARRAY,
-  triggers_json: EMPTY_JSON_ARRAY,
-  seed_refs_json: EMPTY_JSON_ARRAY,
-  wake_programs_json: EMPTY_JSON_ARRAY,
-  default_wake_program: null,
-};
 
 describe("audit-row provenance — sink-side stamping", () => {
-  it("stamps commit, branch, role_version_id, and transcript_anchor on every row regardless of kind", () => {
+  it("stamps commit, branch, and transcript_anchor on every row regardless of kind", () => {
     const repoDir = join(tmpDir, "repo");
     mkdirSync(repoDir);
     initGitRepo(repoDir);
@@ -66,21 +51,18 @@ describe("audit-row provenance — sink-side stamping", () => {
     const db = createDatabase(":memory:");
     const workspaces = createWorkspaceStore(db);
     const roles = createRoleStore(db);
-    const roleVersions = createRoleVersionStore(db);
     const agents = createAgentStore(db);
     const sessions = createSessionStore(db);
     const statusLog = createAgentStatusLogStore(db);
 
     const ws = workspaces.create({ name: "ws", repo_path: repoDir });
     const role = roles.create({ name: "audit-test-role", persistent: false });
-    const rv = roleVersions.create({ role_id: role.id, ...EMPTY_VERSION_INPUT });
     const agent = agents.create({ workspace_id: ws.id, role_id: role.id, label: "tester" });
     const session = sessions.create({
       id: randomUUID(),
       agent_id: agent.id,
       workspace_id: ws.id,
       role_id: role.id,
-      role_version_id: rv.id,
       pid: 9999,
       transcript_path: transcriptPath,
     });
@@ -97,7 +79,7 @@ describe("audit-row provenance — sink-side stamping", () => {
     expect(statusRow.commit).toBeString();
     expect(statusRow.commit!.length).toBe(40); // full SHA
     expect(statusRow.branch).toBeString();
-    expect(statusRow.role_version_id).toBe(rv.id);
+    expect(statusRow.role_version_id).toBeNull();
     expect(statusRow.details?.transcript_anchor).toBe(msgUuid);
 
     // Append "final-report" kind — hook-sourced; also passes NO provenance fields.
@@ -111,7 +93,7 @@ describe("audit-row provenance — sink-side stamping", () => {
 
     expect(reportRow.commit).toBe(statusRow.commit);
     expect(reportRow.branch).toBe(statusRow.branch);
-    expect(reportRow.role_version_id).toBe(rv.id);
+    expect(reportRow.role_version_id).toBeNull();
     expect(reportRow.details?.transcript_anchor).toBe(msgUuid);
   });
 
@@ -123,21 +105,18 @@ describe("audit-row provenance — sink-side stamping", () => {
     const db = createDatabase(":memory:");
     const workspaces = createWorkspaceStore(db);
     const roles = createRoleStore(db);
-    const roleVersions = createRoleVersionStore(db);
     const agents = createAgentStore(db);
     const sessions = createSessionStore(db);
     const statusLog = createAgentStatusLogStore(db);
 
     const ws = workspaces.create({ name: "ws", repo_path: repoDir });
     const role = roles.create({ name: "audit-test-role", persistent: false });
-    const rv = roleVersions.create({ role_id: role.id, ...EMPTY_VERSION_INPUT });
     const agent = agents.create({ workspace_id: ws.id, role_id: role.id, label: "tester" });
     const session = sessions.create({
       id: randomUUID(),
       agent_id: agent.id,
       workspace_id: ws.id,
       role_id: role.id,
-      role_version_id: rv.id,
       pid: 9999,
     });
 
@@ -170,21 +149,18 @@ describe("audit-row provenance — sink-side stamping", () => {
     const db = createDatabase(":memory:");
     const workspaces = createWorkspaceStore(db);
     const roles = createRoleStore(db);
-    const roleVersions = createRoleVersionStore(db);
     const agents = createAgentStore(db);
     const sessions = createSessionStore(db);
     const statusLog = createAgentStatusLogStore(db);
 
     const ws = workspaces.create({ name: "ws", repo_path: nonGitDir });
     const role = roles.create({ name: "audit-test-role", persistent: false });
-    const rv = roleVersions.create({ role_id: role.id, ...EMPTY_VERSION_INPUT });
     const agent = agents.create({ workspace_id: ws.id, role_id: role.id, label: "tester" });
     const session = sessions.create({
       id: randomUUID(),
       agent_id: agent.id,
       workspace_id: ws.id,
       role_id: role.id,
-      role_version_id: rv.id,
       pid: 9999,
     });
 
@@ -205,8 +181,8 @@ describe("audit-row provenance — sink-side stamping", () => {
     expect(row!.branch).toBeNull();
     // The reason for the failure is recorded in details.
     expect(row!.details?.provenance_error).toBeString();
-    // The role_version_id is still stamped — only git resolution is best-effort.
-    expect(row!.role_version_id).toBe(rv.id);
+    // role_version_id is null — sessions no longer carry a version pin (#491).
+    expect(row!.role_version_id).toBeNull();
   });
 
   it("commit-pinned session stamps role_commit_sha + role_commit_branch; role_version_id is null (#486)", () => {
@@ -247,42 +223,4 @@ describe("audit-row provenance — sink-side stamping", () => {
     expect(row.role_version_id).toBeNull();
   });
 
-  it("version-pinned session stamps role_version_id; role_commit_sha is null — no regression (#486)", () => {
-    const repoDir = join(tmpDir, "repo");
-    mkdirSync(repoDir);
-    initGitRepo(repoDir);
-
-    const db = createDatabase(":memory:");
-    const workspaces = createWorkspaceStore(db);
-    const roles = createRoleStore(db);
-    const roleVersions = createRoleVersionStore(db);
-    const agents = createAgentStore(db);
-    const sessions = createSessionStore(db);
-    const statusLog = createAgentStatusLogStore(db);
-
-    const ws = workspaces.create({ name: "ws", repo_path: repoDir });
-    const role = roles.create({ name: "audit-version-pin-role", persistent: false });
-    const rv = roleVersions.create({ role_id: role.id, ...EMPTY_VERSION_INPUT });
-    const agent = agents.create({ workspace_id: ws.id, role_id: role.id, label: "worker" });
-    const session = sessions.create({
-      id: randomUUID(),
-      agent_id: agent.id,
-      workspace_id: ws.id,
-      role_id: role.id,
-      role_version_id: rv.id,
-      pid: 9999,
-    });
-
-    const row = statusLog.append({
-      agent_id: agent.id,
-      session_id: session.id,
-      kind: "status",
-      state: "working",
-      summary: "version-pinned row",
-    });
-
-    expect(row.role_version_id).toBe(rv.id);
-    expect(row.role_commit_sha).toBeNull();
-    expect(row.role_commit_branch).toBeNull();
-  });
 });

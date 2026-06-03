@@ -65,10 +65,8 @@ export const RoleSchema = z.object({
   model: ModelSchema.optional(),
   persistent: z.boolean(),
   workspace_id: z.string().uuid().optional(),
-  // A role is pinned EITHER by a `role_versions` row (current_version_id, the
-  // pre-#349 store) OR by a commit into the upstream role repo (current_commit,
-  // git-as-truth). Embodiment dispatches on which is present.
-  current_version_id: z.string().uuid().optional(),
+  // #349 git-as-truth — a role is pinned by a commit into the upstream role repo.
+  // Embodiment reads content from the tree at this sha.
   current_commit: CommitRefSchema.optional(),
   created_at: z.number().int().nonnegative(),
 });
@@ -227,23 +225,18 @@ export type RoleVersionRef = z.infer<typeof RoleVersionRefSchema>;
 export const WorkspaceRoleAssignmentSchema = z.object({
   role: RoleSchema,
   max_concurrent: z.number().int().nonnegative(),
-  current_version: RoleVersionRefSchema.optional(),
 });
 export type WorkspaceRoleAssignment = z.infer<typeof WorkspaceRoleAssignmentSchema>;
 
-// #385 — a role is pinned EITHER by a `role_versions` row (current_version_id)
-// OR by a commit into the upstream role repo (current_commit). The list/detail
-// views mirror that dual-pin: a git-backed role surfaces its real commit ref as
-// provenance — it has no version-row uuid, and synthesizing a fake one would
-// betray git-as-truth. `version` stays present (the projected view's number) so
-// the picker badge has something to render for both pin kinds.
+// #385 — a role is pinned by a commit into the upstream role repo (current_commit).
+// The list/detail views surface the commit ref as provenance. `version` stays
+// present (the projected view's number) so the picker badge has something to render.
 export const RoleListEntrySchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1),
   persistent: z.boolean(),
   description: z.string().min(1).optional(),
   allowed_tools: z.array(z.string().min(1)).optional(),
-  current_version_id: z.string().uuid().optional(),
   current_commit: CommitRefSchema.optional(),
   version: z.number().int().positive(),
   created_at: z.number().int().nonnegative(),

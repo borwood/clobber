@@ -186,13 +186,12 @@ describe("POST /agent/roles/:id/fork", () => {
     // The new role is commit-pinned to its fresh branch — NOT a role_versions row.
     const newRole = h.db
       .prepare(
-        "SELECT name, workspace_id, current_version_id, current_commit_branch, current_commit_sha FROM roles WHERE id = ?",
+        "SELECT name, workspace_id, current_commit_branch, current_commit_sha FROM roles WHERE id = ?",
       )
       .get(body.role_id) as
       | {
           name: string;
           workspace_id: string;
-          current_version_id: string | null;
           current_commit_branch: string | null;
           current_commit_sha: string | null;
         }
@@ -200,7 +199,7 @@ describe("POST /agent/roles/:id/fork", () => {
     expect(newRole).not.toBeNull();
     expect(newRole!.name).toBe("auditor");
     expect(newRole!.workspace_id).toBe(boot.workspaceId);
-    expect(newRole!.current_version_id).toBeNull();
+    // After #491: current_version_id column is dropped.
     expect(newRole!.current_commit_branch).toBe("auditor");
     expect(newRole!.current_commit_sha).toBe(body.sha);
 

@@ -64,8 +64,5 @@ export function writeRoleVersion(
     default_wake_program: currentVersion.default_wake_program,
   });
 
-  // Only the row pointer moves — the commit pin (if any) is left untouched.
-  db.prepare("UPDATE roles SET current_version_id = ? WHERE id = ?").run(created.id, role.id);
-
   return { role_id: role.id, version_id: created.id, version: nextVersion };
 }

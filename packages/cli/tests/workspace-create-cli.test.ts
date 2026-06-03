@@ -129,14 +129,14 @@ function managerTriggers(): { commitPinned: boolean; triggers: readonly unknown[
     .get("clobber-on-clobber") as { id: string };
   const role = harness.db
     .prepare(
-      "SELECT current_commit_sha AS sha, current_version_id AS versionId FROM roles WHERE name = ? AND workspace_id = ?",
+      "SELECT current_commit_sha AS sha FROM roles WHERE name = ? AND workspace_id = ?",
     )
-    .get("manager", ws.id) as { sha: string | null; versionId: string | null };
+    .get("manager", ws.id) as { sha: string | null };
   if (role.sha === null) throw new Error("manager is not commit-pinned");
   const clone = join(dirname(harness.roleRepoDir), "role-repos", ws.id);
   const dir = existsSync(join(clone, ".git")) ? clone : harness.roleRepoDir;
   return {
-    commitPinned: role.versionId === null,
+    commitPinned: true, // After #491: commit-pinned is the only state.
     triggers: loadRoleContractAtCommit(dir, role.sha).triggers,
   };
 }

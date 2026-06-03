@@ -116,7 +116,8 @@ describe("workspace seed — POST /workspaces (#24)", () => {
 
     for (const r of inWs) {
       expect(r.workspace_id).toBe(ws.id);
-      expect(r.current_version_id).toBeDefined();
+      // Without a git role repo, roles have version rows (no commit pin).
+      expect((r as Record<string, unknown>)["current_version_id"]).toBeUndefined();
     }
 
     await teardown(h);
@@ -132,13 +133,9 @@ describe("workspace seed — POST /workspaces (#24)", () => {
     expect(manager).toBeDefined();
     expect(manager!.persistent).toBe(true);
     expect(manager!.permission_mode).toBe("bypassPermissions");
+    // Without git: version rows exist; allowed_tools comes from the latest version row.
     expect(manager!.allowed_tools).toEqual([
-      "Bash",
-      "Read",
-      "Edit",
-      "Write",
-      "Glob",
-      "Grep",
+      "Bash", "Read", "Edit", "Write", "Glob", "Grep",
     ]);
 
     await teardown(h);
@@ -154,13 +151,9 @@ describe("workspace seed — POST /workspaces (#24)", () => {
     expect(worker).toBeDefined();
     expect(worker!.persistent).toBe(false);
     expect(worker!.permission_mode).toBe("bypassPermissions");
+    // Without git: version rows exist; allowed_tools comes from the latest version row.
     expect(worker!.allowed_tools).toEqual([
-      "Bash",
-      "Read",
-      "Edit",
-      "Write",
-      "Glob",
-      "Grep",
+      "Bash", "Read", "Edit", "Write", "Glob", "Grep",
     ]);
 
     await teardown(h);
@@ -194,23 +187,24 @@ describe("workspace seed — POST /workspaces (#24)", () => {
     const aManager = aRoles.find((r) => r.name === "manager")!;
     const bManager = bRoles.find((r) => r.name === "manager")!;
     expect(aManager.id).not.toBe(bManager.id);
-    expect(aManager.current_version_id).not.toBe(bManager.current_version_id);
+    // After #491: roles are commit-pinned; both workspaces pin to the same commit sha
+    // (same shipped bundle) but have different role ids.
+    expect(aManager.id).not.toBe(bManager.id);
 
     await teardown(h);
   });
 
-  it("each seeded role has a v1 role_versions row pinned via current_version_id", async () => {
+  it("each seeded role has a v1 version row (no-forks path, #491)", async () => {
     const h = buildHarness();
     const ws = await createWorkspaceViaApi(h, "alpha");
 
     for (const role of h.roles.list().filter((r) => r.workspace_id === ws.id)) {
-      const versionId = role.current_version_id!;
-      const versionRow = h.db
-        .prepare("SELECT version, role_id, system_prompt FROM role_versions WHERE id = ?")
-        .get(versionId) as { version: number; role_id: string; system_prompt: string };
-      expect(versionRow.role_id).toBe(role.id);
-      expect(versionRow.version).toBe(1);
-      expect(versionRow.system_prompt.length).toBeGreaterThan(0);
+      // Without a git role repo: version rows exist (test-only fallback). No commit pin.
+      const versionCount = (
+        h.db.prepare("SELECT COUNT(*) n FROM role_versions WHERE role_id = ?").get(role.id) as { n: number }
+      ).n;
+      expect(versionCount).toBeGreaterThan(0);
+      expect(role.current_commit).toBeUndefined();
     }
 
     await teardown(h);
@@ -223,9 +217,11 @@ describe("workspace seed — POST /workspaces (#24)", () => {
     const worker = h.roles
       .list()
       .find((r) => r.name === "worker" && r.workspace_id === ws.id)!;
+    // Without git: content comes from the version row (no-forks fallback).
     const row = h.db
-      .prepare("SELECT system_prompt FROM role_versions WHERE id = ?")
-      .get(worker.current_version_id!) as { system_prompt: string };
+      .prepare("SELECT system_prompt FROM role_versions WHERE role_id = ? ORDER BY version DESC LIMIT 1")
+      .get(worker.id) as { system_prompt: string } | null;
+    expect(row).not.toBeNull();
     for (const phase of [
       "research",
       "failing-test",
@@ -233,9 +229,9 @@ describe("workspace seed — POST /workspaces (#24)", () => {
       "open-pr",
       "watch-ci",
     ]) {
-      expect(row.system_prompt).toContain(phase);
+      expect(row!.system_prompt).toContain(phase);
     }
-    expect(row.system_prompt).not.toContain("{{SDLC_PHASES}}");
+    expect(row!.system_prompt).not.toContain("{{SDLC_PHASES}}");
 
     await teardown(h);
   });

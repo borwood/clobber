@@ -96,13 +96,13 @@ function roleRow(
   h: Harness,
   name: string,
   wsId: string,
-): { id: string; workspace_id: string; current_version_id: string | null; current_commit_branch: string | null; current_commit_sha: string | null } {
+): { id: string; workspace_id: string; current_commit_branch: string | null; current_commit_sha: string | null } {
   const row = h.db
     .prepare(
-      "SELECT id, workspace_id, current_version_id, current_commit_branch, current_commit_sha FROM roles WHERE name = ? AND workspace_id = ?",
+      "SELECT id, workspace_id, current_commit_branch, current_commit_sha FROM roles WHERE name = ? AND workspace_id = ?",
     )
     .get(name, wsId) as
-    | { id: string; workspace_id: string; current_version_id: string | null; current_commit_branch: string | null; current_commit_sha: string | null }
+    | { id: string; workspace_id: string; current_commit_branch: string | null; current_commit_sha: string | null }
     | null;
   if (row === null) throw new Error(`role ${name} not present`);
   return row;
@@ -204,7 +204,7 @@ describe("#216 PR3 — checkout -b (fork via git)", () => {
     expect(created.workspace_id).toBe(wsId);
 
     // Commit-pinned to a fresh `my-worker` branch — NOT a role_versions row.
-    expect(created.current_version_id).toBeNull();
+    
     expect(created.current_commit_branch).toBe("my-worker");
     expect(created.current_commit_sha).toBe(result.sha);
     expect(result.branch).toBe("my-worker");
@@ -258,7 +258,7 @@ describe("#216 PR3 — checkout -b (fork via git)", () => {
     expect(committed.sha).not.toBe(fork.sha);
     const after = roleRow(h, "my-worker", wsId);
     expect(after.current_commit_sha).toBe(committed.sha);
-    expect(after.current_version_id).toBeNull();
+    
     expect(versionRowCount(h, after.id)).toBe(0);
 
     const contract = loadRoleContractAtCommit(cloneDirFor(wsId), committed.sha);

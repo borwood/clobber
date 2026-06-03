@@ -16,8 +16,6 @@ import type { WorkspaceSessionSummaries } from "./workspace-session-summaries.ts
 import type { SessionTokenStore } from "./session-token-store.ts";
 import type { AgentStatusStore } from "./agent-status-store.ts";
 import type { AgentStatusLogStore } from "./agent-status-log-store.ts";
-import type { RoleContractMigrator } from "./role-contract-compat.ts";
-import type { RoleContractRefusalStore } from "./role-contract-refusal-store.ts";
 import type { RoleContentCache } from "./role-content-cache.ts";
 import type { AgentQuestionStore } from "./agent-question-store.ts";
 import type { AgentQuestionWaiter } from "./agent-question-waiter.ts";
@@ -54,16 +52,9 @@ export interface ServerOptions {
   readonly sessionTokens: SessionTokenStore;
   readonly agentStatuses: AgentStatusStore;
   readonly agentStatusLog: AgentStatusLogStore;
-  // The #237 contract-gate refusal sink. Optional with an internal default
-  // (constructed from `db`) so existing callers are untouched.
-  readonly roleContractRefusals?: RoleContractRefusalStore;
   readonly agentQuestions: AgentQuestionStore;
   readonly agentQuestionWaiter: AgentQuestionWaiter;
   readonly askPollWindowMs?: number;
-  // The #237 contract-gate migration seam. Optional with an internal default
-  // (the empty migrator) so existing callers are untouched; #238 / a fork can
-  // inject a populated one.
-  readonly roleContractMigrator?: RoleContractMigrator;
   readonly runtimeProvider?: RuntimeProvider;
   readonly spawner: AgentSpawner;
   readonly hookUrl: string;
@@ -81,8 +72,7 @@ export interface ServerOptions {
   // (materialize + content cache); when absent, embodiment stays row-backed.
   readonly roleRepoDir?: string;
   // Test seam: inject a pre-built content cache. When provided, git
-  // materialization is skipped — the injected cache is used as-is. Consistent
-  // with the roleContractMigrator / roleContractRefusals override pattern.
+  // materialization is skipped — the injected cache is used as-is.
   readonly roleContentCache?: RoleContentCache;
   // #271 — the self.* habit resolver seam. Defaults to embodying the firing
   // session's role and reading its habits; injectable so a test can drive the

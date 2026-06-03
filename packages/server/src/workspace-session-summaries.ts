@@ -6,7 +6,6 @@ import {
   type AskQuestion,
   type LatestAgentStatus,
   type QuestionStatus,
-  type RoleVersionRef,
 } from "@clobber/shared";
 
 const AskQuestionsSchema = z.array(AskQuestionSchema);
@@ -33,8 +32,6 @@ export interface SessionSummary {
   readonly was_live_at_shutdown?: boolean;
   readonly latest_status?: LatestAgentStatus;
   readonly open_question?: OpenSessionQuestion;
-  readonly role_version?: RoleVersionRef;
-  readonly role_current_version?: RoleVersionRef;
   readonly model?: string;
   readonly effort?: string;
 }
@@ -60,20 +57,8 @@ interface Row {
   question_questions_json: string | null;
   question_asked_at: number | null;
   question_status: string | null;
-  pinned_version_id: string | null;
-  pinned_version_number: number | null;
-  current_version_id: string | null;
-  current_version_number: number | null;
   model: string | null;
   effort: string | null;
-}
-
-function pickVersionRef(
-  id: string | null,
-  version: number | null,
-): RoleVersionRef | undefined {
-  if (id === null || version === null) return undefined;
-  return { id, version };
 }
 
 function pickStatus(row: Row): LatestAgentStatus | undefined {
@@ -134,10 +119,6 @@ export function createWorkspaceSessionSummaries(db: Database): WorkspaceSessionS
       q.questions_json AS question_questions_json,
       q.asked_at       AS question_asked_at,
       q.status         AS question_status,
-      pv.id         AS pinned_version_id,
-      pv.version    AS pinned_version_number,
-      cv.id         AS current_version_id,
-      cv.version    AS current_version_number,
       s.model       AS model,
       s.effort      AS effort
     FROM sessions s
@@ -145,8 +126,6 @@ export function createWorkspaceSessionSummaries(db: Database): WorkspaceSessionS
     LEFT JOIN agents a          ON a.id          = s.agent_id
     LEFT JOIN events e          ON e.session_id  = s.id
     LEFT JOIN agent_statuses st ON st.session_id = s.id
-    LEFT JOIN role_versions pv  ON pv.id         = s.role_version_id
-    LEFT JOIN role_versions cv  ON cv.id         = r.current_version_id
     LEFT JOIN agent_questions q
       ON q.id = (
         SELECT id FROM agent_questions
@@ -165,14 +144,6 @@ export function createWorkspaceSessionSummaries(db: Database): WorkspaceSessionS
       return rows.map((row) => {
         const latest_status = pickStatus(row);
         const open_question = pickOpenQuestion(row);
-        const role_version = pickVersionRef(
-          row.pinned_version_id,
-          row.pinned_version_number,
-        );
-        const role_current_version = pickVersionRef(
-          row.current_version_id,
-          row.current_version_number,
-        );
         return {
           session_id: row.session_id,
           role_name: row.role_name,
@@ -185,8 +156,6 @@ export function createWorkspaceSessionSummaries(db: Database): WorkspaceSessionS
           ...(row.was_live_at_shutdown === 1 ? { was_live_at_shutdown: true } : {}),
           ...(latest_status === undefined ? {} : { latest_status }),
           ...(open_question === undefined ? {} : { open_question }),
-          ...(role_version === undefined ? {} : { role_version }),
-          ...(role_current_version === undefined ? {} : { role_current_version }),
           ...(row.model === null ? {} : { model: row.model }),
           ...(row.effort === null ? {} : { effort: row.effort }),
         };

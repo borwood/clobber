@@ -3,7 +3,6 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { PromptModuleDefinition, PromptModuleRef } from "@clobber/shared";
 import { buildHarness, teardown, turnProvider, type Harness } from "./_spawn-harness.ts";
-import { createRoleVersionStore } from "../src/role-version-store.ts";
 import { writeRoleVersion } from "./_role-version-fixture.ts";
 
 // #211 — layer B is a real seed subsystem: role-scoped, ordered, per-seed
@@ -19,9 +18,8 @@ function authorSeed(repoPath: string, name: string, definition: PromptModuleDefi
 }
 
 function setPromptModuleRefs(h: Harness, roleId: string, refs: readonly PromptModuleRef[]): void {
-  const versions = createRoleVersionStore(h.db);
   const role = h.roles.get(roleId)!;
-  const current = versions.get(role.current_version_id!)!;
+  const current = h.roleVersions.latestForRole(roleId)!;
   writeRoleVersion(h.db, role, current, { promptModuleRefs: refs });
 }
 

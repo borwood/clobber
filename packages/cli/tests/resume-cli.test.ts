@@ -93,7 +93,6 @@ beforeAll(async () => {
     agent_id: workerAgent.id,
     workspace_id: ws.id,
     role_id: workerRole.id,
-    role_version_id: workerRole.current_version_id,
     provider_thread_id: endedSessionId,
     pid: 2,
   });
