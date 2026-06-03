@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, openSync, readSync, closeSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 export interface ComposeOfficeContextOptions {
@@ -12,10 +12,18 @@ interface NoteEntry {
   readonly mtimeMs: number;
 }
 
+function readHead(path: string, bytes: number): Buffer {
+  const buf = Buffer.alloc(bytes);
+  const fd = openSync(path, "r");
+  const bytesRead = readSync(fd, buf, 0, bytes, 0);
+  closeSync(fd);
+  return buf.subarray(0, bytesRead);
+}
+
 function isNote(name: string, path: string): boolean {
   if (name.includes(":")) return false; // NTFS Alternate Data Stream (e.g. Zone.Identifier)
   if (name.startsWith(".")) return false; // dotfiles
-  const sample = readFileSync(path).subarray(0, 512);
+  const sample = readHead(path, 512);
   for (let i = 0; i < sample.length; i++) {
     if (sample[i] === 0x00) return false; // binary — NUL byte present
   }
@@ -52,8 +60,7 @@ function relativeTime(now: number, then: number): string {
 }
 
 function headPreview(path: string, previewBytes: number): string {
-  const buf = readFileSync(path);
-  const preview = buf.subarray(0, previewBytes).toString("utf8");
+  const preview = readHead(path, previewBytes).toString("utf8");
   if (preview.includes("\0")) {
     throw new Error(
       `office file preview contains arg-invalid NUL byte — delete ${path} from the agent's office to resume`,
