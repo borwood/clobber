@@ -15,7 +15,7 @@ import type { WorkspaceRoleStore } from "../workspace-role-store.ts";
 import type { TriggerScheduler } from "../trigger-scheduler.ts";
 import { patchRoleThroughPin, triggersRequirePersistent } from "../role-commit.ts";
 import { resolveRoleByIdOrName } from "../resolve-role.ts";
-import { embodyRole, rolePin } from "../embody-role.ts";
+import { roleWakeProgramNames } from "../embody-role.ts";
 
 interface WorkspaceRoleParams {
   wid: string;
@@ -120,13 +120,7 @@ export function registerWorkspaceRoleRoutes(
     }
     const assignments = workspaceRoles.listForWorkspace(request.params.wid);
     return assignments.map((a) => {
-      let bundle;
-      try {
-        bundle = embodyRole(a.role, rolePin(a.role), deps);
-      } catch {
-        bundle = null;
-      }
-      const wakePrograms = bundle?.wakePrograms.map((p) => p.name) ?? [];
+      const wakePrograms = roleWakeProgramNames(deps, a.role);
       return wakePrograms.length > 0 ? { ...a, wake_programs: wakePrograms } : a;
     });
   });

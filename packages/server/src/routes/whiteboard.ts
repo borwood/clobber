@@ -8,7 +8,7 @@ import type { SessionStore } from "../session-store.ts";
 import type { AgentRegistry } from "../agent-registry.ts";
 import type { AgentStatusStore } from "../agent-status-store.ts";
 import type { RoleContentCache } from "../role-content-cache.ts";
-import { embodyRole, rolePin, type RoleEmbodimentDeps } from "../embody-role.ts";
+import { roleWakeProgramNames, type RoleEmbodimentDeps } from "../embody-role.ts";
 import { officePathFor } from "../office-store.ts";
 import { peekOffice, type OfficePeek } from "../office-peek.ts";
 
@@ -134,9 +134,5 @@ export function registerWhiteboardRoutes(
 // `idle` (the universal built-in) followed by the role's declared wake-programs,
 // in order. The office affordance offers exactly these as the human's choices.
 function wakeProgramNamesFor(deps: RoleEmbodimentDeps, role: Role): string[] {
-  const names = [IDLE_WAKE_PROGRAM_NAME];
-  const bundle = embodyRole(role, rolePin(role), deps);
-  if (bundle === null) return names;
-  for (const program of bundle.wakePrograms) names.push(program.name);
-  return names;
+  return [IDLE_WAKE_PROGRAM_NAME, ...roleWakeProgramNames(deps, role)];
 }

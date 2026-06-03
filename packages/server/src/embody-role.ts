@@ -37,6 +37,15 @@ export function sessionPin(session: Session, role: Role): RolePin | null {
   return rolePin(role);
 }
 
+// The role's declared wake-program names, without the built-in `idle` prefix.
+// Returns an empty array when the role has no version/pin yet. Throws on
+// genuine embodiment failures (misconfigured git cache) — same policy as
+// embodyRole.
+export function roleWakeProgramNames(deps: RoleEmbodimentDeps, role: Role): string[] {
+  const bundle = embodyRole(role, rolePin(role), deps);
+  return bundle === null ? [] : bundle.wakePrograms.map((p) => p.name);
+}
+
 export function embodyRole(
   role: Role,
   pin: RolePin | null,
