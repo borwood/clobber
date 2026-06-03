@@ -208,4 +208,81 @@ describe("audit-row provenance — sink-side stamping", () => {
     // The role_version_id is still stamped — only git resolution is best-effort.
     expect(row!.role_version_id).toBe(rv.id);
   });
+
+  it("commit-pinned session stamps role_commit_sha + role_commit_branch; role_version_id is null (#486)", () => {
+    const repoDir = join(tmpDir, "repo");
+    mkdirSync(repoDir);
+    initGitRepo(repoDir);
+
+    const db = createDatabase(":memory:");
+    const workspaces = createWorkspaceStore(db);
+    const roles = createRoleStore(db);
+    const agents = createAgentStore(db);
+    const sessions = createSessionStore(db);
+    const statusLog = createAgentStatusLogStore(db);
+
+    const ws = workspaces.create({ name: "ws", repo_path: repoDir });
+    const role = roles.create({ name: "audit-commit-pin-role", persistent: true });
+    const agent = agents.create({ workspace_id: ws.id, role_id: role.id, label: "manager" });
+    const commitSha = "7b3f625900000000000000000000000000000000";
+    const session = sessions.create({
+      id: randomUUID(),
+      agent_id: agent.id,
+      workspace_id: ws.id,
+      role_id: role.id,
+      role_commit: { branch: "manager", sha: commitSha },
+      pid: 9999,
+    });
+
+    const row = statusLog.append({
+      agent_id: agent.id,
+      session_id: session.id,
+      kind: "status",
+      state: "working",
+      summary: "commit-pinned row",
+    });
+
+    expect(row.role_commit_sha).toBe(commitSha);
+    expect(row.role_commit_branch).toBe("manager");
+    expect(row.role_version_id).toBeNull();
+  });
+
+  it("version-pinned session stamps role_version_id; role_commit_sha is null — no regression (#486)", () => {
+    const repoDir = join(tmpDir, "repo");
+    mkdirSync(repoDir);
+    initGitRepo(repoDir);
+
+    const db = createDatabase(":memory:");
+    const workspaces = createWorkspaceStore(db);
+    const roles = createRoleStore(db);
+    const roleVersions = createRoleVersionStore(db);
+    const agents = createAgentStore(db);
+    const sessions = createSessionStore(db);
+    const statusLog = createAgentStatusLogStore(db);
+
+    const ws = workspaces.create({ name: "ws", repo_path: repoDir });
+    const role = roles.create({ name: "audit-version-pin-role", persistent: false });
+    const rv = roleVersions.create({ role_id: role.id, ...EMPTY_VERSION_INPUT });
+    const agent = agents.create({ workspace_id: ws.id, role_id: role.id, label: "worker" });
+    const session = sessions.create({
+      id: randomUUID(),
+      agent_id: agent.id,
+      workspace_id: ws.id,
+      role_id: role.id,
+      role_version_id: rv.id,
+      pid: 9999,
+    });
+
+    const row = statusLog.append({
+      agent_id: agent.id,
+      session_id: session.id,
+      kind: "status",
+      state: "working",
+      summary: "version-pinned row",
+    });
+
+    expect(row.role_version_id).toBe(rv.id);
+    expect(row.role_commit_sha).toBeNull();
+    expect(row.role_commit_branch).toBeNull();
+  });
 });

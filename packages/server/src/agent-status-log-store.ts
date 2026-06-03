@@ -1,6 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { readFileSync, existsSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { readLastMessageUuid, resolveGitProvenance } from "./audit-provenance-helpers.ts";
 
 export type AgentStatusLogKind =
   | "status"
@@ -37,6 +36,8 @@ export interface AgentStatusLogEntry {
   readonly commit: string | null;
   readonly branch: string | null;
   readonly role_version_id: string | null;
+  readonly role_commit_sha: string | null;
+  readonly role_commit_branch: string | null;
 }
 
 export interface ListForAgentOptions {
@@ -73,6 +74,8 @@ interface Row {
   commit: string | null;
   branch: string | null;
   role_version_id: string | null;
+  role_commit_sha: string | null;
+  role_commit_branch: string | null;
 }
 
 function rowToEntry(row: Row): AgentStatusLogEntry {
@@ -91,64 +94,17 @@ function rowToEntry(row: Row): AgentStatusLogEntry {
     commit: row.commit,
     branch: row.branch,
     role_version_id: row.role_version_id,
+    role_commit_sha: row.role_commit_sha,
+    role_commit_branch: row.role_commit_branch,
   };
 }
 
 interface SessionProvenanceRow {
   role_version_id: string | null;
+  role_commit_sha: string | null;
+  role_commit_branch: string | null;
   transcript_path: string | null;
   repo_path: string;
-}
-
-// Resolve the last message uuid from a JSONL transcript file. Returns null if
-// the file is absent, empty, or has no lines with a uuid field.
-function readLastMessageUuid(transcriptPath: string): string | null {
-  if (!existsSync(transcriptPath)) return null;
-  let lastUuid: string | null = null;
-  const text = readFileSync(transcriptPath, "utf8");
-  for (const raw of text.split("\n")) {
-    if (raw.length === 0) continue;
-    try {
-      const parsed = JSON.parse(raw) as unknown;
-      if (parsed !== null && typeof parsed === "object" && "uuid" in parsed) {
-        const uuid = (parsed as Record<string, unknown>).uuid;
-        if (typeof uuid === "string") lastUuid = uuid;
-      }
-    } catch {
-      // Skip malformed lines.
-    }
-  }
-  return lastUuid;
-}
-
-interface GitProvenance {
-  readonly commit: string;
-  readonly branch: string;
-}
-
-// Run git rev-parse HEAD and git branch --show-current on repoPath.
-// Best-effort: returns null on any failure (non-git dir, git not found, etc.).
-// Brennan approved this defensive path — provenance metadata must never drop
-// the audit row that carries it (#221).
-function resolveGitProvenance(repoPath: string): GitProvenance | null {
-  try {
-    const commitResult = spawnSync("git", ["-C", repoPath, "rev-parse", "HEAD"], {
-      encoding: "utf8",
-      timeout: 5000,
-    });
-    if (commitResult.status !== 0) return null;
-    const commit = commitResult.stdout.trim();
-
-    const branchResult = spawnSync(
-      "git",
-      ["-C", repoPath, "branch", "--show-current"],
-      { encoding: "utf8", timeout: 5000 },
-    );
-    const branch = branchResult.status === 0 ? branchResult.stdout.trim() : "";
-    return { commit, branch };
-  } catch {
-    return null;
-  }
 }
 
 const DEFAULT_LIST_LIMIT = 100;
@@ -157,8 +113,8 @@ export function createAgentStatusLogStore(db: Database): AgentStatusLogStore {
   const insertStmt = db.prepare(`
     INSERT INTO agent_status_log
       (agent_id, session_id, event_id, kind, state, summary, details_json, created_at,
-       "commit", branch, role_version_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       "commit", branch, role_version_id, role_commit_sha, role_commit_branch)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     RETURNING *
   `);
   const latestForSessionStmt = db.prepare(`
@@ -180,7 +136,8 @@ export function createAgentStatusLogStore(db: Database): AgentStatusLogStore {
     ORDER BY log.created_at DESC, log.id DESC
   `);
   const sessionProvenanceStmt = db.prepare(`
-    SELECT s.role_version_id, s.transcript_path, w.repo_path
+    SELECT s.role_version_id, s.role_commit_sha, s.role_commit_branch,
+           s.transcript_path, w.repo_path
     FROM sessions s
     JOIN workspaces w ON w.id = s.workspace_id
     WHERE s.id = ?
@@ -197,6 +154,8 @@ export function createAgentStatusLogStore(db: Database): AgentStatusLogStore {
       let commit: string | null = null;
       let branch: string | null = null;
       let roleVersionId: string | null = null;
+      let roleCommitSha: string | null = null;
+      let roleCommitBranch: string | null = null;
       let provenanceError: string | null = null;
       let transcriptAnchor: string | null = null;
 
@@ -206,6 +165,8 @@ export function createAgentStatusLogStore(db: Database): AgentStatusLogStore {
           provenanceError = `session not found: ${req.session_id}`;
         } else {
           roleVersionId = prov.role_version_id;
+          roleCommitSha = prov.role_commit_sha;
+          roleCommitBranch = prov.role_commit_branch;
 
           const git = resolveGitProvenance(prov.repo_path);
           if (git === null) {
@@ -243,6 +204,8 @@ export function createAgentStatusLogStore(db: Database): AgentStatusLogStore {
         commit,
         branch,
         roleVersionId,
+        roleCommitSha,
+        roleCommitBranch,
       ) as Row;
       return rowToEntry(row);
     },
