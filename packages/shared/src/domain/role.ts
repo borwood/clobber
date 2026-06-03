@@ -225,6 +225,7 @@ export type RoleVersionRef = z.infer<typeof RoleVersionRefSchema>;
 export const WorkspaceRoleAssignmentSchema = z.object({
   role: RoleSchema,
   max_concurrent: z.number().int().nonnegative(),
+  wake_programs: z.array(z.string().min(1)).optional(),
 });
 export type WorkspaceRoleAssignment = z.infer<typeof WorkspaceRoleAssignmentSchema>;
 
