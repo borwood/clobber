@@ -67,4 +67,55 @@ describe("composeOfficeContext", () => {
     expect(out).toContain("notes-real.md");
     expect(out).not.toContain("subdir");
   });
+
+  it("excludes ADS stream files (name contains ':') even when newest", () => {
+    writeNote("notes-real.md", "valid note", 5000);
+    // ADS file is newer (ageMs=0)
+    const adsPath = join(dir, "docker-fix.txt:Zone.Identifier");
+    writeFileSync(adsPath, "[ZoneTransfer]\r\nZoneId=3\x00");
+    const nowSec = Date.now() / 1000;
+    utimesSync(adsPath, nowSec, nowSec);
+
+    const out = composeOfficeContext(dir);
+    expect(out).not.toContain("Zone.Identifier");
+    expect(out).toContain("notes-real.md");
+    expect(out).toContain("preview:");
+    expect(out).not.toContain("\0");
+  });
+
+  it("excludes dotfiles even when newest", () => {
+    writeNote("notes-real.md", "valid note", 5000);
+    const dotPath = join(dir, ".hidden-state");
+    writeFileSync(dotPath, "hidden content");
+    const nowSec = Date.now() / 1000;
+    utimesSync(dotPath, nowSec, nowSec);
+
+    const out = composeOfficeContext(dir);
+    expect(out).not.toContain(".hidden-state");
+    expect(out).toContain("notes-real.md");
+  });
+
+  it("excludes binary files containing NUL bytes even when newest", () => {
+    writeNote("notes-real.md", "valid note", 5000);
+    // PNG-like header with NUL bytes
+    const binPath = join(dir, "image.png");
+    writeFileSync(binPath, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00]));
+    const nowSec = Date.now() / 1000;
+    utimesSync(binPath, nowSec, nowSec);
+
+    const out = composeOfficeContext(dir);
+    expect(out).not.toContain("image.png");
+    expect(out).toContain("notes-real.md");
+    expect(out).toContain("preview:");
+    expect(out).not.toContain("\0");
+  });
+
+  it("returns empty-office message when only non-note files are present", () => {
+    const adsPath = join(dir, "file.txt:Zone.Identifier");
+    writeFileSync(adsPath, "[ZoneTransfer]\r\nZoneId=3\x00");
+
+    const out = composeOfficeContext(dir);
+    expect(out).toContain("office is empty");
+    expect(out).not.toContain("\0");
+  });
 });
