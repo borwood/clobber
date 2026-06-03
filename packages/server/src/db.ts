@@ -15,6 +15,7 @@ import { migrateRoleCommitPin } from "./role-commit-pin-migration.ts";
 import { migrateWorkspaceTheme } from "./theme-migration.ts";
 import { migrateSessionModelEffort } from "./session-model-effort-migration.ts";
 import { migrateAuditRowProvenance } from "./audit-row-provenance-migration.ts";
+import { migrateRoleCommitProvenance } from "./role-commit-provenance-migration.ts";
 
 export function createDatabase(path: string): Database {
   const db = new Database(path);
@@ -42,6 +43,7 @@ export function createDatabase(path: string): Database {
   migrateWorkspaceTheme(db);
   migrateSessionModelEffort(db);
   migrateAuditRowProvenance(db);
+  migrateRoleCommitProvenance(db);
   return db;
 }
 

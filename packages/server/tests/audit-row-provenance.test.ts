@@ -242,8 +242,8 @@ describe("audit-row provenance — sink-side stamping", () => {
       summary: "commit-pinned row",
     });
 
-    expect((row as Record<string, unknown>).role_commit_sha).toBe(commitSha);
-    expect((row as Record<string, unknown>).role_commit_branch).toBe("manager");
+    expect(row.role_commit_sha).toBe(commitSha);
+    expect(row.role_commit_branch).toBe("manager");
     expect(row.role_version_id).toBeNull();
   });
 
@@ -282,7 +282,7 @@ describe("audit-row provenance — sink-side stamping", () => {
     });
 
     expect(row.role_version_id).toBe(rv.id);
-    expect((row as Record<string, unknown>).role_commit_sha).toBeNull();
-    expect((row as Record<string, unknown>).role_commit_branch).toBeNull();
+    expect(row.role_commit_sha).toBeNull();
+    expect(row.role_commit_branch).toBeNull();
   });
 });
