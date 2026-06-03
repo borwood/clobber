@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, openSync, readSync, closeSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 export interface ComposeOfficeContextOptions {
@@ -12,12 +12,32 @@ interface NoteEntry {
   readonly mtimeMs: number;
 }
 
+function readHead(path: string, bytes: number): Buffer {
+  const buf = Buffer.alloc(bytes);
+  const fd = openSync(path, "r");
+  const bytesRead = readSync(fd, buf, 0, bytes, 0);
+  closeSync(fd);
+  return buf.subarray(0, bytesRead);
+}
+
+function isNote(name: string, path: string): boolean {
+  if (name.includes(":")) return false; // NTFS Alternate Data Stream (e.g. Zone.Identifier)
+  if (name.startsWith(".")) return false; // dotfiles
+  const sample = readHead(path, 512);
+  for (let i = 0; i < sample.length; i++) {
+    if (sample[i] === 0x00) return false; // binary — NUL byte present
+  }
+  return true;
+}
+
 function listNotes(officeDir: string): readonly NoteEntry[] {
   const entries = readdirSync(officeDir, { withFileTypes: true });
   const notes: NoteEntry[] = [];
   for (const e of entries) {
     if (!e.isFile()) continue;
-    const stat = statSync(join(officeDir, e.name));
+    const filePath = join(officeDir, e.name);
+    if (!isNote(e.name, filePath)) continue;
+    const stat = statSync(filePath);
     notes.push({ name: e.name, mtimeMs: stat.mtimeMs });
   }
   notes.sort((a, b) => {
@@ -40,8 +60,13 @@ function relativeTime(now: number, then: number): string {
 }
 
 function headPreview(path: string, previewBytes: number): string {
-  const buf = readFileSync(path);
-  return buf.subarray(0, previewBytes).toString("utf8");
+  const preview = readHead(path, previewBytes).toString("utf8");
+  if (preview.includes("\0")) {
+    throw new Error(
+      `office file preview contains arg-invalid NUL byte — delete ${path} from the agent's office to resume`,
+    );
+  }
+  return preview;
 }
 
 export function composeOfficeContext(
