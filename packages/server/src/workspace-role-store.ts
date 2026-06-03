@@ -26,12 +26,9 @@ interface JoinedRow extends CeilingRow {
   role_permission_mode: string | null;
   role_persistent: number;
   role_workspace_id: string | null;
-  role_current_version_id: string | null;
   role_current_commit_branch: string | null;
   role_current_commit_sha: string | null;
   role_created_at: number;
-  current_version_number: number | null;
-  current_version_allowed_tools_json: string | null;
 }
 
 function rowToCeiling(row: CeilingRow): WorkspaceRoleCeiling {
@@ -47,14 +44,9 @@ function joinedRowToAssignment(row: JoinedRow): WorkspaceRoleAssignment {
   };
   if (row.role_description !== null) roleInput["description"] = row.role_description;
   if (row.role_permission_mode !== null) roleInput["permission_mode"] = row.role_permission_mode;
-  if (row.current_version_allowed_tools_json !== null) {
-    const tools = JSON.parse(row.current_version_allowed_tools_json) as readonly string[];
-    if (tools.length > 0) roleInput["allowed_tools"] = tools;
-  }
   if (row.role_workspace_id !== null) roleInput["workspace_id"] = row.role_workspace_id;
-  if (row.role_current_version_id !== null) roleInput["current_version_id"] = row.role_current_version_id;
   // #385 — surface the commit pin so the operator role picker can render a
-  // git-backed role's provenance (its current_version is absent by design).
+  // git-backed role's provenance.
   if (row.role_current_commit_branch !== null && row.role_current_commit_sha !== null) {
     roleInput["current_commit"] = {
       branch: row.role_current_commit_branch,
@@ -62,19 +54,7 @@ function joinedRowToAssignment(row: JoinedRow): WorkspaceRoleAssignment {
     };
   }
   const role: Role = RoleSchema.parse(roleInput);
-  const assignment: WorkspaceRoleAssignment = {
-    role,
-    max_concurrent: row.max_concurrent,
-    ...(row.role_current_version_id === null || row.current_version_number === null
-      ? {}
-      : {
-          current_version: {
-            id: row.role_current_version_id,
-            version: row.current_version_number,
-          },
-        }),
-  };
-  return assignment;
+  return { role, max_concurrent: row.max_concurrent };
 }
 
 export function createWorkspaceRoleStore(db: Database): WorkspaceRoleStore {
@@ -88,23 +68,19 @@ export function createWorkspaceRoleStore(db: Database): WorkspaceRoleStore {
   );
   const listStmt = db.prepare(`
     SELECT
-      wrc.workspace_id    AS workspace_id,
-      wrc.role_id         AS role_id,
-      wrc.max_concurrent  AS max_concurrent,
-      r.name              AS role_name,
-      r.description       AS role_description,
-      r.permission_mode   AS role_permission_mode,
-      r.persistent        AS role_persistent,
-      r.workspace_id      AS role_workspace_id,
-      r.current_version_id AS role_current_version_id,
-      r.current_commit_branch AS role_current_commit_branch,
-      r.current_commit_sha AS role_current_commit_sha,
-      r.created_at        AS role_created_at,
-      cv.version          AS current_version_number,
-      cv.allowed_tools_json AS current_version_allowed_tools_json
+      wrc.workspace_id         AS workspace_id,
+      wrc.role_id              AS role_id,
+      wrc.max_concurrent       AS max_concurrent,
+      r.name                   AS role_name,
+      r.description            AS role_description,
+      r.permission_mode        AS role_permission_mode,
+      r.persistent             AS role_persistent,
+      r.workspace_id           AS role_workspace_id,
+      r.current_commit_branch  AS role_current_commit_branch,
+      r.current_commit_sha     AS role_current_commit_sha,
+      r.created_at             AS role_created_at
     FROM workspace_role_ceilings wrc
     JOIN roles r ON r.id = wrc.role_id
-    LEFT JOIN role_versions cv ON cv.id = r.current_version_id
     WHERE wrc.workspace_id = ?
     ORDER BY r.created_at DESC, r.id DESC
   `);

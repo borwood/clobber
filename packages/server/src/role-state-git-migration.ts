@@ -63,22 +63,14 @@ export function migrateRoleStateToWorkspaceRepos(
       clonesEnsured += 1;
       continue;
     }
-    if (role.current_version_id === undefined) {
-      skipped += 1;
-      continue;
-    }
+    // After #491: no current_version_id to read content from. Try pinning
+    // null-workspace roles to their upstream default fork; workspace roles are skipped.
     if (role.workspace_id === undefined) {
       if (pinNullWorkspaceToDefault(role, deps)) pinnedToDefault += 1;
       else skipped += 1;
-      continue;
+    } else {
+      skipped += 1;
     }
-    migrateWorkspaceRole(role, role.workspace_id, {
-      roles: deps.roles,
-      roleVersions: deps.roleVersions,
-      workspaceRepos: deps.workspaceRepos,
-      forks: deps.upstream.forks,
-    });
-    migrated += 1;
   }
 
   return { migrated, pinnedToDefault, clonesEnsured, skipped };
@@ -94,32 +86,13 @@ function pinNullWorkspaceToDefault(role: Role, deps: RoleStateMigrationDeps): bo
   return true;
 }
 
-// Commit a row-backed workspace role's current version onto a flat `<name>`
-// branch (parented off the upstream `<name>-default` fork when one exists, so a
-// merge-base ancestor exists for #265), then repoint the DB pin to that sha. The
-// boot migration runs it across all roles; the #216 `checkout` verb runs it
-// lazily for one role on first edit, so the working-copy flow works whether or
-// not the global cutover (#395) has run.
+// #491 — row-backed roles are obsolete. This function is kept for compilation
+// compatibility only; it is unreachable in production (all roles are commit-pinned
+// before `migrateRoleStateToWorkspaceRepos` even runs).
 export function migrateWorkspaceRole(
-  role: Role,
-  workspaceId: string,
-  deps: WorkspaceRoleCutoverDeps,
+  _role: Role,
+  _workspaceId: string,
+  _deps: WorkspaceRoleCutoverDeps,
 ): void {
-  const version = deps.roleVersions.get(role.current_version_id!);
-  if (version === null) throw new Error(`role ${role.id} pins a missing version row`);
-  const contract = roleSnapshotToContract(version);
-
-  const dir = deps.workspaceRepos.dirFor(workspaceId);
-  const hasDefault = deps.forks.has(role.name);
-  // In the clone the upstream fork is the remote-tracking ref `upstream/<name>`;
-  // `base` is a local branch (the clone's default checkout).
-  const parentRef = hasDefault ? `upstream/${role.name}-default` : BASE_BRANCH;
-  const pin = commitContractOnBranch(
-    dir,
-    role.name,
-    parentRef,
-    contract,
-    `migrate ${role.name} (role ${role.id})`,
-  );
-  deps.roles.pinCommit(role.id, pin);
+  throw new Error("migrateWorkspaceRole: row-backed migration is obsolete after #491");
 }

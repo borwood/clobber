@@ -75,16 +75,9 @@ describe("workspace-role store", () => {
     expect(managerEntry!.max_concurrent).toBe(1);
     expect(workerEntry!.role).toEqual(b);
     expect(workerEntry!.max_concurrent).toBe(5);
-    if (a.current_version_id !== undefined) {
-      expect(managerEntry!.current_version).toBeDefined();
-      expect(managerEntry!.current_version!.id).toBe(a.current_version_id);
-      expect(managerEntry!.current_version!.version).toBe(1);
-    }
-    if (b.current_version_id !== undefined) {
-      expect(workerEntry!.current_version).toBeDefined();
-      expect(workerEntry!.current_version!.id).toBe(b.current_version_id);
-      expect(workerEntry!.current_version!.version).toBe(1);
-    }
+    // current_version_id and current_version removed in #491 (commit-backed roles)
+    expect(a.current_commit).toBeUndefined();
+    expect(b.current_commit).toBeUndefined();
 
     db.close();
   });

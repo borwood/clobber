@@ -10,11 +10,11 @@ export interface SeedWorkspaceRolesResult {
   readonly skipped: number;
 }
 
-// #385 — `forks` (role name → its fork tip in the upstream role repo) flips a
-// seeded role from row-backed to git-backed: present → the role is pinned to its
-// commit and embodiment reads content from the tree; absent → the pre-#349
-// `role_versions` row is written. Production always materializes the repo, so it
-// embodies from git by default; a no-repo run (an in-memory DB) keeps the row.
+// #385 — `forks` (role name → its fork tip in the upstream role repo) pins each
+// seeded role to its commit so embodiment reads content from the tree. Production
+// always materializes the repo and passes forks; a no-repo run (e.g. in-memory
+// test DB) writes a role_versions row as historical content — no pointer column
+// set; resolveCurrentRoleVersion reads it via latestForRole as a fallback.
 export function seedWorkspaceRoles(
   db: Database,
   workspaceId: string,
@@ -23,10 +23,9 @@ export function seedWorkspaceRoles(
   const versions = createRoleVersionStore(db);
 
   const insertRole = db.prepare(
-    `INSERT INTO roles (id, name, description, permission_mode, effort, model, persistent, workspace_id, current_version_id, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO roles (id, name, description, permission_mode, effort, model, persistent, workspace_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
-  const setVersion = db.prepare("UPDATE roles SET current_version_id = ? WHERE id = ?");
   const pinCommit = db.prepare(
     "UPDATE roles SET current_commit_branch = ?, current_commit_sha = ? WHERE id = ?",
   );
@@ -52,7 +51,6 @@ export function seedWorkspaceRoles(
     }
     const roleId = seedSingleRole(db, workspaceId, shipped, forks, {
       insertRole,
-      setVersion,
       pinCommit,
       upsertCeiling,
       createVersion: versions.create,
@@ -66,7 +64,6 @@ export function seedWorkspaceRoles(
 
 interface SeedDeps {
   readonly insertRole: ReturnType<Database["prepare"]>;
-  readonly setVersion: ReturnType<Database["prepare"]>;
   readonly pinCommit: ReturnType<Database["prepare"]>;
   readonly upsertCeiling: ReturnType<Database["prepare"]>;
   readonly createVersion: ReturnType<typeof createRoleVersionStore>["create"];
@@ -81,11 +78,11 @@ function seedSingleRole(
 ): string {
   const id = randomUUID();
   const created_at = Date.now();
-  const allowedTools = shipped.allowedTools;
   const description = shipped.manifest.description;
   const permissionMode = shipped.permissionMode === undefined ? null : shipped.permissionMode;
   const effort = shipped.manifest.effort === undefined ? null : shipped.manifest.effort;
   const model = shipped.manifest.model === undefined ? null : shipped.manifest.model;
+  const allowedTools = shipped.allowedTools;
 
   deps.insertRole.run(
     id,
@@ -96,7 +93,6 @@ function seedSingleRole(
     model,
     shipped.manifest.persistent ? 1 : 0,
     workspaceId,
-    null,
     created_at,
   );
 
@@ -111,13 +107,12 @@ function seedSingleRole(
     return id;
   }
 
+  // No-forks (no-repo) case: write a role_versions row from the shipped bundle so
+  // resolveCurrentRoleVersion can serve content via latestForRole. No pointer
+  // column is set — roles.current_version_id was dropped in #491. Production
+  // always has forks; this path is in-memory/test-only.
   const snapshot = snapshotShippedBundle({ loaded: shipped, allowedTools });
-  const version = deps.createVersion({
-    role_id: id,
-    version: 1,
-    ...snapshot,
-  });
-  deps.setVersion.run(version.id, id);
+  deps.createVersion({ role_id: id, version: 1, ...snapshot });
 
   return id;
 }

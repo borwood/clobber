@@ -33,7 +33,6 @@ interface Row {
   agent_id: string | null;
   workspace_id: string;
   role_id: string;
-  role_version_id: string | null;
   role_commit_branch: string | null;
   role_commit_sha: string | null;
   runtime_provider: string;
@@ -60,7 +59,6 @@ function rowToSession(row: Row): Session {
     started_at: row.started_at,
   };
   if (row.agent_id !== null) input["agent_id"] = row.agent_id;
-  if (row.role_version_id !== null) input["role_version_id"] = row.role_version_id;
   if (row.role_commit_branch !== null && row.role_commit_sha !== null) {
     input["role_commit"] = { branch: row.role_commit_branch, sha: row.role_commit_sha };
   }
@@ -83,8 +81,8 @@ function rowToSession(row: Row): Session {
 export function createSessionStore(db: Database): SessionStore {
   const insertStmt = db.prepare(
     `INSERT INTO sessions
-       (id, agent_id, workspace_id, role_id, role_version_id, role_commit_branch, role_commit_sha, runtime_provider, provider_thread_id, wake_program, label, pid, started_at, ended_at, transcript_path, composed_system_prompt, model, effort)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
+       (id, agent_id, workspace_id, role_id, role_commit_branch, role_commit_sha, runtime_provider, provider_thread_id, wake_program, label, pid, started_at, ended_at, transcript_path, composed_system_prompt, model, effort)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
   );
   const getStmt = db.prepare("SELECT * FROM sessions WHERE id = ?");
   const latestForAgentStmt = db.prepare(
@@ -130,8 +128,6 @@ export function createSessionStore(db: Database): SessionStore {
   return {
     create(req) {
       const started_at = Date.now();
-      const role_version_id =
-        req.role_version_id === undefined ? null : req.role_version_id;
       const role_commit_branch =
         req.role_commit === undefined ? null : req.role_commit.branch;
       const role_commit_sha =
@@ -153,7 +149,6 @@ export function createSessionStore(db: Database): SessionStore {
         req.agent_id,
         req.workspace_id,
         req.role_id,
-        role_version_id,
         role_commit_branch,
         role_commit_sha,
         runtime_provider,
@@ -176,7 +171,6 @@ export function createSessionStore(db: Database): SessionStore {
         pid: req.pid,
         started_at,
       };
-      if (req.role_version_id !== undefined) out["role_version_id"] = req.role_version_id;
       if (req.role_commit !== undefined) out["role_commit"] = req.role_commit;
       if (req.provider_thread_id !== undefined) {
         out["provider_thread_id"] = req.provider_thread_id;

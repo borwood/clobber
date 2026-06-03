@@ -216,12 +216,11 @@ describe("clobber CLI — roles fork", () => {
 
     const row = harness.db
       .prepare(
-        "SELECT current_version_id, current_commit_branch FROM roles WHERE id = ?",
+        "SELECT current_commit_branch FROM roles WHERE id = ?",
       )
       .get(parsed.role_id) as
-      | { current_version_id: string | null; current_commit_branch: string | null }
+      | { current_commit_branch: string | null }
       | null;
-    expect(row!.current_version_id).toBeNull();
     expect(row!.current_commit_branch).toBe("checkout-b-role");
   });
 

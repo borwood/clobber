@@ -143,19 +143,17 @@ function buildHarness(): Harness {
 
 // Create an ended, resumable worker session (agent survives end; provider
 // thread id present so the runtime can be resumed).
-function seedEndedWorkerSession(h: Harness, opts?: { roleVersionId?: string }): {
+function seedEndedWorkerSession(h: Harness): {
   sessionId: string;
   agentId: string;
 } {
   const agent = h.agents.create({ workspace_id: h.workspaceId, role_id: h.workerRoleId });
-  const role = h.roles.get(h.workerRoleId)!;
   const sessionId = randomUUID();
   h.sessions.create({
     id: sessionId,
     agent_id: agent.id,
     workspace_id: h.workspaceId,
     role_id: h.workerRoleId,
-    role_version_id: opts?.roleVersionId ?? role.current_version_id,
     provider_thread_id: sessionId,
     pid: 4242,
   });
@@ -176,7 +174,6 @@ afterEach(async () => {
 describe("POST /agent/sessions/:id/resume", () => {
   it("manager revives an ended session — clears ended_at, resumes the thread", async () => {
     const ended = seedEndedWorkerSession(h);
-    const pinned = h.sessions.get(ended.sessionId)!.role_version_id;
 
     const res = await h.server.inject({
       method: "POST",
@@ -191,8 +188,6 @@ describe("POST /agent/sessions/:id/resume", () => {
 
     const after = h.sessions.get(ended.sessionId)!;
     expect(after.ended_at).toBeUndefined();
-    // Pinned role version preserved across resume.
-    expect(after.role_version_id).toBe(pinned);
 
     // Resumed against the existing provider thread, not a fresh spawn.
     expect(h.resumeRequests.length).toBe(1);

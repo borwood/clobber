@@ -35,6 +35,10 @@ export interface RoleVersionSummary {
 export interface RoleVersionStore {
   create(input: CreateRoleVersionInput): RoleVersion;
   get(id: string): RoleVersion | null;
+  // Latest version row for a role, or null if none. Used by resolveCurrentRoleVersion
+  // as a fallback for unpinned roles (test scenarios only — production roles are
+  // always commit-pinned after #491).
+  latestForRole(roleId: string): RoleVersion | null;
   listForRole(roleId: string): RoleVersionSummary[];
   loadAsBundle(id: string): RoleBundleData | null;
 }
@@ -91,6 +95,9 @@ export function createRoleVersionStore(db: Database): RoleVersionStore {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const getStmt = db.prepare("SELECT * FROM role_versions WHERE id = ?");
+  const latestForRoleStmt = db.prepare(
+    "SELECT * FROM role_versions WHERE role_id = ? ORDER BY version DESC LIMIT 1",
+  );
   const listForRoleStmt = db.prepare(
     "SELECT id, version, created_at FROM role_versions WHERE role_id = ? ORDER BY version DESC",
   );
@@ -124,6 +131,11 @@ export function createRoleVersionStore(db: Database): RoleVersionStore {
 
     get(id) {
       const row = getStmt.get(id) as Row | null;
+      return row === null ? null : rowToVersion(row);
+    },
+
+    latestForRole(roleId) {
+      const row = latestForRoleStmt.get(roleId) as Row | null;
       return row === null ? null : rowToVersion(row);
     },
 

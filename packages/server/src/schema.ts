@@ -28,20 +28,19 @@ export const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_workspaces_created ON workspaces(created_at DESC);
 
   CREATE TABLE IF NOT EXISTS roles (
-    id                 TEXT    PRIMARY KEY,
-    name               TEXT    NOT NULL,
-    description        TEXT,
-    permission_mode    TEXT,
-    effort             TEXT,
-    model              TEXT,
-    persistent         INTEGER NOT NULL,
-    workspace_id       TEXT,
-    current_version_id TEXT,
+    id                    TEXT    PRIMARY KEY,
+    name                  TEXT    NOT NULL,
+    description           TEXT,
+    permission_mode       TEXT,
+    effort                TEXT,
+    model                 TEXT,
+    persistent            INTEGER NOT NULL,
+    workspace_id          TEXT,
     current_commit_branch TEXT,
     current_commit_sha    TEXT,
-    created_at         INTEGER NOT NULL,
+    created_at            INTEGER NOT NULL,
     UNIQUE (workspace_id, name),
-    FOREIGN KEY (workspace_id)       REFERENCES workspaces(id)     ON DELETE CASCADE
+    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
   );
   CREATE INDEX IF NOT EXISTS idx_roles_created   ON roles(created_at DESC);
 
@@ -90,29 +89,27 @@ export const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_agents_role      ON agents(role_id);
 
   CREATE TABLE IF NOT EXISTS sessions (
-    id              TEXT    PRIMARY KEY,
-    agent_id        TEXT,
-    workspace_id    TEXT    NOT NULL,
-    role_id         TEXT    NOT NULL,
-    role_version_id TEXT,
-    role_commit_branch TEXT,
-    role_commit_sha    TEXT,
-    runtime_provider  TEXT NOT NULL DEFAULT 'claude',
-    provider_thread_id TEXT,
-    wake_program    TEXT,
-    label           TEXT,
-    pid             INTEGER NOT NULL,
-    started_at      INTEGER NOT NULL,
-    ended_at        INTEGER,
-    transcript_path TEXT,
-    was_live_at_shutdown INTEGER NOT NULL DEFAULT 0,
+    id                     TEXT    PRIMARY KEY,
+    agent_id               TEXT,
+    workspace_id           TEXT    NOT NULL,
+    role_id                TEXT    NOT NULL,
+    role_commit_branch     TEXT,
+    role_commit_sha        TEXT,
+    runtime_provider       TEXT    NOT NULL DEFAULT 'claude',
+    provider_thread_id     TEXT,
+    wake_program           TEXT,
+    label                  TEXT,
+    pid                    INTEGER NOT NULL,
+    started_at             INTEGER NOT NULL,
+    ended_at               INTEGER,
+    transcript_path        TEXT,
+    was_live_at_shutdown   INTEGER NOT NULL DEFAULT 0,
     composed_system_prompt TEXT,
-    model  TEXT,
-    effort TEXT,
-    FOREIGN KEY (agent_id)        REFERENCES agents(id)        ON DELETE SET NULL,
-    FOREIGN KEY (workspace_id)    REFERENCES workspaces(id)    ON DELETE CASCADE,
-    FOREIGN KEY (role_id)         REFERENCES roles(id)         ON DELETE CASCADE,
-    FOREIGN KEY (role_version_id) REFERENCES role_versions(id) ON DELETE SET NULL
+    model                  TEXT,
+    effort                 TEXT,
+    FOREIGN KEY (agent_id)     REFERENCES agents(id)     ON DELETE SET NULL,
+    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+    FOREIGN KEY (role_id)      REFERENCES roles(id)      ON DELETE CASCADE
   );
   CREATE INDEX IF NOT EXISTS idx_sessions_workspace ON sessions(workspace_id, started_at DESC);
   CREATE INDEX IF NOT EXISTS idx_sessions_agent     ON sessions(agent_id);

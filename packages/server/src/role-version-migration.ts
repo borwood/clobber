@@ -215,31 +215,46 @@ function backfillRoleVersions(db: Database): void {
   // Pre-migrateRoleAllowedToolsColumnDrop databases have an `allowed_tools`
   // column on `roles`; post-drop (and fresh) databases do not. The select
   // adapts so the backfill still runs for the (rare) case of an unversioned
-  // legacy row that survived past the column drop — it just falls back to the
-  // shipped bundle's manifest defaults instead of the legacy column.
+  // legacy row that survived past the column drop.
+  //
+  // #491: `current_version_id` is dropped as an operational column. The backfill
+  // now only CREATES version rows (historical audit) without updating a pointer.
+  // Roles already owning a version row are skipped via the (role_id, version)
+  // UNIQUE guard; roles with a commit pin are also skipped.
   const versions = createRoleVersionStore(db);
   const hasLegacyTools = hasColumn(db, "roles", "allowed_tools");
-  // A commit-pinned (git-as-truth) role legitimately has current_version_id
-  // NULL while owning role_versions rows + a commit pin — it is NOT unversioned.
-  // Backfilling it would re-insert version 1 and trip the (role_id, version)
-  // UNIQUE. Exclude it. Guarded on column presence (pre-git-as-truth DBs lack
-  // the column, and have no commit-pinned roles anyway) to keep migration
-  // ordering safe.
+  const hasCurrentVersionId = hasColumn(db, "roles", "current_version_id");
   const commitGuard = hasColumn(db, "roles", "current_commit_sha")
     ? " AND current_commit_sha IS NULL"
     : "";
-  const sql =
-    (hasLegacyTools
-      ? "SELECT id, name, allowed_tools FROM roles WHERE current_version_id IS NULL"
-      : "SELECT id, name, NULL AS allowed_tools FROM roles WHERE current_version_id IS NULL") +
-    commitGuard;
+
+  // Always exclude roles that already own a version row (avoid UNIQUE trip on re-open).
+  const noVersionGuard = " AND NOT EXISTS (SELECT 1 FROM role_versions rv WHERE rv.role_id = r.id)";
+  let sql: string;
+  if (hasCurrentVersionId) {
+    // Pre-#491 DB: select roles without any version pointer and without a version row.
+    sql =
+      (hasLegacyTools
+        ? "SELECT r.id AS id, r.name AS name, r.allowed_tools AS allowed_tools FROM roles r WHERE r.current_version_id IS NULL"
+        : "SELECT r.id AS id, r.name AS name, NULL AS allowed_tools FROM roles r WHERE r.current_version_id IS NULL") +
+      commitGuard + noVersionGuard;
+  } else {
+    // Post-#491 DB: select roles without any version row at all.
+    sql =
+      (hasLegacyTools
+        ? "SELECT r.id AS id, r.name AS name, r.allowed_tools AS allowed_tools FROM roles r WHERE TRUE"
+        : "SELECT r.id AS id, r.name AS name, NULL AS allowed_tools FROM roles r WHERE TRUE") +
+      (commitGuard ? ` AND r.current_commit_sha IS NULL` : "") + noVersionGuard;
+  }
+
   const rows = db.prepare(sql).all() as UnversionedRow[];
   if (rows.length === 0) return;
 
-  const setVersion = db.prepare(
-    "UPDATE roles SET current_version_id = ? WHERE id = ?",
-  );
   const dropOrphan = db.prepare("DELETE FROM roles WHERE id = ?");
+  // Only update the pointer if the column still exists (pre-#491 DBs).
+  const setVersion = hasCurrentVersionId
+    ? db.prepare("UPDATE roles SET current_version_id = ? WHERE id = ?")
+    : null;
 
   for (const row of rows) {
     const loaded = loadRoleBundle(row.name);
@@ -257,6 +272,8 @@ function backfillRoleVersions(db: Database): void {
       version: 1,
       ...snapshot,
     });
-    setVersion.run(version.id, row.id);
+    if (setVersion !== null) {
+      setVersion.run(version.id, row.id);
+    }
   }
 }

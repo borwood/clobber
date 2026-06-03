@@ -17,8 +17,6 @@ import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import { createAgentRegistry } from "../src/agent-registry.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
 import { createAgentStatusLogStore } from "../src/agent-status-log-store.ts";
-import { createRoleContractRefusalStore } from "../src/role-contract-refusal-store.ts";
-import { EMPTY_ROLE_CONTRACT_MIGRATOR } from "../src/role-contract-compat.ts";
 import { createTriggerScheduler } from "../src/trigger-scheduler.ts";
 import { createTestClock, type TestClock } from "../src/clock.ts";
 import { writeRoleVersion } from "./_role-version-fixture.ts";
@@ -135,8 +133,6 @@ function makeHarness(initial: Date, opts: { roleRepoDir?: string } = {}): Harnes
     runtimeProvider: claudeRuntimeProvider,
     agentQuestions,
     agentQuestionWaiter,
-    roleContractRefusals: createRoleContractRefusalStore(db),
-    roleContractMigrator: EMPTY_ROLE_CONTRACT_MIGRATOR,
     onSessionEnded: () => {},
   };
 
@@ -193,8 +189,9 @@ async function flushAfter(clock: TestClock, ms: number): Promise<void> {
 }
 
 function getCurrentVersion(h: Harness, roleId: string): RoleVersion {
-  const role = h.roles.get(roleId) as Role;
-  return h.roleVersions.get(role.current_version_id!)!;
+  const v = h.roleVersions.latestForRole(roleId);
+  if (v === null) throw new Error(`no version row for role ${roleId}`);
+  return v;
 }
 
 function setManagerCron(h: Harness, expr: string): void {
@@ -414,10 +411,10 @@ describe("TriggerScheduler — cron firing", () => {
     // Force a worker version with a cron trigger directly via role-version-store
     // (Worker is ephemeral, so the API would 422; we go around it for the test.)
     const workerRole = h.roles.get(h.workerRoleId) as Role;
-    const cur = h.roleVersions.get(workerRole.current_version_id!)!;
-    const v2 = h.roleVersions.create({
+    const cur = h.roleVersions.latestForRole(workerRole.id)!;
+    h.roleVersions.create({
       role_id: workerRole.id,
-      version: 2,
+      version: cur.version + 1,
       framing: cur.framing,
       system_prompt: cur.system_prompt,
       skills_json: cur.skills_json,
@@ -429,9 +426,6 @@ describe("TriggerScheduler — cron firing", () => {
       wake_programs_json: cur.wake_programs_json,
       default_wake_program: cur.default_wake_program,
     });
-    h.db
-      .prepare("UPDATE roles SET current_version_id = ? WHERE id = ?")
-      .run(v2.id, workerRole.id);
 
     // Spawn an ephemeral worker agent
     h.agents.create({
@@ -1013,10 +1007,10 @@ describe("TriggerScheduler — workspace-open firing", () => {
   it("does not fire workspace-open triggers configured on ephemeral roles", async () => {
     const h = makeHarness(new Date("2026-05-05T09:00:00.000Z"));
     const workerRole = h.roles.get(h.workerRoleId) as Role;
-    const cur = h.roleVersions.get(workerRole.current_version_id!)!;
-    const v2 = h.roleVersions.create({
+    const cur = h.roleVersions.latestForRole(workerRole.id)!;
+    h.roleVersions.create({
       role_id: workerRole.id,
-      version: 2,
+      version: cur.version + 1,
       framing: cur.framing,
       system_prompt: cur.system_prompt,
       skills_json: cur.skills_json,
@@ -1028,9 +1022,6 @@ describe("TriggerScheduler — workspace-open firing", () => {
       wake_programs_json: cur.wake_programs_json,
       default_wake_program: cur.default_wake_program,
     });
-    h.db
-      .prepare("UPDATE roles SET current_version_id = ? WHERE id = ?")
-      .run(v2.id, workerRole.id);
     h.agents.create({
       workspace_id: h.workspaceId,
       role_id: h.workerRoleId,
@@ -1222,7 +1213,7 @@ describe("TriggerScheduler — commit-pinned manager wakes (#385)", () => {
         "manager: + webhook trigger",
       );
       h.roles.pinCommit(h.managerRoleId, { branch: fork.branch, sha: fork.sha });
-      expect(h.roles.get(h.managerRoleId)!.current_version_id).toBeUndefined();
+      expect(h.roles.get(h.managerRoleId)!.current_commit).toBeDefined();
 
       h.scheduler.start();
       const result = await h.scheduler.fireWebhook("/wake", { hello: "world" });

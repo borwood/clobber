@@ -132,26 +132,13 @@ export function repoDirOf(deps: RoleCheckoutDeps, role: Role): string {
 // commit-pinned is returned unchanged. Shared by openCheckout (edit the role)
 // and forkRole (branch a new role off it) so the cutover lives in one place.
 export function ensureCommitPinned(
-  deps: RoleCheckoutDeps,
-  cfg: RequiredConfig,
+  _deps: RoleCheckoutDeps,
+  _cfg: RequiredConfig,
   role: Role,
-  workspaceId: string,
+  _workspaceId: string,
 ): Role {
   if (role.current_commit !== undefined) return role;
-  if (role.current_version_id === undefined) {
-    throw new Error(`role ${role.name} has no pin`);
-  }
-  migrateWorkspaceRole(role, workspaceId, {
-    roles: deps.roles,
-    roleVersions: deps.roleVersions,
-    workspaceRepos: cfg.workspaceRepos,
-    forks: cfg.roleForks,
-  });
-  const refetched = deps.roles.get(role.id);
-  if (refetched === null || refetched.current_commit === undefined) {
-    throw new Error(`lazy cutover did not pin role ${role.name} to a commit`);
-  }
-  return refetched;
+  throw new Error(`role ${role.name} has no pin`);
 }
 
 export interface FileChange {

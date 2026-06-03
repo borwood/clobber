@@ -114,10 +114,17 @@ async function bootRowBacked(h: Harness): Promise<Booted> {
   const ws = wsRes.json() as { id: string };
 
   const managerRow = h.db
-    .prepare("SELECT id, current_version_id FROM roles WHERE name = ? AND workspace_id = ?")
-    .get("manager", ws.id) as { id: string; current_version_id: string | null } | null;
-  if (managerRow === null || managerRow.current_version_id === null) {
-    throw new Error("seeded manager is not row-backed");
+    .prepare("SELECT id FROM roles WHERE name = ? AND workspace_id = ?")
+    .get("manager", ws.id) as { id: string } | null;
+  if (managerRow === null) {
+    throw new Error("seeded manager role not found");
+  }
+  // After #491: get version id via latest version row (no current_version_id column).
+  const latestVersion = h.db
+    .prepare("SELECT id FROM role_versions WHERE role_id = ? ORDER BY version DESC LIMIT 1")
+    .get(managerRow.id) as { id: string } | null;
+  if (latestVersion === null) {
+    throw new Error("seeded manager has no version row");
   }
 
   const bootRes = await h.server.inject({
@@ -133,7 +140,7 @@ async function bootRowBacked(h: Harness): Promise<Booted> {
     managerToken: h.tokens.mint(boot.session_id),
     managerSessionId: boot.session_id,
     managerRoleId: managerRow.id,
-    managerVersionId: managerRow.current_version_id,
+    managerVersionId: latestVersion.id,
   };
 }
 

@@ -135,12 +135,12 @@ function pinToFork(h: Harness, id: string, name: string) {
 function pinState(
   h: Harness,
   id: string,
-): { branch: string | null; sha: string | null; versionId: string | null } {
+): { branch: string | null; sha: string | null } {
   return h.db
     .prepare(
-      "SELECT current_commit_branch AS branch, current_commit_sha AS sha, current_version_id AS versionId FROM roles WHERE id = ?",
+      "SELECT current_commit_branch AS branch, current_commit_sha AS sha FROM roles WHERE id = ?",
     )
-    .get(id) as { branch: string | null; sha: string | null; versionId: string | null };
+    .get(id) as { branch: string | null; sha: string | null };
 }
 
 function versionRowCount(h: Harness, id: string): number {
@@ -236,7 +236,9 @@ describe("#361 resolveCurrentRoleVersion read-view", () => {
       roleContentCache: createRoleContentCache(h.db),
       roleRepoDir,
     });
-    expect(view!.id).toBe(worker.current_version_id!);
+    // After #491: commit-pinned roles have no current_version_id; the view is synthetic.
+    expect(view).not.toBeNull();
+    expect(view!.system_prompt.length).toBeGreaterThan(0);
 
     await teardown(h);
   });
@@ -295,7 +297,6 @@ describe("#361 git-backed write-side through the routes", () => {
     const pin = pinState(h, managerId);
     expect(pin.sha).not.toBeNull();
     expect(pin.branch).toBe("manager");
-    expect(pin.versionId).toBeNull();
     expect(pin.sha).not.toBe(beforeSha);
     expect(versionRowCount(h, managerId)).toBe(0);
 
@@ -337,7 +338,6 @@ describe("#361 git-backed write-side through the routes", () => {
     const forkPin = pinState(h, fork.role_id);
     expect(forkPin.branch).toBe("worker-fork");
     expect(forkPin.sha).toBe(fork.sha);
-    expect(forkPin.versionId).toBeNull();
     const forkVersionRows = (
       h.db.prepare("SELECT COUNT(*) AS n FROM role_versions WHERE role_id = ?").get(fork.role_id) as {
         n: number;
@@ -352,7 +352,6 @@ describe("#361 git-backed write-side through the routes", () => {
 
     // The forked source stays git-backed — forking reads it, never demotes it.
     expect(pinState(h, workerId).sha).not.toBeNull();
-    expect(pinState(h, workerId).versionId).toBeNull();
 
     await teardown(h);
   });
@@ -382,7 +381,6 @@ describe("#361 git-backed write-side through the routes", () => {
     const pin = pinState(h, workerId);
     expect(pin.sha).toBe(body.sha);
     expect(pin.sha).not.toBe(beforeSha);
-    expect(pin.versionId).toBeNull();
     expect(versionRowCount(h, workerId)).toBe(0);
 
     // The patch applied AND every other field survived.
@@ -420,7 +418,6 @@ describe("#361 git-backed write-side through the routes", () => {
     const pin = pinState(h, managerId);
     expect(pin.sha).not.toBeNull();
     expect(pin.sha).not.toBe(beforeSha);
-    expect(pin.versionId).toBeNull();
     expect(versionRowCount(h, managerId)).toBe(0);
 
     const after = contractAt(wsId, pin.sha!);
@@ -456,7 +453,6 @@ describe("#361 git-backed write-side through the routes", () => {
 
     const pin = pinState(h, workerId);
     expect(pin.sha).not.toBeNull();
-    expect(pin.versionId).toBeNull();
     expect(versionRowCount(h, workerId)).toBe(0);
 
     const after = contractAt(wsId, pin.sha!);

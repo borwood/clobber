@@ -192,7 +192,6 @@ describe("git-as-truth wired into the live path (#349 pt2)", () => {
 
     const session = h.sessions.get(spawn.session_id)!;
     expect(session.role_commit).toEqual({ branch: fork.branch, sha: fork.sha });
-    expect(session.role_version_id).toBeUndefined();
 
     // Embodiment sourced the worker's content from the commit, not a role row.
     expect(h.calls).toHaveLength(1);

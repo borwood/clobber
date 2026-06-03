@@ -190,7 +190,6 @@ describe("GET /agent/roles", () => {
         id: string;
         name: string;
         persistent: boolean;
-        current_version_id: string;
         version: number;
         allowed_tools?: string[];
       }>;
@@ -202,7 +201,7 @@ describe("GET /agent/roles", () => {
     expect(byName.get("worker")!.persistent).toBe(false);
     expect(byName.get("manager")!.version).toBe(1);
     expect(byName.get("worker")!.version).toBe(1);
-    expect(typeof byName.get("manager")!.current_version_id).toBe("string");
+    // After #491: current_version_id is removed from RoleListEntry.
     expect(byName.get("manager")!.allowed_tools).toContain("Bash");
 
     for (const entry of body.roles) {

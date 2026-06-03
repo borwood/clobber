@@ -52,8 +52,8 @@ export function forkRole(
   const effort = source.effort === undefined ? null : source.effort;
   const model = source.model === undefined ? null : source.model;
   db.prepare(
-    `INSERT INTO roles (id, name, description, permission_mode, effort, model, persistent, workspace_id, current_version_id, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+    `INSERT INTO roles (id, name, description, permission_mode, effort, model, persistent, workspace_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     id,
     newName,

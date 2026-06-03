@@ -33,7 +33,8 @@ describe("role_versions.contract_version stamp (#236)", () => {
     const versions = createRoleVersionStore(db);
 
     const role = roles.create({ name: "manager", persistent: true });
-    const v1 = versions.get(role.current_version_id!)!;
+    // create() writes a v1 row; get it via latestForRole.
+    const v1 = versions.latestForRole(role.id)!;
 
     expect(v1.contract_version).toBe(ENGINE_CONTRACT_VERSION);
     db.close();

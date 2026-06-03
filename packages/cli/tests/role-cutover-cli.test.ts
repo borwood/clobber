@@ -7,6 +7,7 @@ import { createDatabase } from "@clobber/server/db.ts";
 import { createWorkspaceStore } from "@clobber/server/workspace-store.ts";
 import { createRoleStore } from "@clobber/server/role-store.ts";
 import { seedWorkspaceRoles } from "@clobber/server/seed-workspace-roles.ts";
+import { ensureUpstreamRoleRepo } from "@clobber/server/role-repo.ts";
 import { run } from "../src/main.ts";
 
 function collect(stream: PassThrough): { text: () => string } {
@@ -23,7 +24,7 @@ function buildLiveDb(dbPath: string): void {
   const ws = createWorkspaceStore(db).create({ name: "w", repo_path: "/tmp/x" });
   seedWorkspaceRoles(db, ws.id); // no forks → row-backed, unpinned
   const role = createRoleStore(db).findInWorkspace(ws.id, "manager")!;
-  expect(role.current_version_id).toBeDefined();
+  // After #491: current_version_id is gone; roles seeded without forks have no commit pin.
   expect(role.current_commit).toBeUndefined();
   db.close();
 }
@@ -81,18 +82,24 @@ describe("clobber role-cutover", () => {
     }
   });
 
-  it("dry-run reports HELD after a real --apply (every live row pinned + resolves on disk)", async () => {
+  it("dry-run reports HELD when roles are already commit-pinned (#491 production case)", async () => {
     const dir = mkdtempSync(join(tmpdir(), "clobber-cutover-cli-"));
     const dbPath = join(dir, "clobber.db");
+    const roleRepoDir = join(dir, "clobber-role-repo");
     try {
-      buildLiveDb(dbPath);
+      // Seed with forks (commit-pinned roles) — the production state after #491.
+      const db = createDatabase(dbPath);
+      const ws = createWorkspaceStore(db).create({ name: "w", repo_path: "/tmp/x" });
+      const upstream = ensureUpstreamRoleRepo(roleRepoDir);
+      seedWorkspaceRoles(db, ws.id, upstream.forks);
+      db.close();
 
-      // --apply migrates every row-backed role into its fork-repo and pins it.
+      // --apply on an already-pinned DB is a no-op: all roles pass the audit.
       const applied = await cutover(dbPath, ["--apply"]);
       expect(applied.code, applied.errText).toBe(0);
       expect(applied.text).toContain("INVARIANTS HELD");
 
-      // Now the live rows are genuinely pinned + resolvable: the audit holds.
+      // Subsequent dry-run also holds.
       const { code, text } = await cutover(dbPath, []);
       expect(code, text).toBe(0);
       expect(text).toContain("INVARIANTS HELD");
@@ -105,18 +112,24 @@ describe("clobber role-cutover", () => {
   it("dry-run FAILS when a row's pin sha is missing from the on-disk fork-repo (stale pin)", async () => {
     const dir = mkdtempSync(join(tmpdir(), "clobber-cutover-cli-"));
     const dbPath = join(dir, "clobber.db");
+    const roleRepoDir = join(dir, "clobber-role-repo");
     try {
-      buildLiveDb(dbPath);
+      // Seed with commit-pinned roles.
+      const dbSeed = createDatabase(dbPath);
+      const ws = createWorkspaceStore(dbSeed).create({ name: "w", repo_path: "/tmp/x" });
+      const upstream = ensureUpstreamRoleRepo(roleRepoDir);
+      seedWorkspaceRoles(dbSeed, ws.id, upstream.forks);
+      dbSeed.close();
       const applied = await cutover(dbPath, ["--apply"]);
       expect(applied.code, applied.errText).toBe(0);
 
       // Repoint manager to a well-formed but absent sha: the DB pin and the
       // on-disk repo are now out of sync — exactly #411's observed 500 case.
-      const db = createDatabase(dbPath);
-      db.prepare("UPDATE roles SET current_commit_sha = ? WHERE name = 'manager'").run(
+      const dbCorrupt = createDatabase(dbPath);
+      dbCorrupt.prepare("UPDATE roles SET current_commit_sha = ? WHERE name = 'manager'").run(
         "0".repeat(40),
       );
-      db.close();
+      dbCorrupt.close();
 
       const { code, text } = await cutover(dbPath, []);
       expect(code).toBe(1);

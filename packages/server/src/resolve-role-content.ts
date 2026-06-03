@@ -5,18 +5,10 @@ import type { RoleContentCache } from "./role-content-cache.ts";
 import type { RoleVersionStore } from "./role-version-store.ts";
 import { resolveRoleRepoDir, type RoleRepoResolution } from "./resolve-role-repo-dir.ts";
 
-// #361 git-as-truth — the read-view that unifies the two pin kinds. Pre-#349
-// every site read a role's content as `roleVersions.get(role.current_version_id)`;
-// a git-backed role has no row, so each of those sites would 500. This is the one
-// chokepoint they go through instead: it returns the role's current content as a
-// `RoleVersion` VIEW regardless of how the role is pinned.
-//
-//  - row-backed   → the persisted `role_versions` row, verbatim.
-//  - commit-backed → the tree at the pinned sha, read through the materialized
-//    cache and projected into the row shape via the #348 codec. This is a pure
-//    READ: nothing is persisted and the role is NOT demoted. Write verbs that
-//    want to mutate a git-backed role read the view here, then write a real row
-//    and demote separately.
+// #361 / #491 git-as-truth — the read-view for commit-pinned roles. Returns the
+// role's current content as a synthetic `RoleVersion` VIEW, reading from the git
+// tree at the pinned sha through the materialized cache and projecting into the
+// row shape via the #348 codec. A pure READ — nothing is persisted.
 //
 // The view's `id` is synthetic (the content lives in git, not a row) — load-
 // bearing readers (the command gate, the trigger scheduler, the write verbs)
@@ -53,8 +45,8 @@ export function resolveCurrentRoleVersion(
       created_at: 0,
     });
   }
-  if (role.current_version_id !== undefined) {
-    return deps.roleVersions.get(role.current_version_id);
-  }
-  return null;
+  // No commit pin — read the latest version row for this role. In production all
+  // roles are commit-pinned (#491), so this path is only reached in tests that
+  // configure role content via role_versions rows directly.
+  return deps.roleVersions.latestForRole(role.id);
 }

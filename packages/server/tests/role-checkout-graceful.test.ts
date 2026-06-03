@@ -177,7 +177,7 @@ describe("#411 roles checkout degrades to a reasoned 4xx, never a bare 500", () 
     // can't repair this; it must surface, not TypeError.
     h.db
       .prepare(
-        "UPDATE roles SET current_commit_sha = NULL, current_commit_branch = NULL, current_version_id = NULL WHERE id = ?",
+        "UPDATE roles SET current_commit_sha = NULL, current_commit_branch = NULL WHERE id = ?",
       )
       .run(workerId);
 

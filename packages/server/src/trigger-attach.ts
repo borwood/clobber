@@ -2,17 +2,14 @@ import type { Agent, ClobberPromptTag, Role, Workspace } from "@clobber/shared";
 import type {
   SpawnPipelineSuccess,
   SpawnPipelineNoBundleError,
-  SpawnPipelineRoleContractError,
 } from "./spawn-pipeline.ts";
 
 // The contract a trigger fire uses to materialize a session for an idle agent.
 // Shared by the scheduler (which supplies the implementation) and the dispatch
-// core (which invokes it). A fresh attach can also be refused by the #237
-// contract gate.
+// core (which invokes it).
 export type AttachOutcome =
   | SpawnPipelineSuccess
-  | SpawnPipelineNoBundleError
-  | SpawnPipelineRoleContractError;
+  | SpawnPipelineNoBundleError;
 export type AttachSessionFn = (input: {
   readonly workspace: Workspace;
   readonly role: Role;

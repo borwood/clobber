@@ -46,42 +46,45 @@ function rolesReferencingModule(
   workspaceId: string,
   moduleName: string,
 ): Array<{ id: string; name: string }> {
-  const rowBacked = db
-    .prepare(
-      `SELECT r.id, r.name, rv.seed_refs_json
-       FROM roles r
-       JOIN role_versions rv ON rv.id = r.current_version_id
-       WHERE r.workspace_id = ?`,
-    )
-    .all(workspaceId) as Array<{ id: string; name: string; seed_refs_json: string }>;
+  const result: Array<{ id: string; name: string }> = [];
 
-  const commitPinned = db
+  // Commit-pinned roles: read from the materialized contract cache.
+  const commitPinnedRows = db
     .prepare(
       `SELECT r.id, r.name, mrc.contract_json
        FROM roles r
        JOIN materialized_role_cache mrc ON mrc.sha = r.current_commit_sha
        WHERE r.workspace_id = ?
-         AND r.current_commit_sha IS NOT NULL
-         AND r.current_version_id IS NULL`,
+         AND r.current_commit_sha IS NOT NULL`,
     )
     .all(workspaceId) as Array<{ id: string; name: string; contract_json: string }>;
 
-  const result: Array<{ id: string; name: string }> = [];
-
-  for (const row of rowBacked) {
-    // Validate at the boundary (#431, flagged by the #459 adversary): parse the
-    // row-backed refs through the domain schema instead of a raw cast.
-    const refs = PromptModuleRefsSchema.parse(JSON.parse(row.seed_refs_json));
-    if (refs.some((r) => r.name === moduleName)) {
-      result.push({ id: row.id, name: row.name });
-    }
-  }
-
-  for (const row of commitPinned) {
+  for (const row of commitPinnedRows) {
     const contract = JSON.parse(row.contract_json) as {
       seedRefs?: Array<{ name: string }>;
     };
     if (contract.seedRefs?.some((r) => r.name === moduleName)) {
+      result.push({ id: row.id, name: row.name });
+    }
+  }
+
+  // Version-row-backed roles (test-only fallback, no commit pin): read the
+  // latest version row's seed_refs_json.
+  const rowBackedRows = db
+    .prepare(
+      `SELECT r.id, r.name, rv.seed_refs_json
+       FROM roles r
+       JOIN role_versions rv ON rv.id = (
+         SELECT rv2.id FROM role_versions rv2 WHERE rv2.role_id = r.id ORDER BY rv2.version DESC LIMIT 1
+       )
+       WHERE r.workspace_id = ?
+         AND r.current_commit_sha IS NULL`,
+    )
+    .all(workspaceId) as Array<{ id: string; name: string; seed_refs_json: string }>;
+
+  for (const row of rowBackedRows) {
+    const refs = PromptModuleRefsSchema.parse(JSON.parse(row.seed_refs_json));
+    if (refs.some((r) => r.name === moduleName)) {
       result.push({ id: row.id, name: row.name });
     }
   }

@@ -30,9 +30,6 @@ export function buildListEntry(
     version: version.version,
     created_at: role.created_at,
     allowed_tools: JSON.parse(version.allowed_tools_json) as string[],
-    ...(role.current_version_id === undefined
-      ? {}
-      : { current_version_id: role.current_version_id }),
     ...(role.current_commit === undefined ? {} : { current_commit: role.current_commit }),
     ...(role.description === undefined ? {} : { description: role.description }),
   };
@@ -59,10 +56,11 @@ export function buildDetail(
       prompt_module_refs: JSON.parse(version.seed_refs_json),
       wake_programs: JSON.parse(version.wake_programs_json),
       created_at: version.created_at,
-      // Surface the row id only for a row-backed role; a commit-pinned role's
-      // view id is synthetic, so it carries the commit ref instead.
-      ...(role.current_version_id === undefined ? {} : { id: version.id }),
-      ...(role.current_commit === undefined ? {} : { current_commit: role.current_commit }),
+      // For commit-pinned roles, surface the commit ref; for version-row-backed
+      // roles (test-only fallback), surface the real version row id.
+      ...(role.current_commit !== undefined
+        ? { current_commit: role.current_commit }
+        : { id: version.id }),
     },
     version_history: deps.roleVersions.listForRole(role.id),
     ...(role.description === undefined ? {} : { description: role.description }),

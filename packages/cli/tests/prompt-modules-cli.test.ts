@@ -390,17 +390,17 @@ describe("clobber prompt-modules delete", () => {
     writeWorkspaceModule("force-del-cli", { kind: "static", text: "x" });
     // Inject a ref into the manager's role_version
     const roleRow = harness.db
-      .prepare("SELECT id, current_version_id FROM roles WHERE workspace_id = ? AND name = ?")
-      .get(harness.wsId, "manager") as { id: string; current_version_id: string | null };
-    if (roleRow.current_version_id !== null) {
-      const current = harness.db
-        .prepare("SELECT seed_refs_json FROM role_versions WHERE id = ?")
-        .get(roleRow.current_version_id) as { seed_refs_json: string };
-      const refs = JSON.parse(current.seed_refs_json) as Array<{ name: string; enabled: boolean }>;
+      .prepare("SELECT id FROM roles WHERE workspace_id = ? AND name = ?")
+      .get(harness.wsId, "manager") as { id: string } | null;
+    const latestVersion = roleRow === null ? null : (harness.db
+      .prepare("SELECT id, seed_refs_json FROM role_versions WHERE role_id = ? ORDER BY version DESC LIMIT 1")
+      .get(roleRow.id) as { id: string; seed_refs_json: string } | null);
+    if (latestVersion !== null) {
+      const refs = JSON.parse(latestVersion.seed_refs_json) as Array<{ name: string; enabled: boolean }>;
       refs.push({ name: "force-del-cli", enabled: true });
       harness.db
         .prepare("UPDATE role_versions SET seed_refs_json = ? WHERE id = ?")
-        .run(JSON.stringify(refs), roleRow.current_version_id);
+        .run(JSON.stringify(refs), latestVersion.id);
     }
     const s = captureStreams();
     const code = await runWithExit({

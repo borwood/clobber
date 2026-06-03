@@ -104,12 +104,12 @@ function roleId(h: Harness, name: string, wsId: string): string {
 function pinState(
   h: Harness,
   id: string,
-): { branch: string | null; sha: string | null; versionId: string | null } {
+): { branch: string | null; sha: string | null } {
   return h.db
     .prepare(
-      "SELECT current_commit_branch AS branch, current_commit_sha AS sha, current_version_id AS versionId FROM roles WHERE id = ?",
+      "SELECT current_commit_branch AS branch, current_commit_sha AS sha FROM roles WHERE id = ?",
     )
-    .get(id) as { branch: string | null; sha: string | null; versionId: string | null };
+    .get(id) as { branch: string | null; sha: string | null };
 }
 
 function versionRowCount(h: Harness, id: string): number {
@@ -141,16 +141,18 @@ function demoteToRowBacked(h: Harness, workerId: string): void {
   const sha = pinState(h, workerId).sha;
   if (sha === null) throw new Error("expected a seeded commit pin to snapshot from");
   const snapshot = roleContractToSnapshot(loadRoleContractAtCommit(roleRepoDir, sha));
-  const created = createRoleVersionStore(h.db).create({
+  const maxRow = h.db.prepare("SELECT COALESCE(MAX(version), 0) AS m FROM role_versions WHERE role_id = ?").get(workerId) as { m: number };
+  createRoleVersionStore(h.db).create({
     role_id: workerId,
-    version: 1,
+    version: maxRow.m + 1,
     ...snapshot,
   });
+  // After #491: current_version_id column is dropped; clear commit pin only.
   h.db
     .prepare(
-      "UPDATE roles SET current_version_id = ?, current_commit_branch = NULL, current_commit_sha = NULL WHERE id = ?",
+      "UPDATE roles SET current_commit_branch = NULL, current_commit_sha = NULL WHERE id = ?",
     )
-    .run(created.id, workerId);
+    .run(workerId);
 }
 
 async function createWorkspace(h: Harness, repoPath: string): Promise<string> {
@@ -258,7 +260,7 @@ describe("#216 role working-copy commit (closes #396)", () => {
 
     // Still commit-pinned, pin advanced, NO version row minted (no demotion).
     const pin = pinState(h, workerId);
-    expect(pin.versionId).toBeNull();
+    
     expect(pin.sha).toBe(result.sha);
     expect(pin.sha).not.toBe(co.base_sha);
     expect(versionRowCount(h, workerId)).toBe(0);
@@ -318,23 +320,23 @@ describe("#216 role working-copy commit (closes #396)", () => {
     await teardown(h);
   });
 
-  it("checkout on a ROW-backed role lazily mints a branch and succeeds", async () => {
+  it("checkout on a role with no pin → 422 after #491 (lazy cutover removed)", async () => {
     const h = buildHarness();
     const wsId = await createWorkspace(h, repo.path);
     const workerId = roleId(h, "worker", wsId);
     const { token } = await spawnSession(h, wsId, roleId(h, "manager", wsId));
 
-    // Put the worker into the pre-#395 row-backed state, then check out.
+    // Put the worker into an unpinned state (no commit, no version pointer).
     demoteToRowBacked(h, workerId);
-    expect(pinState(h, workerId).versionId).not.toBeNull();
     expect(pinState(h, workerId).sha).toBeNull();
 
-    const co = await checkout(h, token, "worker");
-    // The lazy cutover re-pinned it to a commit.
-    const pin = pinState(h, workerId);
-    expect(pin.sha).not.toBeNull();
-    expect(pin.versionId).toBeNull();
-    expect(co.base_sha).toBe(pin.sha!);
+    // After #491: the lazy cutover is removed; checkout fails with 422.
+    const res = await h.server.inject({
+      method: "POST",
+      url: `/agent/roles/worker/checkout`,
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(res.statusCode).toBe(422);
 
     await teardown(h);
   });

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDatabase } from "../src/db.ts";
 import { createRoleStore } from "../src/role-store.ts";
+import { createRoleVersionStore } from "../src/role-version-store.ts";
 
 // Regression: createDatabase must add the contract_version column
 // (migrateRoleContractVersion) BEFORE migrateRoleVersions runs. migrateRoleVersions
@@ -19,12 +20,14 @@ describe("createDatabase migration ordering (existing-DB upgrade)", () => {
     const dir = mkdtempSync(join(tmpdir(), "clobber-mig-order-"));
     const path = join(dir, "existing.db");
     try {
-      // Build a full current-schema DB with a real role + version, then strip the
+      // Build a current-schema DB with a role + explicit version row, then strip the
       // contract_version column to simulate a database created before #236.
       const seed = createDatabase(path);
       const role = createRoleStore(seed).create({ name: "manager", persistent: true });
-      const versionId = role.current_version_id;
-      if (versionId === undefined) throw new Error("seeded role has no current_version_id");
+      // create() already writes a v1 row; get it via latestForRole.
+      const versions = createRoleVersionStore(seed);
+      const rv = versions.latestForRole(role.id)!;
+      const versionId = rv.id;
       seed.exec("ALTER TABLE role_versions DROP COLUMN contract_version");
       seed.close();
 

@@ -141,7 +141,7 @@ async function bootInWorkspace(h: Harness): Promise<Booted> {
 }
 
 describe("GET /workspaces/:wid/roles surfaces current_version for the picker", () => {
-  it("returns current_version: { id, version } for each seeded role", async () => {
+  it("returns roles without current_version (#491 — version pointer dropped)", async () => {
     const h = buildHarness();
     const boot = await bootInWorkspace(h);
 
@@ -151,16 +151,14 @@ describe("GET /workspaces/:wid/roles surfaces current_version for the picker", (
     });
     expect(list.statusCode).toBe(200);
     const assignments = list.json() as Array<{
-      role: { id: string; name: string; current_version_id?: string };
-      current_version?: { id: string; version: number };
+      role: { id: string; name: string };
+      current_version?: unknown;
       max_concurrent: number;
     }>;
     const worker = assignments.find((a) => a.role.name === "worker");
     expect(worker).toBeDefined();
-    expect(worker!.current_version).toBeDefined();
-    expect(worker!.current_version!.version).toBe(1);
-    expect(worker!.role.current_version_id).toBeDefined();
-    expect(worker!.current_version!.id).toBe(worker!.role.current_version_id!);
+    // After #491: current_version is no longer surfaced (no current_version_id pointer).
+    expect(worker!.current_version).toBeUndefined();
 
     await teardown(h);
   });
@@ -196,7 +194,7 @@ describe("GET /workspaces/:wid/roles surfaces current_version for the picker", (
 });
 
 describe("GET /sessions surfaces pinned + current role versions", () => {
-  it("includes role_version (pinned) and role_current_version on each session", async () => {
+  it("session summaries have no role_version or role_current_version (#491 — dropped)", async () => {
     const h = buildHarness();
     const boot = await bootInWorkspace(h);
 
@@ -208,19 +206,15 @@ describe("GET /sessions surfaces pinned + current role versions", () => {
     const sessions = list.json() as Array<{
       session_id: string;
       role_name: string;
-      role_version?: { id: string; version: number };
-      role_current_version?: { id: string; version: number };
+      role_version?: unknown;
+      role_current_version?: unknown;
     }>;
     expect(sessions.length).toBeGreaterThan(0);
     const managerSession = sessions.find((s) => s.role_name === "manager");
     expect(managerSession).toBeDefined();
-    expect(managerSession!.role_version).toBeDefined();
-    expect(managerSession!.role_version!.version).toBe(1);
-    expect(managerSession!.role_current_version).toBeDefined();
-    expect(managerSession!.role_current_version!.version).toBe(1);
-    expect(managerSession!.role_version!.id).toBe(
-      managerSession!.role_current_version!.id,
-    );
+    // After #491: version pins on sessions are removed from session summaries.
+    expect(managerSession!.role_version).toBeUndefined();
+    expect(managerSession!.role_current_version).toBeUndefined();
 
     await teardown(h);
   });
