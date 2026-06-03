@@ -163,4 +163,97 @@ describe("agent question store", () => {
     expect(deps.questions.get(created.id)).toBeNull();
     deps.db.close();
   });
+
+  it("listForAgent returns answered questions across sessions for one agent, newest first", () => {
+    const deps = open();
+    const ws = deps.workspaces.create({ name: "ws-list", repo_path: "/r" });
+    const role = deps.roles.create({ name: "r-list", persistent: false });
+    const agent = deps.agents.create({ workspace_id: ws.id, role_id: role.id });
+    deps.sessions.create({
+      id: "sA",
+      agent_id: agent.id,
+      workspace_id: ws.id,
+      role_id: role.id,
+      pid: 1,
+    });
+    deps.sessions.create({
+      id: "sB",
+      agent_id: agent.id,
+      workspace_id: ws.id,
+      role_id: role.id,
+      pid: 2,
+    });
+
+    const qa = deps.questions.create({ session_id: "sA", questions: [q("a?")] });
+    const qb = deps.questions.create({ session_id: "sB", questions: [q("b?")] });
+    deps.questions.answer(qa.id, "answer-a");
+    deps.questions.answer(qb.id, "answer-b");
+
+    const answered = deps.questions.listForAgent(agent.id, { status: "answered" });
+
+    expect(answered).toHaveLength(2);
+    expect(answered[0]!.asked_at).toBeGreaterThanOrEqual(answered[1]!.asked_at);
+    expect(answered.map((q) => q.id).sort()).toEqual([qa.id, qb.id].sort());
+    expect(answered.find((q) => q.id === qa.id)!.answer).toBe("answer-a");
+    expect(answered.find((q) => q.id === qb.id)!.answer).toBe("answer-b");
+
+    // no regression
+    expect(deps.questions.get(qa.id)!.status).toBe("answered");
+    expect(deps.questions.getOpenForSession("sA")).toBeNull();
+    deps.db.close();
+  });
+
+  it("listForAgent with no status filter returns all statuses for agent", () => {
+    const deps = open();
+    const ws = deps.workspaces.create({ name: "ws-list2", repo_path: "/r" });
+    const role = deps.roles.create({ name: "r-list2", persistent: false });
+    const agent = deps.agents.create({ workspace_id: ws.id, role_id: role.id });
+    deps.sessions.create({
+      id: "sC",
+      agent_id: agent.id,
+      workspace_id: ws.id,
+      role_id: role.id,
+      pid: 1,
+    });
+
+    const q1 = deps.questions.create({ session_id: "sC", questions: [q("pending?")] });
+    const q2 = deps.questions.create({ session_id: "sC", questions: [q("answered?")] });
+    deps.questions.answer(q2.id, "yes");
+
+    const all = deps.questions.listForAgent(agent.id);
+
+    expect(all).toHaveLength(2);
+    expect(all.map((q) => q.id).sort()).toEqual([q1.id, q2.id].sort());
+    deps.db.close();
+  });
+
+  it("listForAgent does not return another agent's questions", () => {
+    const deps = open();
+    const ws = deps.workspaces.create({ name: "ws-list3", repo_path: "/r" });
+    const role = deps.roles.create({ name: "r-list3", persistent: false });
+    const agent1 = deps.agents.create({ workspace_id: ws.id, role_id: role.id });
+    const agent2 = deps.agents.create({ workspace_id: ws.id, role_id: role.id });
+    deps.sessions.create({
+      id: "sD",
+      agent_id: agent1.id,
+      workspace_id: ws.id,
+      role_id: role.id,
+      pid: 1,
+    });
+    deps.sessions.create({
+      id: "sE",
+      agent_id: agent2.id,
+      workspace_id: ws.id,
+      role_id: role.id,
+      pid: 2,
+    });
+
+    deps.questions.create({ session_id: "sD", questions: [q("agent1?")] });
+    const qe = deps.questions.create({ session_id: "sE", questions: [q("agent2?")] });
+    deps.questions.answer(qe.id, "ok");
+
+    const agent1Answered = deps.questions.listForAgent(agent1.id, { status: "answered" });
+    expect(agent1Answered).toHaveLength(0);
+    deps.db.close();
+  });
 });

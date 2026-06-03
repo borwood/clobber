@@ -12,10 +12,15 @@ export interface CreateAgentQuestionRequest {
   readonly questions: readonly AskQuestion[];
 }
 
+export interface ListAgentQuestionsFilter {
+  readonly status?: QuestionStatus;
+}
+
 export interface AgentQuestionStore {
   create(req: CreateAgentQuestionRequest): AgentQuestion;
   get(id: string): AgentQuestion | null;
   getOpenForSession(sessionId: string): AgentQuestion | null;
+  listForAgent(agentId: string, filter?: ListAgentQuestionsFilter): readonly AgentQuestion[];
   answer(id: string, answer: string): boolean;
   answerLate(id: string, answer: string): boolean;
   timeout(id: string): boolean;
@@ -79,6 +84,18 @@ export function createAgentQuestionStore(db: Database): AgentQuestionStore {
   const listPendingForSessionStmt = db.prepare(
     "SELECT id FROM agent_questions WHERE session_id = ? AND status = 'pending'",
   );
+  const listForAgentStmt = db.prepare(`
+    SELECT aq.* FROM agent_questions aq
+    JOIN sessions s ON aq.session_id = s.id
+    WHERE s.agent_id = ?
+    ORDER BY aq.asked_at DESC, aq.id DESC
+  `);
+  const listForAgentWithStatusStmt = db.prepare(`
+    SELECT aq.* FROM agent_questions aq
+    JOIN sessions s ON aq.session_id = s.id
+    WHERE s.agent_id = ? AND aq.status = ?
+    ORDER BY aq.asked_at DESC, aq.id DESC
+  `);
   const cancelAllForSessionStmt = db.prepare(`
     UPDATE agent_questions
        SET status = 'cancelled', answered_at = ?
@@ -110,6 +127,15 @@ export function createAgentQuestionStore(db: Database): AgentQuestionStore {
     getOpenForSession(sessionId) {
       const row = getOpenForSessionStmt.get(sessionId) as Row | null;
       return row === null ? null : rowToQuestion(row);
+    },
+
+    listForAgent(agentId, filter) {
+      if (filter?.status !== undefined) {
+        const rows = listForAgentWithStatusStmt.all(agentId, filter.status) as Row[];
+        return rows.map(rowToQuestion);
+      }
+      const rows = listForAgentStmt.all(agentId) as Row[];
+      return rows.map(rowToQuestion);
     },
 
     answer(id, answer) {
