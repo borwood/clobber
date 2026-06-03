@@ -28,6 +28,9 @@ export function SpawnView() {
         <SpawnPanel
           workspaceId={w.activeWorkspaceId}
           roleId={w.roleId}
+          wakePrograms={
+            w.assignments.find((a) => a.role.id === w.roleId)?.wake_programs ?? []
+          }
           onSpawned={(s) => w.focusSession(s.session_id)}
         />
       </div>

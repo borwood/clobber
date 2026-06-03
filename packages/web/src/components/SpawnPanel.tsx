@@ -1,13 +1,15 @@
 import { useState } from "react";
-import { api, type EffortLevel, type SpawnResponse } from "../api.ts";
+import { api, type EffortLevel, type Model, type SpawnResponse } from "../api.ts";
 
 interface Props {
   readonly workspaceId: string;
   readonly roleId: string | null;
+  readonly wakePrograms: readonly string[];
   readonly onSpawned: (s: SpawnResponse) => void;
 }
 
 type EffortChoice = EffortLevel | "default";
+type ModelChoice = Model | "default";
 
 const EFFORT_CHOICES: readonly EffortChoice[] = [
   "default",
@@ -18,12 +20,20 @@ const EFFORT_CHOICES: readonly EffortChoice[] = [
   "max",
 ];
 
-export function SpawnPanel({ workspaceId, roleId, onSpawned }: Props) {
+const MODEL_CHOICES: readonly ModelChoice[] = ["default", "opus", "sonnet", "haiku"];
+
+const IDLE_WAKE_PROGRAM = "idle";
+
+export function SpawnPanel({ workspaceId, roleId, wakePrograms, onSpawned }: Props) {
   const [prompt, setPrompt] = useState("");
   const [label, setLabel] = useState("");
   const [effort, setEffort] = useState<EffortChoice>("default");
+  const [model, setModel] = useState<ModelChoice>("default");
+  const [wakeProgram, setWakeProgram] = useState<string>(IDLE_WAKE_PROGRAM);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const wakeProgramChoices: readonly string[] = [IDLE_WAKE_PROGRAM, ...wakePrograms];
 
   async function submit() {
     if (roleId === null) return;
@@ -39,11 +49,15 @@ export function SpawnPanel({ workspaceId, roleId, onSpawned }: Props) {
         prompt,
         label: trimmedLabel,
         ...(effort === "default" ? {} : { effort }),
+        ...(model === "default" ? {} : { model }),
+        ...(wakeProgram === IDLE_WAKE_PROGRAM ? {} : { wake_program: wakeProgram }),
       });
       onSpawned(res);
       setPrompt("");
       setLabel("");
       setEffort("default");
+      setModel("default");
+      setWakeProgram(IDLE_WAKE_PROGRAM);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -101,6 +115,46 @@ export function SpawnPanel({ workspaceId, roleId, onSpawned }: Props) {
           className="w-full px-3 py-2 bg-surface border border-border rounded text-sm focus:outline-none focus:border-border-strong"
         >
           {EFFORT_CHOICES.map((choice) => (
+            <option key={choice} value={choice}>
+              {choice}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="block">
+        <span className="block text-xs text-text-muted mb-1">
+          model{" "}
+          <span className="text-text-faint">
+            (default = role's configured model)
+          </span>
+        </span>
+        <select
+          value={model}
+          onChange={(e) => setModel(e.target.value as ModelChoice)}
+          className="w-full px-3 py-2 bg-surface border border-border rounded text-sm focus:outline-none focus:border-border-strong"
+        >
+          {MODEL_CHOICES.map((choice) => (
+            <option key={choice} value={choice}>
+              {choice}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="block">
+        <span className="block text-xs text-text-muted mb-1">
+          wake program{" "}
+          <span className="text-text-faint">
+            (idle = role's default opening move)
+          </span>
+        </span>
+        <select
+          value={wakeProgram}
+          onChange={(e) => setWakeProgram(e.target.value)}
+          className="w-full px-3 py-2 bg-surface border border-border rounded text-sm focus:outline-none focus:border-border-strong"
+        >
+          {wakeProgramChoices.map((choice) => (
             <option key={choice} value={choice}>
               {choice}
             </option>

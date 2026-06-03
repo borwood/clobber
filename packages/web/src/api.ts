@@ -104,6 +104,7 @@ export interface SpawnRequest {
   readonly label?: string;
   readonly effort?: EffortLevel;
   readonly model?: Model;
+  readonly wake_program?: string;
 }
 
 export interface SpawnResponse {

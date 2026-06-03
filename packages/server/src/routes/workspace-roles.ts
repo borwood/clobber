@@ -15,6 +15,7 @@ import type { WorkspaceRoleStore } from "../workspace-role-store.ts";
 import type { TriggerScheduler } from "../trigger-scheduler.ts";
 import { patchRoleThroughPin, triggersRequirePersistent } from "../role-commit.ts";
 import { resolveRoleByIdOrName } from "../resolve-role.ts";
+import { embodyRole, rolePin } from "../embody-role.ts";
 
 interface WorkspaceRoleParams {
   wid: string;
@@ -117,7 +118,17 @@ export function registerWorkspaceRoleRoutes(
       reply.code(404);
       return { error: "workspace not found" };
     }
-    return workspaceRoles.listForWorkspace(request.params.wid);
+    const assignments = workspaceRoles.listForWorkspace(request.params.wid);
+    return assignments.map((a) => {
+      let bundle;
+      try {
+        bundle = embodyRole(a.role, rolePin(a.role), deps);
+      } catch {
+        bundle = null;
+      }
+      const wakePrograms = bundle?.wakePrograms.map((p) => p.name) ?? [];
+      return wakePrograms.length > 0 ? { ...a, wake_programs: wakePrograms } : a;
+    });
   });
 
   app.delete<{ Params: WorkspaceRoleParams }>(
