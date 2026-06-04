@@ -49,13 +49,21 @@ export interface SpawnPipelineDeps {
 export interface SpawnPipelineInput {
   readonly workspace: Workspace;
   readonly role: Role;
-  readonly prompt: string;
+  // The caller's opening message. For the `custom` built-in this becomes the
+  // kick; for named/default programs the wake-program's own kick takes over and
+  // the prompt is unused. Absent = no kick (idle/boot-and-wait behavior).
+  readonly prompt?: string;
   // Provenance for the caller's prompt. Defaults to `spawn-prompt` (the /spawn
   // route, briefing/`--prompt` path); trigger fires override to `trigger` with
   // the trigger-kind in `attrs.via`.
   readonly promptTag?: ClobberPromptTag;
   readonly label: string;
+  // "default" resolves to the role's declared default_wake_program (same as
+  // omitting the field). Named programs and built-ins ("idle", "custom", "cycle")
+  // are passed through to resolveWakeProgram.
   readonly wakeProgram?: string;
+  // Caller-supplied layer-C addon for the `custom` built-in (#501).
+  readonly systemAddon?: string;
   readonly briefing?: BriefingPacket;
   readonly effortOverride?: EffortLevel;
   readonly modelOverride?: Model;
@@ -92,18 +100,21 @@ export async function executeSpawn(
   deps: SpawnPipelineDeps,
   input: SpawnPipelineInput,
 ): Promise<SpawnPipelineResult> {
-  const { workspace, role, prompt, label, briefing, effortOverride, modelOverride } = input;
+  const { workspace, role, prompt, label, briefing, effortOverride, modelOverride, systemAddon } = input;
   const promptTag: ClobberPromptTag = input.promptTag ?? { kind: "spawn-prompt" };
 
   const capacity = checkCapacity(deps, workspace, role);
   if (capacity !== null) return capacity;
 
   // Surface 1 (#213): the spawn wake-program is a selector with a default. When
-  // the caller selects nothing, the role's declared `default_wake_program` is
-  // its opening move (the worker's `task`); a role that declares none falls
-  // through to idle (the manager — so #215's idle-default is already in place
-  // for spawns, and only the trigger/office surfaces remain for it to flip).
-  const wakeProgram = input.wakeProgram ?? defaultWakeProgramFor(deps, role);
+  // the caller selects nothing (undefined) OR explicitly sends "default", the
+  // role's declared `default_wake_program` is its opening move (the worker's
+  // `task`); a role that declares none falls through to idle. "default" is the
+  // explicit selector the web composer sends (#501); legacy callers still use
+  // undefined and get the same behavior.
+  const wakeProgram = (input.wakeProgram === undefined || input.wakeProgram === "default")
+    ? defaultWakeProgramFor(deps, role)
+    : input.wakeProgram;
 
   const agent = deps.agents.create({
     workspace_id: workspace.id,
@@ -117,6 +128,7 @@ export async function executeSpawn(
     prompt,
     promptTag,
     ...(wakeProgram === undefined ? {} : { wakeProgram }),
+    ...(systemAddon === undefined ? {} : { systemAddon }),
     ...(briefing === undefined ? {} : { briefing }),
     ...(effortOverride === undefined ? {} : { effortOverride }),
     ...(modelOverride === undefined ? {} : { modelOverride }),
@@ -139,6 +151,8 @@ export interface AttachSessionInput {
   readonly prompt: string | undefined;
   readonly promptTag?: ClobberPromptTag;
   readonly wakeProgram?: string;
+  // Caller-supplied layer-C addon for the `custom` built-in (#501).
+  readonly systemAddon?: string;
   readonly briefing?: BriefingPacket;
   readonly effortOverride?: EffortLevel;
   readonly modelOverride?: Model;
@@ -148,7 +162,7 @@ export async function attachSessionToAgent(
   deps: SpawnPipelineDeps,
   input: AttachSessionInput,
 ): Promise<SpawnPipelineSuccess | SpawnPipelineNoBundleError> {
-  const { workspace, role, agent, prompt, promptTag, wakeProgram, briefing, effortOverride, modelOverride } = input;
+  const { workspace, role, agent, prompt, promptTag, wakeProgram, systemAddon, briefing, effortOverride, modelOverride } = input;
   const sessionId = randomUUID();
   const pin = rolePin(role);
 
@@ -162,6 +176,7 @@ export async function attachSessionToAgent(
     prompt,
     ...(promptTag === undefined ? {} : { promptTag }),
     ...(wakeProgram === undefined ? {} : { wakeProgram }),
+    ...(systemAddon === undefined ? {} : { systemAddon }),
     ...(briefing === undefined ? {} : { briefing }),
     ...(effortOverride === undefined ? {} : { effortOverride }),
     ...(modelOverride === undefined ? {} : { modelOverride }),

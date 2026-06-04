@@ -5,7 +5,7 @@ import type {
   RuntimeSpawnOptions,
 } from "@clobber/runtime";
 import type { Agent, BootContext, BriefingPacket, ClobberPromptTag, EffortLevel, Model, Role, Workspace } from "@clobber/shared";
-import { CALLER_SUPPLIED_KICK, resolveWakeProgram } from "@clobber/shared";
+import { CALLER_SUPPLIED_KICK, CALLER_SUPPLIED_SYSTEM, resolveWakeProgram } from "@clobber/shared";
 import { ensureOffice } from "./office-store.ts";
 import { composeOfficeContext } from "./office-context.ts";
 import { composeSystemPrompt } from "./compose-system-prompt.ts";
@@ -42,6 +42,10 @@ export interface PrepareSpawnContextInput {
   // re-composed (the kick is suppressed). The full selection surfaces — spawn
   // arg / trigger map / office UI — are #213; this is the minimal by-name seam.
   readonly wakeProgram?: string;
+  // Caller-supplied layer-C addon for the `custom` built-in (#501). When the
+  // selected program declares CALLER_SUPPLIED_SYSTEM, this string is used as the
+  // wake-program's system contribution (empty string if omitted).
+  readonly systemAddon?: string;
   readonly briefing?: BriefingPacket;
   // Per-spawn override of the role's default effort. When supplied, beats
   // role.effort. When omitted, role.effort applies (or claude's default if
@@ -85,6 +89,7 @@ export async function prepareSpawnContext(
     prompt,
     promptTag,
     wakeProgram,
+    systemAddon,
     briefing,
     effortOverride,
     modelOverride,
@@ -177,11 +182,15 @@ export async function prepareSpawnContext(
         ? { kind: "wake-kick" }
         : promptTag;
 
+  const wakeProgramAddon = program.system === CALLER_SUPPLIED_SYSTEM
+    ? (systemAddon ?? "")
+    : program.system;
+
   const systemPrompt = composeSystemPrompt({
     framing: effectiveBundle.framing,
     rolePrompt: effectiveBundle.systemPrompt,
     seeds,
-    wakeProgramAddon: program.system,
+    wakeProgramAddon,
   });
 
   const materialized = deps.runtimeProvider.prepareBundle({

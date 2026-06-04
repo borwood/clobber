@@ -56,7 +56,9 @@ function buildHarness() {
 }
 
 describe("POST /spawn — request validation", () => {
-  it("rejects a request missing prompt with 400 and does not spawn", async () => {
+  it("accepts a request missing prompt — prompt is optional since #501", async () => {
+    // Prompt is no longer required: named/default programs supply their own kick
+    // and `custom` with no prompt means boot-and-wait (idle behavior).
     const h = buildHarness();
     const res = await h.server.inject({
       method: "POST",
@@ -68,7 +70,8 @@ describe("POST /spawn — request validation", () => {
       },
     });
 
-    expect(res.statusCode).toBe(400);
+    // Schema valid — but workspace doesn't exist in this harness → 404.
+    expect(res.statusCode).toBe(404);
     expect(h.invocationCount()).toBe(0);
 
     await h.server.close();

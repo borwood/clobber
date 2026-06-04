@@ -63,15 +63,10 @@ function makePanel(wakePrograms: readonly string[] = []) {
 }
 
 async function fillAndSubmit(container: HTMLDivElement) {
-  const [labelInput, promptInput] = [
-    container.querySelector("input[type=text]")!,
-    container.querySelector("textarea")!,
-  ];
+  const labelInput = container.querySelector("input[type=text]")!;
   const labelProps = reactProps(labelInput);
-  const promptProps = reactProps(promptInput);
   await act(async () => {
     (labelProps.onChange as (e: { target: { value: string } }) => void)({ target: { value: "my-label" } });
-    (promptProps.onChange as (e: { target: { value: string } }) => void)({ target: { value: "do something" } });
   });
   const btn = container.querySelector("button") as HTMLButtonElement;
   await act(async () => {
@@ -97,12 +92,13 @@ describe("SpawnPanel model + wake-program selectors (#497)", () => {
     expect(lastSpawnPayload!["model"]).toBe("sonnet");
   });
 
-  it("omits wake_program from payload when idle is selected (first/default option)", async () => {
+  it("sends wake_program='default' when the default choice is selected (first option)", async () => {
     await act(async () => { root.render(makePanel(["worker-main"])); });
-    // idle is the first wake-program choice — leave it at default
+    // "default" is the first wake-program choice — leave it at default
     await fillAndSubmit(container);
-    // idle = built-in default: we omit it from the payload (role's default takes over)
-    expect(lastSpawnPayload!["wake_program"]).toBeUndefined();
+    // Composer always sends an explicit program; "default" tells the pipeline to
+    // resolve the role's declared default_wake_program (#501).
+    expect(lastSpawnPayload!["wake_program"]).toBe("default");
   });
 
   it("includes wake_program in payload when a role-specific program is selected", async () => {
@@ -124,6 +120,6 @@ describe("SpawnPanel model + wake-program selectors (#497)", () => {
     // After spawn, both selects should have reset
     const selectsAfter = Array.from(container.querySelectorAll<HTMLSelectElement>("select"));
     expect(selectsAfter[1]!.value).toBe("default");
-    expect(selectsAfter[2]!.value).toBe("idle");
+    expect(selectsAfter[2]!.value).toBe("default");
   });
 });
