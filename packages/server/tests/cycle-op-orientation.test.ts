@@ -277,12 +277,12 @@ describe("cycle op-level orientation (#502)", () => {
     await teardown(h);
   });
 
-  it("cycle wake_program=task uses that program while orientation is still present", async () => {
+  it("cycle wake_program=idle uses that program while orientation is still present", async () => {
     const h = buildHarness();
     const boot = await bootManager(h, 1);
 
-    // Specify wake_program at mint time — orientation should still be injected.
-    await cycle(h, boot.callerToken, { prompt: "HANDOFF: use task program", wake_program: "task" });
+    // Specify a built-in wake_program explicitly — orientation must still be injected.
+    await cycle(h, boot.callerToken, { prompt: "HANDOFF: boot and wait", wake_program: "idle" });
     const { token } = await waitForInterjectedToken(h, boot.callerSessionId);
     const r = await cycle(h, boot.callerToken, { token });
     expect(r.status).toBe(200);
@@ -294,7 +294,7 @@ describe("cycle op-level orientation (#502)", () => {
     // Orientation is always present regardless of wake-program.
     expect(fresh.op_level_addon).toContain("freshly-cycled");
     // The wake_program reflects the caller's choice.
-    expect(fresh.wake_program).toBe("task");
+    expect(fresh.wake_program).toBe("idle");
     // System prompt contains orientation.
     const spawnRecord = h.records.find((r) => r.sessionId === fresh.id)!;
     expect(spawnRecord.systemPrompt).toContain("freshly-cycled");
