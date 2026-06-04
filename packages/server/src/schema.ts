@@ -98,6 +98,7 @@ export const SCHEMA = `
     runtime_provider       TEXT    NOT NULL DEFAULT 'claude',
     provider_thread_id     TEXT,
     wake_program           TEXT,
+    op_level_addon         TEXT,
     label                  TEXT,
     pid                    INTEGER NOT NULL,
     started_at             INTEGER NOT NULL,

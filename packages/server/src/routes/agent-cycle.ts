@@ -37,10 +37,14 @@ const CycleBodySchema = z.object({
   target_session_id: z.string().min(1).optional(),
   prompt: z.string().min(1).optional(),
   token: z.string().min(1).optional(),
+  // The wake-program for the fresh session (#502). Stored with the token args at
+  // mint time and replayed at redemption. Defaults to "custom".
+  wake_program: z.string().min(1).optional(),
 });
 
 interface CycleArgs {
   readonly prompt: string;
+  readonly wakeProgram: string;
 }
 
 export function registerAgentCycleRoutes(app: FastifyInstance, deps: AgentRouteDeps): void {
@@ -85,7 +89,7 @@ export function registerAgentCycleRoutes(app: FastifyInstance, deps: AgentRouteD
             tool: TOOL,
             callerSessionId: session.id,
             targetSessionId: target.id,
-            args: { prompt: body.prompt },
+            args: { prompt: body.prompt, wakeProgram: body.wake_program ?? "custom" },
             brief: CYCLE_BRIEF,
             action: noopAction,
           },
@@ -105,7 +109,7 @@ export function registerAgentCycleRoutes(app: FastifyInstance, deps: AgentRouteD
           action: (args) =>
             executeCycle(
               { ...deps, layoutEvents: deps.layoutEvents },
-              { killSessionId: session.id, prompt: args.prompt },
+              { killSessionId: session.id, prompt: args.prompt, wakeProgram: args.wakeProgram },
             ),
         },
         deps.gate,

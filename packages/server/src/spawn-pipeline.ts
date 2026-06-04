@@ -153,6 +153,9 @@ export interface AttachSessionInput {
   readonly wakeProgram?: string;
   // Caller-supplied layer-C addon for the `custom` built-in (#501).
   readonly systemAddon?: string;
+  // Op-level system addon from the triggering operation (#502). Absent for
+  // plain spawn; cycle supplies the orientation text.
+  readonly opLevelAddon?: string;
   readonly briefing?: BriefingPacket;
   readonly effortOverride?: EffortLevel;
   readonly modelOverride?: Model;
@@ -162,7 +165,7 @@ export async function attachSessionToAgent(
   deps: SpawnPipelineDeps,
   input: AttachSessionInput,
 ): Promise<SpawnPipelineSuccess | SpawnPipelineNoBundleError> {
-  const { workspace, role, agent, prompt, promptTag, wakeProgram, systemAddon, briefing, effortOverride, modelOverride } = input;
+  const { workspace, role, agent, prompt, promptTag, wakeProgram, systemAddon, opLevelAddon, briefing, effortOverride, modelOverride } = input;
   const sessionId = randomUUID();
   const pin = rolePin(role);
 
@@ -177,6 +180,7 @@ export async function attachSessionToAgent(
     ...(promptTag === undefined ? {} : { promptTag }),
     ...(wakeProgram === undefined ? {} : { wakeProgram }),
     ...(systemAddon === undefined ? {} : { systemAddon }),
+    ...(opLevelAddon === undefined ? {} : { opLevelAddon }),
     ...(briefing === undefined ? {} : { briefing }),
     ...(effortOverride === undefined ? {} : { effortOverride }),
     ...(modelOverride === undefined ? {} : { modelOverride }),
@@ -199,6 +203,8 @@ export async function attachSessionToAgent(
     ...(providerThreadId === undefined ? {} : { provider_thread_id: providerThreadId }),
     // Persist the opening move so resume re-composes the same layer-C addon.
     ...(wakeProgram === undefined ? {} : { wake_program: wakeProgram }),
+    // Persist the op-level addon so resume re-composes the same orientation (#502).
+    ...(opLevelAddon === undefined ? {} : { op_level_addon: opLevelAddon }),
     // Denormalize the agent's label onto the session so the sidebar can
     // still show it after the agent row is deleted on non-persistent end.
     ...(agent.label === undefined ? {} : { label: agent.label }),

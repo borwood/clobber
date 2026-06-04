@@ -29,9 +29,9 @@ import type { Session } from "@clobber/shared";
 // end-to-end through `POST /agent/cycle`: an un-tokened call no-ops and injects
 // the brief+token into the TARGET's transcript; redemption kills the old
 // session FIRST (so a ceiling-1 role passes its respawn capacity check), spawns
-// a fresh session on the SAME agent under the reserved `cycle` wake-program with
-// the caller's `--prompt` as the kick, emits a `swap_session_tab` layout event,
-// and consumes the token only on success.
+// a fresh session on the SAME agent under the op-level orientation + chosen
+// wake-program, emits a `swap_session_tab` layout event, and consumes the token
+// only on success.
 
 interface SpawnRecord {
   readonly sessionId: string;
@@ -271,7 +271,7 @@ describe("clobber cycle (#320)", () => {
     await teardown(h);
   });
 
-  it("redeem at ceiling-1 kills first, respawns on the SAME agent under the cycle wake-program, swaps the tab, consumes the token", async () => {
+  it("redeem at ceiling-1 kills first, respawns on the SAME agent with op-level orientation + custom wake-program, swaps the tab, consumes the token", async () => {
     const h = buildHarness();
     const boot = await bootManager(h, 1);
     expect(h.sessions.countActive(boot.workspaceId, boot.roleId)).toBe(1);
@@ -290,7 +290,12 @@ describe("clobber cycle (#320)", () => {
     const fresh = active[0]!;
     expect(fresh.id).not.toBe(boot.callerSessionId);
     expect(fresh.agent_id).toBe(boot.agentId);
-    expect(fresh.wake_program).toBe("cycle");
+    // wake_program is the chosen program (custom by default), NOT "cycle".
+    expect(fresh.wake_program).toBe("custom");
+    // The op-level orientation (the "freshly-cycled" structural text) is persisted
+    // separately so resume can re-compose it.
+    expect(fresh.op_level_addon).toBeDefined();
+    expect(fresh.op_level_addon).toContain("freshly-cycled");
     // Ceiling-1 held throughout: back to exactly one active session.
     expect(h.sessions.countActive(boot.workspaceId, boot.roleId)).toBe(1);
 
@@ -383,7 +388,7 @@ describe("clobber cycle (#320)", () => {
     const active = activeForAgent(h, boot.workspaceId, targetBody.agent_id);
     expect(active).toHaveLength(1);
     expect(active[0]!.id).not.toBe(targetBody.session_id);
-    expect(active[0]!.wake_program).toBe("cycle");
+    expect(active[0]!.wake_program).toBe("custom");
     await teardown(h);
   });
 

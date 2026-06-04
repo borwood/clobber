@@ -137,6 +137,8 @@ async function performResume(
     // Re-compose the original opening move's layer C; the kick stays suppressed
     // because prepareSpawnContext gates it on mode === "resume".
     ...(session.wake_program === undefined ? {} : { wakeProgram: session.wake_program }),
+    // Re-compose the op-level orientation layer (#502); absent on non-cycle sessions.
+    ...(session.op_level_addon === undefined ? {} : { opLevelAddon: session.op_level_addon }),
   });
   if (!prepared.ok) return prepared;
   const ctx = prepared.context;

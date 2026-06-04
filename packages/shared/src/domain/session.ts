@@ -14,6 +14,10 @@ export const SessionSchema = z.object({
   // The wake-program this session was embodied with. Persisted so resume
   // re-composes the same layer-C addon (the kick is still suppressed on resume).
   wake_program: z.string().min(1).optional(),
+  // The op-level system addon injected by the cycle operation (#502). Persisted
+  // so resume re-composes the same orientation layer independently of the
+  // wake-program. Absent on sessions started by spawn (not cycle).
+  op_level_addon: z.string().min(1).optional(),
   label: z.string().min(1).optional(),
   pid: z.number().int().positive(),
   started_at: z.number().int().nonnegative(),
@@ -44,6 +48,7 @@ export const CreateSessionRequestSchema = z.object({
   runtime_provider: z.string().min(1).optional(),
   provider_thread_id: z.string().min(1).optional(),
   wake_program: z.string().min(1).optional(),
+  op_level_addon: z.string().min(1).optional(),
   label: z.string().min(1).optional(),
   pid: z.number().int().positive(),
   transcript_path: z.string().min(1).optional(),
