@@ -21,13 +21,19 @@ import { normalizeSpawnLabel } from "./_spawn-label.ts";
 const SpawnBodySchema = z.object({
   workspace_id: z.string().uuid(),
   role_id: z.string().uuid(),
-  prompt: z.string().min(1),
+  // The caller's optional opening kick. Required only for `custom` when a kick
+  // is desired; absent = no kick (idle / boot-and-wait). Named / default programs
+  // supply their own kick from the wake-program definition.
+  prompt: z.string().min(1).optional(),
   label: z.string().optional(),
   effort: EffortLevelSchema.optional(),
   model: ModelSchema.optional(),
-  // The selected opening move (#212). The minimal by-name seam — the richer
-  // selection surfaces (CLI ergonomics / trigger map / office picker) are #213.
+  // The selected opening move (#212). "default" resolves to the role's declared
+  // default_wake_program. "custom" uses the caller's prompt + system_addon (#501).
   wake_program: z.string().min(1).optional(),
+  // Caller-supplied layer-C addon for the `custom` built-in (#501). Ignored for
+  // all other wake-program selections.
+  system_addon: z.string().optional(),
 });
 
 export interface SpawnRouteDeps {
@@ -61,7 +67,7 @@ export function registerSpawnRoutes(app: FastifyInstance, deps: SpawnRouteDeps):
       reply.code(400);
       return { error: "invalid spawn request", issues: parsed.error.issues };
     }
-    const { workspace_id, role_id, prompt, effort, model, wake_program } = parsed.data;
+    const { workspace_id, role_id, prompt, effort, model, wake_program, system_addon } = parsed.data;
     const label = normalizeSpawnLabel(parsed.data.label);
     if (label === null) {
       reply.code(400);
@@ -82,9 +88,10 @@ export function registerSpawnRoutes(app: FastifyInstance, deps: SpawnRouteDeps):
     const result = await executeSpawn(deps, {
       workspace,
       role,
-      prompt,
+      ...(prompt === undefined ? {} : { prompt }),
       label,
       ...(wake_program === undefined ? {} : { wakeProgram: wake_program }),
+      ...(system_addon === undefined ? {} : { systemAddon: system_addon }),
       ...(effort === undefined ? {} : { effortOverride: effort }),
       ...(model === undefined ? {} : { modelOverride: model }),
     });

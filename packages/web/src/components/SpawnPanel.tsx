@@ -22,42 +22,50 @@ const EFFORT_CHOICES: readonly EffortChoice[] = [
 
 const MODEL_CHOICES: readonly ModelChoice[] = ["default", "opus", "sonnet", "haiku"];
 
-const IDLE_WAKE_PROGRAM = "idle";
+const DEFAULT_WAKE = "default";
+const CUSTOM_WAKE = "custom";
 
 export function SpawnPanel({ workspaceId, roleId, wakePrograms, onSpawned }: Props) {
-  const [prompt, setPrompt] = useState("");
   const [label, setLabel] = useState("");
   const [effort, setEffort] = useState<EffortChoice>("default");
   const [model, setModel] = useState<ModelChoice>("default");
-  const [wakeProgram, setWakeProgram] = useState<string>(IDLE_WAKE_PROGRAM);
+  const [wakeProgram, setWakeProgram] = useState<string>(DEFAULT_WAKE);
+  const [customPrompt, setCustomPrompt] = useState("");
+  const [customSystem, setCustomSystem] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const wakeProgramChoices: readonly string[] = [IDLE_WAKE_PROGRAM, ...wakePrograms];
+  // Dropdown: "default" (role's default program), "custom" (caller kick + system),
+  // then the role's named programs.
+  const wakeProgramChoices: readonly string[] = [DEFAULT_WAKE, CUSTOM_WAKE, ...wakePrograms];
+  const isCustom = wakeProgram === CUSTOM_WAKE;
 
   async function submit() {
     if (roleId === null) return;
-    if (prompt.trim().length === 0) return;
     const trimmedLabel = label.trim();
     if (trimmedLabel.length === 0) return;
     setBusy(true);
     setError(null);
     try {
+      const trimmedPrompt = customPrompt.trim();
+      const trimmedSystem = customSystem.trim();
       const res = await api.spawn({
         workspace_id: workspaceId,
         role_id: roleId,
-        prompt,
         label: trimmedLabel,
+        wake_program: wakeProgram,
+        ...(isCustom && trimmedPrompt.length > 0 ? { prompt: trimmedPrompt } : {}),
+        ...(isCustom && trimmedSystem.length > 0 ? { system_addon: trimmedSystem } : {}),
         ...(effort === "default" ? {} : { effort }),
         ...(model === "default" ? {} : { model }),
-        ...(wakeProgram === IDLE_WAKE_PROGRAM ? {} : { wake_program: wakeProgram }),
       });
       onSpawned(res);
-      setPrompt("");
       setLabel("");
       setEffort("default");
       setModel("default");
-      setWakeProgram(IDLE_WAKE_PROGRAM);
+      setWakeProgram(DEFAULT_WAKE);
+      setCustomPrompt("");
+      setCustomSystem("");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -65,11 +73,7 @@ export function SpawnPanel({ workspaceId, roleId, wakePrograms, onSpawned }: Pro
     }
   }
 
-  const disabled =
-    roleId === null ||
-    busy ||
-    prompt.trim().length === 0 ||
-    label.trim().length === 0;
+  const disabled = roleId === null || busy || label.trim().length === 0;
 
   return (
     <div className="space-y-3">
@@ -83,22 +87,6 @@ export function SpawnPanel({ workspaceId, roleId, wakePrograms, onSpawned }: Pro
           onChange={(e) => setLabel(e.target.value)}
           placeholder="e.g. fix-flaky-test"
           className="w-full px-3 py-2 bg-surface border border-border rounded text-sm focus:outline-none focus:border-border-strong"
-        />
-      </label>
-
-      <label className="block">
-        <span className="block text-xs text-text-muted mb-1">prompt</span>
-        <textarea
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          rows={6}
-          className="w-full px-3 py-2 bg-surface border border-border rounded text-sm focus:outline-none focus:border-border-strong"
-          placeholder={
-            roleId === null
-              ? "select a role above first…"
-              : "Run the bash command `echo hello`…"
-          }
-          disabled={roleId === null}
         />
       </label>
 
@@ -146,7 +134,7 @@ export function SpawnPanel({ workspaceId, roleId, wakePrograms, onSpawned }: Pro
         <span className="block text-xs text-text-muted mb-1">
           wake program{" "}
           <span className="text-text-faint">
-            (idle = role's default opening move)
+            (default = role's opening move; custom = caller-supplied kick)
           </span>
         </span>
         <select
@@ -161,6 +149,44 @@ export function SpawnPanel({ workspaceId, roleId, wakePrograms, onSpawned }: Pro
           ))}
         </select>
       </label>
+
+      {isCustom && (
+        <>
+          <label className="block">
+            <span className="block text-xs text-text-muted mb-1">
+              prompt{" "}
+              <span className="text-text-faint">(optional — the opening kick)</span>
+            </span>
+            <textarea
+              value={customPrompt}
+              onChange={(e) => setCustomPrompt(e.target.value)}
+              rows={5}
+              className="w-full px-3 py-2 bg-surface border border-border rounded text-sm focus:outline-none focus:border-border-strong"
+              placeholder={
+                roleId === null
+                  ? "select a role above first…"
+                  : "leave blank to boot and wait…"
+              }
+              disabled={roleId === null}
+            />
+          </label>
+
+          <label className="block">
+            <span className="block text-xs text-text-muted mb-1">
+              system addon{" "}
+              <span className="text-text-faint">(optional — appended to layer C)</span>
+            </span>
+            <textarea
+              value={customSystem}
+              onChange={(e) => setCustomSystem(e.target.value)}
+              rows={3}
+              className="w-full px-3 py-2 bg-surface border border-border rounded text-sm focus:outline-none focus:border-border-strong"
+              placeholder="leave blank for no system addon…"
+              disabled={roleId === null}
+            />
+          </label>
+        </>
+      )}
 
       <button
         type="button"

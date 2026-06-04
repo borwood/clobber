@@ -100,11 +100,14 @@ export type Model = "opus" | "sonnet" | "haiku";
 export interface SpawnRequest {
   readonly workspace_id: string;
   readonly role_id: string;
-  readonly prompt: string;
+  // Optional — only meaningful for `custom` wake-program. Absent = no kick.
+  readonly prompt?: string;
   readonly label?: string;
   readonly effort?: EffortLevel;
   readonly model?: Model;
   readonly wake_program?: string;
+  // Caller-supplied layer-C addon for the `custom` built-in (#501).
+  readonly system_addon?: string;
 }
 
 export interface SpawnResponse {

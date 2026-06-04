@@ -3,6 +3,13 @@ import type { WakeProgram } from "@clobber/shared";
 import { buildHarness, teardown, turnProvider, type Harness } from "./_spawn-harness.ts";
 import { writeRoleVersion } from "./_role-version-fixture.ts";
 
+interface SpawnResult {
+  session: string;
+  system: string;
+  prompt: string | undefined;
+  promptTag: { kind: string; attrs?: Record<string, string> | undefined } | undefined;
+}
+
 // #212 — a wake-program is the opening move: it owns layer C (a system-prompt
 // addon) and the opening user-message kick (or null for no kick). `idle` is the
 // universal built-in: no C, no kick. The selected program is gated on SpawnMode
@@ -19,12 +26,7 @@ async function spawnWith(
   h: Harness,
   roleId: string,
   wakeProgram: string,
-): Promise<{
-  session: string;
-  system: string;
-  prompt: string | undefined;
-  promptTag: { kind: string; attrs?: Record<string, string> | undefined } | undefined;
-}> {
+): Promise<SpawnResult> {
   const ws = h.workspaces.create({
     name: `ws-${roleId.slice(0, 8)}-${h.records.length}`,
     repo_path: h.repoPath,
@@ -35,6 +37,36 @@ async function spawnWith(
     url: "/spawn",
     payload: { workspace_id: ws.id, role_id: roleId, prompt: "manager free text", label: "task", wake_program: wakeProgram },
   });
+  expect(res.statusCode).toBe(200);
+  const body = res.json() as { session_id: string };
+  const rec = h.records[h.records.length - 1]!;
+  return {
+    session: body.session_id,
+    system: rec.req.appendSystemPrompt!,
+    prompt: rec.req.prompt,
+    promptTag: rec.req.promptTag,
+  };
+}
+
+async function spawnCustom(
+  h: Harness,
+  roleId: string,
+  opts: { prompt?: string; systemAddon?: string },
+): Promise<SpawnResult> {
+  const ws = h.workspaces.create({
+    name: `ws-custom-${roleId.slice(0, 8)}-${h.records.length}`,
+    repo_path: h.repoPath,
+  });
+  h.workspaceRoles.setCeiling(ws.id, roleId, 1);
+  const payload: Record<string, unknown> = {
+    workspace_id: ws.id,
+    role_id: roleId,
+    label: "task",
+    wake_program: "custom",
+  };
+  if (opts.prompt !== undefined) payload.prompt = opts.prompt;
+  if (opts.systemAddon !== undefined) payload.system_addon = opts.systemAddon;
+  const res = await h.server.inject({ method: "POST", url: "/spawn", payload });
   expect(res.statusCode).toBe(200);
   const body = res.json() as { session_id: string };
   const rec = h.records[h.records.length - 1]!;
@@ -174,6 +206,73 @@ describe("wake-programs (#212)", () => {
     // resume message, never the opening-move user template.
     expect(resumeReq.prompt).toBe("second turn");
     expect(resumeReq.prompt).not.toBe("Read your desk and begin.");
+    await teardown(h);
+  });
+});
+
+// #501 — `custom` built-in: caller-supplied kick (optional) + caller-supplied
+// system addon (optional). Subsumes `idle` in the composer: empty custom = idle.
+describe("custom wake-program built-in (#501)", () => {
+  it("custom + prompt → prompt is the opening kick (caller-supplied)", async () => {
+    const h = buildHarness(turnProvider());
+    const role = h.roles.create({ name: "worker", persistent: false });
+
+    const { prompt, promptTag } = await spawnCustom(h, role.id, { prompt: "my custom kick" });
+    expect(prompt).toBe("my custom kick");
+    // The kick content is the caller's — tag is spawn-prompt, NOT wake-kick.
+    expect(promptTag).toEqual({ kind: "spawn-prompt" });
+    await teardown(h);
+  });
+
+  it("custom + no prompt → no kick (boot and wait)", async () => {
+    const h = buildHarness(turnProvider());
+    const role = h.roles.create({ name: "worker", persistent: false });
+
+    const { prompt } = await spawnCustom(h, role.id, {});
+    expect(prompt).toBeUndefined();
+    await teardown(h);
+  });
+
+  it("custom + system-addon → system-addon appears in layer C", async () => {
+    const h = buildHarness(turnProvider());
+    const role = h.roles.create({ name: "worker", persistent: false });
+
+    const { system } = await spawnCustom(h, role.id, {
+      prompt: "kick",
+      systemAddon: "MY-CUSTOM-SYSTEM-ADDON",
+    });
+    expect(system).toContain("MY-CUSTOM-SYSTEM-ADDON");
+    await teardown(h);
+  });
+
+  it("custom + no system-addon → no extra system content", async () => {
+    const h = buildHarness(turnProvider());
+    const role = h.roles.create({ name: "worker", persistent: false });
+
+    const { system } = await spawnCustom(h, role.id, { prompt: "kick" });
+    // No CALLER_SUPPLIED_SYSTEM sentinel must appear verbatim in the composed prompt.
+    expect(system).not.toContain("<<caller-supplied-system>>");
+    await teardown(h);
+  });
+
+  it("'default' selects the role's declared default wake-program", async () => {
+    const h = buildHarness(turnProvider());
+    const role = h.roles.create({ name: "worker", persistent: false });
+    setWakePrograms(h, role.id, [
+      { name: "task", system: "LAYER-C-TASK-ADDON", user: "Read your desk and begin." },
+    ]);
+    const ws = h.workspaces.create({ name: "ws-default2", repo_path: h.repoPath });
+    h.workspaceRoles.setCeiling(ws.id, role.id, 1);
+
+    const res = await h.server.inject({
+      method: "POST",
+      url: "/spawn",
+      payload: { workspace_id: ws.id, role_id: role.id, label: "task", wake_program: "default" },
+    });
+    expect(res.statusCode).toBe(200);
+    const rec = h.records[h.records.length - 1]!;
+    expect(rec.req.appendSystemPrompt).toContain("LAYER-C-TASK-ADDON");
+    expect(rec.req.prompt).toBe("Read your desk and begin.");
     await teardown(h);
   });
 });
