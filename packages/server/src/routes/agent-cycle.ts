@@ -109,7 +109,7 @@ export function registerAgentCycleRoutes(app: FastifyInstance, deps: AgentRouteD
           action: (args) =>
             executeCycle(
               { ...deps, layoutEvents: deps.layoutEvents },
-              { killSessionId: session.id, prompt: args.prompt },
+              { killSessionId: session.id, prompt: args.prompt, wakeProgram: args.wakeProgram },
             ),
         },
         deps.gate,
