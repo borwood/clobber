@@ -53,24 +53,56 @@ function deriveWorktree(
   return { branch, worktreePath };
 }
 
-// Branches off the repo's current HEAD. git itself throws loudly if the branch
-// or the target path already exists — that failure IS the no-silent-reuse
-// guarantee, so we surface its stderr rather than pre-checking.
+// Branches off the remote-tracking default branch (e.g. origin/main) when an
+// origin is configured: first fetch so remote-tracking refs are fresh, then use
+// the remote ref as the explicit start-point. Falls back to today's behavior
+// (branch off current HEAD) when no origin is present — legitimate for
+// local-only workspaces.
+//
+// git itself throws loudly if the branch or target path already exists — that
+// failure IS the no-silent-reuse guarantee, so we surface its stderr rather
+// than pre-checking.
 function createWorktree(
   repoPath: string,
   branch: string,
   worktreePath: string,
 ): void {
-  const res = Bun.spawnSync(
-    ["git", "-C", repoPath, "worktree", "add", worktreePath, "-b", branch],
-    { stdout: "pipe", stderr: "pipe" },
-  );
+  const originRef = resolveOriginDefault(repoPath);
+  if (originRef !== undefined) {
+    const fetchRes = Bun.spawnSync(
+      ["git", "-C", repoPath, "fetch", "origin"],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    if (fetchRes.exitCode !== 0) {
+      throw new Error(
+        `git fetch origin failed (exit ${fetchRes.exitCode}): ${fetchRes.stderr.toString().trim()}`,
+      );
+    }
+  }
+  const worktreeCmd =
+    originRef !== undefined
+      ? ["git", "-C", repoPath, "worktree", "add", worktreePath, "-b", branch, originRef]
+      : ["git", "-C", repoPath, "worktree", "add", worktreePath, "-b", branch];
+  const res = Bun.spawnSync(worktreeCmd, { stdout: "pipe", stderr: "pipe" });
   if (res.exitCode !== 0) {
     throw new Error(
       `git worktree add failed (exit ${res.exitCode}): ${res.stderr.toString().trim()}`,
     );
   }
   installDeps(worktreePath);
+}
+
+// Reads the symbolic ref git sets when a remote is cloned or `git remote
+// set-head` is run. Returns the short form (e.g. "origin/main") when present,
+// undefined when the repo has no origin — the no-origin config is a legitimate
+// local-only workspace, not an error.
+function resolveOriginDefault(repoPath: string): string | undefined {
+  const res = Bun.spawnSync(
+    ["git", "-C", repoPath, "symbolic-ref", "--short", "refs/remotes/origin/HEAD"],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  if (res.exitCode !== 0) return undefined;
+  return res.stdout.toString().trim() || undefined;
 }
 
 // A fresh worktree shares no files with the shared checkout, so it has no

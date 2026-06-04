@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { claudeRuntimeProvider } from "@clobber/runtime";
 import { buildHarness, teardown, type Harness } from "./_spawn-harness.ts";
@@ -186,6 +187,56 @@ describe("spawn_worktree (#174): per-workspace auto-worktree on spawn", () => {
     expect(existsSync(join(cwd, "node_modules", "localdep"))).toBe(true);
 
     rmSync(worktreesRoot(h.repoPath), { recursive: true, force: true });
+    await teardown(h);
+  });
+
+  it("on: when local main lags origin/main, worktree is based on origin HEAD not stale local (#500)", async () => {
+    const h = buildHarness(claudeRuntimeProvider);
+    const remotePath = mkdtempSync(join(tmpdir(), "clobber-test-origin-"));
+
+    // Remote: initial commit A (simulates GitHub "origin")
+    gitRun(remotePath, ["init", "-q", "-b", "main"]);
+    gitRun(remotePath, ["config", "user.email", "test@clobber.invalid"]);
+    gitRun(remotePath, ["config", "user.name", "clobber-test"]);
+    gitRun(remotePath, ["commit", "--allow-empty", "-q", "-m", "root"]);
+
+    // Local: wired to remote, local main at commit A (simulates post-clone state)
+    gitRun(h.repoPath, ["init", "-q", "-b", "main"]);
+    gitRun(h.repoPath, ["config", "user.email", "test@clobber.invalid"]);
+    gitRun(h.repoPath, ["config", "user.name", "clobber-test"]);
+    gitRun(h.repoPath, ["remote", "add", "origin", remotePath]);
+    gitRun(h.repoPath, ["fetch", "origin"]);
+    // Point local main at commit A (update-ref works on an unborn branch)
+    gitRun(h.repoPath, ["update-ref", "refs/heads/main", "refs/remotes/origin/main"]);
+    // Set origin/HEAD → origin/main (git clone does this automatically)
+    gitRun(h.repoPath, ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"]);
+
+    // Remote advances to commit B (simulates `gh pr merge` — local is NOT refetched)
+    gitRun(remotePath, ["commit", "--allow-empty", "-q", "-m", "pr-merge"]);
+    const remoteHead = Bun.spawnSync(["git", "rev-parse", "HEAD"], {
+      cwd: remotePath,
+    }).stdout.toString().trim();
+
+    const ws = h.workspaces.create({
+      name: "ws",
+      repo_path: h.repoPath,
+      spawn_worktree: { kind: "on" },
+    });
+    const role = h.roles.create({ name: "worker", persistent: false });
+    h.workspaceRoles.setCeiling(ws.id, role.id, 1);
+
+    const res = await spawnWorker(h, ws.id, role.id, "500");
+    expect(res.statusCode).toBe(200);
+
+    const cwd = h.records[0]!.req.cwd;
+    const worktreeHead = Bun.spawnSync(["git", "rev-parse", "HEAD"], {
+      cwd,
+    }).stdout.toString().trim();
+    // Must land on origin's HEAD (commit B), not stale local main (commit A)
+    expect(worktreeHead).toBe(remoteHead);
+
+    rmSync(worktreesRoot(h.repoPath), { recursive: true, force: true });
+    rmSync(remotePath, { recursive: true, force: true });
     await teardown(h);
   });
 });
