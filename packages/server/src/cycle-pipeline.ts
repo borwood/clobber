@@ -1,5 +1,4 @@
 import type { Agent, Role, Workspace } from "@clobber/shared";
-import { CYCLE_WAKE_PROGRAM_NAME } from "@clobber/shared";
 import {
   attachSessionToAgent,
   checkCapacity,
@@ -29,14 +28,29 @@ export interface CycleDeps extends SpawnPipelineDeps {
   readonly layoutEvents: LayoutEventStore;
 }
 
+// The orientation text is the op-level system layer for a cycled session (#502).
+// It is structural only — no behavioral directives, no prescription — so it is
+// safe to stamp on every cycle regardless of the chosen wake-program. Verbatim
+// per the spec; do not alter without confirming with the workspace owner.
+const CYCLE_ORIENTATION_LAYER = [
+  "You are a freshly-cycled embodiment of this agent. You have NO prior",
+  "conversation — your predecessor shed its working context deliberately so",
+  "that you start clean. Your continuity does not live in this session's",
+  "history; it lives in your office notes and in the handoff brief that",
+  "follows as your opening turn. Read your office notes first, then act on the",
+  "handoff.",
+].join("\n");
+
 export interface CycleInput {
   // The session to kill and re-seat. On redemption this is the token's bound
   // bearer (the caller's own session for a self-cycle, or the target that
   // redeemed for itself on a cross-agent request).
   readonly killSessionId: string;
-  // The handoff brief, saved with the #321 token at mint time and replayed here
-  // as the fresh session's opening kick under the reserved `cycle` program.
+  // The handoff brief replayed as the fresh session's opening kick.
   readonly prompt: string;
+  // The wake-program for the fresh session. Defaults to "custom" so that a
+  // plain `cycle --prompt X` preserves today's X-as-kick behavior unchanged.
+  readonly wakeProgram?: string;
 }
 
 // The fresh session boots immediately; a "boot failure" surfaces as a
@@ -52,7 +66,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 export async function executeCycle(deps: CycleDeps, input: CycleInput): Promise<void> {
-  const { killSessionId, prompt } = input;
+  const { killSessionId, prompt, wakeProgram = "custom" } = input;
   const old = deps.sessions.get(killSessionId);
   if (old === null) throw new Error(`cycle: session not found: ${killSessionId}`);
   const agentId = old.agent_id;
@@ -70,9 +84,10 @@ export async function executeCycle(deps: CycleDeps, input: CycleInput): Promise<
   //    checkout), which is what lets the fresh session re-seat in place.
   terminateSession(killSessionId, deps);
 
-  // 2. Spawn the fresh session on the same agent under the reserved `cycle`
-  //    program, retrying a transient boot failure with bounded backoff.
-  const fresh = await respawnWithRetry(deps, { workspace, role, agent, prompt });
+  // 2. Spawn the fresh session on the same agent with the op-level orientation
+  //    layer and the caller's chosen wake-program, retrying on transient boot
+  //    failure with bounded backoff.
+  const fresh = await respawnWithRetry(deps, { workspace, role, agent, prompt, wakeProgram });
 
   // 3. Re-target the dead session's tab to the new session via the layout bus;
   //    clients apply it on their next poll (there is no WebSocket).
@@ -88,6 +103,7 @@ interface RespawnTarget {
   readonly role: Role;
   readonly agent: Agent;
   readonly prompt: string;
+  readonly wakeProgram: string;
 }
 
 async function respawnWithRetry(
@@ -110,7 +126,7 @@ async function respawnWithRetry(
 
 async function respawnOnce(
   deps: CycleDeps,
-  { workspace, role, agent, prompt }: RespawnTarget,
+  { workspace, role, agent, prompt, wakeProgram }: RespawnTarget,
 ): Promise<SpawnPipelineSuccess> {
   const capacity = checkCapacity(deps, workspace, role);
   if (capacity !== null) {
@@ -123,10 +139,12 @@ async function respawnOnce(
     role,
     agent,
     prompt,
-    // The handoff brief is the caller's, surfaced as the cycle program's
-    // caller-supplied opening turn — tagged `wake-kick` as the session's first move.
+    // The handoff brief is the caller's opening kick — tagged `wake-kick`.
     promptTag: { kind: "wake-kick" },
-    wakeProgram: CYCLE_WAKE_PROGRAM_NAME,
+    // The cycle operation always injects the orientation as the op-level layer,
+    // independently of the chosen wake-program.
+    opLevelAddon: CYCLE_ORIENTATION_LAYER,
+    wakeProgram,
   });
   if (!result.ok) {
     throw new Error(`cycle respawn failed for role '${result.role}': ${result.error}`);

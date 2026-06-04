@@ -46,6 +46,10 @@ export interface PrepareSpawnContextInput {
   // selected program declares CALLER_SUPPLIED_SYSTEM, this string is used as the
   // wake-program's system contribution (empty string if omitted).
   readonly systemAddon?: string;
+  // Op-level system addon injected by the triggering operation (#502). Absent
+  // for plain spawn; the cycle operation supplies the orientation text. When
+  // present this is persisted on the session row so resume re-composes it.
+  readonly opLevelAddon?: string;
   readonly briefing?: BriefingPacket;
   // Per-spawn override of the role's default effort. When supplied, beats
   // role.effort. When omitted, role.effort applies (or claude's default if
@@ -90,6 +94,7 @@ export async function prepareSpawnContext(
     promptTag,
     wakeProgram,
     systemAddon,
+    opLevelAddon,
     briefing,
     effortOverride,
     modelOverride,
@@ -157,10 +162,9 @@ export async function prepareSpawnContext(
   // program is selected the caller's prompt remains the opening message — the
   // legacy seam until #213 routes selection through every spawn surface.
   const program = resolveWakeProgram(effectiveBundle.wakePrograms, wakeProgram);
-  // A selected program declaring a caller-supplied kick (the `cycle` sentinel)
-  // contributes only its layer-C `system`; its opening turn falls through to the
-  // caller's prompt, the way `idle` does — the third kick mode the parameterized
-  // `cycle` program (#320) needs.
+  // A selected program declaring a caller-supplied kick contributes only its
+  // layer-C `system`; its opening turn falls through to the caller's prompt, the
+  // way `idle` does — the third kick mode the `custom` built-in (#501) uses.
   const callerSuppliedKick = program.user === CALLER_SUPPLIED_KICK;
   const wakeProgramSuppliesKick =
     mode !== "resume" && wakeProgram !== undefined && !callerSuppliedKick;
@@ -190,6 +194,7 @@ export async function prepareSpawnContext(
     framing: effectiveBundle.framing,
     rolePrompt: effectiveBundle.systemPrompt,
     seeds,
+    opLevelAddon: opLevelAddon ?? "",
     wakeProgramAddon,
   });
 

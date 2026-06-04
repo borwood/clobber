@@ -38,6 +38,7 @@ interface Row {
   runtime_provider: string;
   provider_thread_id: string | null;
   wake_program: string | null;
+  op_level_addon: string | null;
   label: string | null;
   pid: number;
   started_at: number;
@@ -66,6 +67,7 @@ function rowToSession(row: Row): Session {
     input["provider_thread_id"] = row.provider_thread_id;
   }
   if (row.wake_program !== null) input["wake_program"] = row.wake_program;
+  if (row.op_level_addon !== null) input["op_level_addon"] = row.op_level_addon;
   if (row.label !== null) input["label"] = row.label;
   if (row.ended_at !== null) input["ended_at"] = row.ended_at;
   if (row.transcript_path !== null) input["transcript_path"] = row.transcript_path;
@@ -81,8 +83,8 @@ function rowToSession(row: Row): Session {
 export function createSessionStore(db: Database): SessionStore {
   const insertStmt = db.prepare(
     `INSERT INTO sessions
-       (id, agent_id, workspace_id, role_id, role_commit_branch, role_commit_sha, runtime_provider, provider_thread_id, wake_program, label, pid, started_at, ended_at, transcript_path, composed_system_prompt, model, effort)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
+       (id, agent_id, workspace_id, role_id, role_commit_branch, role_commit_sha, runtime_provider, provider_thread_id, wake_program, op_level_addon, label, pid, started_at, ended_at, transcript_path, composed_system_prompt, model, effort)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
   );
   const getStmt = db.prepare("SELECT * FROM sessions WHERE id = ?");
   const latestForAgentStmt = db.prepare(
@@ -137,6 +139,7 @@ export function createSessionStore(db: Database): SessionStore {
       const provider_thread_id =
         req.provider_thread_id === undefined ? null : req.provider_thread_id;
       const wake_program = req.wake_program === undefined ? null : req.wake_program;
+      const op_level_addon = req.op_level_addon === undefined ? null : req.op_level_addon;
       const label = req.label === undefined ? null : req.label;
       const transcript_path =
         req.transcript_path === undefined ? null : req.transcript_path;
@@ -154,6 +157,7 @@ export function createSessionStore(db: Database): SessionStore {
         runtime_provider,
         provider_thread_id,
         wake_program,
+        op_level_addon,
         label,
         req.pid,
         started_at,
@@ -176,6 +180,7 @@ export function createSessionStore(db: Database): SessionStore {
         out["provider_thread_id"] = req.provider_thread_id;
       }
       if (req.wake_program !== undefined) out["wake_program"] = req.wake_program;
+      if (req.op_level_addon !== undefined) out["op_level_addon"] = req.op_level_addon;
       if (req.label !== undefined) out["label"] = req.label;
       if (req.transcript_path !== undefined) out["transcript_path"] = req.transcript_path;
       if (req.composed_system_prompt !== undefined) {
