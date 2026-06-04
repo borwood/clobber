@@ -1,10 +1,14 @@
 import { describe, it, expect } from "bun:test";
+import { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDatabase } from "../src/db.ts";
 import { createRoleStore } from "../src/role-store.ts";
+import { createWorkspaceStore } from "../src/workspace-store.ts";
+import { createAgentStore } from "../src/agent-store.ts";
+import { createSessionStore } from "../src/session-store.ts";
 import { seedWorkspaceRoles } from "../src/seed-workspace-roles.ts";
 import { rolePin, sessionPin } from "../src/embody-role.ts";
 import { buildAndRegress } from "../src/migration-harness.ts";
@@ -129,76 +133,133 @@ describe("rm-row-version-pinning (#491) — no version rows on create / seed", (
   });
 });
 
+// Regression helper: surgically add back the two pre-#491 version-pin columns
+// to a current-schema DB. The migration guard checks for
+// `roles.current_version_id`; once present, it rebuilds both tables and the
+// full INSERT...SELECT copy lists are exercised.
+function regressToPrePinDrop(db: Database): void {
+  db.exec("ALTER TABLE roles ADD COLUMN current_version_id TEXT");
+  db.exec("ALTER TABLE sessions ADD COLUMN role_version_id TEXT");
+}
+
 describe("rm-row-version-pinning (#491) — migration drops operational columns", () => {
-  // Currently FAILS: the migration to drop roles.current_version_id and
-  // sessions.role_version_id does not exist yet. After #491, createDatabase
-  // runs the new migration and these columns are absent.
-  it("reopening a pre-#491 DB drops roles.current_version_id", () => {
+  it("reopening a pre-#491 DB drops roles.current_version_id and preserves row data", () => {
     const dir = mkdtempSync(join(tmpdir(), "clobber-491-roles-"));
     const path = join(dir, "test.db");
+    let roleId = "";
+    let seededRoleCount = 0;
     try {
       buildAndRegress({
         path,
         seed: (db) => {
-          createRoleStore(db).create({ name: "worker", persistent: false });
+          const role = createRoleStore(db).create({ name: "worker", persistent: false });
+          roleId = role.id;
+          seededRoleCount = (db.prepare("SELECT COUNT(*) AS n FROM roles").get() as { n: number }).n;
         },
-        // No regression needed — the column already exists in the current schema.
-        // We're proving the new migration drops it on next open.
-        regress: () => {},
+        regress: regressToPrePinDrop,
       });
 
       const db = createDatabase(path);
-      const roleCols = (
-        db.prepare("PRAGMA table_info(roles)").all() as Array<{ name: string }>
-      ).map((r) => r.name);
-      expect(roleCols).not.toContain("current_version_id");
-      db.close();
+      try {
+        // (a) old column dropped
+        const roleCols = (
+          db.prepare("PRAGMA table_info(roles)").all() as Array<{ name: string }>
+        ).map((r) => r.name);
+        expect(roleCols).not.toContain("current_version_id");
+
+        // (b) row count preserved; specific row identity intact
+        const roleCount = (db.prepare("SELECT COUNT(*) AS n FROM roles").get() as { n: number }).n;
+        expect(roleCount).toBe(seededRoleCount);
+        const preserved = db.prepare("SELECT id, name FROM roles WHERE id = ?").get(roleId) as { id: string; name: string } | null;
+        expect(preserved?.id).toBe(roleId);
+        expect(preserved?.name).toBe("worker");
+      } finally {
+        db.close();
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  it("reopening a pre-#491 DB drops sessions.role_version_id", () => {
+  it("reopening a pre-#491 DB drops sessions.role_version_id and preserves row data", () => {
     const dir = mkdtempSync(join(tmpdir(), "clobber-491-sessions-"));
     const path = join(dir, "test.db");
+    let sessionId = "";
+    let seededSessionCount = 0;
     try {
       buildAndRegress({
         path,
         seed: (db) => {
-          createRoleStore(db).create({ name: "worker", persistent: false });
+          const ws = createWorkspaceStore(db).create({ name: "test-ws", repo_path: "/tmp" });
+          const role = createRoleStore(db).create({ name: "worker", persistent: false });
+          const agent = createAgentStore(db).create({ workspace_id: ws.id, role_id: role.id });
+          const session = createSessionStore(db).create({
+            id: randomUUID(),
+            agent_id: agent.id,
+            workspace_id: ws.id,
+            role_id: role.id,
+            pid: 1234,
+          });
+          sessionId = session.id;
+          seededSessionCount = (db.prepare("SELECT COUNT(*) AS n FROM sessions").get() as { n: number }).n;
         },
-        regress: () => {},
+        regress: regressToPrePinDrop,
       });
 
       const db = createDatabase(path);
-      const sessionCols = (
-        db.prepare("PRAGMA table_info(sessions)").all() as Array<{ name: string }>
-      ).map((r) => r.name);
-      expect(sessionCols).not.toContain("role_version_id");
-      db.close();
+      try {
+        // (a) old column dropped
+        const sessionCols = (
+          db.prepare("PRAGMA table_info(sessions)").all() as Array<{ name: string }>
+        ).map((r) => r.name);
+        expect(sessionCols).not.toContain("role_version_id");
+
+        // (b) row count preserved; specific session identity intact
+        const sessionCount = (db.prepare("SELECT COUNT(*) AS n FROM sessions").get() as { n: number }).n;
+        expect(sessionCount).toBe(seededSessionCount);
+        const preserved = db.prepare("SELECT id, pid FROM sessions WHERE id = ?").get(sessionId) as { id: string; pid: number } | null;
+        expect(preserved?.id).toBe(sessionId);
+        expect(preserved?.pid).toBe(1234);
+      } finally {
+        db.close();
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  it("role_versions audit table is preserved after migration", () => {
+  it("role_versions audit table is preserved with rows intact; FK integrity holds after migration", () => {
     const dir = mkdtempSync(join(tmpdir(), "clobber-491-audit-"));
     const path = join(dir, "test.db");
+    let seededVersionCount = 0;
     try {
       buildAndRegress({
         path,
         seed: (db) => {
           createRoleStore(db).create({ name: "worker", persistent: false });
+          seededVersionCount = (db.prepare("SELECT COUNT(*) AS n FROM role_versions").get() as { n: number }).n;
         },
-        regress: () => {},
+        regress: regressToPrePinDrop,
       });
 
       const db = createDatabase(path);
-      const tables = (
-        db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as Array<{ name: string }>
-      ).map((r) => r.name);
-      expect(tables).toContain("role_versions");
-      db.close();
+      try {
+        // (c) role_versions table still present
+        const tables = (
+          db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as Array<{ name: string }>
+        ).map((r) => r.name);
+        expect(tables).toContain("role_versions");
+
+        // (c) role_versions rows preserved through the table rebuild
+        const versionCount = (db.prepare("SELECT COUNT(*) AS n FROM role_versions").get() as { n: number }).n;
+        expect(versionCount).toBe(seededVersionCount);
+
+        // (d) FK integrity — no dangling references after migration
+        const fkViolations = db.prepare("PRAGMA foreign_key_check").all();
+        expect(fkViolations).toHaveLength(0);
+      } finally {
+        db.close();
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
