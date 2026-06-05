@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Habit, PromptModuleRef, RoleSkill, WakeProgram } from "@clobber/shared";
 import { compileSelfHabits } from "./compile-self-habits.ts";
@@ -119,11 +119,16 @@ function mergeHandlers(baselineJson: string, compiled: CompiledHandlers): string
 
 function writeSkills(pluginDir: string, skills: readonly RoleSkill[]): void {
   const skillsDir = join(pluginDir, "skills");
+  // Clear stale dirs so skills removed via edit don't survive re-spawn (#387).
+  if (existsSync(skillsDir)) rmSync(skillsDir, { recursive: true });
   mkdirSync(skillsDir, { recursive: true });
   for (const skill of skills) {
     const skillDir = join(skillsDir, skill.name);
     mkdirSync(skillDir, { recursive: true });
     writeFileSync(join(skillDir, "SKILL.md"), skill.body);
+    for (const [relPath, content] of Object.entries(skill.files ?? {})) {
+      writeFileSync(join(skillDir, relPath), content);
+    }
   }
 }
 

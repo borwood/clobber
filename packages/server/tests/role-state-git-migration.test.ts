@@ -10,7 +10,7 @@ import { createWorkspaceStore } from "../src/workspace-store.ts";
 import { seedWorkspaceRoles } from "../src/seed-workspace-roles.ts";
 import { ensureUpstreamRoleRepo, loadRoleBundleAtCommit } from "../src/role-repo.ts";
 import { createWorkspaceRoleRepos } from "../src/workspace-role-repos.ts";
-import { roleSnapshotToContract } from "../src/role-tree.ts";
+import { roleSnapshotToContract } from "../src/role-tree-snapshot.ts";
 import { snapshotShippedBundle } from "../src/role-version-snapshot.ts";
 import { enumerateShippedRoles } from "@clobber/runtime";
 import { migrateRoleStateToWorkspaceRepos } from "../src/role-state-git-migration.ts";

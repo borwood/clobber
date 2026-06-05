@@ -22,7 +22,7 @@ import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
 import { createFinalReportConsumerStateStore } from "../src/final-report-consumer.ts";
 import { loadRoleContractAtCommit } from "../src/role-repo.ts";
-import { roleContractToSnapshot } from "../src/role-tree.ts";
+import { roleContractToSnapshot } from "../src/role-tree-snapshot.ts";
 import { commitOnBranch } from "../src/role-checkout-repo.ts";
 import { revParse } from "../src/role-git.ts";
 import type { AgentSpawner, SpawnedAgentInfo } from "../src/types.ts";

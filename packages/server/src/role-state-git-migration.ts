@@ -7,7 +7,7 @@ import {
   type ForkRef,
   type UpstreamRoleRepo,
 } from "./role-repo.ts";
-import { roleSnapshotToContract } from "./role-tree.ts";
+import { roleSnapshotToContract } from "./role-tree-snapshot.ts";
 import type { WorkspaceRoleRepos } from "./workspace-role-repos.ts";
 
 // The per-role cutover's inputs, narrowed so the working-copy `checkout` verb

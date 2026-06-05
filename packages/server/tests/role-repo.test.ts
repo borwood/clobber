@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { loadRoleBundle } from "@clobber/runtime";
 import type { RoleBundleData } from "@clobber/runtime";
-import { roleSnapshotToContract } from "../src/role-tree.ts";
+import { roleSnapshotToContract } from "../src/role-tree-snapshot.ts";
 import { snapshotShippedBundle } from "../src/role-version-snapshot.ts";
 import {
   materializeUpstreamRoleRepo,

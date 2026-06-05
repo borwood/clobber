@@ -1,12 +1,8 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { baseRole, enumerateShippedRoles, type BaseLayer, type RoleBundleData } from "@clobber/runtime";
-import {
-  deserializeRoleTree,
-  roleSnapshotToContract,
-  serializeRoleTree,
-  type RoleTreeContract,
-} from "./role-tree.ts";
+import { deserializeRoleTree, serializeRoleTree, type RoleTreeContract } from "./role-tree.ts";
+import { roleSnapshotToContract } from "./role-tree-snapshot.ts";
 import { commitTree, git, readTreeAtCommit, revParse } from "./role-git.ts";
 import { snapshotShippedBundle } from "./role-version-snapshot.ts";
 

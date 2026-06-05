@@ -30,7 +30,7 @@ import {
 } from "../src/role-repo.ts";
 import { createRoleContentCache } from "../src/role-content-cache.ts";
 import { embodyRole, rolePin, sessionPin } from "../src/embody-role.ts";
-import { roleSnapshotToContract } from "../src/role-tree.ts";
+import { roleSnapshotToContract } from "../src/role-tree-snapshot.ts";
 import { snapshotShippedBundle } from "../src/role-version-snapshot.ts";
 
 // #349 pt2 — git-as-truth wired into the live embodiment path. Part 1 (#358)

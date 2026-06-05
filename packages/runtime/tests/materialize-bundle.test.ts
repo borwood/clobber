@@ -142,3 +142,65 @@ describe("materializeBundle", () => {
     ).toBe(true);
   });
 });
+
+// #450 — companion files alongside SKILL.md must be materialized to the runtime
+// plugin dir so agents can read them during a session.
+describe("materializeBundle — companion files (#450)", () => {
+  it("writes companion files alongside SKILL.md under skills/<name>/", () => {
+    const bundle: RoleBundleData = {
+      pluginName: "test-role",
+      framing: "",
+      systemPrompt: "prompt",
+      allowedTools: [],
+      skills: [
+        {
+          name: "my-skill",
+          body: "# MY SKILL",
+          files: { "context.md": "companion content", "runbook.md": "runbook content" },
+        },
+      ],
+      promptModuleRefs: [],
+      wakePrograms: [],
+      hooksJson: "{}",
+      habits: [],
+    };
+    const result = materializeBundle({
+      bundle,
+      repoPath,
+      hookUrl: "http://test.invalid/hook",
+      cliEntry: "/dummy/cli.ts",
+      inSessionHabits: false,
+    });
+
+    const skillDir = join(result.pluginDir, "skills", "my-skill");
+    expect(existsSync(join(skillDir, "SKILL.md"))).toBe(true);
+    expect(existsSync(join(skillDir, "context.md"))).toBe(true);
+    expect(readFileSync(join(skillDir, "context.md"), "utf8")).toBe("companion content");
+    expect(existsSync(join(skillDir, "runbook.md"))).toBe(true);
+    expect(readFileSync(join(skillDir, "runbook.md"), "utf8")).toBe("runbook content");
+  });
+
+  it("a skill with no companion files still materializes correctly (files absent or empty)", () => {
+    const bundle: RoleBundleData = {
+      ...({
+        pluginName: "test-role",
+        framing: "",
+        systemPrompt: "prompt",
+        allowedTools: [],
+        skills: [{ name: "plain-skill", body: "plain body" }],
+        promptModuleRefs: [],
+        wakePrograms: [],
+        hooksJson: "{}",
+        habits: [],
+      } as RoleBundleData),
+    };
+    const result = materializeBundle({
+      bundle,
+      repoPath,
+      hookUrl: "http://test.invalid/hook",
+      cliEntry: "/dummy/cli.ts",
+      inSessionHabits: false,
+    });
+    expect(existsSync(join(result.pluginDir, "skills", "plain-skill", "SKILL.md"))).toBe(true);
+  });
+});
