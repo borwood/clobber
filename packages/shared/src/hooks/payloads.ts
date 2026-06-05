@@ -80,6 +80,39 @@ export const SessionStartPayloadSchema = z.object({
 });
 export type SessionStartPayload = z.infer<typeof SessionStartPayloadSchema>;
 
+// System-generated diagnostic event — not a claude hook. Persisted per failed
+// respawn attempt so operators can root-cause cycle boot failures without
+// grepping ephemeral dev-server stderr. Keyed on kill_session_id because the
+// fresh session never booted and has no ID to attach to.
+export const CycleBootFailedPayloadSchema = z.object({
+  session_id: z.string(),
+  hook_event_name: z.literal("cycle.boot_failed"),
+  error: z.string(),
+  error_stack: z.string().optional(),
+  attempt: z.number(),
+  agent_id: z.string(),
+  role_id: z.string(),
+  kill_session_id: z.string(),
+  ts: z.number(),
+});
+export type CycleBootFailedPayload = z.infer<typeof CycleBootFailedPayloadSchema>;
+
+// Payloads that arrive via the /hook route — always sent by a live claude
+// session. Does NOT include system-generated diagnostic events.
+export const InboundHookPayloadSchema = z.discriminatedUnion("hook_event_name", [
+  PreToolUsePayloadSchema,
+  PostToolUsePayloadSchema,
+  UserPromptSubmitPayloadSchema,
+  NotificationPayloadSchema,
+  StopPayloadSchema,
+  SessionEndPayloadSchema,
+  PreCompactPayloadSchema,
+  SessionStartPayloadSchema,
+]);
+export type InboundHookPayload = z.infer<typeof InboundHookPayloadSchema>;
+
+// Full event union stored in the events table — inbound payloads plus
+// system-generated diagnostic events (e.g. cycle.boot_failed).
 export const HookPayloadSchema = z.discriminatedUnion("hook_event_name", [
   PreToolUsePayloadSchema,
   PostToolUsePayloadSchema,
@@ -89,6 +122,7 @@ export const HookPayloadSchema = z.discriminatedUnion("hook_event_name", [
   SessionEndPayloadSchema,
   PreCompactPayloadSchema,
   SessionStartPayloadSchema,
+  CycleBootFailedPayloadSchema,
 ]);
 export type HookPayload = z.infer<typeof HookPayloadSchema>;
 

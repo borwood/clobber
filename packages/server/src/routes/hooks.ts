@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { HookPayloadSchema, type HookPayload } from "@clobber/shared";
+import { InboundHookPayloadSchema, type InboundHookPayload } from "@clobber/shared";
 import type { EventStore } from "../event-store.ts";
 import type { AgentStore } from "../agent-store.ts";
 import type { SessionStore } from "../session-store.ts";
@@ -51,7 +51,7 @@ export function registerHookRoutes(
 ): void {
   const askBridgePollWindowMs = deps.askBridgePollWindowMs ?? DEFAULT_ASK_BRIDGE_POLL_WINDOW_MS;
   app.post("/hook", async (request, reply) => {
-    const parsed = HookPayloadSchema.safeParse(request.body);
+    const parsed = InboundHookPayloadSchema.safeParse(request.body);
     if (!parsed.success) {
       reply.code(400);
       return { error: "invalid hook payload", issues: parsed.error.issues };
@@ -87,7 +87,7 @@ export function registerHookRoutes(
 }
 
 async function applySessionLifecycle(
-  payload: HookPayload,
+  payload: InboundHookPayload,
   deps: {
     sessions: SessionStore;
     agents: AgentStore;

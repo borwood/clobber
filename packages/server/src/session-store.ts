@@ -8,7 +8,14 @@ export interface SessionStore {
   // resolves a recipient agent to its current session; an ended one still
   // resolves (so the sender gets a 410, not a 404, for a recipient that died).
   latestForAgent(agentId: string): Session | null;
+  // The agent's most recently ended session — used by the cycle supervisor to
+  // find the right recovery target when zero live sessions are detected.
+  latestEndedForAgent(agentId: string): Session | null;
   countActive(workspaceId: string, roleId: string): number;
+  // Count active sessions for a workspace+role, excluding one specific session.
+  // Used by the cycle ceiling-exemption: the kill-target is in-flight and must
+  // not block the replacement's capacity check.
+  countActiveExcluding(workspaceId: string, roleId: string, excludeSessionId: string): number;
   markEnded(id: string): boolean;
   // Revive an ended session: clear ended_at and the was-live-at-shutdown flag
   // so the row counts as active again and drops out of the resume-candidate set.
@@ -90,8 +97,14 @@ export function createSessionStore(db: Database): SessionStore {
   const latestForAgentStmt = db.prepare(
     "SELECT * FROM sessions WHERE agent_id = ? ORDER BY started_at DESC, id DESC LIMIT 1",
   );
+  const latestEndedForAgentStmt = db.prepare(
+    "SELECT * FROM sessions WHERE agent_id = ? AND ended_at IS NOT NULL ORDER BY ended_at DESC, id DESC LIMIT 1",
+  );
   const countActiveStmt = db.prepare(
     "SELECT COUNT(*) AS n FROM sessions WHERE workspace_id = ? AND role_id = ? AND ended_at IS NULL",
+  );
+  const countActiveExcludingStmt = db.prepare(
+    "SELECT COUNT(*) AS n FROM sessions WHERE workspace_id = ? AND role_id = ? AND ended_at IS NULL AND id != ?",
   );
   const markEndedStmt = db.prepare(
     "UPDATE sessions SET ended_at = ? WHERE id = ? AND ended_at IS NULL",
@@ -201,8 +214,18 @@ export function createSessionStore(db: Database): SessionStore {
       return row === null ? null : rowToSession(row);
     },
 
+    latestEndedForAgent(agentId) {
+      const row = latestEndedForAgentStmt.get(agentId) as Row | null;
+      return row === null ? null : rowToSession(row);
+    },
+
     countActive(workspaceId, roleId) {
       const row = countActiveStmt.get(workspaceId, roleId) as { n: number };
+      return row.n;
+    },
+
+    countActiveExcluding(workspaceId, roleId, excludeSessionId) {
+      const row = countActiveExcludingStmt.get(workspaceId, roleId, excludeSessionId) as { n: number };
       return row.n;
     },
 

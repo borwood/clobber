@@ -173,6 +173,10 @@ export function registerAllRoutes(
     runtimeProvider,
     gate: toolTokenGate,
     layoutEvents,
+    store: opts.store,
+    sleep: opts.sleep !== undefined
+      ? opts.sleep
+      : (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms)),
     onSessionEnded,
     onWorkerDone,
     resumeEnded,

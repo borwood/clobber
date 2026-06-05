@@ -78,6 +78,9 @@ export interface ServerOptions {
   // session's role and reading its habits; injectable so a test can drive the
   // receiver/gate with a fixed habit set without standing up the git role repo.
   readonly resolveSessionHabits?: (session: Session) => readonly Habit[];
+  // Test seam: override the async sleep used for cycle respawn backoff. When
+  // absent the server wires the real setTimeout implementation.
+  readonly sleep?: (ms: number) => Promise<void>;
   // The receiver's [0,1) `rand` sampler and `inject.bash` runner. Default to
   // Math.random / a real `execSync`; injectable so probabilistic and shell-
   // enriched habits are deterministically testable.
