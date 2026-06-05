@@ -75,6 +75,10 @@ export type Role = z.infer<typeof RoleSchema>;
 export const RoleSkillSchema = z.object({
   name: z.string().min(1),
   body: z.string().min(1),
+  // Companion files in the skill directory (#450). Keys are paths relative to
+  // skills/<name>/ (e.g. "context.md"), values are file content. `body` IS
+  // SKILL.md; companions are everything else.
+  files: z.record(z.string().min(1), z.string()).optional(),
 });
 export type RoleSkill = z.infer<typeof RoleSkillSchema>;
 

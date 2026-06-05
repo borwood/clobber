@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { RoleVersionSchema, type Role, type RoleVersion } from "@clobber/shared";
-import { roleContractToSnapshot } from "./role-tree.ts";
+import { roleContractToSnapshot } from "./role-tree-snapshot.ts";
 import type { RoleContentCache } from "./role-content-cache.ts";
 import type { RoleVersionStore } from "./role-version-store.ts";
 import { resolveRoleRepoDir, type RoleRepoResolution } from "./resolve-role-repo-dir.ts";

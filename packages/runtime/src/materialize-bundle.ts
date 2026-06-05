@@ -126,6 +126,9 @@ function writeSkills(pluginDir: string, skills: readonly RoleSkill[]): void {
     const skillDir = join(skillsDir, skill.name);
     mkdirSync(skillDir, { recursive: true });
     writeFileSync(join(skillDir, "SKILL.md"), skill.body);
+    for (const [relPath, content] of Object.entries(skill.files ?? {})) {
+      writeFileSync(join(skillDir, relPath), content);
+    }
   }
 }
 

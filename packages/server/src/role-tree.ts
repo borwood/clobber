@@ -1,9 +1,7 @@
 import {
   HabitSchema,
   PromptModuleRefsSchema,
-  RoleSkillSchema,
   RoleTriggerSchema,
-  WakeProgramsSchema,
   triggerId,
   type Habit,
   type PromptModuleRef,
@@ -11,8 +9,6 @@ import {
   type RoleTrigger,
   type WakeProgram,
 } from "@clobber/shared";
-import { z } from "zod";
-import type { RoleVersionSnapshot } from "./role-version-snapshot.ts";
 
 // #348 — the canonical role ↔ git-tree representation.
 //
@@ -71,10 +67,6 @@ export interface RoleTreeContract {
 // committing it to a git repo is #349's concern.
 export type RoleTree = ReadonlyMap<string, string>;
 
-const ToolListSchema = z.array(z.string().min(1));
-const TriggersSchema = z.array(RoleTriggerSchema);
-const SkillsSchema = z.array(RoleSkillSchema);
-
 const byName = <T extends { name: string }>(a: T, b: T): number =>
   a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
 
@@ -93,45 +85,13 @@ const byHabit = (a: Habit, b: Habit): number => {
 // Sets resolved by name/identity are normalized so the contract has one
 // canonical form: skills and wake-programs by name, triggers by trigger id.
 // seedRefs and the allow-lists keep their order — there order is meaning.
-function canonicalize(c: RoleTreeContract): RoleTreeContract {
+export function canonicalize(c: RoleTreeContract): RoleTreeContract {
   return {
     ...c,
     skills: [...c.skills].sort(byName),
     wakePrograms: [...c.wakePrograms].sort(byName),
     triggers: [...c.triggers].sort(byTriggerId),
     habits: [...c.habits].sort(byHabit),
-  };
-}
-
-export function roleSnapshotToContract(snapshot: RoleVersionSnapshot): RoleTreeContract {
-  return canonicalize({
-    framing: snapshot.framing,
-    systemPrompt: snapshot.system_prompt,
-    skills: SkillsSchema.parse(JSON.parse(snapshot.skills_json)),
-    allowedTools: ToolListSchema.parse(JSON.parse(snapshot.allowed_tools_json)),
-    allowedCliCommands: ToolListSchema.parse(JSON.parse(snapshot.allowed_cli_commands_json)),
-    hooks: snapshot.hooks_json,
-    triggers: TriggersSchema.parse(JSON.parse(snapshot.triggers_json)),
-    seedRefs: PromptModuleRefsSchema.parse(JSON.parse(snapshot.seed_refs_json)),
-    wakePrograms: WakeProgramsSchema.parse(JSON.parse(snapshot.wake_programs_json)),
-    defaultWakeProgram: snapshot.default_wake_program,
-    // Phase 0: habits are git-tree-only; the role-version snapshot has no column.
-    habits: [],
-  });
-}
-
-export function roleContractToSnapshot(contract: RoleTreeContract): RoleVersionSnapshot {
-  return {
-    framing: contract.framing,
-    system_prompt: contract.systemPrompt,
-    skills_json: JSON.stringify(contract.skills),
-    allowed_tools_json: JSON.stringify(contract.allowedTools),
-    allowed_cli_commands_json: JSON.stringify(contract.allowedCliCommands),
-    hooks_json: contract.hooks,
-    triggers_json: JSON.stringify(contract.triggers),
-    seed_refs_json: JSON.stringify(contract.seedRefs),
-    wake_programs_json: JSON.stringify(contract.wakePrograms),
-    default_wake_program: contract.defaultWakeProgram,
   };
 }
 
@@ -175,6 +135,9 @@ export function serializeRoleTree(contract: RoleTreeContract): RoleTree {
 
   for (const skill of contract.skills) {
     tree.set(`skills/${skill.name}/SKILL.md`, skill.body);
+    for (const [relPath, content] of Object.entries(skill.files ?? {})) {
+      tree.set(`skills/${skill.name}/${relPath}`, content);
+    }
   }
 
   for (const program of contract.wakePrograms) {
@@ -222,11 +185,31 @@ function requireFile(tree: RoleTree, path: string): string {
 }
 
 function readSkills(tree: RoleTree): RoleSkill[] {
+  // Group all paths under skills/<name>/ by skill name. Any skill dir that
+  // lacks SKILL.md is malformed (#450: companions without a body is an error).
+  const bySkillName = new Map<string, { body?: string; files: Record<string, string> }>();
+  for (const [path] of tree) {
+    if (!/^skills\/[^/]+\/.+$/.test(path)) continue;
+    const rest = path.slice("skills/".length); // "<name>/<file>"
+    const slashIdx = rest.indexOf("/");
+    const name = rest.slice(0, slashIdx);
+    const file = rest.slice(slashIdx + 1);
+    if (!bySkillName.has(name)) bySkillName.set(name, { files: {} });
+    const entry = bySkillName.get(name)!;
+    if (file === "SKILL.md") {
+      entry.body = tree.get(path)!;
+    } else {
+      entry.files[file] = tree.get(path)!;
+    }
+  }
   const skills: RoleSkill[] = [];
-  for (const [path, body] of tree) {
-    if (!/^skills\/[^/]+\/SKILL\.md$/.test(path)) continue;
-    const name = path.slice("skills/".length, -"/SKILL.md".length);
-    skills.push({ name, body });
+  for (const [name, entry] of bySkillName) {
+    if (entry.body === undefined) {
+      throw new Error(`skill dir '${name}' has companion files but no SKILL.md`);
+    }
+    const skill: RoleSkill = { name, body: entry.body };
+    if (Object.keys(entry.files).length > 0) skill.files = entry.files;
+    skills.push(skill);
   }
   return skills.sort(byName);
 }

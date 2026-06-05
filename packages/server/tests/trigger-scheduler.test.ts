@@ -23,7 +23,7 @@ import { writeRoleVersion } from "./_role-version-fixture.ts";
 import { seedWorkspaceRoles } from "../src/seed-workspace-roles.ts";
 import { ensureUpstreamRoleRepo, commitContractOnBranch } from "../src/role-repo.ts";
 import { createRoleContentCache } from "../src/role-content-cache.ts";
-import { roleSnapshotToContract } from "../src/role-tree.ts";
+import { roleSnapshotToContract } from "../src/role-tree-snapshot.ts";
 import { snapshotShippedBundle } from "../src/role-version-snapshot.ts";
 import { attachSessionToAgent, type SpawnPipelineDeps } from "../src/spawn-pipeline.ts";
 import { claudeRuntimeProvider, serializeUserMessage, loadRoleBundle } from "@clobber/runtime";

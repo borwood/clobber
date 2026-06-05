@@ -2,7 +2,8 @@ import type { Role, RoleEditManifest, RoleTrigger } from "@clobber/shared";
 import { commitOnBranch, ensureEditBranch } from "./role-checkout-repo.ts";
 import { loadRoleContractAtCommit } from "./role-repo.ts";
 import { resolveCurrentRoleVersion } from "./resolve-role-content.ts";
-import { roleSnapshotToContract, type RoleTreeContract } from "./role-tree.ts";
+import { roleSnapshotToContract } from "./role-tree-snapshot.ts";
+import type { RoleTreeContract } from "./role-tree.ts";
 import {
   ensureCommitPinned,
   manifestFromRole,
