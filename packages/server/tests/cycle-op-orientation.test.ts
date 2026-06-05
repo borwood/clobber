@@ -342,6 +342,38 @@ describe("cycle op-level orientation (#502)", () => {
     await teardown(h);
   });
 
+  it("resume of a legacy cycled session (wake_program=cycle, no op_level_addon) re-composes orientation", async () => {
+    // Before #502 the cycle operation stamped sessions with the engine-injected
+    // `cycle` built-in wake-program (orientation in layer C) rather than
+    // custom + op_level_addon. Such sessions exist in production DBs. Resume must
+    // still resolve "cycle" as a built-in, or it 500s with
+    // "role has no wake-program named: cycle".
+    const h = buildHarness();
+    const boot = await bootManager(h, 1);
+
+    // Reshape the booted session into the legacy cycled shape.
+    h.db
+      .prepare("UPDATE sessions SET wake_program = 'cycle', op_level_addon = NULL WHERE id = ?")
+      .run(boot.callerSessionId);
+
+    await exitSession(h, boot.callerSessionId);
+    expect(h.sessions.get(boot.callerSessionId)!.ended_at).not.toBeUndefined();
+
+    const resumeRes = await h.server.inject({
+      method: "POST",
+      url: `/sessions/${boot.callerSessionId}/resume`,
+      payload: { prompt: "wake again" },
+    });
+    expect(resumeRes.statusCode).toBe(200);
+
+    // The `cycle` built-in carries the orientation as its layer-C system, so a
+    // resumed legacy session re-composes it even with op_level_addon absent.
+    const resumedRecord = h.records[h.records.length - 1]!;
+    expect(resumedRecord.systemPrompt).toContain("freshly-cycled");
+
+    await teardown(h);
+  });
+
   it("spawn (non-cycle) has no op-level orientation layer", async () => {
     const h = buildHarness();
     const ws = h.workspaces.create({ name: "ws-spawn", repo_path: repoPath });

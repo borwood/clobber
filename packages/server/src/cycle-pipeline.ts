@@ -1,3 +1,4 @@
+import { CYCLE_ORIENTATION_LAYER } from "@clobber/shared";
 import type { Agent, CycleBootFailedPayload, Role, Workspace } from "@clobber/shared";
 import {
   attachSessionToAgent,
@@ -34,15 +35,6 @@ export interface CycleDeps extends SpawnPipelineDeps {
   // Injectable from ServerOptions; tests pass a no-op to avoid real timer delays.
   readonly sleep: (ms: number) => Promise<void>;
 }
-
-const CYCLE_ORIENTATION_LAYER = [
-  "You are a freshly-cycled embodiment of this agent. You have NO prior",
-  "conversation — your predecessor shed its working context deliberately so",
-  "that you start clean. Your continuity does not live in this session's",
-  "history; it lives in your office notes and in the handoff brief that",
-  "follows as your opening turn. Read your office notes first, then act on the",
-  "handoff.",
-].join("\n");
 
 export interface CycleInput {
   readonly killSessionId: string;
