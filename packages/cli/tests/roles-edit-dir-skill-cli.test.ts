@@ -117,6 +117,30 @@ function workerContract() {
 }
 
 describe("--add-skill name=DIR (#450)", () => {
+  it("nested companions: files under subdirs are collected with relative paths (#517)", async () => {
+    const skillDir = join(h.tmpDir, "nested-skill-dir");
+    mkdirSync(skillDir);
+    mkdirSync(join(skillDir, "sub"));
+    writeFileSync(join(skillDir, "SKILL.md"), "# NESTED SKILL");
+    writeFileSync(join(skillDir, "top.md"), "top-level companion");
+    writeFileSync(join(skillDir, "sub", "deep.md"), "nested companion");
+
+    const s = new PassThrough();
+    const code = await run({
+      argv: ["roles", "edit", "worker", "--add-skill", `nested-skill=${skillDir}`],
+      env: envFor(h.managerToken),
+      stdout: s,
+      stderr: s,
+    });
+    expect(code).toBe(0);
+
+    const contract = workerContract();
+    const skill = contract.skills.find((sk) => sk.name === "nested-skill");
+    expect(skill?.body).toBe("# NESTED SKILL");
+    expect(skill?.files?.["top.md"]).toBe("top-level companion");
+    expect(skill?.files?.["sub/deep.md"]).toBe("nested companion");
+  });
+
   it("reads SKILL.md as body and companion files as skill.files", async () => {
     const skillDir = join(h.tmpDir, "my-skill-dir");
     mkdirSync(skillDir);
