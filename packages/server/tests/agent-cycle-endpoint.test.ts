@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { createServer } from "../src/server.ts";
 import { createDatabase } from "../src/db.ts";
-import { createEventStore } from "../src/event-store.ts";
+import { createEventStore, type EventStore } from "../src/event-store.ts";
 import { createWorkspaceStore } from "../src/workspace-store.ts";
 import { createRoleStore } from "../src/role-store.ts";
 import { createRoleVersionStore } from "../src/role-version-store.ts";
@@ -22,7 +22,7 @@ import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
 import { createFinalReportConsumerStateStore } from "../src/final-report-consumer.ts";
 import { createLayoutEventStore } from "../src/layout-event-store.ts";
 import type { AgentSpawner, SpawnedAgentInfo, AgentSpawnRequest } from "../src/types.ts";
-import type { Session } from "@clobber/shared";
+import type { CycleBootFailedPayload, Session } from "@clobber/shared";
 
 // #320 — `clobber cycle`, the kill-first capstone over the three shipped
 // primitives (token gate #321, layout bus #326, agent-target #323). Exercised
@@ -50,9 +50,10 @@ interface Harness {
   sessions: ReturnType<typeof createSessionStore>;
   tokens: ReturnType<typeof createSessionTokenStore>;
   layoutEvents: ReturnType<typeof createLayoutEventStore>;
+  events: EventStore;
   stdinChunks: Map<string, string>;
   spawns: Map<string, SpawnRecord>;
-  control: { failNextSpawns: number };
+  control: { failNextSpawns: number; failKillForSessions: Set<string> };
 }
 
 function buildHarness(): Harness {
@@ -66,9 +67,10 @@ function buildHarness(): Harness {
   const tokens = createSessionTokenStore(db);
   const agentStatuses = createAgentStatusStore(db);
   const layoutEvents = createLayoutEventStore();
+  const events = createEventStore(db);
   const stdinChunks = new Map<string, string>();
   const spawns = new Map<string, SpawnRecord>();
-  const control = { failNextSpawns: 0 };
+  const control = { failNextSpawns: 0, failKillForSessions: new Set<string>() };
   let pidCounter = 7000;
   const spawner: AgentSpawner = (req): SpawnedAgentInfo => {
     // A boot failure: the only failure mode cycle's minimal in-handler retry
@@ -97,12 +99,16 @@ function buildHarness(): Harness {
       pid: pidCounter,
       exited: new Promise<number | null>(() => {}),
       stdin,
-      kill: () => {},
+      kill: () => {
+        if (control.failKillForSessions.has(sessionId)) {
+          throw new Error("simulated kill failure");
+        }
+      },
     };
   };
   const server = createServer({
     db,
-    store: createEventStore(db),
+    store: events,
     workspaces,
     roles,
     roleVersions,
@@ -122,6 +128,7 @@ function buildHarness(): Harness {
     dispatches: createTriggerDispatchStore(db),
     finalReportConsumerState: createFinalReportConsumerStateStore(db),
     layoutEvents,
+    sleep: () => Promise.resolve(),
   });
   return {
     server,
@@ -132,6 +139,7 @@ function buildHarness(): Harness {
     sessions,
     tokens,
     layoutEvents,
+    events,
     stdinChunks,
     spawns,
     control,
@@ -341,23 +349,68 @@ describe("clobber cycle (#320)", () => {
     await teardown(h);
   });
 
-  it("leaves the token live (durable intent) when the bounded respawn retries are exhausted", async () => {
+  it("spawn-first: exhausted retries leave the old session alive — token preserved, never zero sessions", async () => {
     const h = buildHarness();
     const boot = await bootManager(h, 1);
     await cycle(h, boot.callerToken, { prompt: "handoff" });
     const { token } = await waitForInterjectedToken(h, boot.callerSessionId);
 
-    // Exhaust every retry: the action throws (kill ✓ / spawn ✗) so the token is
-    // NOT consumed — it stays live as the durable record of intent.
+    // Exhaust every retry: action throws, token stays live as durable record.
     h.control.failNextSpawns = 50;
     const failed = await cycle(h, boot.callerToken, { token });
     expect(failed.status).toBe(500);
     expect(tokenRows(h, token)).toBe(1);
 
-    // Kill-first happened: the old session is ended and the agent is briefly
-    // "dark" with no live session (the window the UI renders as "cycling…").
+    // Spawn-first: old session was NEVER touched → agent keeps exactly one live session.
+    expect(h.sessions.get(boot.callerSessionId)!.ended_at).toBeUndefined();
+    expect(activeForAgent(h, boot.workspaceId, boot.agentId)).toHaveLength(1);
+    await teardown(h);
+  });
+
+  it("cycle.boot_failed event: each failed respawn attempt writes a durable event with non-empty stack", async () => {
+    const h = buildHarness();
+    const boot = await bootManager(h, 1);
+    await cycle(h, boot.callerToken, { prompt: "handoff" });
+    const { token } = await waitForInterjectedToken(h, boot.callerSessionId);
+
+    // Two attempts fail, third succeeds — expect exactly two failure events.
+    h.control.failNextSpawns = 2;
+    await cycle(h, boot.callerToken, { token });
+
+    const failEvents = h.events
+      .list()
+      .filter((e) => e.payload.hook_event_name === "cycle.boot_failed");
+    expect(failEvents).toHaveLength(2);
+
+    for (const e of failEvents) {
+      const p = e.payload as CycleBootFailedPayload;
+      expect(p.kill_session_id).toBe(boot.callerSessionId);
+      expect(p.agent_id).toBe(boot.agentId);
+      expect(typeof p.error_stack).toBe("string");
+      expect((p.error_stack as string).length).toBeGreaterThan(0);
+      expect(p.attempt).toBeGreaterThanOrEqual(0);
+    }
+    await teardown(h);
+  });
+
+  it("supervisor: old-kill failure after spawn-first → supervisor force-ends old, cycle returns 200, exactly one session", async () => {
+    const h = buildHarness();
+    const boot = await bootManager(h, 1);
+    await cycle(h, boot.callerToken, { prompt: "handoff" });
+    const { token } = await waitForInterjectedToken(h, boot.callerSessionId);
+
+    // Arm a kill failure for the old session: spawn succeeds, SIGTERM throws.
+    h.control.failKillForSessions.add(boot.callerSessionId);
+    const r = await cycle(h, boot.callerToken, { token });
+    // Supervisor recovered the invariant — cycle is functionally complete.
+    expect(r.status).toBe(200);
+
+    // Supervisor guaranteed exactly one active session (the fresh one).
+    const active = activeForAgent(h, boot.workspaceId, boot.agentId);
+    expect(active).toHaveLength(1);
+    expect(active[0]!.id).not.toBe(boot.callerSessionId);
+    // Old session was force-ended by supervisor.
     expect(h.sessions.get(boot.callerSessionId)!.ended_at).not.toBeUndefined();
-    expect(activeForAgent(h, boot.workspaceId, boot.agentId)).toHaveLength(0);
     await teardown(h);
   });
 

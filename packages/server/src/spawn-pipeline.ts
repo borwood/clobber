@@ -256,10 +256,13 @@ export function checkCapacity(
   deps: SpawnPipelineDeps,
   workspace: Workspace,
   role: Role,
+  excludeSessionId?: string,
 ): SpawnPipelineCapacityError | null {
   const ceilingRow = deps.workspaceRoles.getCeiling(workspace.id, role.id);
   const ceiling = ceilingRow === null ? 0 : ceilingRow.max_concurrent;
-  const active = deps.sessions.countActive(workspace.id, role.id);
+  const active = excludeSessionId !== undefined
+    ? deps.sessions.countActiveExcluding(workspace.id, role.id, excludeSessionId)
+    : deps.sessions.countActive(workspace.id, role.id);
   if (active >= ceiling) {
     return { ok: false, status: 403, error: "role at capacity", ceiling, active };
   }

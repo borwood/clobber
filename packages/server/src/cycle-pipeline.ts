@@ -1,37 +1,40 @@
-import type { Agent, Role, Workspace } from "@clobber/shared";
+import type { Agent, CycleBootFailedPayload, Role, Workspace } from "@clobber/shared";
 import {
   attachSessionToAgent,
   checkCapacity,
   type SpawnPipelineDeps,
   type SpawnPipelineSuccess,
 } from "./spawn-pipeline.ts";
-import { terminateSession } from "./session-lifecycle.ts";
+import { endSession } from "./session-lifecycle.ts";
 import type { LayoutEventStore } from "./layout-event-store.ts";
+import type { EventStore } from "./event-store.ts";
 
 /**
- * `clobber cycle` (#320) — the kill-first orchestration that re-seats an agent
- * into a fresh session: same agent identity, new session-id, clean context. It
- * composes three existing seams — `terminateSession` (kill) +
- * `attachSessionToAgent` (fresh session on the surviving agent row) + the #326
- * layout bus (tab-swap) — and is driven by the long-lived server because the
- * caller's own process is the kill target and cannot await its own replacement.
+ * `clobber cycle` (#320, #510) — spawn-first re-seat that guarantees exactly
+ * one live session throughout the operation.
  *
- * Kill-first (OQ3) is mandatory: the role ceiling counts active sessions, so a
- * spawn-first cycle would briefly hold two on a ceiling-1 role and the respawn's
- * capacity check would 403. Killing first drops `countActive`, freeing the slot.
- * It is safe for cycle because the old context is discarded by design — the
- * durable handoff lives in office notes + the #321 token's saved prompt + the
- * surviving agent row.
+ * Kill-first (the original OQ3 design) is reversed: the fresh session boots and
+ * is confirmed healthy BEFORE the old one is terminated. On boot failure the old
+ * session is never touched, making an exhausted-retry cycle a harmless no-op
+ * rather than permanent agent death.
+ *
+ * Ceiling exemption: spawn-first briefly holds two active sessions on a
+ * ceiling-1 role. `checkCapacity` accepts an `excludeSessionId` so the cycle
+ * replacement discounts its own kill-target from the active count, allowing the
+ * transient N+1 without widening the ceiling permanently.
+ *
+ * Supervisor: after the kill attempt, an invariant check enforces exactly one
+ * live session in both failure directions — zero (revival) and two (force-end).
  */
 
 export interface CycleDeps extends SpawnPipelineDeps {
   readonly layoutEvents: LayoutEventStore;
+  // Durable event log for cycle.boot_failed diagnostics (#510).
+  readonly store: EventStore;
+  // Injectable from ServerOptions; tests pass a no-op to avoid real timer delays.
+  readonly sleep: (ms: number) => Promise<void>;
 }
 
-// The orientation text is the op-level system layer for a cycled session (#502).
-// It is structural only — no behavioral directives, no prescription — so it is
-// safe to stamp on every cycle regardless of the chosen wake-program. Verbatim
-// per the spec; do not alter without confirming with the workspace owner.
 const CYCLE_ORIENTATION_LAYER = [
   "You are a freshly-cycled embodiment of this agent. You have NO prior",
   "conversation — your predecessor shed its working context deliberately so",
@@ -42,28 +45,13 @@ const CYCLE_ORIENTATION_LAYER = [
 ].join("\n");
 
 export interface CycleInput {
-  // The session to kill and re-seat. On redemption this is the token's bound
-  // bearer (the caller's own session for a self-cycle, or the target that
-  // redeemed for itself on a cross-agent request).
   readonly killSessionId: string;
-  // The handoff brief replayed as the fresh session's opening kick.
   readonly prompt: string;
-  // The wake-program for the fresh session. Defaults to "custom" so that a
-  // plain `cycle --prompt X` preserves today's X-as-kick behavior unchanged.
   readonly wakeProgram?: string;
 }
 
-// The fresh session boots immediately; a "boot failure" surfaces as a
-// synchronous spawn throw. The minimal in-handler retry (the bounded form of
-// the #325 spawn-health supervisor — explicitly NOT built here) recovers from a
-// transient failure; the #321 token stays live across an exhausted retry as the
-// durable record of intent, so the action throwing leaves it redeemable again.
-const RESPAWN_MAX_RETRIES = 5;
-const RESPAWN_BACKOFF_BASE_MS = 10;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+const RESPAWN_MAX_RETRIES = 8;
+const RESPAWN_BACKOFF_BASE_MS = 100;
 
 export async function executeCycle(deps: CycleDeps, input: CycleInput): Promise<void> {
   const { killSessionId, prompt, wakeProgram = "custom" } = input;
@@ -78,24 +66,36 @@ export async function executeCycle(deps: CycleDeps, input: CycleInput): Promise<
   const agent = deps.agents.get(agentId);
   if (agent === null) throw new Error(`cycle: agent not found: ${agentId}`);
 
-  // 1. Kill the old session first → its active-session slot frees, so the
-  //    respawn passes capacity even at ceiling-1. The agent row and worktree
-  //    survive (endSession preserves the row, terminateSession never touches the
-  //    checkout), which is what lets the fresh session re-seat in place.
-  terminateSession(killSessionId, deps);
+  // 1. Spawn fresh FIRST — the kill-target is excluded from the capacity count so
+  //    the transient N+1 at ceiling-1 is allowed. On boot failure the old session
+  //    is never touched, keeping the agent on the floor throughout.
+  const fresh = await respawnWithRetry(deps, { workspace, role, agent, prompt, wakeProgram, killSessionId });
 
-  // 2. Spawn the fresh session on the same agent with the op-level orientation
-  //    layer and the caller's chosen wake-program, retrying on transient boot
-  //    failure with bounded backoff.
-  const fresh = await respawnWithRetry(deps, { workspace, role, agent, prompt, wakeProgram });
+  // 2. Kill old: deliver the signal then unconditionally clean up the DB row.
+  //    Signal delivery may fail (e.g. pty already gone); endSession always runs
+  //    so the DB state is consistent regardless of signal outcome.
+  const live = deps.registry.get(killSessionId);
+  if (live !== null) {
+    try {
+      live.kill("SIGTERM");
+    } catch {
+      // Signal failed — supervisor below enforces exactly-one via DB cleanup.
+    }
+    deps.registry.unregister(killSessionId);
+  }
+  endSession(killSessionId, deps);
 
-  // 3. Re-target the dead session's tab to the new session via the layout bus;
-  //    clients apply it on their next poll (there is no WebSocket).
+  // 3. Swap the stale tab to the fresh session on the layout bus.
   deps.layoutEvents.emit(workspace.id, {
     type: "swap_session_tab",
     oldSessionId: killSessionId,
     newSessionId: fresh.session_id,
   });
+
+  // 4. Supervisor: belt-and-suspenders invariant check. Handles edge cases where
+  //    endSession was somehow skipped (DB race, unforeseen throw) or where both
+  //    sessions died simultaneously.
+  await superviseCycle(deps, { agentId, workspace, role, agent, killSessionId });
 }
 
 interface RespawnTarget {
@@ -104,6 +104,9 @@ interface RespawnTarget {
   readonly agent: Agent;
   readonly prompt: string;
   readonly wakeProgram: string;
+  // Excluded from the capacity count so the replacement is not blocked by its
+  // own kill-target at ceiling-1.
+  readonly killSessionId: string;
 }
 
 async function respawnWithRetry(
@@ -116,19 +119,42 @@ async function respawnWithRetry(
       return await respawnOnce(deps, target);
     } catch (err) {
       lastError = err;
+      recordBootFailure(deps, target, err, attempt);
       if (attempt < RESPAWN_MAX_RETRIES) {
-        await sleep(RESPAWN_BACKOFF_BASE_MS * 2 ** attempt);
+        await deps.sleep(RESPAWN_BACKOFF_BASE_MS * 2 ** attempt);
       }
     }
   }
   throw lastError;
 }
 
+function recordBootFailure(
+  deps: CycleDeps,
+  target: RespawnTarget,
+  err: unknown,
+  attempt: number,
+): void {
+  const error = err instanceof Error ? err.message : String(err);
+  const error_stack = err instanceof Error && err.stack !== undefined ? err.stack : undefined;
+  const event: CycleBootFailedPayload = {
+    session_id: target.killSessionId,
+    hook_event_name: "cycle.boot_failed",
+    error,
+    ...(error_stack !== undefined ? { error_stack } : {}),
+    attempt,
+    agent_id: target.agent.id,
+    role_id: target.role.id,
+    kill_session_id: target.killSessionId,
+    ts: Date.now(),
+  };
+  deps.store.append(event);
+}
+
 async function respawnOnce(
   deps: CycleDeps,
-  { workspace, role, agent, prompt, wakeProgram }: RespawnTarget,
+  { workspace, role, agent, prompt, wakeProgram, killSessionId }: RespawnTarget,
 ): Promise<SpawnPipelineSuccess> {
-  const capacity = checkCapacity(deps, workspace, role);
+  const capacity = checkCapacity(deps, workspace, role, killSessionId);
   if (capacity !== null) {
     throw new Error(
       `cycle respawn rejected: role at capacity (${capacity.active}/${capacity.ceiling})`,
@@ -139,10 +165,7 @@ async function respawnOnce(
     role,
     agent,
     prompt,
-    // The handoff brief is the caller's opening kick — tagged `wake-kick`.
     promptTag: { kind: "wake-kick" },
-    // The cycle operation always injects the orientation as the op-level layer,
-    // independently of the chosen wake-program.
     opLevelAddon: CYCLE_ORIENTATION_LAYER,
     wakeProgram,
   });
@@ -150,4 +173,44 @@ async function respawnOnce(
     throw new Error(`cycle respawn failed for role '${result.role}': ${result.error}`);
   }
   return result;
+}
+
+interface SuperviseInput {
+  readonly agentId: string;
+  readonly workspace: Workspace;
+  readonly role: Role;
+  readonly agent: Agent;
+  readonly killSessionId: string;
+}
+
+// Enforces exactly-one live session for the agent after a cycle operation. The
+// two failure directions are handled symmetrically:
+//   zero  → revive via a fresh idle session (most-recently-ended provides
+//            context to the human; the fresh session wakes with no kick).
+//   two+  → force-end the kill-target; the fresh session wins.
+async function superviseCycle(deps: CycleDeps, input: SuperviseInput): Promise<void> {
+  const { agentId, workspace, role, agent, killSessionId } = input;
+  const active = deps.sessions
+    .listActiveForWorkspace(workspace.id)
+    .filter((s) => s.agent_id === agentId);
+
+  if (active.length >= 2) {
+    // Two sessions: kill-signal failed and endSession was skipped. Force-end
+    // the old session via the DB path — leaves a potential zombie process but
+    // guarantees the DB invariant that matters for clobber's floor view.
+    endSession(killSessionId, deps);
+    return;
+  }
+
+  if (active.length === 0) {
+    // Zero sessions: both died simultaneously (race during cycle or immediate
+    // crash of the fresh session). Revive by attaching a new idle session so
+    // the agent reappears on the floor without requiring human intervention.
+    await attachSessionToAgent(deps, {
+      workspace,
+      role,
+      agent,
+      prompt: undefined,
+    });
+  }
 }

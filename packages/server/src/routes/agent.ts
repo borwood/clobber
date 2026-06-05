@@ -31,6 +31,7 @@ import { registerAgentReportsRoutes } from "./agent-reports.ts";
 import { listWorkspaceAgents, parseAgentStates } from "./_agents-listing.ts";
 import type { ToolTokenGateDeps } from "../tool-token-gate.ts";
 import type { LayoutEventStore } from "../layout-event-store.ts";
+import type { EventStore } from "../event-store.ts";
 
 export interface AgentRouteDeps {
   readonly sessionTokens: SessionTokenStore;
@@ -58,6 +59,11 @@ export interface AgentRouteDeps {
   // consumed by `clobber cycle` (#320) via `registerAgentCycleRoutes`.
   readonly gate: ToolTokenGateDeps;
   readonly layoutEvents: LayoutEventStore;
+  // Durable event store — cycle threads it for cycle.boot_failed diagnostics.
+  readonly store: EventStore;
+  // Async sleep used for cycle respawn backoff. Injectable from ServerOptions so
+  // tests can pass a no-op and avoid real timer delays.
+  readonly sleep: (ms: number) => Promise<void>;
   readonly onSessionEnded: (workspaceId: string, finishedSessionId: string) => void;
   readonly onWorkerDone: (workspaceId: string, finishedSessionId: string) => void;
   readonly resumeEnded: (input: { readonly sessionId: string; readonly prompt: string | undefined }) => Promise<ResumeEndedResult>;
