@@ -145,12 +145,31 @@ export async function runCheckoutStatus(ctx: CommandContext, json: boolean): Pro
   return emit(ctx, json, result, human);
 }
 
-export async function runDiff(ctx: CommandContext, json: boolean): Promise<number> {
-  const result = await request<{ changed: FileChange[]; stale: boolean }>(ctx.env, {
+export async function runDiff(
+  ctx: CommandContext,
+  json: boolean,
+  rest: readonly string[],
+): Promise<number> {
+  let stat = false;
+  for (const arg of rest) {
+    if (arg === "--stat") {
+      stat = true;
+    } else {
+      throw new CliUsageError(`roles diff: unexpected argument: ${arg}`);
+    }
+  }
+  const result = await request<{ changed: FileChange[]; diff: string; stale: boolean }>(ctx.env, {
     method: "GET",
     path: "/agent/role-checkout/diff",
   });
-  return emit(ctx, json, result, renderChanges(result.changed));
+  if (json) {
+    ctx.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return 0;
+  }
+  if (stat) return emit(ctx, false, result, renderChanges(result.changed));
+  const content = result.diff.length > 0 ? result.diff : "(no changes)\n";
+  ctx.stdout.write(content);
+  return 0;
 }
 
 export async function runCommit(

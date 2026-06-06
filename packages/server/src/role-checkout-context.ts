@@ -1,10 +1,11 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { renderRoleManifest, ROLE_FILE, type RoleEditManifest, type Role, type Session } from "@clobber/shared";
 import { roleEditSpecBody } from "@clobber/runtime";
 import { type RoleTree } from "./role-tree.ts";
 import { readCheckout } from "./role-checkout-repo.ts";
-import { readTreeAtCommit } from "./role-git.ts";
+import { gitDiffNoIndex, readTreeAtCommit, writeTreeToDir } from "./role-git.ts";
 import { migrateWorkspaceRole } from "./role-state-git-migration.ts";
 import { resolveRoleRepoDir } from "./resolve-role-repo-dir.ts";
 import { deskDirFor } from "./desk-store.ts";
@@ -167,4 +168,22 @@ export function baselineTree(role: Role, repoDir: string, branch: string): RoleT
   const tree = new Map(readTreeAtCommit(repoDir, branch));
   tree.set(ROLE_FILE, renderRoleMd(role));
   return tree;
+}
+
+// Compute a unified diff of the checkout against the branch-tip baseline. The
+// baseline is materialized to a temp dir so git diff --no-index can compare it
+// with the checkout dir; the temp dir is removed regardless of outcome. Paths
+// in the output are normalized to `a/<file>` / `b/<file>` so the caller gets a
+// clean readable diff without embedded temp-dir paths.
+export function computeDiffContent(checkoutDir: string, baseline: RoleTree): string {
+  const tmp = mkdtempSync(join(tmpdir(), "clobber-role-diff-"));
+  try {
+    writeTreeToDir(tmp, baseline);
+    const raw = gitDiffNoIndex(tmp, checkoutDir);
+    const a = tmp.endsWith("/") ? tmp : `${tmp}/`;
+    const b = checkoutDir.endsWith("/") ? checkoutDir : `${checkoutDir}/`;
+    return raw.replaceAll(a, "a/").replaceAll(b, "b/");
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
 }

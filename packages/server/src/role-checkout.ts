@@ -23,6 +23,7 @@ import {
   checkoutDirOf,
   clearCheckout,
   computeChanges,
+  computeDiffContent,
   deskFor,
   ensureCommitPinned,
   readSidecar,
@@ -172,8 +173,11 @@ export function diffCheckout(deps: RoleCheckoutDeps, session: Session): RouteRes
 
   const repoDir = repoDirOf(deps, role);
   const tip = revParse(repoDir, sidecar.branch);
-  const changed = computeChanges(checkoutDirOf(deskDir), baselineTree(role, repoDir, sidecar.branch));
-  return { status: 200, body: { changed, stale: tip !== sidecar.base_sha } };
+  const baseline = baselineTree(role, repoDir, sidecar.branch);
+  const checkoutDir = checkoutDirOf(deskDir);
+  const changed = computeChanges(checkoutDir, baseline);
+  const diff = computeDiffContent(checkoutDir, baseline);
+  return { status: 200, body: { changed, diff, stale: tip !== sidecar.base_sha } };
 }
 
 export interface CommitOptions {

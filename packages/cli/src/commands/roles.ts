@@ -199,8 +199,7 @@ export const rolesCommand: Command = {
       return runCheckoutStatus(ctx, json);
     }
     if (sub === "diff") {
-      assertNoArgs("diff", subArgs);
-      return runDiff(ctx, json);
+      return runDiff(ctx, json, subArgs);
     }
     if (sub === "commit") {
       return runCommit(ctx, json, subArgs);
