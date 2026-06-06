@@ -356,6 +356,82 @@ describe("notification inbox — rearmPending (survive process boundaries)", () 
     expect(store.get(n2.id)!.state).toBe("pending");
     db.close();
   });
+
+  it("one throwing row does not abort re-arm of remaining rows", async () => {
+    // This is batch-isolation: a DB-inconsistent or poison pending notification
+    // must not prevent rearming all subsequent rows in the same boot pass.
+    const db = createDatabase(":memory:");
+    const repoPath = mkdtempSync(join(tmpdir(), "clobber-rearm-batch-"));
+    writeFileSync(join(repoPath, ".git"), "gitdir: stub\n");
+    const clock = createTestClock(new Date("2026-06-06T10:00:00.000Z"));
+    const workspaces = createWorkspaceStore(db);
+    const roles = createRoleStore(db);
+    const agents = createAgentStore(db);
+    const sessions = createSessionStore(db);
+    const registry = createAgentRegistry();
+    const store = createNotificationStore(db);
+    let spawnCount = 0;
+
+    const ws = workspaces.create({ name: "ws", repo_path: repoPath });
+    seedWorkspaceRoles(db, ws.id);
+    const roleRow = db
+      .prepare("SELECT id FROM roles WHERE name = ? AND workspace_id = ?")
+      .get("manager", ws.id) as { id: string };
+    const goodAgent = agents.create({ workspace_id: ws.id, role_id: roleRow.id, label: "good" });
+
+    const attachSession: AttachSessionFn = async (input) => {
+      spawnCount += 1;
+      const sid = `sid-${spawnCount}`;
+      sessions.create({ id: sid, agent_id: (input as { agent: { id: string } }).agent.id, workspace_id: ws.id, role_id: roleRow.id, pid: 6000 + spawnCount });
+      return { ok: true, agent_id: (input as { agent: { id: string } }).agent.id, session_id: sid, pid: 6000 + spawnCount };
+    };
+
+    // Inject a roles store whose get() throws to simulate a poison row. The
+    // throwing row targets an agent whose role lookup explodes (invariant-breach
+    // path). The subsequent good row must still be rearmed.
+    let throwNext = false;
+    const poisonRoles: RoleStore = {
+      ...roles,
+      get: (id: string) => {
+        if (throwNext) {
+          throwNext = false;
+          throw new Error("simulated DB corruption on role lookup");
+        }
+        return roles.get(id);
+      },
+    };
+
+    const poisonAgent = agents.create({ workspace_id: ws.id, role_id: roleRow.id, label: "poison" });
+    // First pending row will hit the throwing role lookup
+    const nPoison = store.create(agentNotifReq(poisonAgent.id, "poison body"), T1);
+    // Second pending row is healthy and should be rearmed
+    const nGood = store.create(agentNotifReq(goodAgent.id, "good body"), T2);
+
+    // Prime the throw for the first deliver() call
+    throwNext = true;
+
+    const rearmDeps: RearmPendingDeps = {
+      agents,
+      roles: poisonRoles,
+      workspaces,
+      sessions,
+      registry,
+      runtimeProvider: claudeRuntimeProvider,
+      attachSession,
+      store,
+      clock,
+    };
+
+    // Must not reject — batch-isolation catches the throw and continues
+    await expect(rearmPending(rearmDeps)).resolves.toBeUndefined();
+
+    // Poison row stays pending (not delivered, not errored — loop skipped it)
+    expect(store.get(nPoison.id)!.state).toBe("pending");
+    // Good row was successfully rearmed
+    expect(store.get(nGood.id)!.state).toBe("delivered");
+    expect(spawnCount).toBe(1);
+    db.close();
+  });
 });
 
 // ─── (d) deliver() fold-ins ──────────────────────────────────────────────────

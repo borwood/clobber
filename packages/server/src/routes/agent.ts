@@ -33,6 +33,7 @@ import type { ToolTokenGateDeps } from "../tool-token-gate.ts";
 import type { LayoutEventStore } from "../layout-event-store.ts";
 import type { EventStore } from "../event-store.ts";
 import type { NotificationStore } from "../notification-store.ts";
+import type { Clock } from "../clock.ts";
 
 export interface AgentRouteDeps {
   readonly sessionTokens: SessionTokenStore;
@@ -65,6 +66,7 @@ export interface AgentRouteDeps {
   // Async sleep used for cycle respawn backoff. Injectable from ServerOptions so
   // tests can pass a no-op and avoid real timer delays.
   readonly sleep: (ms: number) => Promise<void>;
+  readonly clock: Clock;
   readonly onSessionEnded: (workspaceId: string, finishedSessionId: string) => void;
   readonly onWorkerDone: (workspaceId: string, finishedSessionId: string) => void;
   readonly resumeEnded: (input: { readonly sessionId: string; readonly prompt: string | undefined }) => Promise<ResumeEndedResult>;

@@ -167,7 +167,15 @@ export async function rearmPending(deps: RearmPendingDeps, agentId?: string): Pr
           (n) => n.recipient.kind === "agent" && n.recipient.agent_id === agentId,
         );
   for (const n of targets) {
-    const outcome = await deliver(deps, n, { kind: "drop" });
+    let outcome: DeliveryOutcome;
+    try {
+      outcome = await deliver(deps, n, { kind: "drop" });
+    } catch {
+      // One poison row (e.g. a DB-inconsistent notification) must not abort
+      // re-arm of the remaining rows — batch-isolation mirrors the drift-sweep
+      // route's per-role try/clean-report pattern.
+      continue;
+    }
     if (outcome.action === "spawned" || outcome.action === "injected") {
       deps.store.markDelivered(n.id, deps.clock.now().getTime());
     }

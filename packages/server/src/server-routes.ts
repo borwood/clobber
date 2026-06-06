@@ -179,6 +179,7 @@ export function registerAllRoutes(
     sleep: opts.sleep !== undefined
       ? opts.sleep
       : (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms)),
+    clock: deps.clock,
     onSessionEnded,
     onWorkerDone,
     resumeEnded,

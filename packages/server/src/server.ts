@@ -28,7 +28,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
 
   // Re-arm durable pending notifications that survived the last process boundary
   // (server restart clears the in-memory busy-queue; DB rows stay pending).
-  void rearmPending({
+  rearmPending({
     agents: deps.spawnPipelineDeps.agents,
     roles: deps.spawnPipelineDeps.roles,
     workspaces: deps.spawnPipelineDeps.workspaces,
@@ -38,7 +38,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     attachSession: (input) => attachSessionToAgent(deps.spawnPipelineDeps, input),
     store: deps.notificationStore,
     clock: deps.clock,
-  });
+  }).catch((err) => console.error("[clobber] rearmPending boot error:", err));
 
   deps.scheduler.start();
   deps.finalReportConsumer.start();

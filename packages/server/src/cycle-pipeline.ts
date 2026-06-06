@@ -10,7 +10,7 @@ import { rearmPending } from "./notification-dispatch.ts";
 import { endSession } from "./session-lifecycle.ts";
 import type { LayoutEventStore } from "./layout-event-store.ts";
 import type { EventStore } from "./event-store.ts";
-import { createSystemClock } from "./clock.ts";
+import type { Clock } from "./clock.ts";
 
 /**
  * `clobber cycle` (#320, #510) — spawn-first re-seat that guarantees exactly
@@ -36,6 +36,8 @@ export interface CycleDeps extends SpawnPipelineDeps {
   readonly store: EventStore;
   // Injectable from ServerOptions; tests pass a no-op to avoid real timer delays.
   readonly sleep: (ms: number) => Promise<void>;
+  // Injectable clock so cycle-reseat rearm timing is testable.
+  readonly clock: Clock;
 }
 
 export interface CycleInput {
@@ -67,7 +69,7 @@ export async function executeCycle(deps: CycleDeps, input: CycleInput): Promise<
 
   // Re-arm any pending notifications for this agent that were orphaned in the
   // old session's in-memory queue (#424 cycle-orphan, #526 Phase 2).
-  void rearmPending(
+  rearmPending(
     {
       agents: deps.agents,
       roles: deps.roles,
@@ -77,10 +79,10 @@ export async function executeCycle(deps: CycleDeps, input: CycleInput): Promise<
       runtimeProvider: deps.runtimeProvider,
       attachSession: (input) => attachSessionToAgent(deps, input),
       store: deps.notifications,
-      clock: createSystemClock(),
+      clock: deps.clock,
     },
     agent.id,
-  );
+  ).catch((err) => console.error("[clobber] rearmPending cycle error:", err));
 
   // 2. Kill old: deliver the signal then unconditionally clean up the DB row.
   //    Signal delivery may fail (e.g. pty already gone); endSession always runs
