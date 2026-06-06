@@ -177,19 +177,13 @@ function makeHarness(initial: Date, opts: { roleRepoDir?: string } = {}): Harnes
   };
 }
 
-// A cron-triggered spawn now runs an async boot-context provider, so the
-// cron timer dispatches fire-and-forget; advancing the fake clock kicks off
-// that async work but does not await it. The fired dispatch routes through the
-// async notification spine (emit → deliver → attachSession's fs writes), whose
-// tail spans several macrotask turns, so settle a handful of them before we
-// assert. (The webhook / workspace-open fire paths return a promise the test
-// awaits directly, so they don't need this.)
-async function flushAfter(clock: TestClock, ms: number): Promise<void> {
-  clock.advance(ms);
-  // The cron dispatch triggers an async compose pipeline (exec + http providers).
-  // Bun.sleep(0) yields only one event-loop turn; a real wait is needed to settle
-  // the sequential office-manifest exec + roles-drift-sweep http round-trips.
-  await Bun.sleep(200);
+// Advances the fake clock by ms, then awaits the cron scheduler's in-flight
+// dispatch promises to settle deterministically. The webhook/workspace-open
+// fire paths return an awaitable promise directly; this helper mirrors that
+// pattern for the cron path, which is fire-and-forget at the clock seam.
+async function flushAfter(h: Harness, ms: number): Promise<void> {
+  h.clock.advance(ms);
+  await h.scheduler.drainCronDispatches();
 }
 
 function getCurrentVersion(h: Harness, roleId: string): RoleVersion {
@@ -232,11 +226,11 @@ describe("TriggerScheduler — cron firing", () => {
     expect(h.spawnCalls.length).toBe(0);
 
     // Advance 30 seconds — not yet
-    await flushAfter(h.clock, 30_000);
+    await flushAfter(h, 30_000);
     expect(h.spawnCalls.length).toBe(0);
 
     // Advance to 9:00:00 — should fire
-    await flushAfter(h.clock, 30_000);
+    await flushAfter(h, 30_000);
     expect(h.spawnCalls.length).toBe(1);
     expect(h.spawnCalls[0]!.prompt).toContain("0 9 * * *");
     // The triggered-wake spawn goes through attachSessionToAgent, so office
@@ -279,7 +273,7 @@ describe("TriggerScheduler — cron firing", () => {
     h.registry.setBusy(sessionId, false);
 
     h.scheduler.start();
-    await flushAfter(h.clock, 60_000); // arrive at 9:00:00
+    await flushAfter(h, 60_000); // arrive at 9:00:00
     expect(h.spawnCalls.length).toBe(0);
 
     const text = Buffer.concat(writes).toString("utf8");
@@ -326,7 +320,7 @@ describe("TriggerScheduler — cron firing", () => {
     // registry registers busy=true by default — perfect.
 
     h.scheduler.start();
-    await flushAfter(h.clock, 60_000);
+    await flushAfter(h, 60_000);
     expect(h.spawnCalls.length).toBe(0);
     expect(writes.length).toBe(0);
 
@@ -343,7 +337,7 @@ describe("TriggerScheduler — cron firing", () => {
     setManagerCron(h, "0 9 * * *");
     h.scheduler.start();
 
-    await flushAfter(h.clock, 60_000); // first fire at 09:00 — spawns a fresh session
+    await flushAfter(h, 60_000); // first fire at 09:00 — spawns a fresh session
     expect(h.spawnCalls.length).toBe(1);
     const firstSessionId = h.spawnCalls[0]!.sessionId;
 
@@ -351,7 +345,7 @@ describe("TriggerScheduler — cron firing", () => {
     h.registry.setBusy(firstSessionId, false);
 
     // Advance another 24h — cron should fire again into the live, idle session
-    await flushAfter(h.clock, 24 * 60 * 60 * 1000);
+    await flushAfter(h, 24 * 60 * 60 * 1000);
 
     const audit = h.dispatches.listForAgent(h.managerAgentId);
     expect(audit.length).toBe(2);
@@ -375,7 +369,7 @@ describe("TriggerScheduler — cron firing", () => {
     });
 
     h.scheduler.start();
-    await flushAfter(h.clock, 60_000);
+    await flushAfter(h, 60_000);
 
     expect(h.spawnCalls.length).toBe(2);
     const audits = h.dispatches.listForWorkspace(h.workspaceId);
@@ -394,7 +388,7 @@ describe("TriggerScheduler — cron firing", () => {
     h.scheduler.start();
 
     // No triggers yet — advance past 9am, nothing fires
-    await flushAfter(h.clock, 60_000);
+    await flushAfter(h, 60_000);
     expect(h.spawnCalls.length).toBe(0);
 
     // Now set a trigger for 10am and reload
@@ -402,7 +396,7 @@ describe("TriggerScheduler — cron firing", () => {
     h.scheduler.reloadRole(h.managerRoleId);
 
     // Advance to 10:00 (currently 09:00, so +1h)
-    await flushAfter(h.clock, 60 * 60 * 1000);
+    await flushAfter(h, 60 * 60 * 1000);
     expect(h.spawnCalls.length).toBe(1);
 
     h.scheduler.stop();
@@ -439,7 +433,7 @@ describe("TriggerScheduler — cron firing", () => {
     });
 
     h.scheduler.start();
-    await flushAfter(h.clock, 60_000);
+    await flushAfter(h, 60_000);
     expect(h.spawnCalls.length).toBe(0);
 
     h.scheduler.stop();
@@ -462,7 +456,7 @@ describe("TriggerScheduler — cron firing", () => {
     });
 
     h.scheduler.start();
-    await flushAfter(h.clock, 48 * 60 * 60 * 1000);
+    await flushAfter(h, 48 * 60 * 60 * 1000);
     expect(h.spawnCalls.length).toBe(0);
 
     const audit = h.dispatches.listForAgent(h.managerAgentId);
@@ -492,7 +486,7 @@ describe("TriggerScheduler — per-workspace trigger overrides", () => {
     });
 
     h.scheduler.start();
-    await flushAfter(h.clock, 60_000); // cross 09:00
+    await flushAfter(h, 60_000); // cross 09:00
     expect(h.spawnCalls.length).toBe(0);
 
     const audit = h.dispatches.listForAgent(h.managerAgentId);
@@ -546,10 +540,10 @@ describe("TriggerScheduler — per-workspace trigger overrides", () => {
 
     h.scheduler.start();
     // Cross 09:00 — disabled, should not fire
-    await flushAfter(h.clock, 60_000);
+    await flushAfter(h, 60_000);
     expect(h.spawnCalls.length).toBe(0);
     // Cross 10:00 — should fire
-    await flushAfter(h.clock, 60 * 60 * 1000);
+    await flushAfter(h, 60 * 60 * 1000);
     expect(h.spawnCalls.length).toBe(1);
     expect(h.spawnCalls[0]!.prompt).toContain("0 10 * * *");
 
@@ -564,7 +558,7 @@ describe("TriggerScheduler — per-workspace trigger overrides", () => {
     h.scheduler.start();
 
     // First fire at 09:00 — no override yet
-    await flushAfter(h.clock, 60_000);
+    await flushAfter(h, 60_000);
     expect(h.spawnCalls.length).toBe(1);
 
     // Disable the trigger and reload
@@ -578,7 +572,7 @@ describe("TriggerScheduler — per-workspace trigger overrides", () => {
     // Mark first session idle so an injection would otherwise happen
     h.registry.setBusy(h.spawnCalls[0]!.sessionId, false);
     // Cross next 09:00 — disabled, should not produce a second spawn or injection
-    await flushAfter(h.clock, 24 * 60 * 60 * 1000);
+    await flushAfter(h, 24 * 60 * 60 * 1000);
     expect(h.spawnCalls.length).toBe(1);
 
     const audit = h.dispatches.listForAgent(h.managerAgentId);
@@ -603,7 +597,7 @@ describe("TriggerScheduler — per-workspace trigger overrides", () => {
     });
 
     h.scheduler.start();
-    await flushAfter(h.clock, 60_000);
+    await flushAfter(h, 60_000);
     expect(h.spawnCalls.length).toBe(1);
 
     h.scheduler.stop();
@@ -891,11 +885,11 @@ describe("TriggerScheduler — workspace-open firing", () => {
     h.registry.setBusy(h.spawnCalls[0]!.sessionId, false);
 
     // Fire again 5s later — debounced
-    await flushAfter(h.clock, 5_000);
+    await flushAfter(h, 5_000);
     expect((await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined)).dispatched).toBe(0);
 
     // Advance past 10s total — fires again
-    await flushAfter(h.clock, 6_000);
+    await flushAfter(h, 6_000);
     expect((await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined)).dispatched).toBe(1);
 
     const audit = h.dispatches.listForAgent(h.managerAgentId);
@@ -915,10 +909,10 @@ describe("TriggerScheduler — workspace-open firing", () => {
     expect((await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined)).dispatched).toBe(1);
     h.registry.setBusy(h.spawnCalls[0]!.sessionId, false);
 
-    await flushAfter(h.clock, 50);
+    await flushAfter(h, 50);
     expect((await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined)).dispatched).toBe(0);
 
-    await flushAfter(h.clock, 60);
+    await flushAfter(h, 60);
     expect((await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined)).dispatched).toBe(1);
 
     h.scheduler.stop();
@@ -964,10 +958,10 @@ describe("TriggerScheduler — workspace-open firing", () => {
     expect((await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined)).dispatched).toBe(2);
     for (const call of h.spawnCalls) h.registry.setBusy(call.sessionId, false);
 
-    await flushAfter(h.clock, 5_000);
+    await flushAfter(h, 5_000);
     expect((await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined)).dispatched).toBe(0);
 
-    await flushAfter(h.clock, 6_000);
+    await flushAfter(h, 6_000);
     expect((await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined)).dispatched).toBe(2);
 
     h.scheduler.stop();
@@ -1100,7 +1094,7 @@ describe("TriggerScheduler — wake-program mapping (#213)", () => {
     setManagerCronWithProgram(h, "0 9 * * *", "orient");
     h.scheduler.start();
 
-    await flushAfter(h.clock, 60_000); // arrive at 9:00:00
+    await flushAfter(h, 60_000); // arrive at 9:00:00
     expect(h.spawnCalls.length).toBe(1);
     // Layer C from the resolved program rides the system prompt...
     expect(h.spawnCalls[0]!.appendSystemPrompt).toContain("LAYER-C-ORIENT");
@@ -1131,7 +1125,7 @@ describe("TriggerScheduler — wake-program mapping (#213)", () => {
     });
     h.scheduler.start();
 
-    await flushAfter(h.clock, 60_000);
+    await flushAfter(h, 60_000);
     expect(h.spawnCalls.length).toBe(1);
     expect(h.spawnCalls[0]!.appendSystemPrompt).toContain("LAYER-C-TRIAGE");
     expect(h.spawnCalls[0]!.appendSystemPrompt).not.toContain("LAYER-C-ORIENT");
@@ -1181,7 +1175,7 @@ describe("TriggerScheduler — wake-program mapping (#213)", () => {
     setManagerCron(h, "0 9 * * *");
     h.scheduler.start();
 
-    await flushAfter(h.clock, 60_000);
+    await flushAfter(h, 60_000);
     expect(h.spawnCalls.length).toBe(1);
     // No mapping → the synthesized prompt remains the opening message.
     expect(h.spawnCalls[0]!.prompt).toContain("0 9 * * *");

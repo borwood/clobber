@@ -1,4 +1,18 @@
+import type { Database } from "bun:sqlite";
+import type { RuntimeProvider } from "@clobber/runtime";
 import type { RoleTrigger } from "@clobber/shared";
+import type { Clock } from "./clock.ts";
+import type { WorkspaceStore } from "./workspace-store.ts";
+import type { RoleStore } from "./role-store.ts";
+import type { RoleVersionStore } from "./role-version-store.ts";
+import type { RoleContentCache } from "./role-content-cache.ts";
+import type { AgentStore } from "./agent-store.ts";
+import type { SessionStore } from "./session-store.ts";
+import type { AgentRegistry } from "./agent-registry.ts";
+import type { TriggerDispatchStore } from "./trigger-dispatch-store.ts";
+import type { AgentStatusLogStore } from "./agent-status-log-store.ts";
+import type { AttachSessionFn } from "./trigger-attach.ts";
+import type { NotificationDispatcher } from "./notification-dispatch.ts";
 import type { AgentBinding, DispatchResult } from "./trigger-dispatch.ts";
 
 // A completion-wake fire entry point: wakes persistent agents in the workspace
@@ -29,3 +43,42 @@ export const UNSUPPORTED_KINDS: ReadonlySet<RoleTrigger["kind"]> = new Set([
 ]);
 
 export const DEFAULT_WORKSPACE_OPEN_DEBOUNCE_MS = 10_000;
+
+export interface TriggerSchedulerDeps {
+  readonly db: Database;
+  readonly clock: Clock;
+  readonly workspaces: WorkspaceStore;
+  readonly roles: RoleStore;
+  readonly roleVersions: RoleVersionStore;
+  readonly agents: AgentStore;
+  readonly sessions: SessionStore;
+  readonly registry: AgentRegistry;
+  readonly runtimeProvider: RuntimeProvider;
+  readonly dispatches: TriggerDispatchStore;
+  readonly agentStatusLog: AgentStatusLogStore;
+  readonly attachSession: AttachSessionFn;
+  // The notification spine the trigger emitter records onto; defaulted from the
+  // scheduler's own db+clock when a caller doesn't share one.
+  readonly dispatcher?: NotificationDispatcher;
+  readonly synthesizePrompt?: (trigger: RoleTrigger, payload: unknown) => string;
+  // #385 — present iff git-as-truth is configured. The manager's wake path
+  // resolves its triggers through these, so a commit-pinned manager still wakes.
+  readonly roleContentCache?: RoleContentCache;
+  readonly roleRepoDir?: string;
+}
+
+export interface TriggerScheduler {
+  start(): void;
+  stop(): void;
+  reloadRole(roleId: string): void;
+  reloadAgent(agentId: string): void;
+  fireWebhook(path: string, payload: unknown): Promise<DispatchResult>;
+  fireWorkspaceOpen(workspaceId: string, payload: unknown): Promise<DispatchResult>;
+  fireSessionEnded: FireCompletionWake;
+  fireWorkerDone: FireCompletionWake;
+  flushPendingWakes(agentId: string): Promise<void>;
+  // Awaits all in-flight cron dispatch promises. Tests use this after advancing
+  // a TestClock to deterministically settle async compose pipelines without
+  // fixed sleeps — mirrors the awaitable pattern of fireWebhook/fireWorkspaceOpen.
+  drainCronDispatches(): Promise<void>;
+}
