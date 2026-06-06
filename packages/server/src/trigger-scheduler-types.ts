@@ -12,7 +12,7 @@ import type { AgentRegistry } from "./agent-registry.ts";
 import type { TriggerDispatchStore } from "./trigger-dispatch-store.ts";
 import type { AgentStatusLogStore } from "./agent-status-log-store.ts";
 import type { AttachSessionFn } from "./trigger-attach.ts";
-import type { NotificationDispatcher } from "./notification-dispatch.ts";
+import type { NotificationDispatcher, ResumeSessionFn } from "./notification-dispatch.ts";
 import type { AgentBinding, DispatchResult } from "./trigger-dispatch.ts";
 
 // A completion-wake fire entry point: wakes persistent agents in the workspace
@@ -57,6 +57,7 @@ export interface TriggerSchedulerDeps {
   readonly dispatches: TriggerDispatchStore;
   readonly agentStatusLog: AgentStatusLogStore;
   readonly attachSession: AttachSessionFn;
+  readonly resumeEndedSession: ResumeSessionFn;
   // The notification spine the trigger emitter records onto; defaulted from the
   // scheduler's own db+clock when a caller doesn't share one.
   readonly dispatcher?: NotificationDispatcher;

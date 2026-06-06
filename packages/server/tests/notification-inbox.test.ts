@@ -133,6 +133,7 @@ function makeDispatchHarness(attachOverride?: AttachSessionFn): DispatchHarness 
     registry,
     runtimeProvider: claudeRuntimeProvider,
     attachSession,
+    resumeEndedSession: async () => ({ ok: false, status: 409, error: "runtime does not support resume" as const }),
   };
 
   const rearmDeps: RearmPendingDeps = {
@@ -339,6 +340,7 @@ describe("notification inbox — rearmPending (survive process boundaries)", () 
       registry,
       runtimeProvider: claudeRuntimeProvider,
       attachSession,
+      resumeEndedSession: async () => ({ ok: false, status: 409, error: "runtime does not support resume" as const }),
     };
     const rearmDeps: RearmPendingDeps = { ...baseDeliverDeps, store, clock };
 
@@ -418,6 +420,7 @@ describe("notification inbox — rearmPending (survive process boundaries)", () 
       registry,
       runtimeProvider: claudeRuntimeProvider,
       attachSession,
+      resumeEndedSession: async () => ({ ok: false, status: 409, error: "runtime does not support resume" as const }),
       store,
       clock,
     };

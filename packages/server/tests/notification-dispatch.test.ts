@@ -96,6 +96,7 @@ function makeHarness(opts: { attach?: AttachSessionFn } = {}): Harness {
     runtimeProvider: claudeRuntimeProvider,
     dispatches,
     attachSession: opts.attach === undefined ? defaultAttach : attachSession,
+    resumeEndedSession: async () => ({ ok: false, status: 409, error: "runtime does not support resume" as const }),
     synthesize: defaultSynthesizePrompt,
     dispatcher,
   };

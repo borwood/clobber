@@ -152,6 +152,7 @@ function makeHarness(initial: Date, opts: { roleRepoDir?: string } = {}): Harnes
     dispatches,
     agentStatusLog,
     attachSession: (input) => attachSessionToAgent(spawnDeps, input),
+    resumeEndedSession: async () => ({ ok: false, status: 409, error: "runtime does not support resume" as const }),
     // #385 — when a role repo is configured, the scheduler resolves a
     // commit-pinned manager's triggers through the cache (its wake path).
     ...(opts.roleRepoDir === undefined

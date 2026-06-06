@@ -3,6 +3,7 @@ import { buildServerDeps } from "./server-deps.ts";
 import { registerAllRoutes } from "./server-routes.ts";
 import { rearmPending } from "./notification-dispatch.ts";
 import { attachSessionToAgent } from "./spawn-pipeline.ts";
+import { resumeEndedSession } from "./resume-pipeline.ts";
 
 export type {
   AgentSpawnRequest,
@@ -36,6 +37,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
     registry: deps.spawnPipelineDeps.registry,
     runtimeProvider: deps.spawnPipelineDeps.runtimeProvider,
     attachSession: (input) => attachSessionToAgent(deps.spawnPipelineDeps, input),
+    resumeEndedSession: (input) => resumeEndedSession(deps.spawnPipelineDeps, input),
     store: deps.notificationStore,
     clock: deps.clock,
   }).catch((err) => console.error("[clobber] rearmPending boot error:", err));
