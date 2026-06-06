@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import {
   RoleDetailResponseSchema,
   type RoleSkill,
@@ -19,8 +19,9 @@ interface EditResponse {
   readonly description?: string;
 }
 
-// Read a skill from a directory (#450). The dir must contain SKILL.md; all
-// other immediate files become companion entries in `skill.files`.
+// Read a skill from a directory (#450, #517). The dir must contain SKILL.md;
+// all other files (including those in subdirectories) become companion entries
+// in `skill.files` keyed by their path relative to the skill dir.
 function readSkillFromDir(name: string, dir: string): RoleSkill {
   const skillMdPath = join(dir, "SKILL.md");
   if (!existsSync(skillMdPath)) {
@@ -30,10 +31,18 @@ function readSkillFromDir(name: string, dir: string): RoleSkill {
   }
   const body = readFileSync(skillMdPath, "utf8");
   const files: Record<string, string> = {};
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (!entry.isFile() || entry.name === "SKILL.md") continue;
-    files[entry.name] = readFileSync(join(dir, entry.name), "utf8");
-  }
+  const walk = (current: string): void => {
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const abs = join(current, entry.name);
+      if (entry.isDirectory()) {
+        walk(abs);
+      } else if (entry.isFile()) {
+        const rel = relative(dir, abs);
+        if (rel !== "SKILL.md") files[rel] = readFileSync(abs, "utf8");
+      }
+    }
+  };
+  walk(dir);
   const skill: RoleSkill = { name, body };
   if (Object.keys(files).length > 0) skill.files = files;
   return skill;
