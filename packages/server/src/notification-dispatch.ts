@@ -87,18 +87,18 @@ export async function deliver(
     const wakeProgram = readWakeProgram(n);
     const shutdownSession = deps.sessions.latestShutdownSessionForAgent(agentId);
     if (shutdownSession !== null) {
-      let resumeResult: ResumeEndedResult;
+      let resumeResult: ResumeEndedResult | undefined;
       try {
         resumeResult = await deps.resumeEndedSession({
           sessionId: shutdownSession.id,
           prompt: n.payload.body,
         });
-      } catch (err) {
-        return { action: "errored", error: err instanceof Error ? err.message : String(err) };
+      } catch {
+        // Resume threw (e.g. transcript repair, prepareSpawnContext) — fall through
+        // to fresh-spawn so the trigger lands rather than being stranded as errored.
       }
-      if (resumeResult.ok) return { action: "resumed", sessionId: resumeResult.session_id };
-      // Resume failed (provider thread gone / resume not supported) — fall through
-      // to fresh-spawn so the trigger lands rather than being dropped.
+      if (resumeResult?.ok) return { action: "resumed", sessionId: resumeResult.session_id };
+      // Resume returned ok:false or threw — fall through to fresh-spawn.
     }
     let spawnResult: AttachOutcome;
     try {

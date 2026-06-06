@@ -35,6 +35,7 @@ function makeNotification(agentId: string): Notification {
 function makeHarness(opts: {
   hasShutdownSession?: boolean;
   resumeResult?: ResumeEndedResult;
+  resumeThrows?: Error;
 } = {}) {
   const db = createDatabase(":memory:");
   const workspaces = createWorkspaceStore(db);
@@ -76,6 +77,7 @@ function makeHarness(opts: {
 
   const resumeEndedSession = async (input: { sessionId: string; prompt: string }) => {
     resumeCalls.push(input);
+    if (opts.resumeThrows) throw opts.resumeThrows;
     return opts.resumeResult ?? defaultResumeResult;
   };
 
@@ -147,6 +149,22 @@ describe("deliver() — resume-aware no-active-session branch", () => {
     const { db, deps, agent, resumeCalls, spawnCalls } = makeHarness({
       hasShutdownSession: true,
       resumeResult: failResult,
+    });
+
+    const outcome = await deliver(deps, makeNotification(agent.id), { kind: "drop" });
+
+    expect(outcome.action).toBe("spawned");
+    expect(outcome.sessionId).toBe("spawned-session-1");
+    expect(resumeCalls).toHaveLength(1);
+    expect(spawnCalls).toHaveLength(1);
+
+    db.close();
+  });
+
+  it("resumeEndedSession throws → falls through to fresh-spawn rather than stranding as errored", async () => {
+    const { db, deps, agent, resumeCalls, spawnCalls } = makeHarness({
+      hasShutdownSession: true,
+      resumeThrows: new Error("transcript repair failed"),
     });
 
     const outcome = await deliver(deps, makeNotification(agent.id), { kind: "drop" });
