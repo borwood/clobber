@@ -48,7 +48,7 @@ const STATIC_PROMPT_MODULES: readonly PromptModule[] = [
 ];
 
 // When apiBase is provided the roles-drift-sweep module uses a live http
-// provider that calls GET /agent/roles/drift-sweep on the running server.
+// provider that POSTs to /agent/roles/drift-sweep on the running server.
 // Without apiBase (e.g. workspace CRUD routes listing the catalog) it
 // degrades to noop so the catalog entry is still present for name-based
 // shadow detection, just without a live URL.

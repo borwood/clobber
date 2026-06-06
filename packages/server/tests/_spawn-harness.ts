@@ -7,6 +7,7 @@ import {
   type RuntimeProvider,
   type RuntimeSpawnRequest,
 } from "@clobber/runtime";
+import { createDriftStub, type DriftStub } from "./_drift-stub.ts";
 import { createServer } from "../src/server.ts";
 import { createDatabase } from "../src/db.ts";
 import { createEventStore } from "../src/event-store.ts";
@@ -42,6 +43,7 @@ export interface Harness {
   readonly sessionTokens: ReturnType<typeof createSessionTokenStore>;
   readonly records: SpawnRecord[];
   readonly repoPath: string;
+  readonly driftStub: DriftStub;
 }
 
 export function turnProvider(): RuntimeProvider {
@@ -107,6 +109,7 @@ export function buildHarness(runtimeProvider: RuntimeProvider): Harness {
       kill: () => {},
     };
   };
+  const driftStub = createDriftStub();
   const server = createServer({
     db,
     store: createEventStore(db),
@@ -125,16 +128,17 @@ export function buildHarness(runtimeProvider: RuntimeProvider): Harness {
     runtimeProvider,
     spawner,
     hookUrl: "http://test.invalid/hook",
-    apiBase: "http://test.invalid",
+    apiBase: driftStub.apiBase,
     cliEntry: "/abs/cli.ts",
     dispatches: createTriggerDispatchStore(db),
     finalReportConsumerState: createFinalReportConsumerStateStore(db),
   });
   const repoPath = mkdtempSync(join(tmpdir(), "clobber-prep-spawn-ctx-"));
-  return { server, db, workspaces, roles, roleVersions, workspaceRoles, sessions, sessionTokens, records, repoPath };
+  return { server, db, workspaces, roles, roleVersions, workspaceRoles, sessions, sessionTokens, records, repoPath, driftStub };
 }
 
 export async function teardown(h: Harness): Promise<void> {
+  h.driftStub.stop();
   await h.server.close();
   h.db.close();
   rmSync(h.repoPath, { recursive: true, force: true });

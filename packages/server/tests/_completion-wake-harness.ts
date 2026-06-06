@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { RoleTrigger } from "@clobber/shared";
+import { createDriftStub, type DriftStub } from "./_drift-stub.ts";
 import { createServer } from "../src/server.ts";
 import { createDatabase } from "../src/db.ts";
 import { createEventStore } from "../src/event-store.ts";
@@ -42,6 +43,7 @@ export interface Harness {
   clock: TestClock;
   spawns: SpawnLog[];
   roleRepoDir: string;
+  driftStub: DriftStub;
 }
 
 export function buildHarness(initial: Date): Harness {
@@ -77,6 +79,7 @@ export function buildHarness(initial: Date): Harness {
     return { sessionId: req.sessionId, pid: pidCounter, exited, stdin, kill: () => {} };
   };
 
+  const driftStub = createDriftStub();
   const server = createServer({
     db,
     store: createEventStore(db),
@@ -94,7 +97,7 @@ export function buildHarness(initial: Date): Harness {
     agentQuestionWaiter: createAgentQuestionWaiter(),
     spawner,
     hookUrl: "http://test.invalid/hook",
-    apiBase: "http://test.invalid",
+    apiBase: driftStub.apiBase,
     cliEntry: "/dummy/cli.ts",
     dispatches,
     finalReportConsumerState,
@@ -102,10 +105,11 @@ export function buildHarness(initial: Date): Harness {
     roleRepoDir,
   });
 
-  return { server, db, tokens, dispatches, clock, spawns, roleRepoDir };
+  return { server, db, tokens, dispatches, clock, spawns, roleRepoDir, driftStub };
 }
 
 export async function teardown(h: Harness): Promise<void> {
+  h.driftStub.stop();
   await h.server.close();
   h.db.close();
   rmSync(h.roleRepoDir, { recursive: true, force: true });

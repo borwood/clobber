@@ -1,3 +1,4 @@
+import { DRIFT_STUB_API_BASE } from "./_drift-stub.ts";
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { PassThrough } from "node:stream";
 import { readFileSync, mkdtempSync, rmSync } from "node:fs";
@@ -125,7 +126,7 @@ function makeHarness(initial: Date, opts: { roleRepoDir?: string } = {}): Harnes
     sessionTokens,
     spawner,
     hookUrl: "http://test.invalid/hook",
-    apiBase: "http://test.invalid",
+    apiBase: DRIFT_STUB_API_BASE,
     cliEntry: "/dummy/cli.ts",
     registry,
     roles,
@@ -185,7 +186,10 @@ function makeHarness(initial: Date, opts: { roleRepoDir?: string } = {}): Harnes
 // awaits directly, so they don't need this.)
 async function flushAfter(clock: TestClock, ms: number): Promise<void> {
   clock.advance(ms);
-  for (let i = 0; i < 8; i += 1) await Bun.sleep(0);
+  // The cron dispatch triggers an async compose pipeline (exec + http providers).
+  // Bun.sleep(0) yields only one event-loop turn; a real wait is needed to settle
+  // the sequential office-manifest exec + roles-drift-sweep http round-trips.
+  await Bun.sleep(200);
 }
 
 function getCurrentVersion(h: Harness, roleId: string): RoleVersion {

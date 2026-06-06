@@ -1,3 +1,4 @@
+import { DRIFT_STUB_API_BASE } from "./_drift-stub.ts";
 import { describe, expect, it } from "bun:test";
 import { PassThrough } from "node:stream";
 import { createServer } from "../src/server.ts";
@@ -85,7 +86,7 @@ function boot(s: Stores) {
     runtimeProvider: turnProvider(),
     spawner: noopSpawner(),
     hookUrl: "http://test.invalid/hook",
-    apiBase: "http://test.invalid",
+    apiBase: DRIFT_STUB_API_BASE,
     cliEntry: "/abs/cli.ts",
     dispatches: s.dispatches,
     finalReportConsumerState: s.finalReportConsumerState,

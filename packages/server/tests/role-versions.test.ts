@@ -1,3 +1,4 @@
+import { DRIFT_STUB_API_BASE } from "./_drift-stub.ts";
 import { describe, it, expect } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -236,7 +237,7 @@ describe("executeSpawn embodies version-row role (#23 / #491)", () => {
         agentQuestionWaiter: createAgentQuestionWaiter(),
         spawner,
         hookUrl: "http://127.0.0.1:3300/hook",
-        apiBase: "http://127.0.0.1:3300",
+        apiBase: DRIFT_STUB_API_BASE,
         cliEntry: "/abs/cli/index.ts",
       
     dispatches: createTriggerDispatchStore(db),

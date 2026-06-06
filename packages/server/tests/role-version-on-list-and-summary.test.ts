@@ -1,3 +1,4 @@
+import { DRIFT_STUB_API_BASE } from "./_drift-stub.ts";
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { mkdtempSync as _mkdtempSync, rmSync as _rmSync } from "node:fs";
 import { tmpdir as _tmpdir } from "node:os";
@@ -70,7 +71,7 @@ function buildHarness({ withRepo = false }: { withRepo?: boolean } = {}): Harnes
     agentQuestionWaiter: createAgentQuestionWaiter(),
     spawner,
     hookUrl: "http://test.invalid/hook",
-    apiBase: "http://test.invalid",
+    apiBase: DRIFT_STUB_API_BASE,
     cliEntry: "/dummy/cli.ts",
     ...(withRepo ? { roleRepoDir } : {}),
     dispatches: createTriggerDispatchStore(db),

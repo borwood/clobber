@@ -27,7 +27,7 @@ describe("prepareSpawnContext (#125) is the shared spawn/attach/resume seam", ()
     const attachReq = h.records[0]!.req;
     const attachEnv = attachReq.env;
     expect(attachEnv).toBeDefined();
-    expect(attachEnv!["CLOBBER_API_BASE"]).toBe("http://test.invalid");
+    expect(attachEnv!["CLOBBER_API_BASE"]).toBe(h.driftStub.apiBase);
     expect(attachEnv!["CLOBBER_WORKSPACE_ID"]).toBe(ws.id);
     expect(attachEnv!["CLOBBER_ROLE"]).toBe("manager");
     expect(attachEnv!["CLOBBER_SESSION_ID"]).toBe(spawnBody.session_id);

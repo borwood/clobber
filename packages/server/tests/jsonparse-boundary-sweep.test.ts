@@ -1,3 +1,4 @@
+import { DRIFT_STUB_API_BASE } from "./_drift-stub.ts";
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { PassThrough } from "node:stream";
 import { makeRepoFixture, type RepoFixture } from "./repo-fixture.ts";
@@ -73,7 +74,7 @@ function buildHarness(): Harness {
     agentQuestionWaiter: createAgentQuestionWaiter(),
     spawner,
     hookUrl: "http://test.invalid/hook",
-    apiBase: "http://test.invalid",
+    apiBase: DRIFT_STUB_API_BASE,
     cliEntry: "/dummy/cli.ts",
     dispatches: createTriggerDispatchStore(db),
     finalReportConsumerState: createFinalReportConsumerStateStore(db),
