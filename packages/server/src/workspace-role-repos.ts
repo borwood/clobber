@@ -22,7 +22,7 @@ export interface WorkspaceRoleRepos {
   dirFor(workspaceId: string): string;
 }
 
-const UPSTREAM_REMOTE = "upstream";
+export const UPSTREAM_REMOTE = "upstream";
 
 export function createWorkspaceRoleRepos(input: WorkspaceRoleReposInput): WorkspaceRoleRepos {
   return {

@@ -1,6 +1,7 @@
 import type { CommandContext } from "../commands.ts";
 import { request } from "../http.ts";
 import { CliUsageError } from "../usage-error.ts";
+import { runDiffUpstream } from "./roles-upstream.ts";
 
 // #216 — the working-copy verbs: edit a role like code. `checkout` materializes
 // the role's branch tip into the desk; you edit the files with normal tools;
@@ -150,6 +151,12 @@ export async function runDiff(
   json: boolean,
   rest: readonly string[],
 ): Promise<number> {
+  // `roles diff <role> @{upstream}` — upstream diff form (two positionals).
+  const upstreamForm =
+    rest.length >= 2 && (rest[1] === "@{upstream}" || (rest[1] === "--against" && rest[2] === "upstream"));
+  if (upstreamForm) {
+    return runDiffUpstream(ctx, json, rest[0]!);
+  }
   let stat = false;
   for (const arg of rest) {
     if (arg === "--stat") {
