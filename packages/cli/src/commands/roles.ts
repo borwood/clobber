@@ -15,6 +15,7 @@ import {
   runDiff,
   runDiscard,
 } from "./roles-checkout.ts";
+import { runFetch, runLogUpstream } from "./roles-upstream.ts";
 
 const SUBCOMMANDS = [
   "list",
@@ -30,6 +31,8 @@ const SUBCOMMANDS = [
   "diff",
   "commit",
   "discard",
+  "fetch",
+  "log",
 ] as const;
 type Subcommand = (typeof SUBCOMMANDS)[number];
 
@@ -120,7 +123,7 @@ export const rolesCommand: Command = {
   name: "roles",
   summary: "List or inspect roles available in the current workspace.",
   usage:
-    "usage: clobber roles <list|show|fork|edit|delete|ceiling|prompt-modules|wake-programs|checkout|status|diff|commit|discard> [args...]\n\n" +
+    "usage: clobber roles <list|show|fork|edit|delete|ceiling|prompt-modules|wake-programs|checkout|status|diff|commit|discard|fetch|log> [args...]\n\n" +
     "Subcommands:\n" +
     "  roles list [--json]                          List workspace roles with version metadata.\n" +
     "  roles show <name|id> [--json]                Show full role + current version + history.\n" +
@@ -130,6 +133,10 @@ export const rolesCommand: Command = {
     "  roles ceiling <name|id> <max> [--json]       Set the spawn ceiling for this role in this workspace.\n" +
     "  roles prompt-modules <name|id> [add|enable|disable <module> [--disabled]]  List a role's prompt-module refs, or add/toggle one.\n" +
     "  roles wake-programs <name|id> [show|add|edit|remove <name> ...]  List/show/author wake-programs (`idle` is the built-in).\n\n" +
+    "Upstream verbs (compare local role state to engine defaults):\n" +
+    "  roles fetch                                  Refresh upstream remote-tracking refs in the workspace clone.\n" +
+    "  roles diff <name|id> @{upstream} [--json]    Line-level diff of local pin vs upstream default.\n" +
+    "  roles log <name|id> @{upstream}.. [--json]   Commits on upstream not yet in local pin.\n\n" +
     "Working-copy verbs (edit a role like code — commit advances the git pin, no new version row):\n" +
     "  roles checkout <name|id> [--json]            Materialize the role's branch into the desk; edit the files, then commit.\n" +
     "  roles checkout -b <new-name> --from <src>    Create/fork a role as a fresh git branch off <src> (commit-pinned, no version row).\n" +
@@ -207,6 +214,13 @@ export const rolesCommand: Command = {
     if (sub === "discard") {
       assertNoArgs("discard", subArgs);
       return runDiscard(ctx, json);
+    }
+    if (sub === "fetch") {
+      assertNoArgs("fetch", subArgs);
+      return runFetch(ctx, json);
+    }
+    if (sub === "log") {
+      return runLogUpstream(ctx, json, subArgs);
     }
     return runShow(ctx, json, subArgs);
   },

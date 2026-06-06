@@ -18,6 +18,7 @@ import {
 } from "../delete-role.ts";
 import { resolveRoleByIdOrName } from "../resolve-role.ts";
 import { registerAgentRoleCheckoutRoutes } from "./agent-role-checkout.ts";
+import { registerAgentRoleUpstreamRoutes } from "./agent-role-upstream.ts";
 import { registerAgentRoleEditRoute } from "./agent-role-edit-route.ts";
 import { withAgentAuth } from "./_with-agent-auth.ts";
 import { buildDetail, buildListEntry } from "./_agent-roles-views.ts";
@@ -193,4 +194,7 @@ export function registerAgentRolesRoutes(
   // #216 — the working-copy verbs (checkout / status / diff / commit / discard)
   // register on the same auth surface, in their own module to stay reviewable.
   registerAgentRoleCheckoutRoutes(app, deps);
+
+  // #401 step-1 — upstream read verbs (fetch / diff @{upstream} / log @{upstream}..)
+  registerAgentRoleUpstreamRoutes(app, deps);
 }
