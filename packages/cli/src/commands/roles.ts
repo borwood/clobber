@@ -148,7 +148,7 @@ export const rolesCommand: Command = {
     "  --system-prompt-file FILE      Replace system prompt from a file.\n" +
     "  --system-prompt -              Replace system prompt from stdin.\n" +
     "  --allowed-tools tool1,tool2    Replace the allowed tool list.\n" +
-    "  --add-skill name=FILE          Add (or replace) a skill (repeatable).\n" +
+    "  --add-skill name=FILE|DIR      Add (or replace) a skill (repeatable).\n" +
     "  --remove-skill name            Remove a skill by name (repeatable).\n" +
     "  --description TEXT             Replace the role description (metadata-only; does not advance the pin).\n" +
     "  --description-file FILE        Replace the role description from a file.\n" +

@@ -1,6 +1,6 @@
 import { DRIFT_STUB_API_BASE } from "./_drift-stub.ts";
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { PassThrough } from "node:stream";
@@ -237,15 +237,26 @@ describe("roles drift-sweep (#401 step-2)", () => {
     expect(text).not.toMatch(/designer-drift:.*commit.*ahead/);
   });
 
-  it("(c) staleness note appears in the response text", async () => {
+  it("(c) staleness note reflects real .git/FETCH_HEAD — distinct from 'never fetched'", async () => {
+    // The workspace clone dir (returned by workspaceRepos.dirFor) is a real non-bare git repo.
+    // FETCH_HEAD lives at <cloneDir>/.git/FETCH_HEAD — NOT at <cloneDir>/FETCH_HEAD.
+    // The buggy code omits the `.git` segment, so existsSync always misses it and the
+    // response always contains "never fetched" even right after a successful fetch.
+    // This test verifies the fix exercises the real path: after fetch, the staleness
+    // text must NOT be the never-fetched fallback.
+    const cloneDir = cloneDirFor(harness.wsId);
+    // The harness beforeAll already ran `clobber roles fetch` — FETCH_HEAD must exist.
+    expect(existsSync(join(cloneDir, ".git", "FETCH_HEAD"))).toBe(true);
+
     const res = await fetch(`${harness.base}/agent/roles/drift-sweep`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(bootContextFor(harness.wsId)),
     });
     const text = await res.text();
-    // Must mention when refs were last fetched
+    // Must mention when refs were last fetched AND must NOT be the never-fetched fallback.
     expect(text).toMatch(/fetched/i);
+    expect(text).not.toContain("never fetched");
   });
 
   it("(d) zero-drift is near-silent — one terse line, not a paragraph", async () => {
