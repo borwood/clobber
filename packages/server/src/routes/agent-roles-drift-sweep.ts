@@ -84,8 +84,8 @@ export function registerAgentRolesDriftSweepRoute(
 }
 
 function fetchedAgoText(repoDir: string): string {
-  const fetchHead = join(repoDir, "FETCH_HEAD");
-  if (!existsSync(fetchHead)) return "never fetched — run `clobber roles fetch`";
+  const fetchHead = join(repoDir, ".git", "FETCH_HEAD");
+  if (!existsSync(fetchHead)) return "run `clobber roles fetch` to populate upstream refs";
   const ageMs = Date.now() - statSync(fetchHead).mtimeMs;
   const ageMin = Math.round(ageMs / 60_000);
   if (ageMin < 60) return `~${Math.max(0, ageMin)} min ago`;
