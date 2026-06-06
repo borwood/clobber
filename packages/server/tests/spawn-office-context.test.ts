@@ -34,6 +34,7 @@ import { createAgentQuestionStore } from "../src/agent-question-store.ts";
 import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
 import { createFinalReportConsumerStateStore } from "../src/final-report-consumer.ts";
+import { createNotificationStore } from "../src/notification-store.ts";
 import type { AgentSpawner, AgentSpawnRequest } from "../src/types.ts";
 
 let repoPath: string;
@@ -245,6 +246,7 @@ describe("spawn — office continuity at spawn (#55)", () => {
       agentQuestions,
       agentQuestionWaiter,
       onSessionEnded: () => {},
+      notifications: createNotificationStore(db),
     };
 
     const workspace = workspaces.get(ws.id)!;

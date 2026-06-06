@@ -14,6 +14,7 @@ import type { AgentQuestionStore } from "../agent-question-store.ts";
 import type { AgentQuestionWaiter } from "../agent-question-waiter.ts";
 import type { RoleContentCache } from "../role-content-cache.ts";
 import type { TriggerScheduler } from "../trigger-scheduler.ts";
+import type { NotificationStore } from "../notification-store.ts";
 import { EffortLevelSchema, ModelSchema } from "@clobber/shared";
 import { executeSpawn } from "../spawn-pipeline.ts";
 import { normalizeSpawnLabel } from "./_spawn-label.ts";
@@ -58,6 +59,7 @@ export interface SpawnRouteDeps {
   readonly roleRepoDir?: string;
   readonly scheduler: Pick<TriggerScheduler, "reloadAgent">;
   readonly onSessionEnded: (workspaceId: string, finishedSessionId: string) => void;
+  readonly notifications: NotificationStore;
 }
 
 export function registerSpawnRoutes(app: FastifyInstance, deps: SpawnRouteDeps): void {

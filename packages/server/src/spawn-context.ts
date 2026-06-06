@@ -8,6 +8,7 @@ import type { Agent, BootContext, BriefingPacket, ClobberPromptTag, EffortLevel,
 import { CALLER_SUPPLIED_KICK, CALLER_SUPPLIED_SYSTEM, resolveWakeProgram } from "@clobber/shared";
 import { ensureOffice } from "./office-store.ts";
 import { composeOfficeContext } from "./office-context.ts";
+import { composeUnackedNotifications } from "./notification-inbox.ts";
 import { composeSystemPrompt } from "./compose-system-prompt.ts";
 import { resolvePromptModuleCatalog } from "./workspace-prompt-module-catalog.ts";
 import { composePromptModules } from "./compose-prompt-modules.ts";
@@ -153,6 +154,9 @@ export async function prepareSpawnContext(
   // carries only the task kick (absent on a no-task wake).
   if (officeDir !== null) {
     seeds.push(composeOfficeContext(officeDir));
+    // Phase-2 (#526): non-flushing boot re-dump — unacknowledged notifications
+    // surface on every persistent-agent wake WITHOUT clearing them.
+    seeds.push(composeUnackedNotifications(agent.id, deps.notifications));
   }
 
   // Layer C — the selected wake-program's system addon. Composed on every
