@@ -13,7 +13,10 @@ import type { PromptModule } from "@clobber/shared";
 //  - repo-sdlc: a static pointer at the repo's conventions.
 //  - wisdom-pointer: the migrated #166 boot-context pointer; refed by the
 //    manager role alone so workers no longer receive it.
-const DEFAULT_PROMPT_MODULES: readonly PromptModule[] = [
+//  - roles-drift-sweep: a dynamic http module injected at compose time (apiBase
+//    required); tells a persistent agent how far each workspace role lags behind
+//    its upstream default (#401 step-2). Near-silent on zero-drift.
+const STATIC_PROMPT_MODULES: readonly PromptModule[] = [
   {
     name: "office-manifest",
     definition: {
@@ -44,6 +47,23 @@ const DEFAULT_PROMPT_MODULES: readonly PromptModule[] = [
   },
 ];
 
-export function enumerateDefaultPromptModules(): readonly PromptModule[] {
-  return DEFAULT_PROMPT_MODULES;
+// When apiBase is provided the roles-drift-sweep module uses a live http
+// provider that calls GET /agent/roles/drift-sweep on the running server.
+// Without apiBase (e.g. workspace CRUD routes listing the catalog) it
+// degrades to noop so the catalog entry is still present for name-based
+// shadow detection, just without a live URL.
+function buildDriftSweepModule(apiBase?: string): PromptModule {
+  return {
+    name: "roles-drift-sweep",
+    definition: {
+      kind: "dynamic",
+      provider: apiBase
+        ? { kind: "http", url: `${apiBase}/agent/roles/drift-sweep` }
+        : { kind: "noop" },
+    },
+  };
+}
+
+export function enumerateDefaultPromptModules(apiBase?: string): readonly PromptModule[] {
+  return [...STATIC_PROMPT_MODULES, buildDriftSweepModule(apiBase)];
 }

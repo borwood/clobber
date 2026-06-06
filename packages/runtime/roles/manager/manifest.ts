@@ -34,6 +34,10 @@ export const managerRole = defineRole({
       { name: "office-manifest", enabled: true },
       { name: "repo-sdlc", enabled: true },
       { name: "wisdom-pointer", enabled: true },
+      // Disabled by default: the http provider calls the running server at apiBase,
+      // which is not configured in the engine default. Enable via `clobber roles`
+      // on the workspace fork once clobber is deployed (#401 step-2).
+      { name: "roles-drift-sweep", enabled: false },
     ],
     wakePrograms: [
       {

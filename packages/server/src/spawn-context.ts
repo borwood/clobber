@@ -143,7 +143,7 @@ export async function prepareSpawnContext(
   };
   const seeds = await composePromptModules(
     effectiveBundle.promptModuleRefs,
-    resolvePromptModuleCatalog(workspace.repo_path),
+    resolvePromptModuleCatalog(workspace.repo_path, deps.apiBase),
     bootContext,
     seedEnv,
   );
