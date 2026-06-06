@@ -12,6 +12,7 @@ import type { RoleStore } from "./role-store.ts";
 import type { RoleVersionStore } from "./role-version-store.ts";
 import type { AgentQuestionStore } from "./agent-question-store.ts";
 import type { AgentQuestionWaiter } from "./agent-question-waiter.ts";
+import type { NotificationStore } from "./notification-store.ts";
 import { endSession } from "./session-lifecycle.ts";
 import { prepareSpawnContext, type SpawnContext } from "./spawn-context.ts";
 import { bindRuntimeEvents } from "./runtime-event-binder.ts";
@@ -44,6 +45,9 @@ export interface SpawnPipelineDeps {
   // wakes a manager declaring a `session-ended` trigger. Injected late by the
   // server to break the spawn-pipeline ↔ scheduler construction cycle.
   readonly onSessionEnded: (workspaceId: string, finishedSessionId: string) => void;
+  // Phase-2 boot re-dump: un-acked notifications surface in the agent's system
+  // prompt on every wake (persistent agents only, non-flushing).
+  readonly notifications: NotificationStore;
 }
 
 export interface SpawnPipelineInput {

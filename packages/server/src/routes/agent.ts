@@ -32,6 +32,7 @@ import { listWorkspaceAgents, parseAgentStates } from "./_agents-listing.ts";
 import type { ToolTokenGateDeps } from "../tool-token-gate.ts";
 import type { LayoutEventStore } from "../layout-event-store.ts";
 import type { EventStore } from "../event-store.ts";
+import type { NotificationStore } from "../notification-store.ts";
 
 export interface AgentRouteDeps {
   readonly sessionTokens: SessionTokenStore;
@@ -67,6 +68,7 @@ export interface AgentRouteDeps {
   readonly onSessionEnded: (workspaceId: string, finishedSessionId: string) => void;
   readonly onWorkerDone: (workspaceId: string, finishedSessionId: string) => void;
   readonly resumeEnded: (input: { readonly sessionId: string; readonly prompt: string | undefined }) => Promise<ResumeEndedResult>;
+  readonly notifications: NotificationStore;
 }
 
 const AgentSpawnBodySchema = z.object({

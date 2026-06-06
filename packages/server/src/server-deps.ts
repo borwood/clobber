@@ -24,10 +24,8 @@ export function buildServerDeps(opts: ServerOptions) {
   const clock = opts.clock === undefined ? createSystemClock() : opts.clock;
   // The notification spine (#425): one dispatcher shared by the trigger emitter
   // and the #93 message route so every cross-agent signal lands on one record.
-  const notificationDispatcher = createNotificationDispatcher(
-    createNotificationStore(opts.db),
-    clock,
-  );
+  const notificationStore = createNotificationStore(opts.db);
+  const notificationDispatcher = createNotificationDispatcher(notificationStore, clock);
   const runtimeProvider =
     opts.runtimeProvider === undefined ? claudeRuntimeProvider : opts.runtimeProvider;
 
@@ -72,6 +70,7 @@ export function buildServerDeps(opts: ServerOptions) {
     agentQuestions: opts.agentQuestions,
     agentQuestionWaiter: opts.agentQuestionWaiter,
     onSessionEnded,
+    notifications: notificationStore,
   };
 
   scheduler = createTriggerScheduler({
@@ -135,6 +134,7 @@ export function buildServerDeps(opts: ServerOptions) {
     toolTokens,
     layoutEvents,
     clock,
+    notificationStore,
     notificationDispatcher,
     runtimeProvider,
     roleEmbodiment,

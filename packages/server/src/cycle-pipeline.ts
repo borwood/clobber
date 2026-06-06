@@ -6,9 +6,11 @@ import {
   type SpawnPipelineDeps,
   type SpawnPipelineSuccess,
 } from "./spawn-pipeline.ts";
+import { rearmPending } from "./notification-dispatch.ts";
 import { endSession } from "./session-lifecycle.ts";
 import type { LayoutEventStore } from "./layout-event-store.ts";
 import type { EventStore } from "./event-store.ts";
+import { createSystemClock } from "./clock.ts";
 
 /**
  * `clobber cycle` (#320, #510) — spawn-first re-seat that guarantees exactly
@@ -62,6 +64,23 @@ export async function executeCycle(deps: CycleDeps, input: CycleInput): Promise<
   //    the transient N+1 at ceiling-1 is allowed. On boot failure the old session
   //    is never touched, keeping the agent on the floor throughout.
   const fresh = await respawnWithRetry(deps, { workspace, role, agent, prompt, wakeProgram, killSessionId });
+
+  // Re-arm any pending notifications for this agent that were orphaned in the
+  // old session's in-memory queue (#424 cycle-orphan, #526 Phase 2).
+  void rearmPending(
+    {
+      agents: deps.agents,
+      roles: deps.roles,
+      workspaces: deps.workspaces,
+      sessions: deps.sessions,
+      registry: deps.registry,
+      runtimeProvider: deps.runtimeProvider,
+      attachSession: (input) => attachSessionToAgent(deps, input),
+      store: deps.notifications,
+      clock: createSystemClock(),
+    },
+    agent.id,
+  );
 
   // 2. Kill old: deliver the signal then unconditionally clean up the DB row.
   //    Signal delivery may fail (e.g. pty already gone); endSession always runs

@@ -47,21 +47,25 @@ export interface DeliverDeps {
 
 // The recipient-state → action router, extracted from `dispatchTrigger` and
 // generalized to a `Notification` (any recipient, any source). Maps the
-// recipient's lifecycle state to a delivery action and performs it. Recipient
-// existence is the emitter's precondition: by the time deliver runs the agent is
-// known to exist, so a missing agent/role/workspace here is an invariant breach
-// and throws (Engineering Rule 3 — unexpected data is never swallowed).
+// recipient's lifecycle state to a delivery action and performs it.
+//
+// User is a first-class, presence-free recipient (Phase-2 fold-in): recorded in
+// the inbox without spawn/inject; `low` → pull, `high` → priority persisted for
+// Phase-3 wake-push. An absent agent recipient is a legitimate race condition
+// (reaped/raced) → {action:"errored"} recorded, row stays pending. Role/workspace
+// absent while the agent EXISTS is a true contract breach and still throws.
 export async function deliver(
   deps: DeliverDeps,
   n: Notification,
   busyPolicy: EnqueuePolicy,
 ): Promise<DeliveryOutcome> {
-  if (n.recipient.kind !== "agent") {
-    throw new Error(`deliver: recipient kind "${n.recipient.kind}" is not deliverable in this phase`);
+  if (n.recipient.kind === "user") {
+    // User inbox: record only. Phase-3 will build the wake-push for high-prio.
+    return { action: "queued" };
   }
   const agentId = n.recipient.agent_id;
   const agent = deps.agents.get(agentId);
-  if (agent === null) throw new Error(`deliver: agent ${agentId} not found`);
+  if (agent === null) return { action: "errored", error: `recipient agent ${agentId} absent` };
   const role = deps.roles.get(agent.role_id);
   const workspace = deps.workspaces.get(agent.workspace_id);
   if (role === null) throw new Error(`deliver: role ${agent.role_id} not found`);
@@ -142,4 +146,30 @@ export function createNotificationDispatcher(
       return { notification, outcome };
     },
   };
+}
+
+export interface RearmPendingDeps extends DeliverDeps {
+  readonly store: NotificationStore;
+  readonly clock: Clock;
+}
+
+// Re-arm durable `pending` rows through the existing deliver() core. Called on
+// server boot and cycle-reseat boot so notifications survive process boundaries.
+// The in-memory busy queue evaporates on restart; the DB row stays pending and
+// is picked up here. Optional `agentId` scopes re-arm to a single recipient
+// (cycle-reseat: only that agent's orphaned rows need re-queueing).
+export async function rearmPending(deps: RearmPendingDeps, agentId?: string): Promise<void> {
+  const pending = deps.store.listPending();
+  const targets =
+    agentId === undefined
+      ? pending
+      : pending.filter(
+          (n) => n.recipient.kind === "agent" && n.recipient.agent_id === agentId,
+        );
+  for (const n of targets) {
+    const outcome = await deliver(deps, n, { kind: "drop" });
+    if (outcome.action === "spawned" || outcome.action === "injected") {
+      deps.store.markDelivered(n.id, deps.clock.now().getTime());
+    }
+  }
 }

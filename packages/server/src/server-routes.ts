@@ -12,6 +12,7 @@ import { registerAgentMessagesRoutes } from "./routes/agent-messages.ts";
 import { registerAgentRolesRoutes } from "./routes/agent-roles.ts";
 import { registerAgentSelfSkillsRoutes } from "./routes/agent-self-skills.ts";
 import { registerAgentAskRoutes } from "./routes/agent-ask.ts";
+import { registerNotificationsRoutes } from "./routes/agent-notifications.ts";
 import { registerPersistentAgentsRoutes } from "./routes/persistent-agents.ts";
 import { registerWhiteboardRoutes } from "./routes/whiteboard.ts";
 import { registerWebhookTriggersRoutes } from "./routes/webhook-triggers.ts";
@@ -107,6 +108,7 @@ export function registerAllRoutes(
     runtimeProvider,
     scheduler,
     onSessionEnded,
+    notifications: deps.notificationStore,
   });
   registerWorkspaceRoutes(app, {
     db: opts.db,
@@ -180,6 +182,7 @@ export function registerAllRoutes(
     onSessionEnded,
     onWorkerDone,
     resumeEnded,
+    notifications: deps.notificationStore,
     // #385 — the auth gate (whoami/status/report/cycle/sessions…) resolves a
     // commit-pinned role's allow-list through the cache, so these routes don't 500.
     ...roleEmbodiment,
@@ -221,5 +224,9 @@ export function registerAllRoutes(
     agentQuestionWaiter: opts.agentQuestionWaiter,
     ...(opts.askPollWindowMs === undefined ? {} : { askPollWindowMs: opts.askPollWindowMs }),
     ...roleEmbodiment,
+  });
+  registerNotificationsRoutes(app, {
+    notifications: deps.notificationStore,
+    clock: deps.clock,
   });
 }
