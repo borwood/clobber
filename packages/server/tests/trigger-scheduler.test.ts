@@ -26,6 +26,7 @@ import { createRoleContentCache } from "../src/role-content-cache.ts";
 import { roleSnapshotToContract } from "../src/role-tree-snapshot.ts";
 import { snapshotShippedBundle } from "../src/role-version-snapshot.ts";
 import { attachSessionToAgent, type SpawnPipelineDeps } from "../src/spawn-pipeline.ts";
+import { createNotificationStore } from "../src/notification-store.ts";
 import { claudeRuntimeProvider, serializeUserMessage, loadRoleBundle } from "@clobber/runtime";
 import type { AgentSpawner, SpawnedAgentInfo } from "../src/types.ts";
 import { z } from "zod";
@@ -134,6 +135,7 @@ function makeHarness(initial: Date, opts: { roleRepoDir?: string } = {}): Harnes
     agentQuestions,
     agentQuestionWaiter,
     onSessionEnded: () => {},
+    notifications: createNotificationStore(db),
   };
 
   const scheduler = createTriggerScheduler({
@@ -1165,8 +1167,11 @@ describe("TriggerScheduler — wake-program mapping (#213)", () => {
     expect(h.spawnCalls.length).toBe(1);
     // No opening user message — the manager waits for the human on their turn.
     expect(h.spawnCalls[0]!.prompt).toBeUndefined();
-    // idle carries no layer C → no synthesized "workspace was opened" framing.
-    expect(h.spawnCalls[0]!.appendSystemPrompt).not.toContain("the workspace was opened");
+    // Phase-2: the workspace-open notification appears in the boot re-dump (not as a
+    // layer-C wake-program framing but as the non-flushing notification re-dump, #526).
+    expect(h.spawnCalls[0]!.appendSystemPrompt).toContain("the workspace was opened");
+    // idle carries no layer-C wake-program addon (no CYCLE_ORIENTATION_LAYER or similar).
+    expect(h.spawnCalls[0]!.appendSystemPrompt).not.toContain("CYCLE_ORIENTATION_LAYER");
 
     h.scheduler.stop();
     h.db.close();
