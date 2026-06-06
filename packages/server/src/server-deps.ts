@@ -87,6 +87,7 @@ export function buildServerDeps(opts: ServerOptions) {
     agentStatusLog: opts.agentStatusLog,
     dispatcher: notificationDispatcher,
     attachSession: (input) => attachSessionToAgent(spawnPipelineDeps, input),
+    resumeEndedSession: (input) => resumeEndedSession(spawnPipelineDeps, input),
     // #385 — the manager's wake path resolves triggers through the commit-pin
     // view, so a git-backed (commit-pinned) manager still registers and wakes.
     ...roleEmbodiment,

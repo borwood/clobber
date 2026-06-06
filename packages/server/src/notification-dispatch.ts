@@ -8,11 +8,13 @@ import type { AgentRegistry } from "./agent-registry.ts";
 import type { Clock } from "./clock.ts";
 import type { AttachOutcome, AttachSessionFn } from "./trigger-attach.ts";
 import type { NotificationStore } from "./notification-store.ts";
+import type { ResumeEndedResult } from "./resume-pipeline.ts";
 
 // The actions the recipient-state router can take — the existing trigger-dispatch
 // outcomes, lifted verbatim so the audit row stays byte-identical.
 export type DeliveryAction =
   | "spawned"
+  | "resumed"
   | "injected"
   | "queued"
   | "skipped-busy"
@@ -35,6 +37,11 @@ export type EnqueuePolicy =
   | { readonly kind: "drop" }
   | { readonly kind: "enqueue"; readonly enqueue: (n: Notification) => void };
 
+export type ResumeSessionFn = (input: {
+  readonly sessionId: string;
+  readonly prompt: string;
+}) => Promise<ResumeEndedResult>;
+
 export interface DeliverDeps {
   readonly agents: AgentStore;
   readonly roles: RoleStore;
@@ -43,6 +50,7 @@ export interface DeliverDeps {
   readonly registry: AgentRegistry;
   readonly runtimeProvider: RuntimeProvider;
   readonly attachSession: AttachSessionFn;
+  readonly resumeEndedSession: ResumeSessionFn;
 }
 
 // The recipient-state → action router, extracted from `dispatchTrigger` and
@@ -77,9 +85,24 @@ export async function deliver(
 
   if (activeForAgent.length === 0) {
     const wakeProgram = readWakeProgram(n);
-    let result: AttachOutcome;
+    const shutdownSession = deps.sessions.latestShutdownSessionForAgent(agentId);
+    if (shutdownSession !== null) {
+      let resumeResult: ResumeEndedResult | undefined;
+      try {
+        resumeResult = await deps.resumeEndedSession({
+          sessionId: shutdownSession.id,
+          prompt: n.payload.body,
+        });
+      } catch {
+        // Resume threw (e.g. transcript repair, prepareSpawnContext) — fall through
+        // to fresh-spawn so the trigger lands rather than being stranded as errored.
+      }
+      if (resumeResult?.ok) return { action: "resumed", sessionId: resumeResult.session_id };
+      // Resume returned ok:false or threw — fall through to fresh-spawn.
+    }
+    let spawnResult: AttachOutcome;
     try {
-      result = await deps.attachSession({
+      spawnResult = await deps.attachSession({
         workspace,
         role,
         agent,
@@ -90,8 +113,8 @@ export async function deliver(
     } catch (err) {
       return { action: "errored", error: err instanceof Error ? err.message : String(err) };
     }
-    if (result.ok) return { action: "spawned", sessionId: result.session_id };
-    return { action: "errored", error: result.error };
+    if (spawnResult.ok) return { action: "spawned", sessionId: spawnResult.session_id };
+    return { action: "errored", error: spawnResult.error };
   }
 
   const live = deps.registry.get(activeForAgent[0]!.id);
@@ -140,7 +163,7 @@ export function createNotificationDispatcher(
     async emit(req, transport) {
       const notification = store.create(req, clock.now().getTime());
       const outcome = await transport(notification);
-      if (outcome.action === "spawned" || outcome.action === "injected") {
+      if (outcome.action === "spawned" || outcome.action === "resumed" || outcome.action === "injected") {
         store.markDelivered(notification.id, clock.now().getTime());
       }
       return { notification, outcome };
@@ -176,7 +199,7 @@ export async function rearmPending(deps: RearmPendingDeps, agentId?: string): Pr
       // route's per-role try/clean-report pattern.
       continue;
     }
-    if (outcome.action === "spawned" || outcome.action === "injected") {
+    if (outcome.action === "spawned" || outcome.action === "resumed" || outcome.action === "injected") {
       deps.store.markDelivered(n.id, deps.clock.now().getTime());
     }
   }

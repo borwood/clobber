@@ -53,6 +53,7 @@ export function createTriggerScheduler(
     runtimeProvider: deps.runtimeProvider,
     dispatches: deps.dispatches,
     attachSession: deps.attachSession,
+    resumeEndedSession: deps.resumeEndedSession,
     dispatcher,
     synthesize,
   };

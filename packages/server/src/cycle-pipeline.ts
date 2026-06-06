@@ -6,6 +6,7 @@ import {
   type SpawnPipelineDeps,
   type SpawnPipelineSuccess,
 } from "./spawn-pipeline.ts";
+import { resumeEndedSession } from "./resume-pipeline.ts";
 import { rearmPending } from "./notification-dispatch.ts";
 import { endSession } from "./session-lifecycle.ts";
 import type { LayoutEventStore } from "./layout-event-store.ts";
@@ -78,6 +79,7 @@ export async function executeCycle(deps: CycleDeps, input: CycleInput): Promise<
       registry: deps.registry,
       runtimeProvider: deps.runtimeProvider,
       attachSession: (input) => attachSessionToAgent(deps, input),
+      resumeEndedSession: (input) => resumeEndedSession(deps, input),
       store: deps.notifications,
       clock: deps.clock,
     },

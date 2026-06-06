@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 
 export type DispatchOutcome =
   | "spawned"
+  | "resumed"
   | "injected"
   | "skipped-busy"
   | "queued"

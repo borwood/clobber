@@ -19,6 +19,7 @@ import {
   type DeliverDeps,
   type EnqueuePolicy,
   type NotificationDispatcher,
+  type ResumeSessionFn,
 } from "./notification-dispatch.ts";
 
 export interface AgentBinding {
@@ -61,6 +62,7 @@ export interface DispatchDeps {
   readonly runtimeProvider: RuntimeProvider;
   readonly dispatches: TriggerDispatchStore;
   readonly attachSession: AttachSessionFn;
+  readonly resumeEndedSession: ResumeSessionFn;
   readonly dispatcher: NotificationDispatcher;
   readonly synthesize: (trigger: RoleTrigger, payload: unknown) => string;
 }
@@ -113,6 +115,7 @@ export async function dispatchTrigger(
     registry: deps.registry,
     runtimeProvider: deps.runtimeProvider,
     attachSession: deps.attachSession,
+    resumeEndedSession: deps.resumeEndedSession,
   };
 
   const { outcome } = await deps.dispatcher.emit(req, (n) =>
