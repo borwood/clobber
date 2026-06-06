@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { PassThrough } from "node:stream";
 import { createServer } from "../src/server.ts";
 import { createDatabase } from "../src/db.ts";
@@ -20,7 +20,8 @@ import { createAgentQuestionStore } from "../src/agent-question-store.ts";
 import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
 import { createFinalReportConsumerStateStore } from "../src/final-report-consumer.ts";
-import { git, readTreeAtCommit } from "../src/role-git.ts";
+import { git, readTreeAtCommit, revParse } from "../src/role-git.ts";
+import { commitContractOnBranch, loadRoleContractAtCommit } from "../src/role-repo.ts";
 import type { AgentSpawner, SpawnedAgentInfo } from "../src/types.ts";
 
 // #401 step-1 — full-flow integration for the upstream read verbs:
@@ -30,6 +31,9 @@ import type { AgentSpawner, SpawnedAgentInfo } from "../src/types.ts";
 // - diff shows line-level hunks (+/- lines in the content that changed upstream)
 // - log lists the K commits on upstream not yet in local
 // - a workspace-invented role (forked from manager) resolves the correct upstream
+// - a base-derived / equidistant role resolves to upstream/base, not an arbitrary default
+// - an unmodified-fork-behind-upstream returns a diff (no throw)
+// - an invalid/unfetched upstream ref surfaces a "run roles fetch" 422, not a silent wrong-target
 // - a role with no engine ancestor returns 422, never a silent wrong-target diff
 
 interface Harness {
@@ -150,6 +154,11 @@ function advanceUpstreamManagerDefault(roleRepoDir: string, k: number): void {
   git(roleRepoDir, "checkout", "-q", "base");
 }
 
+// Return the workspace clone dir for a workspace (mirrors role-embodiment-config.ts).
+function cloneDirFor(wsId: string): string {
+  return join(dirname(harness.roleRepoDir), "role-repos", wsId);
+}
+
 function auth(token: string): Record<string, string> {
   return { Authorization: `Bearer ${token}` };
 }
@@ -219,6 +228,98 @@ describe("roles upstream read verbs (#401 step-1)", () => {
     expect(body.diff).toContain("+# UPSTREAM-UPDATE-1");
   });
 
+  it("base-derived / equidistant role resolves to upstream/base, not an arbitrary default", async () => {
+    // A role forked directly from the base commit is equidistant from every engine
+    // fork (git merge-base gives the same base sha for all forks). The correct
+    // diff target is upstream/base — diffing against manager or worker would show
+    // their role-specific content as a spurious diff.
+    const cloneDir = cloneDirFor(harness.wsId);
+    const baseRef = "upstream/base";
+    const baseContract = loadRoleContractAtCommit(cloneDir, baseRef);
+    const designerRef = commitContractOnBranch(
+      cloneDir,
+      "designer",
+      revParse(cloneDir, baseRef),
+      baseContract,
+      "designer: fork from base layer",
+    );
+    harness.db
+      .prepare(
+        "INSERT INTO roles (id, name, persistent, workspace_id, current_commit_branch, current_commit_sha, created_at) VALUES (?, ?, 0, ?, ?, ?, ?)",
+      )
+      .run(
+        "b0b0b0b0-b0b0-4b0b-b0b0-b0b0b0b0b001",
+        "designer",
+        harness.wsId,
+        "designer",
+        designerRef.sha,
+        Date.now(),
+      );
+
+    const diffRes = await harness.server.inject({
+      method: "GET",
+      url: "/agent/roles/designer/upstream/diff",
+      headers: auth(harness.managerToken),
+    });
+    expect(diffRes.statusCode, diffRes.body).toBe(200);
+    const body = diffRes.json() as { diff: string };
+    // Designer was forked from base with identical content. Resolving to
+    // upstream/base produces an empty diff. If the bug were present (wrong target),
+    // the diff would show manager/worker role-specific content as added lines.
+    expect(body.diff).toBe("");
+  });
+
+  it("unmodified fork behind upstream returns diff (no throw from merge-base guard)", async () => {
+    // A workspace-invented role whose sha IS an ancestor of the upstream ref
+    // (i.e. it has not been locally modified since the fork point) should produce
+    // a normal diff showing what upstream added — not throw a "not a valid fork
+    // lineage" error. This was Defect B: the bestMergeBase === commit.sha guard
+    // incorrectly threw for this valid case.
+    const cloneDir = cloneDirFor(harness.wsId);
+    // Grab the sha that manager was pinned to before upstream advanced (OLD sha).
+    // This sha lies directly on manager-default's history, so:
+    //   git merge-base OLD_SHA upstream/manager-default → OLD_SHA (it IS the ancestor)
+    const managerRow = harness.db
+      .prepare(
+        "SELECT current_commit_sha FROM roles WHERE name = ? AND workspace_id = ?",
+      )
+      .get("manager", harness.wsId) as { current_commit_sha: string };
+    const oldSha = managerRow.current_commit_sha;
+
+    harness.db
+      .prepare(
+        "INSERT INTO roles (id, name, persistent, workspace_id, current_commit_branch, current_commit_sha, created_at) VALUES (?, ?, 0, ?, ?, ?, ?)",
+      )
+      .run(
+        "c0c0c0c0-c0c0-4c0c-9c0c-c0c0c0c0c001",
+        "unmodified-fork",
+        harness.wsId,
+        "unmodified-fork-branch",
+        oldSha,
+        Date.now(),
+      );
+
+    const diffRes = await harness.server.inject({
+      method: "GET",
+      url: "/agent/roles/unmodified-fork/upstream/diff",
+      headers: auth(harness.managerToken),
+    });
+    expect(diffRes.statusCode, diffRes.body).toBe(200);
+    const diffBody = diffRes.json() as { diff: string };
+    // Upstream advanced past old_sha by 2 commits; the diff must show those changes.
+    expect(diffBody.diff).toContain("+# UPSTREAM-UPDATE-1");
+
+    const logRes = await harness.server.inject({
+      method: "GET",
+      url: "/agent/roles/unmodified-fork/upstream/log",
+      headers: auth(harness.managerToken),
+    });
+    expect(logRes.statusCode, logRes.body).toBe(200);
+    const logBody = logRes.json() as { log: string };
+    const lines = logBody.log.trim().split("\n").filter((l) => l.length > 0);
+    expect(lines.length).toBe(2);
+  });
+
   it("role not found returns 404", async () => {
     const res = await harness.server.inject({
       method: "GET",
@@ -245,5 +346,30 @@ describe("roles upstream read verbs (#401 step-1)", () => {
     expect(res.statusCode).toBe(422);
     const body = res.json() as { error: string };
     expect(body.error).toContain("no commit pin");
+  });
+
+  it("invalid/unfetched upstream ref returns 422 prompting roles fetch, not a no-ancestor report", async () => {
+    // Remove the upstream/worker-default remote-tracking ref from the clone to
+    // simulate an unfetched state. The next diff call for a workspace-invented role
+    // (which iterates ALL roleForks) will hit exit 128 on that ref and must surface
+    // a "run roles fetch" message — not confuse it with a no-common-ancestor case.
+    const cloneDir = cloneDirFor(harness.wsId);
+    git(cloneDir, "update-ref", "-d", "refs/remotes/upstream/worker-default");
+
+    const diffRes = await harness.server.inject({
+      method: "GET",
+      url: "/agent/roles/my-forked-role/upstream/diff",
+      headers: auth(harness.managerToken),
+    });
+    expect(diffRes.statusCode, diffRes.body).toBe(422);
+    const body = diffRes.json() as { error: string };
+    expect(body.error).toContain("fetch");
+
+    // Restore the remote-tracking refs so no subsequent test is affected.
+    await harness.server.inject({
+      method: "POST",
+      url: "/agent/roles/fetch",
+      headers: auth(harness.managerToken),
+    });
   });
 });
