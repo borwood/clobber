@@ -15,6 +15,7 @@ export interface PromptModuleWithSource extends PromptModule {
 // Co-located here so both consumers share the same FS read logic.
 export function resolvePromptModuleCatalogWithSources(
   repoPath: string,
+  apiBase?: string,
 ): PromptModuleWithSource[] {
   const defaultNames = new Set(enumerateDefaultPromptModules().map((m) => m.name));
 
@@ -29,7 +30,7 @@ export function resolvePromptModuleCatalogWithSources(
     }
   }
 
-  const resolved = resolvePromptModuleCatalog(repoPath);
+  const resolved = resolvePromptModuleCatalog(repoPath, apiBase);
   return resolved.map((mod) => {
     const inWorkspace = workspaceNames.has(mod.name);
     const inDefaults = defaultNames.has(mod.name);
@@ -60,9 +61,9 @@ const MODULE_FILE = "prompt-module.json";
 const LEGACY_CATALOG_SUBDIR = ".clobber/seeds";
 const LEGACY_MODULE_FILE = "seed.json";
 
-export function resolvePromptModuleCatalog(repoPath: string): PromptModule[] {
+export function resolvePromptModuleCatalog(repoPath: string, apiBase?: string): PromptModule[] {
   const byName = new Map<string, PromptModule>();
-  for (const mod of enumerateDefaultPromptModules()) {
+  for (const mod of enumerateDefaultPromptModules(apiBase)) {
     byName.set(mod.name, mod);
   }
 

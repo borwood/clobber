@@ -1,3 +1,4 @@
+import { DRIFT_STUB_API_BASE } from "./_drift-stub.ts";
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import {
   mkdtempSync,
@@ -97,7 +98,7 @@ function buildHarness(): Harness {
     agentQuestionWaiter: createAgentQuestionWaiter(),
     spawner,
     hookUrl: "http://127.0.0.1:3300/hook",
-    apiBase: "http://127.0.0.1:3300",
+    apiBase: DRIFT_STUB_API_BASE,
     cliEntry: "/abs/cli/index.ts",
     dispatches: createTriggerDispatchStore(db),
     finalReportConsumerState: createFinalReportConsumerStateStore(db),
@@ -236,7 +237,7 @@ describe("spawn — office continuity at spawn (#55)", () => {
       sessionTokens,
       spawner,
       hookUrl: "http://test.invalid/hook",
-      apiBase: "http://test.invalid",
+      apiBase: DRIFT_STUB_API_BASE,
       cliEntry: "/dummy/cli.ts",
       registry,
       roles,

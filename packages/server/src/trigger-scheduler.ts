@@ -1,21 +1,10 @@
-import type { Database } from "bun:sqlite";
-import type { RuntimeProvider } from "@clobber/runtime";
 import {
   RoleTriggerSchema,
   triggerId,
   type Agent,
   type RoleTrigger,
 } from "@clobber/shared";
-import type { Clock } from "./clock.ts";
-import type { WorkspaceStore } from "./workspace-store.ts";
-import type { RoleStore } from "./role-store.ts";
-import type { RoleVersionStore } from "./role-version-store.ts";
-import type { RoleContentCache } from "./role-content-cache.ts";
 import { resolveCurrentRoleVersion } from "./resolve-role-content.ts";
-import type { AgentStore } from "./agent-store.ts";
-import type { SessionStore } from "./session-store.ts";
-import type { AgentRegistry } from "./agent-registry.ts";
-import type { TriggerDispatchStore } from "./trigger-dispatch-store.ts";
 import {
   dispatchTrigger,
   recordDisabledTrigger,
@@ -24,8 +13,7 @@ import {
   type DispatchDeps,
   type DispatchResult,
 } from "./trigger-dispatch.ts";
-import type { AttachSessionFn } from "./trigger-attach.ts";
-import { createNotificationDispatcher, type NotificationDispatcher } from "./notification-dispatch.ts";
+import { createNotificationDispatcher } from "./notification-dispatch.ts";
 import { createNotificationStore } from "./notification-store.ts";
 import { defaultSynthesizePrompt } from "./trigger-synthesize.ts";
 import {
@@ -33,7 +21,8 @@ import {
   DEFAULT_WORKSPACE_OPEN_DEBOUNCE_MS,
   type ScheduledWebhook,
   type ScheduledWorkspaceOpen,
-  type FireCompletionWake,
+  type TriggerSchedulerDeps,
+  type TriggerScheduler,
 } from "./trigger-scheduler-types.ts";
 import { createCronScheduler } from "./trigger-cron-scheduler.ts";
 import { createCompletionWakeSchedulers } from "./completion-wake-schedulers.ts";
@@ -41,42 +30,9 @@ import {
   addToKeyedIndex,
   clearAgentFromKeyedIndex,
 } from "./trigger-keyed-index.ts";
-import type { AgentStatusLogStore } from "./agent-status-log-store.ts";
 
-export interface TriggerSchedulerDeps {
-  readonly db: Database;
-  readonly clock: Clock;
-  readonly workspaces: WorkspaceStore;
-  readonly roles: RoleStore;
-  readonly roleVersions: RoleVersionStore;
-  readonly agents: AgentStore;
-  readonly sessions: SessionStore;
-  readonly registry: AgentRegistry;
-  readonly runtimeProvider: RuntimeProvider;
-  readonly dispatches: TriggerDispatchStore;
-  readonly agentStatusLog: AgentStatusLogStore;
-  readonly attachSession: AttachSessionFn;
-  // The notification spine the trigger emitter records onto; defaulted from the
-  // scheduler's own db+clock when a caller doesn't share one.
-  readonly dispatcher?: NotificationDispatcher;
-  readonly synthesizePrompt?: (trigger: RoleTrigger, payload: unknown) => string;
-  // #385 — present iff git-as-truth is configured. The manager's wake path
-  // resolves its triggers through these, so a commit-pinned manager still wakes.
-  readonly roleContentCache?: RoleContentCache;
-  readonly roleRepoDir?: string;
-}
-
-export interface TriggerScheduler {
-  start(): void;
-  stop(): void;
-  reloadRole(roleId: string): void;
-  reloadAgent(agentId: string): void;
-  fireWebhook(path: string, payload: unknown): Promise<DispatchResult>;
-  fireWorkspaceOpen(workspaceId: string, payload: unknown): Promise<DispatchResult>;
-  fireSessionEnded: FireCompletionWake;
-  fireWorkerDone: FireCompletionWake;
-  flushPendingWakes(agentId: string): Promise<void>;
-}
+// Re-export the public interfaces so callers importing from this module keep working.
+export type { TriggerSchedulerDeps, TriggerScheduler } from "./trigger-scheduler-types.ts";
 
 export function createTriggerScheduler(
   deps: TriggerSchedulerDeps,
@@ -294,5 +250,6 @@ export function createTriggerScheduler(
     fireSessionEnded: completionWakes.fireSessionEnded,
     fireWorkerDone: completionWakes.fireWorkerDone,
     flushPendingWakes: completionWakes.flushPendingWakes,
+    drainCronDispatches: cronScheduler.drainInFlight,
   };
 }

@@ -20,6 +20,7 @@ import { registerLayoutEventRoutes } from "./routes/layout-events.ts";
 import { registerToolTokenTestRoutes } from "./routes/tool-token-test.ts";
 import { registerWorkspacePromptModuleRoutes } from "./routes/workspace-prompt-modules.ts";
 import { registerSessionLocationsRoutes } from "./routes/session-locations.ts";
+import { registerAgentRolesDriftSweepRoute } from "./routes/agent-roles-drift-sweep.ts";
 import type { ServerOptions } from "./types.ts";
 import type { ServerDeps } from "./server-deps.ts";
 
@@ -203,6 +204,10 @@ export function registerAllRoutes(
     workspaceRoles: opts.workspaceRoles,
     workspaces: opts.workspaces,
     scheduler,
+    ...roleEmbodiment,
+  });
+  registerAgentRolesDriftSweepRoute(app, {
+    roles: opts.roles,
     ...roleEmbodiment,
   });
   registerAgentSelfSkillsRoutes(app, {

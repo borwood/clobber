@@ -34,6 +34,7 @@ export const managerRole = defineRole({
       { name: "office-manifest", enabled: true },
       { name: "repo-sdlc", enabled: true },
       { name: "wisdom-pointer", enabled: true },
+      { name: "roles-drift-sweep", enabled: true },
     ],
     wakePrograms: [
       {

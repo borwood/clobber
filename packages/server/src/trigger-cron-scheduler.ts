@@ -15,6 +15,10 @@ export interface CronScheduler {
   register(entry: ScheduledCron): void;
   clearAgent(agentId: string): void;
   clearAll(): void;
+  // Awaits all in-flight cron dispatch promises. Used in tests to settle an
+  // async compose pipeline (exec + http boot-context providers) that fires
+  // from a TestClock advance without the test needing a fixed sleep.
+  drainInFlight(): Promise<void>;
 }
 
 export function createCronScheduler(
@@ -23,6 +27,7 @@ export function createCronScheduler(
   isStarted: () => boolean,
 ): CronScheduler {
   const byAgent = new Map<string, Set<ScheduledCron>>();
+  const inFlight = new Set<Promise<unknown>>();
 
   function isStillTracked(entry: ScheduledCron): boolean {
     const set = byAgent.get(entry.agentId);
@@ -47,7 +52,9 @@ export function createCronScheduler(
       // Reschedule the next tick immediately so cadence is independent of how
       // long the dispatch (which may run an async boot-context provider) takes;
       // dispatchTrigger records its own outcome and never rejects.
-      void dispatchTrigger(dispatchDeps, entry, entry.trigger, undefined);
+      const p = dispatchTrigger(dispatchDeps, entry, entry.trigger, undefined);
+      inFlight.add(p);
+      void p.finally(() => inFlight.delete(p));
       if (isStarted() && isStillTracked(entry)) scheduleNext(entry);
     }, delay);
   }
@@ -80,5 +87,11 @@ export function createCronScheduler(
     byAgent.clear();
   }
 
-  return { register, clearAgent, clearAll };
+  async function drainInFlight(): Promise<void> {
+    while (inFlight.size > 0) {
+      await Promise.all([...inFlight]);
+    }
+  }
+
+  return { register, clearAgent, clearAll, drainInFlight };
 }

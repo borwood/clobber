@@ -1,3 +1,4 @@
+import { DRIFT_STUB_API_BASE } from "./_drift-stub.ts";
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -85,7 +86,7 @@ function buildHarness(opts: { readonly runtimeProvider?: RuntimeProvider } = {})
     agentQuestionWaiter: createAgentQuestionWaiter(),
     spawner,
     hookUrl: "http://127.0.0.1:3300/hook",
-    apiBase: "http://127.0.0.1:3300",
+    apiBase: DRIFT_STUB_API_BASE,
     cliEntry: "/abs/cli/index.ts",
     dispatches: createTriggerDispatchStore(db),
     finalReportConsumerState: createFinalReportConsumerStateStore(db),
@@ -137,7 +138,7 @@ describe("POST /spawn — manager bundle materialization", () => {
     expect(call.sessionId).toBe(body.session_id);
     expect(call.cwd).toBe(repoPath);
     expect(call.env).toBeDefined();
-    expect(call.env!["CLOBBER_API_BASE"]).toBe("http://127.0.0.1:3300");
+    expect(call.env!["CLOBBER_API_BASE"]).toBe(DRIFT_STUB_API_BASE);
     expect(call.env!["CLOBBER_SESSION_ID"]).toBe(body.session_id);
     expect(call.env!["CLOBBER_WORKSPACE_ID"]).toBe(ws.id);
     expect(call.env!["CLOBBER_ROLE"]).toBe("manager");
@@ -194,7 +195,7 @@ describe("POST /spawn — manager bundle materialization", () => {
     expect(call.prompt).toContain("[Previously in this office]");
     expect(call.prompt!.endsWith("go")).toBe(true);
 
-    expect(call.env!["CLOBBER_API_BASE"]).toBe("http://127.0.0.1:3300");
+    expect(call.env!["CLOBBER_API_BASE"]).toBe(DRIFT_STUB_API_BASE);
     expect(call.env!["CLOBBER_SESSION_ID"]).toBe(body.session_id);
     expect(call.env!["CLOBBER_WORKSPACE_ID"]).toBe(ws.id);
     expect(call.env!["CLOBBER_ROLE"]).toBe("manager");
