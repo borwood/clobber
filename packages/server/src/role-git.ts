@@ -76,6 +76,22 @@ export function clearWorkingTree(dir: string): void {
   }
 }
 
+// Run git diff --no-index between two directories. Exit 0 = identical, exit 1 =
+// has differences — both are success for a diff query; only other exit codes are
+// errors. Returns the raw unified diff string (empty string when no differences).
+export function gitDiffNoIndex(baseline: string, working: string): string {
+  const res = Bun.spawnSync(
+    ["git", "diff", "--no-index", "--", baseline, working],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  if (res.exitCode !== 0 && res.exitCode !== 1) {
+    throw new Error(
+      `git diff --no-index failed (exit ${res.exitCode}): ${res.stderr.toString().trim()}`,
+    );
+  }
+  return res.stdout.toString();
+}
+
 // Reconstruct a role tree from the commit: list the blobs, then read each one
 // verbatim. `git show <ref>:<path>` emits the blob exactly, so empty files and
 // trailing newlines round-trip the codec losslessly.
