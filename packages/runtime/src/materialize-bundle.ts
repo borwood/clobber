@@ -1,5 +1,5 @@
 import { chmodSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { Habit, PromptModuleRef, RoleSkill, WakeProgram } from "@clobber/shared";
 import { compileSelfHabits } from "./compile-self-habits.ts";
 import type { HookHandler } from "./spawn-config.ts";
@@ -127,6 +127,7 @@ function writeSkills(pluginDir: string, skills: readonly RoleSkill[]): void {
     mkdirSync(skillDir, { recursive: true });
     writeFileSync(join(skillDir, "SKILL.md"), skill.body);
     for (const [relPath, content] of Object.entries(skill.files ?? {})) {
+      mkdirSync(dirname(join(skillDir, relPath)), { recursive: true });
       writeFileSync(join(skillDir, relPath), content);
     }
   }

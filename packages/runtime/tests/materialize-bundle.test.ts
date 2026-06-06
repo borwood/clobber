@@ -180,6 +180,38 @@ describe("materializeBundle — companion files (#450)", () => {
     expect(readFileSync(join(skillDir, "runbook.md"), "utf8")).toBe("runbook content");
   });
 
+  // #533 — nested companion paths (e.g. sub/x.md) need their parent dir created
+  it("writes nested companion files into sub-directories under skills/<name>/", () => {
+    const bundle: RoleBundleData = {
+      pluginName: "test-role",
+      framing: "",
+      systemPrompt: "prompt",
+      allowedTools: [],
+      skills: [
+        {
+          name: "my-skill",
+          body: "# MY SKILL",
+          files: { "sub/x.md": "nested content" },
+        },
+      ],
+      promptModuleRefs: [],
+      wakePrograms: [],
+      hooksJson: "{}",
+      habits: [],
+    };
+    const result = materializeBundle({
+      bundle,
+      repoPath,
+      hookUrl: "http://test.invalid/hook",
+      cliEntry: "/dummy/cli.ts",
+      inSessionHabits: false,
+    });
+
+    const skillDir = join(result.pluginDir, "skills", "my-skill");
+    expect(existsSync(join(skillDir, "sub", "x.md"))).toBe(true);
+    expect(readFileSync(join(skillDir, "sub", "x.md"), "utf8")).toBe("nested content");
+  });
+
   it("a skill with no companion files still materializes correctly (files absent or empty)", () => {
     const bundle: RoleBundleData = {
       ...({
