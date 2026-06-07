@@ -2,7 +2,8 @@
 // Multi-tier resolution (intersection across workspace/role/agent tiers) is Step 4/5.
 
 import {
-  CLI_CAPABILITY_REGISTRY,
+  allCapabilityNames,
+  capabilityNamesByTag,
   type CliCapabilityTag,
 } from "./cli-capabilities.ts";
 
@@ -13,44 +14,46 @@ export interface CliScope {
 
 const VALID_TAGS = new Set<string>(["read", "write", "admin"]);
 
-// Expands one allow token to the set of verb names it grants.
-// Unknown bare verbs (not *, not tag:, not <prefix>.*, not in registry) → empty
-// set so the shim stays byte-identical with the old includes() semantics.
-function expandAllowToken(token: string): Set<string> {
+// Expands one token (stripped of any leading '!') to the verb names it covers.
+// onUnknownVerb controls what happens for an exact-verb token not in the registry:
+//   "empty" — return the empty set (shim compat; unknown allow tokens grant nothing)
+//   "throw" — throw (deny typos are always config errors, Rule 3)
+function expandToken(
+  token: string,
+  onUnknownVerb: "empty" | "throw",
+  rawForError: string,
+): Set<string> {
   if (token === "*") {
-    return new Set(Object.keys(CLI_CAPABILITY_REGISTRY));
+    return new Set(allCapabilityNames());
   }
 
   if (token.startsWith("tag:")) {
     const tag = token.slice(4);
     if (!VALID_TAGS.has(tag)) {
-      throw new Error(`unknown tag in allow token '${token}': '${tag}'`);
+      throw new Error(`unknown tag in token '${rawForError}': '${tag}'`);
     }
-    return new Set(
-      Object.values(CLI_CAPABILITY_REGISTRY)
-        .filter((c) => c.tag === (tag as CliCapabilityTag))
-        .map((c) => c.name),
-    );
+    return new Set(capabilityNamesByTag(tag as CliCapabilityTag));
   }
 
   if (token.endsWith(".*")) {
     const prefix = token.slice(0, -2);
-    return new Set(
-      Object.keys(CLI_CAPABILITY_REGISTRY).filter((n) =>
-        n.startsWith(prefix + "."),
-      ),
-    );
+    return new Set(allCapabilityNames().filter((n) => n.startsWith(prefix + ".")));
   }
 
-  // Exact verb: known → singleton; unknown → empty (shim compat; see PR note).
-  if (CLI_CAPABILITY_REGISTRY[token] !== undefined) {
+  // Exact verb.
+  if (allCapabilityNames().includes(token)) {
     return new Set([token]);
+  }
+  if (onUnknownVerb === "throw") {
+    throw new Error(`unknown verb in deny token '${rawForError}'`);
   }
   return new Set<string>();
 }
 
-// Expands one deny token (must start with '!') to the set of verbs it denies.
-// Rule 3: malformed or unknown deny tokens throw — deny typos are always config errors.
+function expandAllowToken(token: string): Set<string> {
+  return expandToken(token, "empty", token);
+}
+
 function expandDenyToken(raw: string): Set<string> {
   if (!raw.startsWith("!")) {
     throw new Error(`deny token must start with '!': '${raw}'`);
@@ -58,35 +61,7 @@ function expandDenyToken(raw: string): Set<string> {
   if (raw === "!*") {
     throw new Error(`'!*' is not a valid deny token — NO deny-all`);
   }
-
-  const token = raw.slice(1);
-
-  if (token.startsWith("tag:")) {
-    const tag = token.slice(4);
-    if (!VALID_TAGS.has(tag)) {
-      throw new Error(`unknown tag in deny token '${raw}': '${tag}'`);
-    }
-    return new Set(
-      Object.values(CLI_CAPABILITY_REGISTRY)
-        .filter((c) => c.tag === (tag as CliCapabilityTag))
-        .map((c) => c.name),
-    );
-  }
-
-  if (token.endsWith(".*")) {
-    const prefix = token.slice(0, -2);
-    return new Set(
-      Object.keys(CLI_CAPABILITY_REGISTRY).filter((n) =>
-        n.startsWith(prefix + "."),
-      ),
-    );
-  }
-
-  // Exact verb — unknown → throw (deny typos are always errors).
-  if (CLI_CAPABILITY_REGISTRY[token] !== undefined) {
-    return new Set([token]);
-  }
-  throw new Error(`unknown verb in deny token '${raw}'`);
+  return expandToken(raw.slice(1), "throw", raw);
 }
 
 // Single-tier: allow = union of expanded allow tokens; deny = union of expanded deny tokens.
