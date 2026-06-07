@@ -19,6 +19,9 @@
         "@clobber/server": "workspace:*",
         "@clobber/shared": "workspace:*",
       },
+      "devDependencies": {
+        "@clobber/runtime": "workspace:*",
+      },
     },
     "packages/runtime": {
       "name": "@clobber/runtime",

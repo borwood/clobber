@@ -10,5 +10,8 @@
   "dependencies": {
     "@clobber/server": "workspace:*",
     "@clobber/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@clobber/runtime": "workspace:*"
   }
 }

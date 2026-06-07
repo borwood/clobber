@@ -6,7 +6,8 @@
     "packages/*"
   ],
   "scripts": {
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "docs:gen": "bun run packages/cli/scripts/docs-gen.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",
