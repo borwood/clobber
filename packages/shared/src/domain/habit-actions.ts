@@ -1,15 +1,17 @@
 import { z } from "zod";
 
-// #398 habit primitive — the ACTION union (v1 = inject | cli | wake). Reuse-only,
-// no bespoke DSL (Golden Rule 1). An action is what fires when a trigger matches.
+// #398 habit primitive — the ACTION union (v1 = inject | cli | wake | refuse).
+// Reuse-only, no bespoke DSL (Golden Rule 1). An action fires when a trigger matches.
 //
 //   inject — return a hint as the /hook receiver's additionalContext, optionally
 //            enriched by the stdout of a `bash` command run receiver-side.
 //   cli    — fire-and-forget `clobber <verb> [args]` (status / note / finding).
 //   wake   — the COMPOSE seam to wake-programs (#212/#213/#214): it SELECTS a
 //            program by name, it does not contain one (layered architecture).
+//   refuse — BLOCK a PreToolUse juncture (deny) when the path-jail predicate
+//            fires; the first negative action kind (#398-D1).
 //
-// Additive-later members (NOT v1), expressed as the union grows:
+// Additive-later members, expressed as the union grows:
 //   { kind:"broadcast"; targets; payload } — #382 (one → many)
 //   { kind:"escalate";  question; chain }  — #384 (up a chain)
 
