@@ -9,6 +9,7 @@ export interface CliCapability {
   readonly name: string;
   readonly description: string;
   readonly tag: CliCapabilityTag;
+  readonly internal?: boolean;
 }
 
 export const CLI_CAPABILITY_REGISTRY: Readonly<Record<string, CliCapability>> = Object.freeze({
@@ -214,6 +215,7 @@ export const CLI_CAPABILITY_REGISTRY: Readonly<Record<string, CliCapability>> = 
     name: "test-tool",
     description: "Internal tool-token test endpoint (dev/test only).",
     tag: "admin",
+    internal: true,
   },
 });
 

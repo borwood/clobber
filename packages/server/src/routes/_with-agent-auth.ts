@@ -5,6 +5,7 @@ import type {
   RouteHandlerMethod,
 } from "fastify";
 import type { Session } from "@clobber/shared";
+import { CLI_CAPABILITY_REGISTRY } from "@clobber/shared";
 import {
   authorizeCommand,
   resolveCallerSession,
@@ -24,11 +25,37 @@ export type AuthedHandler<G extends RouteGenericInterface = RouteGenericInterfac
   ctx: AgentAuthContext,
 ) => unknown | Promise<unknown>;
 
+// Test-only collection: capture commandNames seen at registration time.
+// No-op in production (flag stays false).
+let _collecting = false;
+let _collectionBuffer: string[] = [];
+
+export function startCapabilityCollection(): void {
+  _collecting = true;
+  _collectionBuffer = [];
+}
+
+export function stopCapabilityCollection(): ReadonlyArray<string> {
+  _collecting = false;
+  const result = [..._collectionBuffer];
+  _collectionBuffer = [];
+  return result;
+}
+
 export function withAgentAuth<G extends RouteGenericInterface = RouteGenericInterface>(
   commandName: string,
   deps: WithAgentAuthDeps,
   handler: AuthedHandler<G>,
 ): RouteHandlerMethod {
+  if (!(commandName in CLI_CAPABILITY_REGISTRY)) {
+    throw new Error(
+      `withAgentAuth: '${commandName}' is not in CLI_CAPABILITY_REGISTRY — ` +
+        `add it to packages/shared/src/domain/cli-capabilities.ts before registering this route`,
+    );
+  }
+  if (_collecting) {
+    _collectionBuffer.push(commandName);
+  }
   return async function (this: unknown, request, reply) {
     const auth = resolveCallerSession(request, deps);
     if (!auth.ok) {
