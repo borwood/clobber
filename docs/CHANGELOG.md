@@ -4,6 +4,7 @@
 
 _Generated from git history of source metadata files._
 
+- ee639bd7253a0ee66b5b461ccf0b3cdfa6a404bb 2026-06-07 feat(shared): Track C step 3 — scope grammar algebra + isCliCommandAllowed shim (#560)
 - 5e9526a8571da2b6ddbcfecda3f75c53f9095859 2026-06-07 feat(shared,cli): Track C step 2a — CLI capability registry + Subcommand refs (#555)
 - e22c98419c55efe5b01d01423e914b4fc3d17d1e 2026-06-07 feat(cli,server): dot every mutating CLI verb; add agent prompt-modules.edit route (#551) (#553)
 - 282497b0f1cb4610acad328283eafa1dd0bc0039 2026-06-06 fix(server): drift-sweep FETCH_HEAD path + help text (#535 #536) (#537)

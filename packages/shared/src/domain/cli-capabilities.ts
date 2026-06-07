@@ -222,3 +222,13 @@ export const CLI_CAPABILITY_REGISTRY: Readonly<Record<string, CliCapability>> = 
 export function getCliCapability(name: string): CliCapability | undefined {
   return CLI_CAPABILITY_REGISTRY[name];
 }
+
+export function allCapabilityNames(): readonly string[] {
+  return Object.keys(CLI_CAPABILITY_REGISTRY);
+}
+
+export function capabilityNamesByTag(tag: CliCapabilityTag): readonly string[] {
+  return Object.values(CLI_CAPABILITY_REGISTRY)
+    .filter((c) => c.tag === tag)
+    .map((c) => c.name);
+}
