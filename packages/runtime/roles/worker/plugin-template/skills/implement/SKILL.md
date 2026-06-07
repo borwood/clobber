@@ -26,12 +26,31 @@ Make the test you just wrote go green, and don't break anything else.
 - **Comments that explain *what* the code does.** Good names beat comments.
   Comments are for *why* a non-obvious choice was made.
 
+## Generated-docs gate (when applicable)
+
+If the repo declares a `docs:gen` script in its root `package.json`, include
+this as a local gate step before opening a PR:
+
+```sh
+# Regenerate from source
+<runner> run docs:gen      # e.g. bun run docs:gen, npm run docs:gen
+
+# Fail on any drift
+git diff --exit-code
+```
+
+The gate is **conditional on the declared generator** — only run it if the
+script exists. A workspace without a docs generator skips this step entirely.
+A commit touching only the generated `docs/` tree should produce no new diff
+(the generator is source-scoped, not docs-scoped).
+
 ## Done when
 
 - The new test passes.
 - The full suite passes.
 - The type-checker is silent.
 - No new lint warnings (run the repo's lint script if it has one).
+- If `docs:gen` is declared: the gate is clean (no drift after regenerating).
 
 Mark the `implement` task as `completed` (via `TaskUpdate`) and the next
 phase as `in_progress`. Then move to `open-pr/`.

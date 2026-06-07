@@ -5,7 +5,7 @@ import type {
   RouteHandlerMethod,
 } from "fastify";
 import type { Session } from "@clobber/shared";
-import { CLI_CAPABILITY_REGISTRY } from "@clobber/shared";
+import { CLI_CAPABILITY_REGISTRY, getCliCapability } from "@clobber/shared";
 import {
   authorizeCommand,
   resolveCallerSession,
@@ -47,7 +47,7 @@ export function withAgentAuth<G extends RouteGenericInterface = RouteGenericInte
   deps: WithAgentAuthDeps,
   handler: AuthedHandler<G>,
 ): RouteHandlerMethod {
-  if (!(commandName in CLI_CAPABILITY_REGISTRY)) {
+  if (getCliCapability(commandName) === undefined) {
     throw new Error(
       `withAgentAuth: '${commandName}' is not in CLI_CAPABILITY_REGISTRY — ` +
         `add it to packages/shared/src/domain/cli-capabilities.ts before registering this route`,

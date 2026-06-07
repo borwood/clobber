@@ -124,5 +124,5 @@ Past the bootstrap commits, no work directly on `main`. Use `git worktree add` f
 2. Don't write unit tests without approval.
 3. Don't add defensive null/error handling.
 4. Don't commit `.env`, secrets, or anything in `.clobber/`.
-5. Don't create new top-level docs files. Update `CLAUDE.md` and `README.md`.
+5. **Generated-subtree rule.** `docs/{cli,permissions,roles}/`, `docs/index.md`, and `docs/CHANGELOG.md` are machine-generated — never hand-edit them. They are projected from in-code single-sources (`CLI_CAPABILITY_REGISTRY`, `buildCommandRegistry()`, role manifests, `git log`) by the `docs:gen` script (`bun run docs:gen`). If documentation needs updating, change the source; the generator produces the output. The gate fails on drift: `bun run docs:gen && git diff --exit-code`. Hand-authored docs (e.g. `docs/architecture/`) are allowed and not touched by the generator. AI assistants must never hand-roll prose docs for the generated subtree.
 6. Don't leave deprecated/legacy code or "removed because…" comments.
