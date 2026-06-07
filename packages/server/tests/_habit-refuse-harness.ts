@@ -34,6 +34,7 @@ export interface RefuseHarness {
   workspaces: ReturnType<typeof createWorkspaceStore>;
   roles: ReturnType<typeof createRoleStore>;
   workspaceRoles: ReturnType<typeof createWorkspaceRoleStore>;
+  agents: ReturnType<typeof createAgentStore>;
   sessions: ReturnType<typeof createSessionStore>;
   tokens: ReturnType<typeof createSessionTokenStore>;
 }
@@ -80,7 +81,7 @@ export function buildHarness(resolveSessionHabits: (s: Session) => readonly Habi
     finalReportConsumerState: createFinalReportConsumerStateStore(db),
     resolveSessionHabits,
   });
-  return { server, db, workspaces, roles, workspaceRoles, sessions, tokens };
+  return { server, db, workspaces, roles, workspaceRoles, agents, sessions, tokens };
 }
 
 export async function teardown(h: RefuseHarness): Promise<void> {

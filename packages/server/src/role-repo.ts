@@ -58,13 +58,17 @@ export function materializeUpstreamRoleRepo(dir: string): UpstreamRoleRepo {
   for (const loaded of enumerateShippedRoles()) {
     const name = loaded.manifest.name;
     const snapshot = snapshotShippedBundle({ loaded, allowedTools: loaded.allowedTools });
+    // Phase 0: roleSnapshotToContract returns habits: [] because the version-store
+    // has no habit column. Overlay the shipped bundle's habits so the git tree
+    // includes them from the start; workspace forks inherit them on first merge.
+    const contract = { ...roleSnapshotToContract(snapshot), habits: loaded.habits };
     forks.set(
       name,
       commitContractOnBranch(
         dir,
         `${name}-default`,
         BASE_BRANCH,
-        roleSnapshotToContract(snapshot),
+        contract,
         `${name}: fork from base`,
       ),
     );

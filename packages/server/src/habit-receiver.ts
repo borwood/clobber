@@ -1,8 +1,10 @@
-import type { Habit, HookEventName, HookPayload, PreToolUsePayload, Session } from "@clobber/shared";
+import type { Habit, HookEventName, HookPayload, PathJail, PreToolUsePayload, Session } from "@clobber/shared";
 import { claudeEventForHabit } from "@clobber/runtime";
 import type { SessionStore } from "./session-store.ts";
 import type { WorkspaceStore } from "./workspace-store.ts";
+import { deskDirFor } from "./desk-store.ts";
 import { isPathJailed } from "./path-jail.ts";
+import { worktreeRootFor } from "./spawn-worktree.ts";
 
 // #271 habit Phase 1 — the DYNAMIC half of the self.* seam. The compile side
 // (runtime) registers the Claude hook so the harness POSTs the event; this side
@@ -61,7 +63,8 @@ export function evaluateSelfHabits(
       if (mapped === null || mapped.event !== payload.hook_event_name) continue;
       if (!matchesHabit(habit, payload, subject)) continue;
       if (habit.rand !== undefined && deps.random() >= habit.rand) continue;
-      if (!isPathJailed(habit.action.predicate, payload as PreToolUsePayload)) continue;
+      const predicate = expandSentinels(habit.action.predicate, session, deps);
+      if (!isPathJailed(predicate, payload as PreToolUsePayload)) continue;
       return {
         hookSpecificOutput: {
           hookEventName: "PreToolUse",
@@ -123,4 +126,43 @@ function renderHint(
   if (bash === undefined) return hint;
   const out = deps.runBash(bash, cwd).trim();
   return out.length === 0 ? hint : `${hint}\n${out}`;
+}
+
+// Expand sentinel placeholders stored in the role git tree with real paths
+// derived from the session's workspace at evaluation time. This keeps the
+// habit JSON generic (no hardcoded absolute paths), while letting the
+// predicate refer to per-workspace locations.
+//
+//   __REPO_PATH__    → workspace.repo_path
+//   __WORKTREE_ROOT__ → derived from repo_path + session.label + spawn_worktree
+//   __DESK_DIR__     → .clobber/agents/<agent_id>/desk/ under repo_path
+//
+// A sentinel that cannot be resolved (no workspace, no agent_id) stays as-is —
+// it never matches a real absolute path so the habit is a no-op.
+function expandSentinels(
+  predicate: PathJail,
+  session: Session,
+  deps: HabitReceiverDeps,
+): PathJail {
+  const workspace = deps.workspaces.get(session.workspace_id);
+  if (workspace === null) return predicate;
+
+  const repoPath = workspace.repo_path;
+  const worktreeRoot = worktreeRootFor(repoPath, session.label, workspace.spawn_worktree);
+  const deskDir =
+    session.agent_id !== undefined ? deskDirFor(repoPath, session.agent_id) : undefined;
+
+  function expand(s: string): string {
+    let result = s;
+    result = result.replace(/__REPO_PATH__/g, repoPath);
+    result = result.replace(/__WORKTREE_ROOT__/g, worktreeRoot);
+    if (deskDir !== undefined) result = result.replace(/__DESK_DIR__/g, deskDir);
+    return result;
+  }
+
+  return {
+    outside: expand(predicate.outside),
+    under: predicate.under !== undefined ? expand(predicate.under) : undefined,
+    except: predicate.except !== undefined ? expand(predicate.except) : undefined,
+  };
 }
