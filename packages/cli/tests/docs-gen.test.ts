@@ -72,6 +72,12 @@ describe("docs:gen — idempotency", () => {
       // Extra hand-authored files in docs/ (architecture/, runbooks/) are out of scope.
       const generatedFiles = await collectFiles(tmpDir);
       for (const f of generatedFiles) {
+        // CHANGELOG.md is excluded from byte-comparison: its content is a function of mutable
+        // post-squash git history. GitHub squash-merge rewrites both the sha (%H) and the
+        // subject (%s, appended " (#PR)"), so a fresh regen at HEAD will never match a
+        // previously committed snapshot. Changelog determinism is still guarded by the sibling
+        // "generates byte-identical output on two consecutive runs" test above.
+        if (f === "CHANGELOG.md") continue;
         const generated = await readFile(join(tmpDir, f));
         const committed = await readFile(join(COMMITTED_DOCS, f));
         expect(generated.equals(committed)).toBe(true);

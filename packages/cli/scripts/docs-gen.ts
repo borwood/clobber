@@ -146,7 +146,7 @@ function renderRoles(): string {
 
 function buildChangelog(): readonly string[] {
   const paths = CHANGELOG_SOURCES.join(" ");
-  const out = execSync(`git -C "${REPO_ROOT}" log --format="%H %as %s" -- ${paths}`, {
+  const out = execSync(`git -C "${REPO_ROOT}" log --format="%as %s" -- ${paths}`, {
     encoding: "utf8",
     stdio: ["pipe", "pipe", "pipe"],
   });
