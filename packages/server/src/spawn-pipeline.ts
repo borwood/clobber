@@ -238,7 +238,7 @@ export function bindLiveSession(
   spawned: SpawnedAgentInfo,
   busy: boolean,
 ): void {
-  deps.sessionTokens.register(sessionId, ctx.token);
+  deps.sessionTokens.register(sessionId, ctx.token, ctx.scope_json);
   deps.registry.register(sessionId, spawned.stdin, spawned.kill, busy);
   bindRuntimeEvents(deps, sessionId, spawned);
   const endOnCleanExit = deps.runtimeProvider.capabilities.processLifetime === "session";

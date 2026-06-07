@@ -1,5 +1,5 @@
 import type { FastifyRequest } from "fastify";
-import { isCliCommandAllowed, isActionAllowed, type Session } from "@clobber/shared";
+import { isCliCommandAllowed, isActionAllowed, type CliScope, type Session } from "@clobber/shared";
 import type { SessionTokenStore } from "../session-token-store.ts";
 import type { SessionStore } from "../session-store.ts";
 import type { RoleStore } from "../role-store.ts";
@@ -27,7 +27,7 @@ export interface CommandAuthzDeps {
 }
 
 export type AuthResult =
-  | { readonly ok: true; readonly session: Session }
+  | { readonly ok: true; readonly session: Session; readonly scope_json: string | null }
   | { readonly ok: false; readonly status: 401; readonly error: string };
 
 export type AuthzResult =
@@ -58,14 +58,30 @@ export function resolveCallerSession(
   if (session === null || session.ended_at !== undefined) {
     return { ok: false, status: 401, error: "session no longer active" };
   }
-  return { ok: true, session };
+  return { ok: true, session, scope_json: lookup.scope_json };
 }
 
 export function authorizeCommand(
   session: Session,
   commandName: string,
   deps: CommandAuthzDeps,
+  scopeJson?: string | null,
 ): AuthzResult {
+  // Baked scope present — use it directly as a single-tier check.
+  if (scopeJson !== null && scopeJson !== undefined) {
+    const baked = JSON.parse(scopeJson) as CliScope;
+    if (!isActionAllowed(baked, commandName)) {
+      return {
+        ok: false,
+        status: 403,
+        error: `command '${commandName}' denied by workspace permissions`,
+      };
+    }
+    return { ok: true };
+  }
+
+  // NULL scope → fall-back to live 2-tier resolution (migration-safety invariant:
+  // tokens that pre-date scope_json baking resolve identically to the live path).
   const role = deps.roles.get(session.role_id);
   if (role === null) {
     return { ok: false, status: 500, error: "role missing for session" };

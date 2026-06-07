@@ -62,7 +62,7 @@ export function withAgentAuth<G extends RouteGenericInterface = RouteGenericInte
       reply.code(auth.status);
       return { error: auth.error };
     }
-    const authz = authorizeCommand(auth.session, commandName, deps);
+    const authz = authorizeCommand(auth.session, commandName, deps, auth.scope_json);
     if (!authz.ok) {
       reply.code(authz.status);
       return { error: authz.error };
