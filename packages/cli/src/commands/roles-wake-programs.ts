@@ -9,9 +9,8 @@ import type { CommandContext } from "../commands.ts";
 import { request } from "../http.ts";
 import { CliUsageError } from "../usage-error.ts";
 
-interface PatchResult {
+interface MutateResult {
   readonly role_id: string;
-  // #414 — wake-program edits advance the git pin (no version row).
   readonly branch: string;
   readonly sha: string;
   readonly no_new_version: boolean;
@@ -77,18 +76,6 @@ async function fetchPrograms(
     path: `/agent/roles/${encodeURIComponent(target)}`,
   });
   return RoleDetailResponseSchema.parse(raw).current_version.wake_programs;
-}
-
-async function patchPrograms(
-  ctx: CommandContext,
-  target: string,
-  programs: readonly WakeProgram[],
-): Promise<PatchResult> {
-  return request<PatchResult>(ctx.env, {
-    method: "PATCH",
-    path: `/agent/roles/${encodeURIComponent(target)}`,
-    body: { wake_programs: programs },
-  });
 }
 
 function renderList(programs: readonly WakeProgram[]): string {
@@ -163,24 +150,20 @@ export async function runWakePrograms(
   }
 
   reserved(action, name);
-  const programs = await fetchPrograms(ctx, target);
 
-  let next: WakeProgram[];
+  let result: MutateResult;
   if (action === "remove") {
     if (extra.length > 0) {
       throw new CliUsageError(
         `roles wake-programs remove: unexpected arguments: ${extra.join(" ")}`,
       );
     }
-    if (!programs.some((p) => p.name === name)) {
-      throw new CliUsageError(`roles wake-programs remove: no program named: ${name}`);
-    }
-    next = programs.filter((p) => p.name !== name);
+    result = await request<MutateResult>(ctx.env, {
+      method: "DELETE",
+      path: `/agent/roles/${encodeURIComponent(target)}/wake-programs/${encodeURIComponent(name)}`,
+    });
   } else if (action === "add") {
     const flags = parseWakeFlags("add", extra);
-    if (programs.some((p) => p.name === name)) {
-      throw new CliUsageError(`roles wake-programs add: program already exists: ${name}`);
-    }
     if (flags.system === undefined) {
       throw new CliUsageError(
         "roles wake-programs add: --system or --system-file is required",
@@ -191,27 +174,25 @@ export async function runWakePrograms(
         "roles wake-programs add: a kick is required — pass --user TEXT or --no-user",
       );
     }
-    next = [...programs, { name, system: flags.system, user: flags.user }];
+    result = await request<MutateResult>(ctx.env, {
+      method: "POST",
+      path: `/agent/roles/${encodeURIComponent(target)}/wake-programs`,
+      body: { name, system: flags.system, user: flags.user },
+    });
   } else {
     const flags = parseWakeFlags("edit", extra);
-    const current = programs.find((p) => p.name === name);
-    if (current === undefined) {
-      throw new CliUsageError(`roles wake-programs edit: no program named: ${name}`);
-    }
     if (flags.system === undefined && flags.user === undefined) {
       throw new CliUsageError(
         "roles wake-programs edit: nothing to change — pass --system/--system-file and/or --user/--no-user",
       );
     }
-    const merged: WakeProgram = {
-      name,
-      system: flags.system === undefined ? current.system : flags.system,
-      user: flags.user === undefined ? current.user : flags.user,
-    };
-    next = programs.map((p) => (p.name === name ? merged : p));
+    result = await request<MutateResult>(ctx.env, {
+      method: "PATCH",
+      path: `/agent/roles/${encodeURIComponent(target)}/wake-programs/${encodeURIComponent(name)}`,
+      body: { ...(flags.system !== undefined ? { system: flags.system } : {}), ...(flags.user !== undefined ? { user: flags.user } : {}) },
+    });
   }
 
-  const result = await patchPrograms(ctx, target, next);
   ctx.stdout.write(
     `roles wake-programs ${action} ${name} -> ${result.sha.slice(0, 8)} (${target})\n`,
   );

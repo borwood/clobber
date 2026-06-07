@@ -6,9 +6,8 @@ import type { CommandContext } from "../commands.ts";
 import { request } from "../http.ts";
 import { CliUsageError } from "../usage-error.ts";
 
-interface PatchResult {
+interface MutateResult {
   readonly role_id: string;
-  // #414 — prompt-module edits advance the git pin (no version row).
   readonly branch: string;
   readonly sha: string;
   readonly no_new_version: boolean;
@@ -23,18 +22,6 @@ async function fetchPromptModuleRefs(
     path: `/agent/roles/${encodeURIComponent(target)}`,
   });
   return RoleDetailResponseSchema.parse(raw).current_version.prompt_module_refs;
-}
-
-async function patchPromptModuleRefs(
-  ctx: CommandContext,
-  target: string,
-  promptModuleRefs: readonly PromptModuleRef[],
-): Promise<PatchResult> {
-  return request<PatchResult>(ctx.env, {
-    method: "PATCH",
-    path: `/agent/roles/${encodeURIComponent(target)}`,
-    body: { prompt_module_refs: promptModuleRefs },
-  });
 }
 
 function renderList(refs: readonly PromptModuleRef[]): string {
@@ -78,25 +65,22 @@ export async function runPromptModules(
     throw new CliUsageError("roles prompt-modules: --disabled only applies to `add`");
   }
 
-  const refs = await fetchPromptModuleRefs(ctx, target);
-
-  let next: PromptModuleRef[];
+  let result: MutateResult;
   if (action === "add") {
-    if (refs.some((r) => r.name === name)) {
-      throw new CliUsageError(`roles prompt-modules add: module already on role: ${name}`);
-    }
-    next = [...refs, { name, enabled: !disabled }];
+    result = await request<MutateResult>(ctx.env, {
+      method: "POST",
+      path: `/agent/roles/${encodeURIComponent(target)}/prompt-modules`,
+      body: { name, enabled: !disabled },
+    });
   } else {
-    if (!refs.some((r) => r.name === name)) {
-      throw new CliUsageError(
-        `roles prompt-modules ${action}: module is not ref'd on role: ${name}`,
-      );
-    }
     const enabled = action === "enable";
-    next = refs.map((r) => (r.name === name ? { name: r.name, enabled } : r));
+    result = await request<MutateResult>(ctx.env, {
+      method: "PATCH",
+      path: `/agent/roles/${encodeURIComponent(target)}/prompt-modules/${encodeURIComponent(name)}`,
+      body: { enabled },
+    });
   }
 
-  const result = await patchPromptModuleRefs(ctx, target, next);
   ctx.stdout.write(
     `roles prompt-modules ${action} ${name} -> ${result.sha.slice(0, 8)} (${target})\n`,
   );

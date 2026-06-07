@@ -21,6 +21,9 @@ import { registerToolTokenTestRoutes } from "./routes/tool-token-test.ts";
 import { registerWorkspacePromptModuleRoutes } from "./routes/workspace-prompt-modules.ts";
 import { registerSessionLocationsRoutes } from "./routes/session-locations.ts";
 import { registerAgentRolesDriftSweepRoute } from "./routes/agent-roles-drift-sweep.ts";
+import { registerAgentRolesPromptModulesRoutes } from "./routes/agent-roles-prompt-modules.ts";
+import { registerAgentRolesWakeProgramsRoutes } from "./routes/agent-roles-wake-programs.ts";
+import { registerAgentPromptModulesRoutes } from "./routes/agent-prompt-modules.ts";
 import type { ServerOptions } from "./types.ts";
 import type { ServerDeps } from "./server-deps.ts";
 
@@ -229,6 +232,36 @@ export function registerAllRoutes(
     agentQuestions: opts.agentQuestions,
     agentQuestionWaiter: opts.agentQuestionWaiter,
     ...(opts.askPollWindowMs === undefined ? {} : { askPollWindowMs: opts.askPollWindowMs }),
+    ...roleEmbodiment,
+  });
+  registerAgentRolesPromptModulesRoutes(app, {
+    db: opts.db,
+    sessionTokens: opts.sessionTokens,
+    sessions: opts.sessions,
+    roles: opts.roles,
+    roleVersions: opts.roleVersions,
+    workspaceRoles: opts.workspaceRoles,
+    workspaces: opts.workspaces,
+    scheduler,
+    ...roleEmbodiment,
+  });
+  registerAgentRolesWakeProgramsRoutes(app, {
+    db: opts.db,
+    sessionTokens: opts.sessionTokens,
+    sessions: opts.sessions,
+    roles: opts.roles,
+    roleVersions: opts.roleVersions,
+    workspaceRoles: opts.workspaceRoles,
+    workspaces: opts.workspaces,
+    scheduler,
+    ...roleEmbodiment,
+  });
+  registerAgentPromptModulesRoutes(app, {
+    sessionTokens: opts.sessionTokens,
+    sessions: opts.sessions,
+    roles: opts.roles,
+    roleVersions: opts.roleVersions,
+    workspaces: opts.workspaces,
     ...roleEmbodiment,
   });
   registerNotificationsRoutes(app, {

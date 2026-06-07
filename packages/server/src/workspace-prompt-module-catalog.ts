@@ -1,7 +1,16 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { PromptModuleDefinitionSchema, type PromptModule } from "@clobber/shared";
 import { enumerateDefaultPromptModules } from "@clobber/runtime";
+
+export const CATALOG_SUBDIR = ".clobber/prompt-modules";
+export const MODULE_FILE = "prompt-module.json";
+
+export function writeModule(repoPath: string, name: string, definition: unknown): void {
+  const dir = join(repoPath, CATALOG_SUBDIR, name);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, MODULE_FILE), JSON.stringify(definition, null, 2));
+}
 
 // Source of a resolved catalog entry. Used by the authoring routes to surface
 // where a module came from and whether an edit would shadow a default.
@@ -56,8 +65,6 @@ export function resolvePromptModuleCatalogWithSources(
 // Tolerant resolver: the new .clobber/prompt-modules/ catalog is checked first;
 // if an entry is absent there the legacy .clobber/seeds/<name>/seed.json path is
 // tried as a fallback so existing forks with authored modules still resolve.
-const CATALOG_SUBDIR = ".clobber/prompt-modules";
-const MODULE_FILE = "prompt-module.json";
 const LEGACY_CATALOG_SUBDIR = ".clobber/seeds";
 const LEGACY_MODULE_FILE = "seed.json";
 

@@ -247,9 +247,9 @@ describe("clobber CLI — roles seeds", () => {
     expect(readWorker().prompt_module_refs).toContainEqual({ name: "repo-sdlc", enabled: true });
   });
 
-  it("exits 2 when toggling a seed that is not on the role", async () => {
+  it("exits 1 when toggling a seed that is not on the role", async () => {
     const r = await cli(["roles", "prompt-modules", "worker", "enable", "no-such-seed"]);
-    expect(r.code).toBe(2);
+    expect(r.code).toBe(1);
     expect(r.err).toMatch(/no-such-seed|not.*ref|not on/i);
   });
 });
@@ -337,7 +337,7 @@ describe("clobber CLI — roles wake-programs", () => {
     expect(readWorker().wake_programs.find((p) => p.name === "watch")).toBeUndefined();
   });
 
-  it("exits 2 when adding a wake-program that already exists", async () => {
+  it("exits 1 when adding a wake-program that already exists", async () => {
     const r = await cli([
       "roles",
       "wake-programs",
@@ -348,7 +348,7 @@ describe("clobber CLI — roles wake-programs", () => {
       "dup",
       "--no-user",
     ]);
-    expect(r.code).toBe(2);
+    expect(r.code).toBe(1);
     expect(r.err).toMatch(/exists|already/i);
   });
 
@@ -367,7 +367,7 @@ describe("clobber CLI — roles wake-programs", () => {
     expect(r.err).toMatch(/idle|reserved|built-in/i);
   });
 
-  it("exits 2 when editing a wake-program that does not exist", async () => {
+  it("exits 1 when editing a wake-program that does not exist", async () => {
     const r = await cli([
       "roles",
       "wake-programs",
@@ -377,7 +377,7 @@ describe("clobber CLI — roles wake-programs", () => {
       "--user",
       "x",
     ]);
-    expect(r.code).toBe(2);
+    expect(r.code).toBe(1);
     expect(r.err).toMatch(/ghost|not found|no.*program/i);
   });
 });
