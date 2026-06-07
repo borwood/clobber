@@ -7,9 +7,16 @@ import { endSession, type SessionLifecycleDeps } from "./session-lifecycle.ts";
  * Session-lifetime providers (e.g. claude) spawn a child process whose pid is
  * recorded on the session row. Under `bun --hot` the server restarts but the
  * child may still be running — probing `process.kill(pid, 0)` distinguishes a
- * live child (skip the row) from a genuinely dead one (reap it). Only dead-child
- * rows are flagged `was_live_at_shutdown` and ended; a live child's row is left
- * completely untouched.
+ * live pid (skip the row) from a dead one (reap it). Only dead-pid rows are
+ * flagged `was_live_at_shutdown` and ended; a live-pid row is left untouched.
+ *
+ * Caveat: the probe checks pid liveness, not process identity. Across a full
+ * reboot or long downtime, pid reuse could recycle a dead child's slot onto an
+ * unrelated live process — that row would be wrongly spared. The probability is
+ * low under `bun --hot` ms-scale restarts (no OS reboot, pid namespace intact)
+ * and this is strictly better than the old reap-everything behavior. Robust
+ * identity verification (start-time / cmdline / spawn-epoch comparison) is a
+ * tracked follow-up.
  *
  * Turn-lifetime providers (e.g. codex) resume via a provider-managed thread id
  * regardless of server restart, so those rows are always left active and flagged
@@ -32,8 +39,15 @@ export function reapOrphanedSessions(
     try {
       process.kill(session.pid, 0);
       alive = true;
-    } catch {
-      alive = false;
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code;
+      if (code === "ESRCH") {
+        alive = false; // no such process — genuinely dead
+      } else if (code === "EPERM") {
+        alive = true; // process exists but is unsignalable — treat as live
+      } else {
+        throw e; // unexpected OS error — surface it, don't silently misclassify
+      }
     }
     if (alive) continue;
     deps.sessions.markWasLiveAtShutdown(session.id);

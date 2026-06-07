@@ -82,8 +82,9 @@ async function spawnAndReapPid(): Promise<number> {
 describe("reapOrphanedSessions (boot-time)", () => {
   it("ends every active session left over from a previous process", async () => {
     const h = buildHarness();
-    const a = seed(h, { persistent: false, pid: 9000 });
-    const b = seed(h, { persistent: true, pid: 9000 });
+    const deadPid = await spawnAndReapPid();
+    const a = seed(h, { persistent: false, pid: deadPid });
+    const b = seed(h, { persistent: true, pid: deadPid });
 
     expect(h.sessions.get(a.sessionId)!.ended_at).toBeUndefined();
     expect(h.sessions.get(b.sessionId)!.ended_at).toBeUndefined();
@@ -104,8 +105,9 @@ describe("reapOrphanedSessions (boot-time)", () => {
 
   it("preserves agents (ephemeral and persistent) so resume can reattach", async () => {
     const h = buildHarness();
-    const ephemeral = seed(h, { persistent: false, pid: 9000 });
-    const persistent = seed(h, { persistent: true, pid: 9000 });
+    const deadPid = await spawnAndReapPid();
+    const ephemeral = seed(h, { persistent: false, pid: deadPid });
+    const persistent = seed(h, { persistent: true, pid: deadPid });
 
     reapOrphanedSessions({
       sessions: h.sessions,
@@ -125,10 +127,12 @@ describe("reapOrphanedSessions (boot-time)", () => {
 
   it("flags every active session was-live-at-shutdown (reaped or skipped)", async () => {
     const h = buildHarness();
-    const claude = seed(h, { persistent: false, pid: 9000 });
+    const deadPid = await spawnAndReapPid();
+    // codex is turn-lifetime (skipped before the probe); any pid works for it
+    const claude = seed(h, { persistent: false, pid: deadPid });
     const codex = seed(h, {
       persistent: true,
-      pid: 9000,
+      pid: deadPid,
       runtimeProvider: "codex",
       providerThreadId: "thread-1",
     });
@@ -190,13 +194,15 @@ describe("reapOrphanedSessions (boot-time)", () => {
 
   it("preserves active sessions for the selected turn-lifetime provider", async () => {
     const h = buildHarness();
+    const deadPid = await spawnAndReapPid();
+    // codex is turn-lifetime (skipped before the probe); any pid works for it
     const codex = seed(h, {
       persistent: true,
-      pid: 9000,
+      pid: deadPid,
       runtimeProvider: "codex",
       providerThreadId: "thread-1",
     });
-    const claude = seed(h, { persistent: true, pid: 9000 });
+    const claude = seed(h, { persistent: true, pid: deadPid });
 
     reapOrphanedSessions({
       sessions: h.sessions,
@@ -216,7 +222,7 @@ describe("reapOrphanedSessions (boot-time)", () => {
 
   it("frees ceiling capacity by zeroing countActive across the board", async () => {
     const h = buildHarness();
-    const a = seed(h, { persistent: false, pid: 9000 });
+    const a = seed(h, { persistent: false, pid: await spawnAndReapPid() });
     expect(h.sessions.countActive(a.workspaceId, a.roleId)).toBe(1);
 
     reapOrphanedSessions({
