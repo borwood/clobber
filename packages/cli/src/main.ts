@@ -136,6 +136,10 @@ export async function run(opts: RunOptions): Promise<number> {
       printUsage(registry, opts.stderr);
       return 2;
     }
+    if (err instanceof CliHttpError) {
+      opts.stderr.write(`error: ${err.message}\n`);
+      return 1;
+    }
     throw err;
   }
 }

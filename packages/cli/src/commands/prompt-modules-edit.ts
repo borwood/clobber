@@ -3,10 +3,6 @@ import { request } from "../http.ts";
 import { CliUsageError } from "../usage-error.ts";
 import { parseProviderFlags, readStdinText } from "./_prompt-modules-flags.ts";
 
-interface AgentMe {
-  readonly workspace_id: string;
-}
-
 interface EditResult {
   readonly name: string;
   readonly source: string;
@@ -29,10 +25,9 @@ export async function runEdit(ctx: CommandContext, rest: readonly string[]): Pro
     definition = parsed.definition;
   }
 
-  const me = await request<AgentMe>(ctx.env, { method: "GET", path: "/agent/me" });
   const result = await request<EditResult>(ctx.env, {
     method: "PUT",
-    path: `/workspaces/${me.workspace_id}/prompt-modules/${encodeURIComponent(name)}`,
+    path: `/agent/prompt-modules/${encodeURIComponent(name)}`,
     body: { definition },
   });
 

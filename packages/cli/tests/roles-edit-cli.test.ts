@@ -497,25 +497,20 @@ describe("clobber CLI — roles edit", () => {
 
   it("--triggers on an ephemeral role surfaces the 422 from the server", async () => {
     const s = captureStreams();
-    let caught: Error | null = null;
-    try {
-      await run({
-        argv: [
-          "roles",
-          "edit",
-          "worker",
-          "--triggers",
-          '[{"kind":"cron","expr":"0 9 * * *"}]',
-        ],
-        env: envFor(harness.managerToken),
-        stdout: s.stdout,
-        stderr: s.stderr,
-      });
-    } catch (e) {
-      caught = e as Error;
-    }
-    expect(caught).not.toBeNull();
-    expect(caught!.message).toMatch(/persistent/i);
+    const code = await run({
+      argv: [
+        "roles",
+        "edit",
+        "worker",
+        "--triggers",
+        '[{"kind":"cron","expr":"0 9 * * *"}]',
+      ],
+      env: envFor(harness.managerToken),
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(1);
+    expect(s.err()).toMatch(/persistent/i);
   });
 
   it("exits 2 when both --triggers and --triggers-file are passed", async () => {
