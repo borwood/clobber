@@ -22,6 +22,7 @@ import { createAgentQuestionWaiter } from "@clobber/server/agent-question-waiter
 import type { AgentSpawner, SpawnedAgentInfo } from "@clobber/server/types.ts";
 import { createTriggerDispatchStore } from "@clobber/server/trigger-dispatch-store.ts";
 import { createFinalReportConsumerStateStore } from "@clobber/server/final-report-consumer.ts";
+import { DRIFT_STUB_API_BASE } from "@clobber/server/_drift-stub.ts";
 import type { PromptModuleRef, WakeProgram } from "@clobber/shared";
 import { run } from "../src/main.ts";
 
@@ -89,7 +90,7 @@ beforeAll(async () => {
     agentQuestionWaiter: createAgentQuestionWaiter(),
     spawner,
     hookUrl: "http://test.invalid/hook",
-    apiBase: "http://test.invalid",
+    apiBase: DRIFT_STUB_API_BASE,
     cliEntry: "/dummy/cli.ts",
     roleRepoDir,
     dispatches: createTriggerDispatchStore(db),
@@ -141,6 +142,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  if ((harness as Harness | undefined) === undefined) return;
   await harness.app.close();
   harness.db.close();
   rmSync(harness.repoPath, { recursive: true, force: true });
@@ -198,6 +200,17 @@ async function cli(args: readonly string[]) {
   });
   return { code, out: s.out(), err: s.err() };
 }
+
+describe("clobber CLI — boot integrity", () => {
+  it("manager spawn through harness returns 200 (apiBase self-HTTP reachability guard)", () => {
+    // harness is only assigned when beforeAll's spawn returned 200.
+    // A regression where apiBase is unreachable causes spawn to return 500,
+    // beforeAll to throw, harness to stay undefined, and this test to fail.
+    expect((harness as Harness | undefined)).toBeDefined();
+    expect(harness.managerToken).toBeString();
+    expect(harness.managerToken.length).toBeGreaterThan(0);
+  });
+});
 
 describe("clobber CLI — roles seeds", () => {
   it("adds a seed ref and advances the pin", async () => {

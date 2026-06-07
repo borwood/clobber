@@ -22,6 +22,7 @@ import { createAgentQuestionWaiter } from "@clobber/server/agent-question-waiter
 import type { AgentSpawner, SpawnedAgentInfo } from "@clobber/server/types.ts";
 import { createTriggerDispatchStore } from "@clobber/server/trigger-dispatch-store.ts";
 import { createFinalReportConsumerStateStore } from "@clobber/server/final-report-consumer.ts";
+import { DRIFT_STUB_API_BASE } from "@clobber/server/_drift-stub.ts";
 import { run } from "../src/main.ts";
 
 // #450 — --add-skill name=DIR reads a skill directory: SKILL.md becomes
@@ -72,7 +73,7 @@ beforeAll(async () => {
     agentQuestionWaiter: createAgentQuestionWaiter(),
     spawner,
     hookUrl: "http://test.invalid/hook",
-    apiBase: "http://test.invalid",
+    apiBase: DRIFT_STUB_API_BASE,
     cliEntry: "/dummy/cli.ts",
     roleRepoDir,
     dispatches: createTriggerDispatchStore(db),
