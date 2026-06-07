@@ -10,3 +10,4 @@ Load or patch a workspace (create + apply triggers, or live config patch).
 | ---------- | ---------- |
 | `create` | — |
 | `patch` | — |
+| `perms` | — |
