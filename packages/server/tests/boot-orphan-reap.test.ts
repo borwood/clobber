@@ -1,5 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
+import { spawn } from "node:child_process";
 import { createDatabase } from "../src/db.ts";
 import { createWorkspaceStore } from "../src/workspace-store.ts";
 import { createRoleStore } from "../src/role-store.ts";
@@ -9,6 +10,7 @@ import { createSessionTokenStore } from "../src/session-token-store.ts";
 import { createAgentQuestionStore } from "../src/agent-question-store.ts";
 import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import { reapOrphanedSessions } from "../src/boot-reap.ts";
+import { endSession } from "../src/session-lifecycle.ts";
 import { codexRuntimeProvider } from "@clobber/runtime";
 
 interface Harness {
@@ -38,6 +40,7 @@ function buildHarness(): Harness {
 
 interface SeedOpts {
   readonly persistent: boolean;
+  readonly pid: number;
   readonly preEnded?: boolean;
   readonly runtimeProvider?: string;
   readonly providerThreadId?: string;
@@ -60,17 +63,28 @@ function seed(h: Harness, opts: SeedOpts) {
     ...(opts.providerThreadId === undefined
       ? {}
       : { provider_thread_id: opts.providerThreadId }),
-    pid: 9000,
+    pid: opts.pid,
   });
   if (opts.preEnded === true) h.sessions.markEnded(sessionId);
   return { workspaceId: ws.id, roleId: role.id, agentId: agent.id, sessionId };
 }
 
+// Spawn a process, kill it, and return its (now-dead) pid.
+async function spawnAndReapPid(): Promise<number> {
+  const child = spawn("sleep", ["100"]);
+  await new Promise<void>((resolve) => child.on("spawn", resolve));
+  const pid = child.pid!;
+  child.kill("SIGKILL");
+  await new Promise<void>((resolve) => child.on("close", resolve));
+  return pid;
+}
+
 describe("reapOrphanedSessions (boot-time)", () => {
   it("ends every active session left over from a previous process", async () => {
     const h = buildHarness();
-    const a = seed(h, { persistent: false });
-    const b = seed(h, { persistent: true });
+    const deadPid = await spawnAndReapPid();
+    const a = seed(h, { persistent: false, pid: deadPid });
+    const b = seed(h, { persistent: true, pid: deadPid });
 
     expect(h.sessions.get(a.sessionId)!.ended_at).toBeUndefined();
     expect(h.sessions.get(b.sessionId)!.ended_at).toBeUndefined();
@@ -91,8 +105,9 @@ describe("reapOrphanedSessions (boot-time)", () => {
 
   it("preserves agents (ephemeral and persistent) so resume can reattach", async () => {
     const h = buildHarness();
-    const ephemeral = seed(h, { persistent: false });
-    const persistent = seed(h, { persistent: true });
+    const deadPid = await spawnAndReapPid();
+    const ephemeral = seed(h, { persistent: false, pid: deadPid });
+    const persistent = seed(h, { persistent: true, pid: deadPid });
 
     reapOrphanedSessions({
       sessions: h.sessions,
@@ -112,9 +127,12 @@ describe("reapOrphanedSessions (boot-time)", () => {
 
   it("flags every active session was-live-at-shutdown (reaped or skipped)", async () => {
     const h = buildHarness();
-    const claude = seed(h, { persistent: false });
+    const deadPid = await spawnAndReapPid();
+    // codex is turn-lifetime (skipped before the probe); any pid works for it
+    const claude = seed(h, { persistent: false, pid: deadPid });
     const codex = seed(h, {
       persistent: true,
+      pid: deadPid,
       runtimeProvider: "codex",
       providerThreadId: "thread-1",
     });
@@ -140,7 +158,7 @@ describe("reapOrphanedSessions (boot-time)", () => {
 
   it("does not flag sessions that were already ended before boot", async () => {
     const h = buildHarness();
-    const done = seed(h, { persistent: false, preEnded: true });
+    const done = seed(h, { persistent: false, pid: 9000, preEnded: true });
 
     reapOrphanedSessions({
       sessions: h.sessions,
@@ -157,7 +175,7 @@ describe("reapOrphanedSessions (boot-time)", () => {
 
   it("does not touch sessions that were already ended", async () => {
     const h = buildHarness();
-    const done = seed(h, { persistent: false, preEnded: true });
+    const done = seed(h, { persistent: false, pid: 9000, preEnded: true });
     const endedAt = h.sessions.get(done.sessionId)!.ended_at;
     expect(typeof endedAt).toBe("number");
 
@@ -176,12 +194,15 @@ describe("reapOrphanedSessions (boot-time)", () => {
 
   it("preserves active sessions for the selected turn-lifetime provider", async () => {
     const h = buildHarness();
+    const deadPid = await spawnAndReapPid();
+    // codex is turn-lifetime (skipped before the probe); any pid works for it
     const codex = seed(h, {
       persistent: true,
+      pid: deadPid,
       runtimeProvider: "codex",
       providerThreadId: "thread-1",
     });
-    const claude = seed(h, { persistent: true });
+    const claude = seed(h, { persistent: true, pid: deadPid });
 
     reapOrphanedSessions({
       sessions: h.sessions,
@@ -201,7 +222,7 @@ describe("reapOrphanedSessions (boot-time)", () => {
 
   it("frees ceiling capacity by zeroing countActive across the board", async () => {
     const h = buildHarness();
-    const a = seed(h, { persistent: false });
+    const a = seed(h, { persistent: false, pid: await spawnAndReapPid() });
     expect(h.sessions.countActive(a.workspaceId, a.roleId)).toBe(1);
 
     reapOrphanedSessions({
@@ -218,7 +239,7 @@ describe("reapOrphanedSessions (boot-time)", () => {
   });
 
   it("is a no-op when there are no active sessions", async () => {
-    const h = buildHarness();
+    const h = buildHarness(); // no seed needed
 
     reapOrphanedSessions({
       sessions: h.sessions,
@@ -228,6 +249,135 @@ describe("reapOrphanedSessions (boot-time)", () => {
       agentQuestions: h.agentQuestions,
       agentQuestionWaiter: h.agentQuestionWaiter,
     });
+
+    h.db.close();
+  });
+});
+
+describe("reapOrphanedSessions — liveness gate (#466)", () => {
+  it("spares an active session whose child process is still alive", async () => {
+    const h = buildHarness();
+    const child = spawn("sleep", ["100"]);
+    await new Promise<void>((resolve) => child.on("spawn", resolve));
+    const livePid = child.pid!;
+
+    const a = seed(h, { persistent: false, pid: livePid });
+
+    reapOrphanedSessions({
+      sessions: h.sessions,
+      agents: h.agents,
+      roles: h.roles,
+      sessionTokens: h.sessionTokens,
+      agentQuestions: h.agentQuestions,
+      agentQuestionWaiter: h.agentQuestionWaiter,
+    });
+
+    // Live child — row must survive
+    expect(h.sessions.get(a.sessionId)!.ended_at).toBeUndefined();
+
+    child.kill("SIGKILL");
+    await new Promise<void>((resolve) => child.on("close", resolve));
+    h.db.close();
+  });
+
+  it("reaps an active session whose child process is dead (ESRCH)", async () => {
+    const h = buildHarness();
+    const deadPid = await spawnAndReapPid();
+
+    const a = seed(h, { persistent: false, pid: deadPid });
+
+    reapOrphanedSessions({
+      sessions: h.sessions,
+      agents: h.agents,
+      roles: h.roles,
+      sessionTokens: h.sessionTokens,
+      agentQuestions: h.agentQuestions,
+      agentQuestionWaiter: h.agentQuestionWaiter,
+    });
+
+    // Dead child — row must be ended
+    expect(typeof h.sessions.get(a.sessionId)!.ended_at).toBe("number");
+    h.db.close();
+  });
+
+  it("does not flag a live-process session was-live-at-shutdown", async () => {
+    const h = buildHarness();
+    const child = spawn("sleep", ["100"]);
+    await new Promise<void>((resolve) => child.on("spawn", resolve));
+    const livePid = child.pid!;
+
+    const a = seed(h, { persistent: false, pid: livePid });
+
+    reapOrphanedSessions({
+      sessions: h.sessions,
+      agents: h.agents,
+      roles: h.roles,
+      sessionTokens: h.sessionTokens,
+      agentQuestions: h.agentQuestions,
+      agentQuestionWaiter: h.agentQuestionWaiter,
+    });
+
+    // A running session is not a resume candidate — must not be flagged
+    expect(h.sessions.get(a.sessionId)!.was_live_at_shutdown).toBeUndefined();
+
+    child.kill("SIGKILL");
+    await new Promise<void>((resolve) => child.on("close", resolve));
+    h.db.close();
+  });
+
+  it("flags a reaped dead-process session was-live-at-shutdown", async () => {
+    const h = buildHarness();
+    const deadPid = await spawnAndReapPid();
+
+    const a = seed(h, { persistent: false, pid: deadPid });
+
+    reapOrphanedSessions({
+      sessions: h.sessions,
+      agents: h.agents,
+      roles: h.roles,
+      sessionTokens: h.sessionTokens,
+      agentQuestions: h.agentQuestions,
+      agentQuestionWaiter: h.agentQuestionWaiter,
+    });
+
+    expect(h.sessions.get(a.sessionId)!.was_live_at_shutdown).toBe(true);
+    h.db.close();
+  });
+});
+
+describe("boot — killed agent durability (#433)", () => {
+  it("a killed agent remains ended after re-init and boot reconciliation", async () => {
+    const h = buildHarness();
+
+    const child = spawn("sleep", ["100"]);
+    await new Promise<void>((resolve) => child.on("spawn", resolve));
+    const pid = child.pid!;
+
+    const a = seed(h, { persistent: true, pid });
+
+    // Simulate terminateSession: kill child, mark session ended in DB
+    child.kill("SIGTERM");
+    await new Promise<void>((resolve) => child.on("close", resolve));
+    endSession(a.sessionId, h);
+
+    expect(typeof h.sessions.get(a.sessionId)!.ended_at).toBe("number");
+
+    // Simulate restart: re-create all store instances from the same DB
+    const restarted = {
+      sessions: createSessionStore(h.db),
+      agents: createAgentStore(h.db),
+      roles: createRoleStore(h.db),
+      sessionTokens: createSessionTokenStore(h.db),
+      agentQuestions: createAgentQuestionStore(h.db),
+      agentQuestionWaiter: createAgentQuestionWaiter(),
+    };
+
+    reapOrphanedSessions(restarted);
+
+    // Killed agent must NOT be in the active set after restart
+    const active = restarted.sessions.listActive();
+    expect(active.some((s) => s.id === a.sessionId)).toBe(false);
+    expect(typeof restarted.sessions.get(a.sessionId)!.ended_at).toBe("number");
 
     h.db.close();
   });
