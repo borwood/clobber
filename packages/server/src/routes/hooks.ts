@@ -76,12 +76,12 @@ export function registerHookRoutes(
       const reminder = buildFileSizeReminder(payload, deps);
       if (reminder !== null) return reminder;
     }
-    // The self.* habit injection rides every event the compile side wired. It
-    // returns additionalContext, so it runs after the gates/bridges that may
-    // short-circuit the turn, and falls through to {continue:true} when no habit
-    // fires — leaving the baseline IPC contract intact.
-    const injection = evaluateSelfHabits(payload, deps);
-    if (injection !== null) return injection;
+    // The self.* habit evaluation rides every event the compile side wired. An
+    // inject habit returns additionalContext; a refuse habit returns a PreToolUse
+    // deny. Both run after the gates/bridges that may short-circuit the turn, and
+    // fall through to {continue:true} when no habit fires.
+    const habitResult = evaluateSelfHabits(payload, deps);
+    if (habitResult !== null) return habitResult;
     return { continue: true };
   });
 }

@@ -1,15 +1,17 @@
 import { z } from "zod";
 
-// #398 habit primitive — the ACTION union (v1 = inject | cli | wake). Reuse-only,
-// no bespoke DSL (Golden Rule 1). An action is what fires when a trigger matches.
+// #398 habit primitive — the ACTION union (v1 = inject | cli | wake | refuse).
+// Reuse-only, no bespoke DSL (Golden Rule 1). An action fires when a trigger matches.
 //
 //   inject — return a hint as the /hook receiver's additionalContext, optionally
 //            enriched by the stdout of a `bash` command run receiver-side.
 //   cli    — fire-and-forget `clobber <verb> [args]` (status / note / finding).
 //   wake   — the COMPOSE seam to wake-programs (#212/#213/#214): it SELECTS a
 //            program by name, it does not contain one (layered architecture).
+//   refuse — BLOCK a PreToolUse juncture (deny) when the path-jail predicate
+//            fires; the first negative action kind (#398-D1).
 //
-// Additive-later members (NOT v1), expressed as the union grows:
+// Additive-later members, expressed as the union grows:
 //   { kind:"broadcast"; targets; payload } — #382 (one → many)
 //   { kind:"escalate";  question; chain }  — #384 (up a chain)
 
@@ -37,9 +39,28 @@ export const WakeActionSchema = z.object({
 });
 export type WakeAction = z.infer<typeof WakeActionSchema>;
 
+// Path-jail predicate — stored in a refuse action to describe the forbidden zone.
+// `outside`: deny writes under this root.
+// `under`: allow if under this subpath (overrides `outside`).
+// `except`: another allow-exemption path (overrides `outside`).
+export const PathJailSchema = z.object({
+  outside: z.string().min(1),
+  under: z.string().min(1).optional(),
+  except: z.string().min(1).optional(),
+});
+export type PathJail = z.infer<typeof PathJailSchema>;
+
+export const RefuseActionSchema = z.object({
+  kind: z.literal("refuse"),
+  predicate: PathJailSchema,
+  reason: z.string().min(1).optional(),
+});
+export type RefuseAction = z.infer<typeof RefuseActionSchema>;
+
 export const HabitActionSchema = z.discriminatedUnion("kind", [
   InjectActionSchema,
   CliActionSchema,
   WakeActionSchema,
+  RefuseActionSchema,
 ]);
 export type HabitAction = z.infer<typeof HabitActionSchema>;

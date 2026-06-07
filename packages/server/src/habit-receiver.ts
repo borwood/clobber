@@ -1,6 +1,8 @@
-import type { Habit, HookEventName, HookPayload, Session } from "@clobber/shared";
+import type { Habit, HookEventName, HookPayload, PreToolUsePayload, Session } from "@clobber/shared";
 import { claudeEventForHabit } from "@clobber/runtime";
 import type { SessionStore } from "./session-store.ts";
+import type { WorkspaceStore } from "./workspace-store.ts";
+import { isPathJailed } from "./path-jail.ts";
 
 // #271 habit Phase 1 — the DYNAMIC half of the self.* seam. The compile side
 // (runtime) registers the Claude hook so the harness POSTs the event; this side
@@ -16,8 +18,18 @@ export interface HabitInjection {
   };
 }
 
+// #398-D1 — the deny shape, matching HabitGateDenial (ask-bridge precedent).
+export interface HabitDenial {
+  readonly hookSpecificOutput: {
+    readonly hookEventName: "PreToolUse";
+    readonly permissionDecision: "deny";
+    readonly permissionDecisionReason: string;
+  };
+}
+
 export interface HabitReceiverDeps {
   readonly sessions: SessionStore;
+  readonly workspaces: WorkspaceStore;
   // The firing session's habits — embodied from its role (commit-pinned roles
   // carry habits; row-backed roles carry none). Injected so the heavy embodiment
   // wiring stays in server.ts and the evaluator is directly testable.
@@ -32,7 +44,7 @@ export interface HabitReceiverDeps {
 export function evaluateSelfHabits(
   payload: HookPayload,
   deps: HabitReceiverDeps,
-): HabitInjection | null {
+): HabitInjection | HabitDenial | null {
   const session = deps.sessions.get(payload.session_id);
   if (session === null) return null;
 
@@ -40,8 +52,26 @@ export function evaluateSelfHabits(
   const hints: string[] = [];
   for (const habit of deps.resolveSessionHabits(session)) {
     if (!habit.enabled) continue;
-    // v1 receiver produces additionalContext, so only `inject` fires here. `cli`
-    // and `wake` actions are the scheduler/CLI's concern (Phase 2+).
+
+    // #398-D1 — refuse branch: evaluated before inject so a matching refuse
+    // short-circuits immediately (no point collecting hints if the action is blocked).
+    if (habit.action.kind === "refuse") {
+      if (payload.hook_event_name !== "PreToolUse") continue;
+      const mapped = claudeEventForHabit(habit);
+      if (mapped === null || mapped.event !== payload.hook_event_name) continue;
+      if (!matchesHabit(habit, payload, subject)) continue;
+      if (habit.rand !== undefined && deps.random() >= habit.rand) continue;
+      if (!isPathJailed(habit.action.predicate, payload as PreToolUsePayload)) continue;
+      return {
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse",
+          permissionDecision: "deny",
+          permissionDecisionReason: habit.action.reason ?? "action refused by habit",
+        },
+      };
+    }
+
+    // cli and wake actions are the scheduler/CLI's concern (Phase 2+).
     if (habit.action.kind !== "inject") continue;
     const mapped = claudeEventForHabit(habit);
     if (mapped === null || mapped.event !== payload.hook_event_name) continue;
