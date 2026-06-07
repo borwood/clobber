@@ -37,9 +37,28 @@ export const WakeActionSchema = z.object({
 });
 export type WakeAction = z.infer<typeof WakeActionSchema>;
 
+// Path-jail predicate — stored in a refuse action to describe the forbidden zone.
+// `outside`: deny writes under this root.
+// `under`: allow if under this subpath (overrides `outside`).
+// `except`: another allow-exemption path (overrides `outside`).
+export const PathJailSchema = z.object({
+  outside: z.string().min(1),
+  under: z.string().min(1).optional(),
+  except: z.string().min(1).optional(),
+});
+export type PathJail = z.infer<typeof PathJailSchema>;
+
+export const RefuseActionSchema = z.object({
+  kind: z.literal("refuse"),
+  predicate: PathJailSchema,
+  reason: z.string().min(1).optional(),
+});
+export type RefuseAction = z.infer<typeof RefuseActionSchema>;
+
 export const HabitActionSchema = z.discriminatedUnion("kind", [
   InjectActionSchema,
   CliActionSchema,
   WakeActionSchema,
+  RefuseActionSchema,
 ]);
 export type HabitAction = z.infer<typeof HabitActionSchema>;

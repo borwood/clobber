@@ -85,6 +85,17 @@ describe("compileSelfHabits", () => {
     ]);
   });
 
+  it("a refuse habit on self.tool-use compiles to the SAME PreToolUse handler as inject", () => {
+    const compiled = compileSelfHabits(
+      [habit({ path: "self.tool-use", name: "jail", match: "Edit|Write", action: { kind: "refuse", predicate: { outside: "/repo" }, reason: "jailed" } })],
+      HOOK_URL,
+    );
+    expect(compiled.PreToolUse).toEqual([
+      { matcher: "Edit|Write", hooks: [{ type: "http", url: HOOK_URL, async: false }] },
+    ]);
+    expect(compiled.PostToolUse).toBeUndefined();
+  });
+
   it("does NOT compile the [S]/[V*] paths or disabled habits", () => {
     const compiled = compileSelfHabits(
       [
