@@ -4,8 +4,8 @@ import type {
   RoleBundleData,
   RuntimeSpawnOptions,
 } from "@clobber/runtime";
-import type { Agent, BootContext, BriefingPacket, ClobberPromptTag, EffortLevel, Model, Role, Workspace } from "@clobber/shared";
-import { CALLER_SUPPLIED_KICK, CALLER_SUPPLIED_SYSTEM, resolveWakeProgram } from "@clobber/shared";
+import type { Agent, BootContext, BriefingPacket, CliScope, ClobberPromptTag, EffortLevel, Model, Role, Workspace } from "@clobber/shared";
+import { allCapabilityNames, CALLER_SUPPLIED_KICK, CALLER_SUPPLIED_SYSTEM, isActionAllowed, resolveWakeProgram } from "@clobber/shared";
 import { ensureOffice } from "./office-store.ts";
 import { composeOfficeContext } from "./office-context.ts";
 import { composeUnackedNotifications } from "./notification-inbox.ts";
@@ -15,6 +15,7 @@ import { composePromptModules } from "./compose-prompt-modules.ts";
 import { OFFICE_NOTES_SKILL } from "./office-notes-skill.ts";
 import { deskDirFor, writeBriefingPacket } from "./desk-store.ts";
 import { generateTokenValue } from "./session-token-store.ts";
+import { resolveCurrentRoleVersion } from "./resolve-role-content.ts";
 import { resolveSpawnCwd } from "./spawn-worktree.ts";
 import { embodyRole, type RolePin } from "./embody-role.ts";
 import type { SpawnPipelineDeps } from "./spawn-pipeline.ts";
@@ -63,6 +64,7 @@ export interface PrepareSpawnContextInput {
 
 export interface SpawnContext {
   readonly token: string;
+  readonly scope_json: string;
   readonly officeDir: string | null;
   readonly materialized: MaterializedBundle;
   readonly env: NodeJS.ProcessEnv;
@@ -112,6 +114,20 @@ export async function prepareSpawnContext(
   }
 
   const token = generateTokenValue();
+
+  // Bake ws∩role at spawn time; stored with the token so authorizeCommand can serve
+  // it without re-resolving role+workspace on every command. NULL-scope tokens (tokens
+  // that pre-date this column) fall back to the live 2-tier path (#567).
+  const version = resolveCurrentRoleVersion(role, deps);
+  // version cannot be null here: embodyRole above already resolved the same source.
+  const roleAllowList = JSON.parse(version!.allowed_cli_commands_json) as readonly string[];
+  const roleScope: CliScope = { allow: roleAllowList as string[], deny: [] };
+  const agentScope: CliScope = { allow: ["*"], deny: [] }; // no per-agent override in PR1
+  const bakedAllow = allCapabilityNames().filter(
+    (v) => isActionAllowed(workspace.perms_scope, v) && isActionAllowed(roleScope, v) && isActionAllowed(agentScope, v),
+  );
+  const scope_json = JSON.stringify({ allow: bakedAllow, deny: [] });
+
   const officeDir = role.persistent ? ensureOffice(workspace.repo_path, agent.id) : null;
 
   const deskDir = mode === "attach" ? deskDirFor(workspace.repo_path, agent.id) : null;
@@ -251,7 +267,7 @@ export async function prepareSpawnContext(
     ...(agent.label === undefined ? {} : { displayName: agent.label }),
   };
 
-  return { ok: true, context: { token, officeDir, materialized, env, spawnOptions } };
+  return { ok: true, context: { token, scope_json, officeDir, materialized, env, spawnOptions } };
 }
 
 function injectOfficeNotesSkill(bundle: RoleBundleData): RoleBundleData {

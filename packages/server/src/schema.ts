@@ -123,6 +123,7 @@ export const SCHEMA = `
     token       TEXT    PRIMARY KEY,
     session_id  TEXT    NOT NULL UNIQUE,
     created_at  INTEGER NOT NULL,
+    scope_json  TEXT,
     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
   );
 
