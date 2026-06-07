@@ -1,17 +1,14 @@
 import type { FastifyInstance } from "fastify";
 import type { Database } from "bun:sqlite";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { PromptModuleDefinitionSchema, PromptModuleRefsSchema } from "@clobber/shared";
 import { enumerateDefaultPromptModules } from "@clobber/runtime";
 import type { WorkspaceStore } from "../workspace-store.ts";
 import {
+  CATALOG_SUBDIR,
+  MODULE_FILE,
+  writeModule,
   resolvePromptModuleCatalogWithSources,
   type PromptModuleWithSource,
 } from "../workspace-prompt-module-catalog.ts";
@@ -21,9 +18,6 @@ import {
 //   2. It knows the workspace's repo_path.
 //   3. Its DB can answer "which roles ref this module" for delete-safety.
 // The CLI is a thin client calling these; no FS access in the CLI.
-
-const CATALOG_SUBDIR = ".clobber/prompt-modules";
-const MODULE_FILE = "prompt-module.json";
 
 interface Params {
   id: string;
@@ -98,12 +92,6 @@ function modulePath(repoPath: string, name: string): string {
 
 function workspaceModuleExists(repoPath: string, name: string): boolean {
   return existsSync(modulePath(repoPath, name));
-}
-
-function writeModule(repoPath: string, name: string, definition: unknown): void {
-  const dir = join(repoPath, CATALOG_SUBDIR, name);
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, MODULE_FILE), JSON.stringify(definition, null, 2));
 }
 
 export function registerWorkspacePromptModuleRoutes(

@@ -1,8 +1,13 @@
 import type { FastifyInstance } from "fastify";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { PromptModuleDefinitionSchema } from "@clobber/shared";
 import { enumerateDefaultPromptModules } from "@clobber/runtime";
+import {
+  CATALOG_SUBDIR,
+  MODULE_FILE,
+  writeModule,
+} from "../workspace-prompt-module-catalog.ts";
 import type { WorkspaceStore } from "../workspace-store.ts";
 import type { WithAgentAuthDeps } from "./_with-agent-auth.ts";
 import { withAgentAuth } from "./_with-agent-auth.ts";
@@ -11,9 +16,6 @@ import { withAgentAuth } from "./_with-agent-auth.ts";
 // caller's session (no agent cd / path-rediscovery); wraps the same catalog write
 // as PUT /workspaces/:id/prompt-modules/:name behind agent auth.
 //   PUT /agent/prompt-modules/:name  → "prompt-modules.edit"
-
-const CATALOG_SUBDIR = ".clobber/prompt-modules";
-const MODULE_FILE = "prompt-module.json";
 
 interface NamedParams {
   name: string;
@@ -54,9 +56,7 @@ export function registerAgentPromptModulesRoutes(
           reply.code(400);
           return { error: "invalid definition", issues: parsed.error.issues };
         }
-        const dir = join(ws.repo_path, CATALOG_SUBDIR, name);
-        mkdirSync(dir, { recursive: true });
-        writeFileSync(join(dir, MODULE_FILE), JSON.stringify(parsed.data, null, 2));
+        writeModule(ws.repo_path, name, parsed.data);
         const shadowed_default = !inWorkspace && inDefaults;
         const source = inDefaults ? "shadows-default" : "workspace";
         return { name, source, shadowed_default };
