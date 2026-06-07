@@ -1,10 +1,11 @@
 import type { FastifyRequest } from "fastify";
-import { isCliCommandAllowed, type Session } from "@clobber/shared";
+import { isCliCommandAllowed, isActionAllowed, type Session } from "@clobber/shared";
 import type { SessionTokenStore } from "../session-token-store.ts";
 import type { SessionStore } from "../session-store.ts";
 import type { RoleStore } from "../role-store.ts";
 import type { RoleVersionStore } from "../role-version-store.ts";
 import type { RoleContentCache } from "../role-content-cache.ts";
+import type { WorkspaceStore } from "../workspace-store.ts";
 import { resolveCurrentRoleVersion } from "../resolve-role-content.ts";
 
 const BEARER = "Bearer ";
@@ -21,6 +22,8 @@ export interface CommandAuthzDeps {
   // commit-pinned role's allow-list from the materialized tree, not a row.
   readonly roleContentCache?: RoleContentCache;
   readonly roleRepoDir?: string;
+  // #565 — workspace perms tier: loaded here to intersect with the role tier.
+  readonly workspaces: Pick<WorkspaceStore, "get">;
 }
 
 export type AuthResult =
@@ -81,6 +84,17 @@ export function authorizeCommand(
       ok: false,
       status: 403,
       error: `command '${commandName}' not allowed for role '${role.name}'`,
+    };
+  }
+  const workspace = deps.workspaces.get(session.workspace_id);
+  if (workspace === null) {
+    return { ok: false, status: 500, error: "workspace missing for session" };
+  }
+  if (!isActionAllowed(workspace.perms_scope, commandName)) {
+    return {
+      ok: false,
+      status: 403,
+      error: `command '${commandName}' denied by workspace permissions`,
     };
   }
   return { ok: true };

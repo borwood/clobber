@@ -9,9 +9,11 @@ import {
   DEFAULT_FILE_SIZE_POLICY,
   DEFAULT_MANAGER_SKILL_POLICY,
   DEFAULT_WORKSPACE_THEME,
+  DEFAULT_WORKSPACE_PERMS_SCOPE,
   WorkspaceSchema,
   slugify,
   type CreateWorkspaceRequest,
+  type CliScope,
   type FileSizePolicy,
   type FinalReportCallback,
   type ManagerSkillPolicy,
@@ -32,6 +34,7 @@ export interface WorkspaceConfigPatch {
   readonly file_size_policy?: FileSizePolicy;
   readonly manager_skill_policy?: ManagerSkillPolicy;
   readonly theme?: WorkspaceTheme;
+  readonly perms_scope?: CliScope;
 }
 
 export interface WorkspaceStore {
@@ -57,6 +60,7 @@ interface Row {
   file_size_policy: string;
   manager_skill_policy: string;
   theme: string;
+  perms_scope: string;
   created_at: number;
 }
 
@@ -73,6 +77,7 @@ function rowToWorkspace(row: Row): Workspace {
     file_size_policy: JSON.parse(row.file_size_policy),
     manager_skill_policy: JSON.parse(row.manager_skill_policy),
     theme: JSON.parse(row.theme),
+    perms_scope: JSON.parse(row.perms_scope),
     created_at: row.created_at,
   });
 }
@@ -80,8 +85,8 @@ function rowToWorkspace(row: Row): Workspace {
 export function createWorkspaceStore(db: Database): WorkspaceStore {
   const insertStmt = db.prepare(
     `INSERT INTO workspaces
-       (id, name, repo_path, setting_sources, role_edit_policy, trigger_overrides, final_report_callback, spawn_worktree, file_size_policy, manager_skill_policy, theme, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, name, repo_path, setting_sources, role_edit_policy, trigger_overrides, final_report_callback, spawn_worktree, file_size_policy, manager_skill_policy, theme, perms_scope, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const getStmt = db.prepare("SELECT * FROM workspaces WHERE id = ?");
   const listStmt = db.prepare(
@@ -110,6 +115,7 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
         allowed_skills: [...DEFAULT_MANAGER_SKILL_POLICY.allowed_skills],
       };
       const theme: WorkspaceTheme = req.theme ?? { ...DEFAULT_WORKSPACE_THEME };
+      const permsScope: CliScope = req.perms_scope ?? { ...DEFAULT_WORKSPACE_PERMS_SCOPE };
       insertStmt.run(
         id,
         req.name,
@@ -122,6 +128,7 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
         JSON.stringify(fileSizePolicy),
         JSON.stringify(skillPolicy),
         JSON.stringify(theme),
+        JSON.stringify(permsScope),
         created_at,
       );
       return {
@@ -139,6 +146,7 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
           allowed_skills: [...skillPolicy.allowed_skills],
         },
         theme,
+        perms_scope: { allow: [...permsScope.allow], deny: [...permsScope.deny] },
         created_at,
       };
     },
@@ -193,6 +201,10 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
       if (config.theme !== undefined) {
         fragments.push("theme = ?");
         values.push(JSON.stringify(config.theme));
+      }
+      if (config.perms_scope !== undefined) {
+        fragments.push("perms_scope = ?");
+        values.push(JSON.stringify(config.perms_scope));
       }
       if (fragments.length === 0) {
         const row = getStmt.get(id) as Row | null;

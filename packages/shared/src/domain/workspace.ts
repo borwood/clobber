@@ -1,9 +1,13 @@
 import { z } from "zod";
+import { CliScopeSchema, DEFAULT_WORKSPACE_PERMS_SCOPE, type CliScope } from "./cli-scope.ts";
 import { FinalReportCallbackSchema } from "./final-report-callback.ts";
 import { SpawnWorktreeSchema } from "./spawn-worktree.ts";
 import { FileSizePolicySchema } from "./file-size-policy.ts";
 import { WorkspaceThemeSchema } from "./workspace-theme.ts";
 import { ManagerSkillPolicySchema } from "./manager-skill-policy.ts";
+
+export { DEFAULT_WORKSPACE_PERMS_SCOPE };
+export type { CliScope };
 
 export const SettingSourceSchema = z.enum(["user", "project", "local"]);
 export type SettingSource = z.infer<typeof SettingSourceSchema>;
@@ -89,6 +93,7 @@ export const WorkspaceSchema = z.object({
   file_size_policy: FileSizePolicySchema,
   manager_skill_policy: ManagerSkillPolicySchema,
   theme: WorkspaceThemeSchema,
+  perms_scope: CliScopeSchema,
   created_at: z.number().int().nonnegative(),
 });
 export type Workspace = z.infer<typeof WorkspaceSchema>;
@@ -104,6 +109,7 @@ export const CreateWorkspaceRequestSchema = z.object({
   file_size_policy: FileSizePolicySchema.optional(),
   manager_skill_policy: ManagerSkillPolicySchema.optional(),
   theme: WorkspaceThemeSchema.optional(),
+  perms_scope: CliScopeSchema.optional(),
 });
 export type CreateWorkspaceRequest = z.infer<typeof CreateWorkspaceRequestSchema>;
 
@@ -117,6 +123,7 @@ export const UpdateWorkspaceConfigRequestSchema = z
     file_size_policy: FileSizePolicySchema.optional(),
     manager_skill_policy: ManagerSkillPolicySchema.optional(),
     theme: WorkspaceThemeSchema.optional(),
+    perms_scope: CliScopeSchema.optional(),
   })
   .refine(
     (v) =>
@@ -127,10 +134,11 @@ export const UpdateWorkspaceConfigRequestSchema = z
       v.spawn_worktree !== undefined ||
       v.file_size_policy !== undefined ||
       v.manager_skill_policy !== undefined ||
-      v.theme !== undefined,
+      v.theme !== undefined ||
+      v.perms_scope !== undefined,
     {
       message:
-        "must include at least one of setting_sources, role_edit_policy, trigger_overrides, final_report_callback, spawn_worktree, file_size_policy, manager_skill_policy, theme",
+        "must include at least one of setting_sources, role_edit_policy, trigger_overrides, final_report_callback, spawn_worktree, file_size_policy, manager_skill_policy, theme, perms_scope",
     },
   );
 export type UpdateWorkspaceConfigRequest = z.infer<

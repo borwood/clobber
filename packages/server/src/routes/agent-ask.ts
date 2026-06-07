@@ -12,6 +12,7 @@ import type { RoleVersionStore } from "../role-version-store.ts";
 import type { RoleContentCache } from "../role-content-cache.ts";
 import type { AgentQuestionStore } from "../agent-question-store.ts";
 import type { AgentQuestionWaiter } from "../agent-question-waiter.ts";
+import type { WorkspaceStore } from "../workspace-store.ts";
 import {
   awaitExistingAnswer,
   createAndAwaitAnswer,
@@ -34,6 +35,7 @@ export interface AgentAskRouteDeps {
   // gate commit-safe for a git-backed role.
   readonly roleContentCache?: RoleContentCache;
   readonly roleRepoDir?: string;
+  readonly workspaces: Pick<WorkspaceStore, "get">;
   readonly agentQuestions: AgentQuestionStore;
   readonly agentQuestionWaiter: AgentQuestionWaiter;
   readonly askPollWindowMs?: number;

@@ -97,6 +97,9 @@ export function registerWorkspaceRoutes(
         ...(parsed.data.theme === undefined
           ? {}
           : { theme: parsed.data.theme }),
+        ...(parsed.data.perms_scope === undefined
+          ? {}
+          : { perms_scope: parsed.data.perms_scope }),
       });
       if (updated === null) {
         reply.code(404);

@@ -47,6 +47,12 @@ export function migrateWorkspaceConfig(db: Database): void {
     "manager_skill_policy",
     `TEXT NOT NULL DEFAULT '{"allow_self_grant":false,"allowed_skills":[]}'`,
   );
+  ensureColumn(
+    db,
+    "workspaces",
+    "perms_scope",
+    `TEXT NOT NULL DEFAULT '{"allow":["*"],"deny":[]}'`,
+  );
 }
 
 function ensureColumn(
