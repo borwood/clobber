@@ -4,6 +4,7 @@
 
 _Generated from git history of source metadata files._
 
+- 2fa63f587dd892a2af3d8dfa26ffba1f6c2081e3 2026-06-07 feat(server,cli): PR2 — per-agent scope override + effective_scope surface (#567)
 - b94c4a269b9dfb6e936a552783627b40ca227ea1 2026-06-07 feat(shared,server,cli): Track C step 4 — workspace perms tier + live 2-tier resolution (#565) (#566)
 - 1fefe6733f4287ef677249e38048424a2615dddc 2026-06-07 feat(shared): Track C step 3 — scope grammar + isCliCommandAllowed shim (#560) (#561)
 - 5e9526a8571da2b6ddbcfecda3f75c53f9095859 2026-06-07 feat(shared,cli): Track C step 2a — CLI capability registry + Subcommand refs (#555)
