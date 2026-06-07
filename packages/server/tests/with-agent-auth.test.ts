@@ -62,7 +62,7 @@ function buildHarness(): Harness {
 
   const capturedSessionIds: string[] = [];
   const app = Fastify();
-  const deps = { sessionTokens: tokens, sessions, roles, roleVersions };
+  const deps = { sessionTokens: tokens, sessions, roles, roleVersions, workspaces };
 
   app.get(
     "/test/whoami-route",

@@ -23,6 +23,7 @@ export const SCHEMA = `
     file_size_policy      TEXT    NOT NULL DEFAULT '{"kind":"on","max_lines":300}',
     manager_skill_policy  TEXT    NOT NULL DEFAULT '{"allow_self_grant":false,"allowed_skills":[]}',
     theme                 TEXT    NOT NULL DEFAULT '{"mode":"dark","accent":"emerald"}',
+    perms_scope           TEXT    NOT NULL DEFAULT '{"allow":["*"],"deny":[]}',
     created_at            INTEGER NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_workspaces_created ON workspaces(created_at DESC);

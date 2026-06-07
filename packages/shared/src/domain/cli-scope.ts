@@ -1,6 +1,7 @@
 // Track C Step 3 (#560) — single-tier scope algebra.
-// Multi-tier resolution (intersection across workspace/role/agent tiers) is Step 4/5.
+// Track C Step 4 (#565) — workspace perms tier: CliScopeSchema + DEFAULT_WORKSPACE_PERMS_SCOPE.
 
+import { z } from "zod";
 import {
   allCapabilityNames,
   capabilityNamesByTag,
@@ -11,6 +12,17 @@ export interface CliScope {
   readonly allow: readonly string[];
   readonly deny: readonly string[];
 }
+
+// Zod shape for storage and route validation. Token semantics (unknown verbs,
+// deny prefix) are validated at runtime by isActionAllowed/expandDenyToken (Rule 3).
+export const CliScopeSchema = z.object({
+  allow: z.array(z.string()),
+  deny: z.array(z.string()),
+});
+
+// Permissive default — grants every capability, denies nothing.
+// Used as the column DEFAULT so pre-existing workspace rows are unaffected.
+export const DEFAULT_WORKSPACE_PERMS_SCOPE: CliScope = { allow: ["*"], deny: [] };
 
 const VALID_TAGS = new Set<string>(["read", "write", "admin"]);
 
