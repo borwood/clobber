@@ -1,4 +1,4 @@
-import type { Command } from "../commands.ts";
+import type { Command, Subcommand } from "../commands.ts";
 import { request } from "../http.ts";
 import { CliUsageError } from "../usage-error.ts";
 
@@ -17,11 +17,12 @@ interface AgentsListResponse {
   readonly agents: readonly AgentEntry[];
 }
 
-const SUBCOMMANDS = ["list"] as const;
-type Subcommand = (typeof SUBCOMMANDS)[number];
+const SUBCOMMANDS: readonly Subcommand[] = [
+  { name: "list", capability: "agents" },
+];
 
-function isSubcommand(name: string): name is Subcommand {
-  return (SUBCOMMANDS as readonly string[]).includes(name);
+function isSubcommand(name: string): boolean {
+  return SUBCOMMANDS.some((s) => s.name === name);
 }
 
 const AGENTS_USAGE = `usage: clobber agents <list>

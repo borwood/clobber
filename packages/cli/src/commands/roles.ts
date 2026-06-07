@@ -1,4 +1,4 @@
-import type { Command, CommandContext } from "../commands.ts";
+import type { Command, CommandContext, Subcommand } from "../commands.ts";
 import { request } from "../http.ts";
 import { CliUsageError } from "../usage-error.ts";
 import { takeJsonFlag } from "./roles-args.ts";
@@ -17,27 +17,28 @@ import {
 } from "./roles-checkout.ts";
 import { runFetch, runLogUpstream } from "./roles-upstream.ts";
 
-const SUBCOMMANDS = [
-  "list",
-  "show",
-  "fork",
-  "edit",
-  "delete",
-  "ceiling",
-  "prompt-modules",
-  "wake-programs",
-  "checkout",
-  "status",
-  "diff",
-  "commit",
-  "discard",
-  "fetch",
-  "log",
-] as const;
-type Subcommand = (typeof SUBCOMMANDS)[number];
+// prompt-modules and wake-programs are sub-dispatchers (they fan out to
+// multiple capabilities), so they carry no single capability ref.
+const SUBCOMMANDS: readonly Subcommand[] = [
+  { name: "list",           capability: "roles.list" },
+  { name: "show",           capability: "roles.show" },
+  { name: "fork",           capability: "roles.fork" },
+  { name: "edit",           capability: "roles.edit" },
+  { name: "delete",         capability: "roles.delete" },
+  { name: "ceiling",        capability: "roles.ceiling" },
+  { name: "prompt-modules" },
+  { name: "wake-programs" },
+  { name: "checkout",       capability: "roles.checkout" },
+  { name: "status",         capability: "roles.status" },
+  { name: "diff",           capability: "roles.diff" },
+  { name: "commit",         capability: "roles.commit" },
+  { name: "discard",        capability: "roles.discard" },
+  { name: "fetch",          capability: "roles.fetch" },
+  { name: "log",            capability: "roles.upstream.log" },
+];
 
-function isSubcommand(name: string): name is Subcommand {
-  return (SUBCOMMANDS as readonly string[]).includes(name);
+function isSubcommand(name: string): boolean {
+  return SUBCOMMANDS.some((s) => s.name === name);
 }
 
 function assertNoArgs(sub: string, args: readonly string[]): void {

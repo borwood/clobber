@@ -1,13 +1,17 @@
-import type { Command } from "../commands.ts";
+import type { Command, Subcommand } from "../commands.ts";
 import { CliUsageError } from "../usage-error.ts";
 import { WORKSPACE_CONFIG_FILE, MANAGER_TRIGGERS_FILE, runCreate } from "./workspace-create.ts";
 import { runPatch } from "./workspace-patch.ts";
 
-const SUBCOMMANDS = ["create", "patch"] as const;
-type Subcommand = (typeof SUBCOMMANDS)[number];
+// workspace create/patch call /workspaces/* routes (no withAgentAuth), so
+// no capability ref — they operate outside the agent-authz layer.
+const SUBCOMMANDS: readonly Subcommand[] = [
+  { name: "create" },
+  { name: "patch" },
+];
 
-function isSubcommand(name: string): name is Subcommand {
-  return (SUBCOMMANDS as readonly string[]).includes(name);
+function isSubcommand(name: string): boolean {
+  return SUBCOMMANDS.some((s) => s.name === name);
 }
 
 const WORKSPACE_USAGE = `usage: clobber workspace <subcommand> [flags]
