@@ -21,6 +21,7 @@ import { createAgentQuestionStore } from "@clobber/server/agent-question-store.t
 import { createAgentQuestionWaiter } from "@clobber/server/agent-question-waiter.ts";
 import { createTriggerDispatchStore } from "@clobber/server/trigger-dispatch-store.ts";
 import { createFinalReportConsumerStateStore } from "@clobber/server/final-report-consumer.ts";
+import { DRIFT_STUB_API_BASE } from "@clobber/server/_drift-stub.ts";
 import { run } from "../src/main.ts";
 
 // The real dogfood example lives at the repo root; this test file is
@@ -64,7 +65,7 @@ beforeAll(async () => {
       throw new Error("spawn not expected in loader test");
     },
     hookUrl: "http://test.invalid/hook",
-    apiBase: "http://test.invalid",
+    apiBase: DRIFT_STUB_API_BASE,
     cliEntry: "/dummy/cli.ts",
     roleRepoDir,
     dispatches: createTriggerDispatchStore(db),

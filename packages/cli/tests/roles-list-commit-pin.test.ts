@@ -23,6 +23,7 @@ import { createTriggerDispatchStore } from "@clobber/server/trigger-dispatch-sto
 import { createFinalReportConsumerStateStore } from "@clobber/server/final-report-consumer.ts";
 import { createRoleContentCache } from "@clobber/server/role-content-cache.ts";
 import type { AgentSpawner, SpawnedAgentInfo } from "@clobber/server/types.ts";
+import { DRIFT_STUB_API_BASE } from "@clobber/server/_drift-stub.ts";
 import { ENGINE_CONTRACT_VERSION } from "@clobber/shared";
 import { run } from "../src/main.ts";
 
@@ -113,7 +114,7 @@ beforeAll(async () => {
     agentQuestionWaiter: createAgentQuestionWaiter(),
     spawner,
     hookUrl: "http://test.invalid/hook",
-    apiBase: "http://test.invalid",
+    apiBase: DRIFT_STUB_API_BASE,
     cliEntry: "/dummy/cli.ts",
     dispatches: createTriggerDispatchStore(db),
     finalReportConsumerState: createFinalReportConsumerStateStore(db),

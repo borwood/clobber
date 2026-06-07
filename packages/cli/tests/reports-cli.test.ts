@@ -25,6 +25,7 @@ import type { SessionStore } from "@clobber/server/session-store.ts";
 import type { AgentSpawner, SpawnedAgentInfo } from "@clobber/server/types.ts";
 import { createTriggerDispatchStore } from "@clobber/server/trigger-dispatch-store.ts";
 import { createFinalReportConsumerStateStore } from "@clobber/server/final-report-consumer.ts";
+import { DRIFT_STUB_API_BASE } from "@clobber/server/_drift-stub.ts";
 import { run, runWithExit } from "../src/main.ts";
 
 interface Harness {
@@ -92,7 +93,7 @@ beforeAll(async () => {
     agentQuestionWaiter: createAgentQuestionWaiter(),
     spawner,
     hookUrl: "http://test.invalid/hook",
-    apiBase: "http://test.invalid",
+    apiBase: DRIFT_STUB_API_BASE,
     cliEntry: "/dummy/cli.ts",
     dispatches: createTriggerDispatchStore(db),
     finalReportConsumerState: createFinalReportConsumerStateStore(db),
