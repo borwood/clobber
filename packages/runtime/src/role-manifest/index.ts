@@ -1,7 +1,9 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import {
+  HabitSchema,
   RoleManifestSchema,
+  type Habit,
   type PermissionMode,
   type RoleManifest,
   type RoleSkill,
@@ -26,9 +28,9 @@ export interface BaseLayer {
 
 // A fully-resolved role: the fork's own identity (framing, system prompt,
 // manifest) plus the effective content after composing the base layer in.
-// `allowedTools`, `permissionMode`, `hooksJson`, and `skills` are the composed
-// values — downstream snapshotting projects these directly, never re-reading
-// the bundle from disk.
+// `allowedTools`, `permissionMode`, `hooksJson`, `skills`, and `habits` are
+// the composed values — downstream snapshotting projects these directly,
+// never re-reading the bundle from disk.
 export interface LoadedRole {
   readonly bundleRoot: string;
   readonly manifest: RoleManifest;
@@ -38,6 +40,9 @@ export interface LoadedRole {
   readonly permissionMode: PermissionMode | undefined;
   readonly hooksJson: string;
   readonly skills: readonly RoleSkill[];
+  // Habits loaded from <root>/habits/<category>/<event>/<name>.json.
+  // Empty when the role ships no habits.
+  readonly habits: readonly Habit[];
 }
 
 export interface DefineRoleOptions {
@@ -151,6 +156,7 @@ export function defineRole(opts: DefineRoleOptions): LoadedRole {
   const allowedTools = resolveAllowedTools(manifest, base);
   const permissionMode = manifest.permissionMode ?? base?.permissionMode;
   const skills = composeSkills(base?.skills ?? [], readSkills(join(pluginRootAbs, PLUGIN_SKILLS_REL)));
+  const habits = readHabits(join(opts.root, "habits"));
 
   return Object.freeze({
     bundleRoot: opts.root,
@@ -161,6 +167,7 @@ export function defineRole(opts: DefineRoleOptions): LoadedRole {
     permissionMode,
     hooksJson,
     skills,
+    habits,
   });
 }
 
@@ -222,6 +229,31 @@ function readSkills(skillsDir: string): readonly RoleSkill[] {
   }
   out.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   return out;
+}
+
+// Recursively scans <habitsDir>/<category>/<event>/<name>.json. Returns an
+// empty array when the directory doesn't exist (roles with no habits).
+function readHabits(habitsDir: string): readonly Habit[] {
+  if (!existsSync(habitsDir) || !statSync(habitsDir).isDirectory()) return [];
+  const habits: Habit[] = [];
+  for (const categoryEntry of readdirSync(habitsDir, { withFileTypes: true })) {
+    if (!categoryEntry.isDirectory()) continue;
+    const categoryDir = join(habitsDir, categoryEntry.name);
+    for (const eventEntry of readdirSync(categoryDir, { withFileTypes: true })) {
+      if (!eventEntry.isDirectory()) continue;
+      const eventDir = join(categoryDir, eventEntry.name);
+      for (const fileEntry of readdirSync(eventDir, { withFileTypes: true })) {
+        if (!fileEntry.isFile() || !fileEntry.name.endsWith(".json")) continue;
+        const raw = readFileSync(join(eventDir, fileEntry.name), "utf8");
+        habits.push(HabitSchema.parse(JSON.parse(raw)));
+      }
+    }
+  }
+  habits.sort((a, b) => {
+    if (a.path !== b.path) return a.path < b.path ? -1 : 1;
+    return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+  });
+  return habits;
 }
 
 function loadFraming(root: string, manifest: RoleManifest): string {

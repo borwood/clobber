@@ -108,4 +108,11 @@ describe("workerRole", () => {
     expect(loaded).not.toBeNull();
     expect(loaded!.manifest.name).toBe("worker");
   });
+
+  it("ships a worktree-jail habit in the self.tool-use path", () => {
+    const jail = workerRole.habits.find((h) => h.name === "worktree-jail");
+    expect(jail).toBeDefined();
+    expect(jail?.path).toBe("self.tool-use");
+    expect(jail?.action.kind).toBe("refuse");
+  });
 });

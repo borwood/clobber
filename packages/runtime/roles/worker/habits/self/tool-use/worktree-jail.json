@@ -1,0 +1,15 @@
+{
+  "path": "self.tool-use",
+  "phase": "pre",
+  "match": "Edit|Write|MultiEdit|Bash",
+  "name": "worktree-jail",
+  "action": {
+    "kind": "refuse",
+    "predicate": {
+      "outside": "__REPO_PATH__",
+      "under": "__WORKTREE_ROOT__",
+      "except": "__DESK_DIR__"
+    },
+    "reason": "writes to main checkout are not permitted from a worktree session"
+  }
+}

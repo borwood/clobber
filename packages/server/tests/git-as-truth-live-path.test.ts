@@ -43,11 +43,13 @@ import { snapshotShippedBundle } from "../src/role-version-snapshot.ts";
 
 // The oracle: the bundle the in-memory (row-backed) embodiment path produces for
 // a shipped role, before any git is involved. Mirrors role-repo.test.ts.
+// Phase 0: roleSnapshotToContract returns habits: [] (no snapshot column), so
+// overlay loaded.habits to match what materializeUpstreamRoleRepo commits.
 function inMemoryBundle(name: string): RoleBundleData {
   const loaded = loadRoleBundle(name);
   if (loaded === null) throw new Error(`no shipped role ${name}`);
   const snapshot = snapshotShippedBundle({ loaded, allowedTools: loaded.allowedTools });
-  const contract = roleSnapshotToContract(snapshot);
+  const contract = { ...roleSnapshotToContract(snapshot), habits: loaded.habits };
   return bundleFromContract(contract, {
     pluginName: name,
     description: loaded.manifest.description,

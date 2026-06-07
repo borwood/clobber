@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { slugify, type Agent, type Workspace } from "@clobber/shared";
+import { slugify, type Agent, type SpawnWorktree, type Workspace } from "@clobber/shared";
 import type { SpawnMode } from "./spawn-context.ts";
 
 // Resolves the working directory a session is spawned into. With the
@@ -24,6 +24,20 @@ export function resolveSpawnCwd(
   const firstAttach = mode === "attach" && !agentHasSession;
   if (firstAttach) createWorktree(workspace.repo_path, branch, worktreePath);
   return worktreePath;
+}
+
+// Pure path math: the worktree root a session with `label` would use for
+// `policy`. When policy is off (or label is undefined), returns `repoPath`.
+// Exported for the habit-receiver sentinel expansion — no I/O.
+export function worktreeRootFor(
+  repoPath: string,
+  label: string | undefined,
+  policy: SpawnWorktree,
+): string {
+  if (policy.kind === "off" || label === undefined) return repoPath;
+  const slug = slugify(label);
+  if (slug === "") return repoPath;
+  return join(dirname(repoPath), `${basename(repoPath)}-worktrees`, slug);
 }
 
 // Branch and path are derived deterministically from the agent label (the

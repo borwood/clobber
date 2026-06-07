@@ -34,11 +34,13 @@ function git(dir: string, ...args: string[]): string {
 
 // The bundle the live embodiment path would produce for a shipped role, before
 // any git is involved — the oracle we hold the git round-trip against.
+// Phase 0: roleSnapshotToContract returns habits: [] (no snapshot column), so
+// we overlay loaded.habits to match what materializeUpstreamRoleRepo commits.
 function inMemoryBundle(name: string): RoleBundleData {
   const loaded = loadRoleBundle(name);
   if (loaded === null) throw new Error(`no shipped role ${name}`);
   const snapshot = snapshotShippedBundle({ loaded, allowedTools: loaded.allowedTools });
-  const contract = roleSnapshotToContract(snapshot);
+  const contract = { ...roleSnapshotToContract(snapshot), habits: loaded.habits };
   return bundleFromContract(contract, {
     pluginName: name,
     description: loaded.manifest.description,
