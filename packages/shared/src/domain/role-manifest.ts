@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { PermissionModeSchema } from "../hooks/payloads.ts";
+import { isActionAllowed } from "./cli-scope.ts";
 import { EffortLevelSchema, ModelSchema, SdlcProfileSchema } from "./role.ts";
 import { PromptModuleRefSchema } from "./prompt-module.ts";
 import { WakeProgramSchema } from "./wake-program.ts";
@@ -53,17 +54,13 @@ export type RoleManifest = z.infer<typeof RoleManifestSchema>;
 
 export const CLI_COMMAND_WILDCARD = "*";
 
-// Returns true iff `commandName` is permitted by the allow-list.
-//
-// Names may be plain top-level verbs (e.g. "spawn") or dotted sub-verbs
-// (e.g. "roles.fork"). A list containing "*" permits any command. Sub-verb
-// matching is exact: a list with ["roles.list"] permits "roles.list" but
-// not "roles.fork". Future extension point: "roles.*" could allow any
-// roles.<x>; not implemented yet to keep semantics narrow.
+// Thin shim: forwards to isActionAllowed (Track C Step 3, #560).
+// Unknown bare tokens (e.g. "roles") resolve to the empty grant — matches the
+// old includes() semantics so agent-roles-dotted-commands.test.ts stays green.
+// Deny list is always empty here; multi-tier deny is Step 4/5.
 export function isCliCommandAllowed(
   allowed: readonly string[],
   commandName: string,
 ): boolean {
-  if (allowed.includes(CLI_COMMAND_WILDCARD)) return true;
-  return allowed.includes(commandName);
+  return isActionAllowed({ allow: allowed, deny: [] }, commandName);
 }
