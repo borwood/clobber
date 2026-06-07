@@ -1,4 +1,4 @@
-import type { Command, CommandContext } from "../commands.ts";
+import type { Command, CommandContext, Subcommand } from "../commands.ts";
 import { request } from "../http.ts";
 import { CliUsageError } from "../usage-error.ts";
 
@@ -128,7 +128,10 @@ export const reportsCommand: Command = {
   name: "reports",
   summary: "Read worker final reports for this workspace (manager triage interface).",
   usage: REPORTS_USAGE,
-  subcommands: ["list", "show"],
+  subcommands: [
+    { name: "list", capability: "reports" },
+    { name: "show", capability: "reports" },
+  ] satisfies readonly Subcommand[],
   async run(ctx) {
     const [verb, ...rest] = ctx.args;
     if (verb === "list") return runList(ctx, rest);

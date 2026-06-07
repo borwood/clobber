@@ -23,3 +23,4 @@ export * from "./notification.ts";
 export * from "./layout-event.ts";
 export * from "./habit.ts";
 export * from "./port.ts";
+export * from "./cli-capabilities.ts";

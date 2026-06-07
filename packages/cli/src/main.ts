@@ -33,7 +33,7 @@ export interface RunOptions {
   readonly stdin?: NodeJS.ReadableStream;
 }
 
-function buildRegistry(): CommandRegistry {
+export function buildCommandRegistry(): CommandRegistry {
   const registry = new CommandRegistry();
   registry.register(whoamiCommand);
   registry.register(spawnCommand);
@@ -83,7 +83,7 @@ function isHelpFlag(arg: string | undefined): boolean {
 }
 
 export async function run(opts: RunOptions): Promise<number> {
-  const registry = buildRegistry();
+  const registry = buildCommandRegistry();
   const [name, ...rest] = opts.argv;
 
   if (name === "--version" || name === "-V") {

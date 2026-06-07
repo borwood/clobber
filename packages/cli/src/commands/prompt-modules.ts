@@ -1,4 +1,4 @@
-import type { Command } from "../commands.ts";
+import type { Command, Subcommand } from "../commands.ts";
 import { CliUsageError } from "../usage-error.ts";
 import { runList } from "./prompt-modules-list.ts";
 import { runShow } from "./prompt-modules-show.ts";
@@ -6,11 +6,18 @@ import { runCreate } from "./prompt-modules-create.ts";
 import { runEdit } from "./prompt-modules-edit.ts";
 import { runDelete } from "./prompt-modules-delete.ts";
 
-const SUBCOMMANDS = ["list", "show", "create", "edit", "delete"] as const;
-type Subcommand = (typeof SUBCOMMANDS)[number];
+// list/show/create/delete call /workspaces/* routes (no withAgentAuth).
+// edit calls /agent/prompt-modules/:name (withAgentAuth "prompt-modules.edit").
+const SUBCOMMANDS: readonly Subcommand[] = [
+  { name: "list" },
+  { name: "show" },
+  { name: "create" },
+  { name: "edit", capability: "prompt-modules.edit" },
+  { name: "delete" },
+];
 
-function isSubcommand(name: string): name is Subcommand {
-  return (SUBCOMMANDS as readonly string[]).includes(name);
+function isSubcommand(name: string): boolean {
+  return SUBCOMMANDS.some((s) => s.name === name);
 }
 
 const PROMPT_MODULES_USAGE = `usage: clobber prompt-modules <subcommand> [flags]

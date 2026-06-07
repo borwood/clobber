@@ -5,15 +5,18 @@ import {
   type RoleSkill,
   type SelfSkillsMutationResponse,
 } from "@clobber/shared";
-import type { Command, CommandContext } from "../commands.ts";
+import type { Command, CommandContext, Subcommand } from "../commands.ts";
 import { request } from "../http.ts";
 import { CliUsageError } from "../usage-error.ts";
 
-const SUBCOMMANDS = ["list", "grant", "release"] as const;
-type Subcommand = (typeof SUBCOMMANDS)[number];
+const SUBCOMMANDS: readonly Subcommand[] = [
+  { name: "list", capability: "self-skills.list" },
+  { name: "grant", capability: "self-skills.grant" },
+  { name: "release", capability: "self-skills.release" },
+];
 
-function isSubcommand(name: string): name is Subcommand {
-  return (SUBCOMMANDS as readonly string[]).includes(name);
+function isSubcommand(name: string): boolean {
+  return SUBCOMMANDS.some((s) => s.name === name);
 }
 
 function takeJsonFlag(args: readonly string[]): {
@@ -169,7 +172,7 @@ are gated by the workspace's manager_skill_policy (PATCH /workspaces/:id).`,
     }
     if (!isSubcommand(sub)) {
       throw new CliUsageError(
-        `unknown self-skills subcommand: ${sub} (expected one of ${SUBCOMMANDS.join(", ")})`,
+        `unknown self-skills subcommand: ${sub} (expected one of ${SUBCOMMANDS.map((s) => s.name).join(", ")})`,
       );
     }
     if (sub === "list") {
