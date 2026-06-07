@@ -1,7 +1,7 @@
 import { existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
-import type { BootContext } from "@clobber/shared";
+import { BootContextSchema } from "@clobber/shared";
 import type { RoleStore } from "../role-store.ts";
 import type { ForkRef } from "../role-repo.ts";
 import type { WorkspaceRoleRepos } from "../workspace-role-repos.ts";
@@ -30,7 +30,12 @@ export function registerAgentRolesDriftSweepRoute(
       return "Role drift check unavailable (role repo not configured).";
     }
 
-    const body = request.body as BootContext;
+    const parsed = BootContextSchema.safeParse(request.body);
+    if (!parsed.success) {
+      reply.code(400);
+      return `invalid boot context: ${parsed.error.message}`;
+    }
+    const body = parsed.data;
     const repoDir = workspaceRepos.dirFor(body.workspace_id);
     const roles = deps.roles.listForWorkspace(body.workspace_id);
 

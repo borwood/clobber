@@ -325,6 +325,19 @@ describe("roles drift-sweep (#401 step-2)", () => {
     rmSync(repoPath2, { recursive: true, force: true });
   });
 
+  it("(f) body missing workspace_id returns 400, not an opaque 500", async () => {
+    // Without boundary validation the route casts the body as BootContext and
+    // calls dirFor(body.workspace_id) where workspace_id is undefined, which
+    // crashes path.join with ERR_INVALID_ARG_TYPE → Fastify surfaces a 500.
+    // After fix (BootContextSchema.safeParse) we expect a clean 400.
+    const res = await fetch(`${harness.base}/agent/roles/drift-sweep`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ agent_id: "x", role_id: "y", role_name: "z", persistent: false }),
+    });
+    expect(res.status).toBe(400);
+  });
+
   it("(e) drift signal appears in the composed boot surface (compose-path assertion)", async () => {
     // Test the http-provider compose path directly: build a catalog entry pointing
     // at the running server, call composePromptModules, assert the output contains
