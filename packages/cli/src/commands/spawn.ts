@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
-import { EffortLevelSchema, MODEL_ALIASES, ModelSchema, type BriefingFile, type EffortLevel, type Model } from "@clobber/shared";
+import { EffortLevelSchema, MODEL_ALIASES, ModelSchema, type BriefingFile, type CliScope, type EffortLevel, type Model } from "@clobber/shared";
 import type { Command } from "../commands.ts";
 import { request } from "../http.ts";
 import { CliUsageError } from "../usage-error.ts";
@@ -20,6 +20,7 @@ interface ParsedArgs {
   readonly effort?: EffortLevel;
   readonly model?: Model;
   readonly wakeProgram?: string;
+  readonly scopeOverride?: CliScope;
 }
 
 function takeValue(
@@ -53,6 +54,8 @@ export function parseSpawnArgs(args: readonly string[]): ParsedArgs {
   let model: Model | undefined;
   let wakeProgram: string | undefined;
   const briefingPairs: { name: string; path: string }[] = [];
+  const scopeAllowTokens: string[] = [];
+  const scopeDenyTokens: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
     const tok = args[i]!;
@@ -91,6 +94,14 @@ export function parseSpawnArgs(args: readonly string[]): ParsedArgs {
     } else if (tok === "--wake-program") {
       wakeProgram = takeValue(args, i, "--wake-program");
       i++;
+    } else if (tok === "--scope") {
+      scopeAllowTokens.push(takeValue(args, i, "--scope"));
+      i++;
+    } else if (tok === "--deny") {
+      const raw = takeValue(args, i, "--deny");
+      // Normalise: prepend '!' if the caller omitted it (shell-friendly).
+      scopeDenyTokens.push(raw.startsWith("!") ? raw : `!${raw}`);
+      i++;
     } else if (tok.startsWith("--") || (tok.startsWith("-") && tok.length > 1)) {
       throw new CliUsageError(`unknown flag: ${tok}`);
     } else {
@@ -114,6 +125,11 @@ export function parseSpawnArgs(args: readonly string[]): ParsedArgs {
     );
   }
 
+  const scopeOverride: CliScope | undefined =
+    scopeAllowTokens.length > 0 || scopeDenyTokens.length > 0
+      ? { allow: scopeAllowTokens.length > 0 ? scopeAllowTokens : ["*"], deny: scopeDenyTokens }
+      : undefined;
+
   return {
     role,
     prompt,
@@ -123,6 +139,7 @@ export function parseSpawnArgs(args: readonly string[]): ParsedArgs {
     ...(effort === undefined ? {} : { effort }),
     ...(model === undefined ? {} : { model }),
     ...(wakeProgram === undefined ? {} : { wakeProgram }),
+    ...(scopeOverride === undefined ? {} : { scopeOverride }),
   };
 }
 
@@ -157,7 +174,7 @@ function walkDir(root: string, dir: string, out: BriefingFile[]): void {
   }
 }
 
-const SPAWN_USAGE = `usage: clobber spawn <role> --prompt <text> --label <slug> [--briefing-dir <path>] [--briefing <name:path>...] [--effort <level>] [--model <model>] [--wake-program <name>]
+const SPAWN_USAGE = `usage: clobber spawn <role> --prompt <text> --label <slug> [--briefing-dir <path>] [--briefing <name:path>...] [--effort <level>] [--model <model>] [--wake-program <name>] [--scope <token>...] [--deny <verb>...]
 
 Spawn a worker agent into the current workspace. The role must already
 exist in this workspace (see \`clobber roles list\`). Prints the new
@@ -188,6 +205,15 @@ Flags:
                                  \`task\` for a worker that should read its desk
                                  and start the SDLC; \`idle\` to boot oriented
                                  and wait. Omit for the legacy prompt-as-kick.
+      --scope <token>            Add an allow token to the agent's per-spawn
+                                 scope override (e.g. tag:read, spawn, role.*).
+                                 May be repeated. Omit for the role default (all
+                                 capabilities the role + workspace grant).
+      --deny <verb>              Add a deny to the agent's per-spawn scope
+                                 override (e.g. roles.commit). The leading '!'
+                                 is added automatically. May be repeated. At
+                                 least one --scope is assumed '*' when only
+                                 --deny is given.
 
 Briefing files land at .clobber/agents/<agent-id>/desk/, which the worker
 sees via $CLOBBER_DESK_DIR. The worker role's first action is to read that
@@ -197,6 +223,9 @@ task-tool phase plan.
 Example:
   clobber spawn worker --prompt "ship #82" --label issue-82 \\
                        --briefing-dir /tmp/issue-82-packet
+
+  clobber spawn worker --prompt "audit roles" --label role-audit \\
+                       --scope tag:read --deny roles.commit
 
 Skill: see manager:spawn for when to spawn vs. continue an existing session,
 and manager:assignment for building a briefing packet from a GitHub issue.`;
@@ -224,6 +253,9 @@ export const spawnCommand: Command = {
     }
     if (parsed.wakeProgram !== undefined) {
       body["wake_program"] = parsed.wakeProgram;
+    }
+    if (parsed.scopeOverride !== undefined) {
+      body["scope_override"] = parsed.scopeOverride;
     }
     const result = await request<SpawnResponse>(ctx.env, {
       method: "POST",

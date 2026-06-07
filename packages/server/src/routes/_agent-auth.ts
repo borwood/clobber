@@ -74,7 +74,7 @@ export function authorizeCommand(
       return {
         ok: false,
         status: 403,
-        error: `command '${commandName}' denied by workspace permissions`,
+        error: `command '${commandName}' denied by effective permissions`,
       };
     }
     return { ok: true };

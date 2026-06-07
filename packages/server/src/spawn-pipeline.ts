@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { RuntimeProvider } from "@clobber/runtime";
-import type { Agent, BriefingPacket, ClobberPromptTag, EffortLevel, Model, Role, Workspace } from "@clobber/shared";
+import type { Agent, BriefingPacket, CliScope, ClobberPromptTag, EffortLevel, Model, Role, Workspace } from "@clobber/shared";
 import type { WorkspaceRoleStore } from "./workspace-role-store.ts";
 import type { WorkspaceStore } from "./workspace-store.ts";
 import type { AgentStore } from "./agent-store.ts";
@@ -71,6 +71,7 @@ export interface SpawnPipelineInput {
   readonly briefing?: BriefingPacket;
   readonly effortOverride?: EffortLevel;
   readonly modelOverride?: Model;
+  readonly scopeOverride?: CliScope;
 }
 
 export interface SpawnPipelineSuccess {
@@ -104,7 +105,7 @@ export async function executeSpawn(
   deps: SpawnPipelineDeps,
   input: SpawnPipelineInput,
 ): Promise<SpawnPipelineResult> {
-  const { workspace, role, prompt, label, briefing, effortOverride, modelOverride, systemAddon } = input;
+  const { workspace, role, prompt, label, briefing, effortOverride, modelOverride, scopeOverride, systemAddon } = input;
   const promptTag: ClobberPromptTag = input.promptTag ?? { kind: "spawn-prompt" };
 
   const capacity = checkCapacity(deps, workspace, role);
@@ -136,6 +137,7 @@ export async function executeSpawn(
     ...(briefing === undefined ? {} : { briefing }),
     ...(effortOverride === undefined ? {} : { effortOverride }),
     ...(modelOverride === undefined ? {} : { modelOverride }),
+    ...(scopeOverride === undefined ? {} : { scopeOverride }),
   });
 }
 
@@ -163,13 +165,14 @@ export interface AttachSessionInput {
   readonly briefing?: BriefingPacket;
   readonly effortOverride?: EffortLevel;
   readonly modelOverride?: Model;
+  readonly scopeOverride?: CliScope;
 }
 
 export async function attachSessionToAgent(
   deps: SpawnPipelineDeps,
   input: AttachSessionInput,
 ): Promise<SpawnPipelineSuccess | SpawnPipelineNoBundleError> {
-  const { workspace, role, agent, prompt, promptTag, wakeProgram, systemAddon, opLevelAddon, briefing, effortOverride, modelOverride } = input;
+  const { workspace, role, agent, prompt, promptTag, wakeProgram, systemAddon, opLevelAddon, briefing, effortOverride, modelOverride, scopeOverride } = input;
   const sessionId = randomUUID();
   const pin = rolePin(role);
 
@@ -188,6 +191,7 @@ export async function attachSessionToAgent(
     ...(briefing === undefined ? {} : { briefing }),
     ...(effortOverride === undefined ? {} : { effortOverride }),
     ...(modelOverride === undefined ? {} : { modelOverride }),
+    ...(scopeOverride === undefined ? {} : { scopeOverride }),
   });
   if (!prepared.ok) return prepared;
   const ctx = prepared.context;

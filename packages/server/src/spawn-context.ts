@@ -60,6 +60,9 @@ export interface PrepareSpawnContextInput {
   // Per-spawn override of the role's default model. Same precedence as effort:
   // override > role.model > unset (no `--model` arg → claude's own default).
   readonly modelOverride?: Model;
+  // Per-agent scope override threaded from SpawnInput (#567 PR2). When present,
+  // replaces the permissive default agentScope in the ws∩role∩agent bake.
+  readonly scopeOverride?: CliScope;
 }
 
 export interface SpawnContext {
@@ -101,6 +104,7 @@ export async function prepareSpawnContext(
     briefing,
     effortOverride,
     modelOverride,
+    scopeOverride,
   } = input;
 
   const bundle = embodyRole(role, pin, deps);
@@ -122,7 +126,7 @@ export async function prepareSpawnContext(
   // version cannot be null here: embodyRole above already resolved the same source.
   const roleAllowList = JSON.parse(version!.allowed_cli_commands_json) as readonly string[];
   const roleScope: CliScope = { allow: roleAllowList as string[], deny: [] };
-  const agentScope: CliScope = { allow: ["*"], deny: [] }; // no per-agent override in PR1
+  const agentScope: CliScope = scopeOverride ?? { allow: ["*"], deny: [] };
   const bakedAllow = allCapabilityNames().filter(
     (v) => isActionAllowed(workspace.perms_scope, v) && isActionAllowed(roleScope, v) && isActionAllowed(agentScope, v),
   );

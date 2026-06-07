@@ -4,6 +4,7 @@ import type { SessionStore } from "../session-store.ts";
 import type { RoleStore } from "../role-store.ts";
 import type { AgentStore } from "../agent-store.ts";
 import type { AgentRegistry } from "../agent-registry.ts";
+import type { SessionTokenStore } from "../session-token-store.ts";
 
 export type AgentListState = "busy" | "idle" | "ended";
 
@@ -14,6 +15,7 @@ export interface AgentListingDeps {
   readonly roles: RoleStore;
   readonly agents: AgentStore;
   readonly registry: AgentRegistry;
+  readonly sessionTokens: SessionTokenStore;
 }
 
 /**
@@ -48,6 +50,7 @@ function buildEntry(
   const role = deps.roles.get(s.role_id);
   if (role === null) throw new Error(`role missing for session ${s.id}`);
   const agentRow = s.agent_id === undefined ? null : deps.agents.get(s.agent_id);
+  const scopeJson = deps.sessionTokens.scopeForSession(s.id);
   const entry: Record<string, unknown> = {
     session_id: s.id,
     agent_id: s.agent_id,
@@ -56,6 +59,7 @@ function buildEntry(
     state: entryState(deps, s),
     started_at: s.started_at,
     is_caller: s.id === callerSessionId,
+    effective_scope: scopeJson !== null ? JSON.parse(scopeJson) : null,
   };
   if (agentRow !== null && agentRow.label !== undefined) {
     entry["label"] = agentRow.label;

@@ -18,6 +18,7 @@ import type { AgentSpawner } from "../types.ts";
 import {
   AgentStatusUpdateSchema,
   BriefingPacketSchema,
+  CliScopeSchema,
   EffortLevelSchema,
   ModelSchema,
 } from "@clobber/shared";
@@ -82,6 +83,8 @@ const AgentSpawnBodySchema = z.object({
   model: ModelSchema.optional(),
   // The selected opening move (#212); the minimal by-name seam.
   wake_program: z.string().min(1).optional(),
+  // Per-agent scope override — replaces the permissive default in the ws∩role∩agent bake.
+  scope_override: CliScopeSchema.optional(),
 });
 
 export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps): void {
@@ -168,6 +171,9 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
         ...(parsed.data.model === undefined
           ? {}
           : { modelOverride: parsed.data.model }),
+        ...(parsed.data.scope_override === undefined
+          ? {}
+          : { scopeOverride: parsed.data.scope_override }),
       });
       if (!result.ok) {
         const { ok: _ok, status, ...rest } = result;
