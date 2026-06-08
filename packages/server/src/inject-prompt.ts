@@ -4,6 +4,7 @@ import type { SessionStore } from "./session-store.ts";
 import type { AgentRegistry } from "./agent-registry.ts";
 import { endSession, type SessionLifecycleDeps } from "./session-lifecycle.ts";
 import type { ResumeTurnSuccess, ResumeTurnError } from "./resume-pipeline.ts";
+import { writeUserTurn } from "./write-user-turn.ts";
 
 export interface InjectPromptDeps extends SessionLifecycleDeps {
   readonly sessions: SessionStore;
@@ -72,7 +73,6 @@ export async function injectPrompt(
   // 14/14, never poisons), so the clobber-side inject queue is redundant. The
   // inject-independent interleaved-thinking poison (#372) is handled by the #360
   // repair half on resume. setBusy marks the turn now in flight.
-  live.stdin.write(deps.runtimeProvider.serializeUserPrompt(prompt, tag));
-  deps.registry.setBusy(sessionId, true);
+  writeUserTurn(live, deps.runtimeProvider, deps.registry, prompt, tag);
   return { ok: true };
 }

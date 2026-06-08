@@ -74,7 +74,10 @@ describe("session-ended trigger — worker→manager completion signal", () => {
     await teardown(h);
   });
 
-  it("(c) manager BUSY at completion → wakes enqueued, then flushed (coalesced) on next Stop", async () => {
+  it("(c) N completions while manager BUSY → N native wakes (write-through, no coalescing)", async () => {
+    // Write-through (#573, AC #4): each completion is injected immediately as an
+    // independent wake rather than enqueued for coalesced flush-on-idle. Stop fires
+    // a flush but nothing is pending, so no additional injection.
     const h = buildHarness(new Date("2026-05-24T09:00:00.000Z"));
     const boot = await bootManager(h, repo.path, [{ kind: "session-ended" }]);
     // Manager stays busy (boot session registered busy by default).
@@ -85,27 +88,22 @@ describe("session-ended trigger — worker→manager completion signal", () => {
     await postHook(h, w1.sessionId, "SessionEnd");
     await postHook(h, w2.sessionId, "SessionEnd");
 
-    // Both completions are enqueued (manager busy) — never dropped.
-    const queued = h.dispatches
-      .listForAgent(boot.managerAgentId)
-      .filter((r) => r.trigger_kind === "session-ended" && r.dispatch_outcome === "queued");
-    expect(queued.length).toBe(2);
-
-    // Nothing injected into the busy manager yet.
-    expect(lastInjectedContent(h.spawns[0]!)).toBe("");
-
-    // Manager finishes its turn → flush, coalescing both into one wake.
-    await postHook(h, boot.managerSessionId, "Stop");
-
+    // Both completions are injected immediately — write-through, not enqueued.
     const injected = h.dispatches
       .listForAgent(boot.managerAgentId)
       .filter((r) => r.trigger_kind === "session-ended" && r.dispatch_outcome === "injected");
-    expect(injected.length).toBe(1);
+    expect(injected.length).toBe(2);
 
+    // Each wake targets one worker; the last injection carries issue-2's info.
     const content = lastInjectedContent(h.spawns[0]!);
-    expect(content).toContain("2 workers");
-    expect(content).toContain("issue-1");
     expect(content).toContain("issue-2");
+
+    // Stop flushes pending wakes (nothing pending → no additional injection).
+    await postHook(h, boot.managerSessionId, "Stop");
+    const allInjected = h.dispatches
+      .listForAgent(boot.managerAgentId)
+      .filter((r) => r.trigger_kind === "session-ended" && r.dispatch_outcome === "injected");
+    expect(allInjected.length).toBe(2); // unchanged — Stop added nothing
 
     await teardown(h);
   });

@@ -304,7 +304,9 @@ describe("TriggerScheduler — cron firing", () => {
     h.db.close();
   });
 
-  it("records skipped-busy when a live session is busy and does not inject", async () => {
+  it("write-through: cron fires into a busy live session → injected not skipped-busy", async () => {
+    // Write-through (#573): injection-capable runtimes ignore the busy flag and
+    // write directly to stdin. No spawn, no skip — bytes land on the live session.
     const h = makeHarness(new Date("2026-05-05T08:59:00.000Z"));
     setManagerCron(h, "0 9 * * *");
 
@@ -320,16 +322,15 @@ describe("TriggerScheduler — cron firing", () => {
       pid: 4243,
     });
     h.registry.register(sessionId, liveStdin, () => {}, true);
-    // registry registers busy=true by default — perfect.
 
     h.scheduler.start();
     await flushAfter(h, 60_000);
     expect(h.spawnCalls.length).toBe(0);
-    expect(writes.length).toBe(0);
+    expect(writes.length).toBe(1); // bytes landed on stdin
 
     const audit = h.dispatches.listForAgent(h.managerAgentId);
     expect(audit.length).toBe(1);
-    expect(audit[0]!.dispatch_outcome).toBe("skipped-busy");
+    expect(audit[0]!.dispatch_outcome).toBe("injected");
 
     h.scheduler.stop();
     h.db.close();
