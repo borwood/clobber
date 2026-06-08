@@ -65,7 +65,11 @@ describe("worker-done trigger — worker's `clobber status done` wakes the manag
     await teardown(h);
   });
 
-  it("(c) manager BUSY at done → wake enqueued, then flushed on the manager's next Stop", async () => {
+  it("(c) N completions while manager BUSY → N native wakes (write-through, no coalescing)", async () => {
+    // Write-through (#573, AC #4): each completion is injected immediately as an
+    // independent wake rather than enqueued for coalesced flush-on-idle. N honest
+    // wakes beat 1 lossy coalesced one once delivery is reliable. Stop fires a
+    // flush but nothing is pending, so no additional injection.
     const h = buildHarness(new Date("2026-05-26T09:00:00.000Z"));
     const boot = await bootManager(h, repo.path, [{ kind: "worker-done" }]);
     // Manager stays busy (boot session registered busy by default).
@@ -76,25 +80,23 @@ describe("worker-done trigger — worker's `clobber status done` wakes the manag
     await postStatus(h, w1, "done", "shipped a");
     await postStatus(h, w2, "done", "shipped b");
 
-    // Both done-signals are enqueued (manager busy) — not tapped mid-turn.
-    const queued = h.dispatches
-      .listForAgent(boot.managerAgentId)
-      .filter((r) => r.trigger_kind === "worker-done" && r.dispatch_outcome === "queued");
-    expect(queued.length).toBe(2);
-    expect(lastInjectedContent(h.spawns[0]!)).toBe("");
-
-    // Manager finishes its turn → flush-on-idle, coalescing both into one wake.
-    await postHook(h, boot.managerSessionId, "Stop");
-
+    // Both done-signals are injected immediately — write-through, not enqueued.
     const injected = h.dispatches
       .listForAgent(boot.managerAgentId)
       .filter((r) => r.trigger_kind === "worker-done" && r.dispatch_outcome === "injected");
-    expect(injected.length).toBe(1);
+    expect(injected.length).toBe(2);
 
+    // Each wake targets one worker; the last injection carries issue-b's info.
     const content = lastInjectedContent(h.spawns[0]!);
-    expect(content).toContain("2 workers");
-    expect(content).toContain("issue-a");
     expect(content).toContain("issue-b");
+    expect(content).toContain("shipped b");
+
+    // Stop flushes pending wakes (nothing pending → no additional injection).
+    await postHook(h, boot.managerSessionId, "Stop");
+    const allInjected = h.dispatches
+      .listForAgent(boot.managerAgentId)
+      .filter((r) => r.trigger_kind === "worker-done" && r.dispatch_outcome === "injected");
+    expect(allInjected.length).toBe(2); // unchanged — Stop added nothing
 
     await teardown(h);
   });

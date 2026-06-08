@@ -1,5 +1,6 @@
 import type { RuntimeProvider } from "@clobber/runtime";
 import type { CreateNotification, Notification } from "@clobber/shared";
+import { writeUserTurn } from "./write-user-turn.ts";
 import type { AgentStore } from "./agent-store.ts";
 import type { RoleStore } from "./role-store.ts";
 import type { WorkspaceStore } from "./workspace-store.ts";
@@ -118,6 +119,19 @@ export async function deliver(
   }
 
   const live = deps.registry.get(activeForAgent[0]!.id);
+
+  // Injection-capable runtime: write-through regardless of busy. The busy gate
+  // was the direct cause of worker-done stranding across cycles (#573) — a
+  // persistent recipient is always busy at session start. Claude's native stdin
+  // queue defers a mid-thinking write to a safe tool-result boundary on its own
+  // (#367 spike — 14/14, never poisons), so the clobber-side busy gate is
+  // redundant for this runtime. Consequence: N completions while busy produce N
+  // native-queued wakes (not 1 coalesced flush-on-idle); see AC #4.
+  if (live !== null && deps.runtimeProvider.capabilities.livePromptInjection) {
+    writeUserTurn(live, deps.runtimeProvider, deps.registry, n.payload.body, n.payload.tag);
+    return { action: "injected", sessionId: live.sessionId };
+  }
+
   if (live === null || live.busy) {
     if (live !== null && busyPolicy.kind === "enqueue") {
       busyPolicy.enqueue(n);
@@ -126,13 +140,7 @@ export async function deliver(
     return { action: "skipped-busy" };
   }
 
-  if (!deps.runtimeProvider.capabilities.livePromptInjection) {
-    return { action: "errored", error: "runtime does not support live prompt injection" };
-  }
-
-  live.stdin.write(deps.runtimeProvider.serializeUserPrompt(n.payload.body, n.payload.tag));
-  deps.registry.setBusy(live.sessionId, true);
-  return { action: "injected", sessionId: live.sessionId };
+  return { action: "errored", error: "runtime does not support live prompt injection" };
 }
 
 // The wake-program rides on metadata (#213) so resume re-composes it for free.
@@ -189,7 +197,20 @@ export async function rearmPending(deps: RearmPendingDeps, agentId?: string): Pr
       : pending.filter(
           (n) => n.recipient.kind === "agent" && n.recipient.agent_id === agentId,
         );
+
+  // Coalesce per-recipient: deliver at most one row per recipient, not one per
+  // row. Naive write-through over the full backlog injects the entire accumulated
+  // pending backlog to stdin at once on boot — that trades the strand for a storm.
+  // One-per-recipient is the minimal bound; listPending() is ASC so last-write
+  // into the map is the most recent row for that recipient. The #424
+  // staleness/category gate can refine this further in a follow-up.
+  const latestByRecipient = new Map<string, Notification>();
   for (const n of targets) {
+    const key = n.recipient.kind === "user" ? "\0user" : n.recipient.agent_id;
+    latestByRecipient.set(key, n);
+  }
+
+  for (const n of latestByRecipient.values()) {
     let outcome: DeliveryOutcome;
     try {
       outcome = await deliver(deps, n, { kind: "drop" });

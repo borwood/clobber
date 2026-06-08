@@ -178,15 +178,15 @@ describe("TriggerScheduler — HTTP integration wiring", () => {
     });
     expect(patchRes.statusCode).toBe(200);
 
-    // Boot session is registered busy by default — cron fires into a live-busy agent.
-    // The fire-and-forget cron dispatch now routes through the async notification
-    // spine (emit → deliver), so drain its macrotask tail before reading the audit.
+    // Boot session is registered busy by default — with write-through (#573),
+    // the cron injects directly rather than skipping. Drain the async notification
+    // spine's macrotask tail before reading the audit.
     h.clock.advance(60_000);
     for (let i = 0; i < 8; i += 1) await Bun.sleep(0);
 
     const audit = h.dispatches.listForAgent(boot.managerAgentId);
     expect(audit.length).toBe(1);
-    expect(audit[0]!.dispatch_outcome).toBe("skipped-busy");
+    expect(audit[0]!.dispatch_outcome).toBe("injected");
     expect(audit[0]!.trigger_kind).toBe("cron");
 
     await teardown(h);

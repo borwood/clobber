@@ -179,26 +179,35 @@ describe("notification dispatch — recipient-state router (golden invariant)", 
     h.db.close();
   });
 
-  it("alive + busy, drop policy → skipped-busy: no session_id, notification stays pending", async () => {
+  it("alive + busy, injection-capable runtime → injected: write-through, notification delivered", async () => {
+    // Write-through (#573): for injection-capable runtimes the busy gate is gone.
+    // A busy recipient is no longer a delivery barrier — bytes land on stdin.
     const h = makeHarness();
-    liveSession(h, "live-busy-1", true);
+    const writes: Buffer[] = [];
+    const stdin = liveSession(h, "live-busy-1", true);
+    stdin.on("data", (c: Buffer) => writes.push(c));
 
     await dispatchTrigger(h.deps, h.binding, TRIGGER, undefined);
 
     const audit = h.dispatches.listForAgent(h.agentId);
-    expect(audit[0]!.dispatch_outcome).toBe("skipped-busy");
-    expect(audit[0]!.session_id).toBeUndefined();
+    expect(audit[0]!.dispatch_outcome).toBe("injected");
+    expect(audit[0]!.session_id).toBe("live-busy-1");
+
+    expect(writes.length).toBe(1);
 
     const notifs = h.notifications.listForAgent(h.agentId);
     expect(notifs).toHaveLength(1);
-    expect(notifs[0]!.state).toBe("pending");
-    expect(notifs[0]!.delivered_at).toBeUndefined();
+    expect(notifs[0]!.state).toBe("delivered");
     h.db.close();
   });
 
-  it("alive + busy, enqueue policy → queued: session_id + the enqueue callback fires", async () => {
+  it("alive + busy, enqueue policy + injection-capable runtime → injected: enqueue never fires (write-through bypasses it)", async () => {
+    // Write-through (#573): for injection-capable runtimes the enqueueWhileBusy
+    // callback is never reached — the write happens before the busy check.
     const h = makeHarness();
-    liveSession(h, "live-busy-2", true);
+    const writes: Buffer[] = [];
+    const stdin = liveSession(h, "live-busy-2", true);
+    stdin.on("data", (c: Buffer) => writes.push(c));
     const enqueued: Array<{ agentId: string; trigger: RoleTrigger; payload: unknown }> = [];
     const busyPolicy: BusyPolicy = {
       kind: "enqueue",
@@ -209,16 +218,15 @@ describe("notification dispatch — recipient-state router (golden invariant)", 
     await dispatchTrigger(h.deps, h.binding, TRIGGER, { tick: 1 }, busyPolicy);
 
     const audit = h.dispatches.listForAgent(h.agentId);
-    expect(audit[0]!.dispatch_outcome).toBe("queued");
+    expect(audit[0]!.dispatch_outcome).toBe("injected");
     expect(audit[0]!.session_id).toBe("live-busy-2");
 
-    expect(enqueued).toHaveLength(1);
-    expect(enqueued[0]!.agentId).toBe(h.agentId);
-    expect(enqueued[0]!.trigger).toEqual(TRIGGER);
-    expect(enqueued[0]!.payload).toEqual({ tick: 1 });
+    expect(writes.length).toBe(1);
+    // The enqueue callback must NOT have fired.
+    expect(enqueued).toHaveLength(0);
 
     const notifs = h.notifications.listForAgent(h.agentId);
-    expect(notifs[0]!.state).toBe("pending");
+    expect(notifs[0]!.state).toBe("delivered");
     h.db.close();
   });
 
