@@ -11,10 +11,10 @@ export interface SessionStore {
   // The agent's most recently ended session — used by the cycle supervisor to
   // find the right recovery target when zero live sessions are detected.
   latestEndedForAgent(agentId: string): Session | null;
-  // The agent's most recent ended session flagged was_live_at_shutdown — set
-  // only by boot-reap (involuntary restart). Used by deliver() to prefer
-  // resume-and-deliver over fresh-spawn after a server crash.
-  latestShutdownSessionForAgent(agentId: string): Session | null;
+  // The chain tip IFF it carries was_live_at_shutdown=1 (boot-reap); null when
+  // the tip is a clean cycle or no ended sessions exist. Used by deliver() to
+  // resume on restart while never resurrecting a superseded stale root (#575).
+  latestShutdownSessionForAgentIfTip(agentId: string): Session | null;
   countActive(workspaceId: string, roleId: string): number;
   // Count active sessions for a workspace+role, excluding one specific session.
   // Used by the cycle ceiling-exemption: the kill-target is in-flight and must
@@ -103,9 +103,6 @@ export function createSessionStore(db: Database): SessionStore {
   );
   const latestEndedForAgentStmt = db.prepare(
     "SELECT * FROM sessions WHERE agent_id = ? AND ended_at IS NOT NULL ORDER BY ended_at DESC, id DESC LIMIT 1",
-  );
-  const latestShutdownSessionForAgentStmt = db.prepare(
-    "SELECT * FROM sessions WHERE agent_id = ? AND ended_at IS NOT NULL AND was_live_at_shutdown = 1 ORDER BY ended_at DESC, id DESC LIMIT 1",
   );
   const countActiveStmt = db.prepare(
     "SELECT COUNT(*) AS n FROM sessions WHERE workspace_id = ? AND role_id = ? AND ended_at IS NULL",
@@ -226,9 +223,9 @@ export function createSessionStore(db: Database): SessionStore {
       return row === null ? null : rowToSession(row);
     },
 
-    latestShutdownSessionForAgent(agentId) {
-      const row = latestShutdownSessionForAgentStmt.get(agentId) as Row | null;
-      return row === null ? null : rowToSession(row);
+    latestShutdownSessionForAgentIfTip(agentId) {
+      const row = latestEndedForAgentStmt.get(agentId) as Row | null;
+      return row !== null && row.was_live_at_shutdown === 1 ? rowToSession(row) : null;
     },
 
     countActive(workspaceId, roleId) {

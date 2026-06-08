@@ -86,12 +86,12 @@ export async function deliver(
 
   if (activeForAgent.length === 0) {
     const wakeProgram = readWakeProgram(n);
-    const shutdownSession = deps.sessions.latestShutdownSessionForAgent(agentId);
-    if (shutdownSession !== null) {
+    const shutdownTip = deps.sessions.latestShutdownSessionForAgentIfTip(agentId);
+    if (shutdownTip !== null) {
       let resumeResult: ResumeEndedResult | undefined;
       try {
         resumeResult = await deps.resumeEndedSession({
-          sessionId: shutdownSession.id,
+          sessionId: shutdownTip.id,
           prompt: n.payload.body,
         });
       } catch {
