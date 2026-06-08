@@ -177,3 +177,52 @@ describe("deliver() — resume-aware no-active-session branch", () => {
     db.close();
   });
 });
+
+describe("deliver() — resume-tip guard (FIX1 #575)", () => {
+  it("stale root (was_live=1) + clean-cycle tip (was_live=0) → fresh-spawn, root NOT resumed", async () => {
+    const { db, deps, agent, resumeCalls, spawnCalls } = makeHarness();
+
+    // Seed stale root: ended, was_live_at_shutdown=1 (older timestamps — from 40h ago boot-reap)
+    db.prepare(
+      `INSERT INTO sessions (id, agent_id, workspace_id, role_id, runtime_provider, pid, started_at, ended_at, was_live_at_shutdown)
+       VALUES ('root-session', ?, ?, ?, 'claude', 1001, 1000, 2000, 1)`,
+    ).run(agent.id, agent.workspace_id, agent.role_id);
+
+    // Seed clean-cycle tip: ended, was_live_at_shutdown=0 (newer timestamps — agent cycled past the root)
+    db.prepare(
+      `INSERT INTO sessions (id, agent_id, workspace_id, role_id, runtime_provider, pid, started_at, ended_at, was_live_at_shutdown)
+       VALUES ('tip-session', ?, ?, ?, 'claude', 1002, 3000, 4000, 0)`,
+    ).run(agent.id, agent.workspace_id, agent.role_id);
+
+    const outcome = await deliver(deps, makeNotification(agent.id), { kind: "drop" });
+
+    expect(outcome.action).toBe("spawned");
+    expect(outcome.sessionId).toBe("spawned-session-1");
+    expect(resumeCalls).toHaveLength(0);
+    expect(spawnCalls).toHaveLength(1);
+    expect(spawnCalls[0]!.prompt).toBe(BODY);
+
+    db.close();
+  });
+
+  it("was_live session IS the chain tip (no clean cycle) → still resumes", async () => {
+    const { db, deps, agent, resumeCalls, spawnCalls } = makeHarness({
+      resumeResult: { ok: true, session_id: "tip-root-session", pid: 5678 },
+    });
+
+    db.prepare(
+      `INSERT INTO sessions (id, agent_id, workspace_id, role_id, runtime_provider, pid, started_at, ended_at, was_live_at_shutdown)
+       VALUES ('tip-root-session', ?, ?, ?, 'claude', 1001, 1000, 2000, 1)`,
+    ).run(agent.id, agent.workspace_id, agent.role_id);
+
+    const outcome = await deliver(deps, makeNotification(agent.id), { kind: "drop" });
+
+    expect(outcome.action).toBe("resumed");
+    expect(outcome.sessionId).toBe("tip-root-session");
+    expect(resumeCalls).toHaveLength(1);
+    expect(resumeCalls[0]!.sessionId).toBe("tip-root-session");
+    expect(spawnCalls).toHaveLength(0);
+
+    db.close();
+  });
+});
