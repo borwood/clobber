@@ -38,6 +38,10 @@ export function guardHabitEdit(
 
   const abs = isAbsolute(filePath) ? resolve(filePath) : resolve(payload.cwd, filePath);
   const deskDir = deskDirFor(workspace.repo_path, session.agent_id);
+  // #577 — the role-checkout subtree is authorized by roles.* + role-edit-policy;
+  // commit-time deserializeRoleTree → HabitSchema.parse is the validation boundary.
+  // This gate owns only self-authoring grant enforcement and must not fire here.
+  if (isWithin(abs, resolve(deskDir, "role-checkout"))) return null;
   if (!isWithin(abs, deskDir) || !HABIT_FILE.test(abs)) return null;
 
   const content = intendedContent(payload, abs);

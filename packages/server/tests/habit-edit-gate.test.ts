@@ -150,3 +150,39 @@ describe("guardHabitEdit (/hook PreToolUse)", () => {
     await teardown(h);
   });
 });
+
+function checkoutHabitFilePath(agentId: string, event: string, name: string): string {
+  return `.clobber/agents/${agentId}/desk/role-checkout/habits/self/${event}/${name}.json`;
+}
+
+// A habit with a path NOT in the editing agent's own grant (self.stop vs grant=self.tool-use).
+// Written to the role-checkout tree, this is the load-bearing case for #577.
+const UNGRANTED_PATH = JSON.stringify(
+  habit({ path: "self.stop", name: "on-stop", action: { kind: "inject", hint: "x" } }),
+);
+
+describe("guardHabitEdit — role-checkout path exclusion (#577)", () => {
+  it("AC1: allows Write into role-checkout habit tree even when path is not in agent's own grant", async () => {
+    // The editing agent's grant is self.tool-use only; the habit being authored is
+    // self.stop for the checked-out role. The guard must NOT apply — authority comes
+    // from roles.* + role-edit-policy + commit-time re-validation, not from the
+    // editing agent's own grant.
+    const h = buildHarness();
+    const body = await post(
+      h,
+      write(h, checkoutHabitFilePath(h.agentId, "stop", "on-stop"), UNGRANTED_PATH),
+    );
+    expect(body).toEqual({ continue: true });
+    await teardown(h);
+  });
+
+  it("AC2: still denies self-authoring a habit outside the agent's own grant (gate not blinded)", async () => {
+    // The same habit with path self.stop, but written directly to the agent's own
+    // desk habits tree (NOT role-checkout). The role-checkout exclusion must not
+    // blind the self-authoring gate.
+    const h = buildHarness();
+    const body = await post(h, write(h, habitFilePath(h.agentId, "stop", "on-stop"), UNGRANTED_PATH));
+    expect((body["hookSpecificOutput"] as Record<string, unknown>)["permissionDecision"]).toBe("deny");
+    await teardown(h);
+  });
+});
