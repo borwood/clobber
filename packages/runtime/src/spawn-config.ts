@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { EffortLevel, HookEventName, Model, PermissionMode } from "@clobber/shared";
 
 export const ALL_HOOK_EVENTS = [
@@ -54,6 +57,11 @@ export function buildHookSettings(opts: BuildHookSettingsOptions): HookSettings 
   return { hooks };
 }
 
+// Linux per-argument byte limit (getconf ARG_MAX / per-arg). The cycle path
+// composes a large role charter + CYCLE_ORIENTATION_LAYER that historically
+// crossed this and caused E2BIG in posix_spawn (#580).
+export const MAX_ARG_STRLEN = 131072;
+
 export interface BuildClaudeArgsOptions {
   readonly sessionId: string;
   // When set, resume the existing claude conversation thread (`--resume <id>`)
@@ -75,14 +83,29 @@ export interface BuildClaudeArgsOptions {
   readonly settingSources?: readonly string[];
 }
 
-export function buildClaudeArgs(opts: BuildClaudeArgsOptions): string[] {
+export interface BuildClaudeArgsResult {
+  readonly args: string[];
+  // Deletes the per-session temp directory written by buildClaudeArgs.
+  // Call after the spawned process exits.
+  readonly cleanup: () => void;
+}
+
+// Build the argv for a claude spawn. Large string args (settings, system prompt)
+// are written to per-session temp files and passed as file paths instead of
+// inline strings, keeping every single arg under MAX_ARG_STRLEN and avoiding
+// posix_spawn E2BIG on long cycle prompts (#580).
+export function buildClaudeArgs(opts: BuildClaudeArgsOptions): BuildClaudeArgsResult {
   const args: string[] =
     opts.resumeThreadId === undefined
       ? ["--session-id", opts.sessionId]
       : ["--resume", opts.resumeThreadId];
 
+  const tmpDir = mkdtempSync(join(tmpdir(), "clobber-spawn-"));
+
   if (opts.settings !== undefined) {
-    args.push("--settings", JSON.stringify(opts.settings));
+    const settingsPath = join(tmpDir, "settings.json");
+    writeFileSync(settingsPath, JSON.stringify(opts.settings), { mode: 0o600 });
+    args.push("--settings", settingsPath);
   }
 
   if (opts.pluginDirs !== undefined) {
@@ -102,7 +125,9 @@ export function buildClaudeArgs(opts: BuildClaudeArgsOptions): string[] {
     args.push("--permission-mode", opts.permissionMode);
   }
   if (opts.appendSystemPrompt !== undefined) {
-    args.push("--append-system-prompt", opts.appendSystemPrompt);
+    const promptPath = join(tmpDir, "system-prompt");
+    writeFileSync(promptPath, opts.appendSystemPrompt, { mode: 0o600 });
+    args.push("--append-system-prompt-file", promptPath);
   }
   if (opts.displayName !== undefined && opts.displayName.length > 0) {
     args.push("--name", opts.displayName);
@@ -122,5 +147,8 @@ export function buildClaudeArgs(opts: BuildClaudeArgsOptions): string[] {
     "--verbose",
   );
 
-  return args;
+  return {
+    args,
+    cleanup: () => rmSync(tmpDir, { recursive: true, force: true }),
+  };
 }

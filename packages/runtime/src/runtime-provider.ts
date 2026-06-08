@@ -257,6 +257,6 @@ export function buildClaudeRuntimeArgs(opts: {
   readonly model?: Model;
   readonly appendSystemPrompt?: string;
   readonly displayName?: string;
-}): string[] {
+}): import("./spawn-config.ts").BuildClaudeArgsResult {
   return buildClaudeArgs(opts);
 }
