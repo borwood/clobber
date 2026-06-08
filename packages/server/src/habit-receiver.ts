@@ -4,6 +4,7 @@ import type { SessionStore } from "./session-store.ts";
 import type { WorkspaceStore } from "./workspace-store.ts";
 import { deskDirFor } from "./desk-store.ts";
 import { isPathJailed } from "./path-jail.ts";
+import { resolveToolPath } from "./tool-write-targets.ts";
 import { worktreeRootFor } from "./spawn-worktree.ts";
 
 // #271 habit Phase 1 — the DYNAMIC half of the self.* seam. The compile side
@@ -109,12 +110,38 @@ function matchesHabit(habit: Habit, payload: HookPayload, subject: string | null
     if (habit.source === undefined) return true;
     return payload.hook_event_name === "SessionStart" && payload.source === habit.source;
   }
-  const match = "match" in habit ? habit.match : undefined;
-  if (match === undefined) return true;
-  if (subject === null) return false;
   // Mirrors Claude matcher semantics: exact | '|'-list | regex all fall out of a
   // single regex test (`Bash`, `Edit|Write`, `.*` are all valid patterns).
-  return new RegExp(match).test(subject);
+  const match = "match" in habit ? habit.match : undefined;
+  if (match !== undefined) {
+    if (subject === null) return false;
+    if (!new RegExp(match).test(subject)) return false;
+  }
+  if (habit.path === "self.tool-use") {
+    // payload is Pre/PostToolUse when self.tool-use fires (guaranteed by claudeEventForHabit gate).
+    const tp = payload as { tool_name: string; tool_input: Record<string, unknown>; cwd: string };
+    if (habit.match_path !== undefined) {
+      // Real branch keyed on tool_name — mirrors writeTargets()'s empty-return contract.
+      if (tp.tool_name === "Write" || tp.tool_name === "Edit" || tp.tool_name === "MultiEdit") {
+        const fp = tp.tool_input["file_path"];
+        if (typeof fp !== "string" || fp.length === 0) return false;
+        if (!new RegExp(habit.match_path).test(resolveToolPath(fp, tp.cwd))) return false;
+      } else {
+        return false;
+      }
+    }
+    if (habit.match_command !== undefined) {
+      // Real branch keyed on tool_name — mirrors writeTargets()'s empty-return contract.
+      if (tp.tool_name === "Bash") {
+        const cmd = tp.tool_input["command"];
+        if (typeof cmd !== "string" || cmd.length === 0) return false;
+        if (!new RegExp(habit.match_command).test(cmd)) return false;
+      } else {
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
 function renderHint(

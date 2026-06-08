@@ -63,7 +63,9 @@ const SelfSessionMessage = z.object({
 const SelfToolUse = z.object({
   path: z.literal("self.tool-use"),
   phase: z.enum(["pre", "post"]).default("pre"), // PreToolUse | PostToolUse [V]
-  match, // tool_name — rides the native settings.json matcher
+  match,       // tool_name — rides the native settings.json matcher
+  match_path:    z.string().min(1).optional(), // regex vs resolved absolute file_path (Write|Edit|MultiEdit)
+  match_command: z.string().min(1).optional(), // regex vs tool_input.command (Bash)
 });
 const SelfSessionStart = z.object({
   path: z.literal("self.session-start"),

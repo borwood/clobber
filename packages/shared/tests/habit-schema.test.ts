@@ -60,6 +60,55 @@ describe("habit round-trips per trigger-path category", () => {
     expect(h.enabled).toBe(true);
   });
 
+  // AC1: match_path / match_command additive; old match-only habits byte-identical.
+  it("self.tool-use with match_path validates; old match-only habit stays byte-identical", () => {
+    // Old habit — no match_path/match_command → parses identically, fields absent.
+    const old = roundTrip({
+      path: "self.tool-use",
+      match: "Bash",
+      name: "old-habit",
+      action: { kind: "inject", hint: "h" },
+    });
+    if (old.path !== "self.tool-use") throw new Error("expected self.tool-use");
+    expect(old.match).toBe("Bash");
+    expect(old.match_path).toBeUndefined();
+    expect(old.match_command).toBeUndefined();
+
+    // New habit with match_path only.
+    const withPath = roundTrip({
+      path: "self.tool-use",
+      name: "docs-freshness",
+      match_path: "cli-capabilities\\.ts$",
+      action: { kind: "inject", hint: "run docs:gen" },
+    });
+    if (withPath.path !== "self.tool-use") throw new Error("expected self.tool-use");
+    expect(withPath.match_path).toBe("cli-capabilities\\.ts$");
+    expect(withPath.match).toBeUndefined();
+
+    // New habit with match_command only.
+    const withCmd = roundTrip({
+      path: "self.tool-use",
+      name: "test-hygiene",
+      match_command: "\\bbun test\\b",
+      action: { kind: "inject", hint: "unset CLOBBER_*" },
+    });
+    if (withCmd.path !== "self.tool-use") throw new Error("expected self.tool-use");
+    expect(withCmd.match_command).toBe("\\bbun test\\b");
+    expect(withCmd.match).toBeUndefined();
+
+    // Both facets together.
+    const withBoth = roundTrip({
+      path: "self.tool-use",
+      name: "both-facets",
+      match: "Edit",
+      match_path: "\\.ts$",
+      action: { kind: "inject", hint: "type changed" },
+    });
+    if (withBoth.path !== "self.tool-use") throw new Error("expected self.tool-use");
+    expect(withBoth.match).toBe("Edit");
+    expect(withBoth.match_path).toBe("\\.ts$");
+  });
+
   it("cli × system.cron (engine-fired)", () => {
     const h = roundTrip({
       path: "system.cron",
