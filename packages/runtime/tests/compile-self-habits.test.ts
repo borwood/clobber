@@ -75,6 +75,25 @@ describe("compileSelfHabits", () => {
     expect(compiled.PreToolUse?.[0]?.matcher).toBe(".*");
   });
 
+  // AC4: match_path-only / match_command-only habits compile to ".*" native matcher.
+  // The narrowing happens receiver-side; compile side is already correct.
+  it("a match_path-only habit compiles to the '.*' native matcher", () => {
+    const compiled = compileSelfHabits(
+      [habit({ path: "self.tool-use", name: "docs-freshness", match_path: "cli-capabilities\\.ts$", action: { kind: "inject", hint: "run docs:gen" } })],
+      HOOK_URL,
+    );
+    expect(compiled.PreToolUse?.[0]?.matcher).toBe(".*");
+    expect(compiled.PostToolUse).toBeUndefined();
+  });
+
+  it("a match_command-only habit compiles to the '.*' native matcher", () => {
+    const compiled = compileSelfHabits(
+      [habit({ path: "self.tool-use", name: "test-hygiene", match_command: "\\bbun test\\b", action: { kind: "inject", hint: "unset CLOBBER_*" } })],
+      HOOK_URL,
+    );
+    expect(compiled.PreToolUse?.[0]?.matcher).toBe(".*");
+  });
+
   it("a non-tool self path (self.session-message) registers a matcher-LESS handler", () => {
     const compiled = compileSelfHabits(
       [habit({ path: "self.session-message", name: "n", match: "deploy", action: { kind: "inject", hint: "h" } })],

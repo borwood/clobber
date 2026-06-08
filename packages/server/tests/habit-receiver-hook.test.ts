@@ -192,4 +192,81 @@ describe("self.* habit receiver (/hook)", () => {
     expect(await post(h, { ...envelope(h.sessionId), hook_event_name: "Stop" })).toEqual({ continue: true });
     await teardown(h);
   });
+
+  // AC3 (load-bearing, non-inert): real /hook → evaluateSelfHabits chain.
+  // Proves the ".*" native-matcher → receiver-narrowing path actually delivers.
+  it("match_path-only habit fires on Edit to matching path, NOT on non-matching Edit, NOT on Bash", async () => {
+    const h = buildHarness();
+    habits = [habit({
+      path: "self.tool-use",
+      name: "docs-path",
+      match_path: "/docs/",
+      action: { kind: "inject", hint: "docs changed" },
+    })];
+
+    const matchingPath = join(repoPath, "docs", "readme.md");
+    const fired = await post(h, {
+      ...envelope(h.sessionId),
+      hook_event_name: "PreToolUse",
+      tool_name: "Edit",
+      tool_input: { file_path: matchingPath },
+      tool_use_id: "toolu_p1",
+    });
+    expect(fired).toEqual({
+      hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: "docs changed" },
+    });
+
+    const noMatchPath = join(repoPath, "src", "main.ts");
+    const notFired = await post(h, {
+      ...envelope(h.sessionId),
+      hook_event_name: "PreToolUse",
+      tool_name: "Edit",
+      tool_input: { file_path: noMatchPath },
+      tool_use_id: "toolu_p2",
+    });
+    expect(notFired).toEqual({ continue: true });
+
+    const bash = await post(h, {
+      ...envelope(h.sessionId),
+      hook_event_name: "PreToolUse",
+      tool_name: "Bash",
+      tool_input: { command: "echo hello" },
+      tool_use_id: "toolu_p3",
+    });
+    expect(bash).toEqual({ continue: true });
+
+    await teardown(h);
+  });
+
+  it("match_command-only habit fires on matching Bash, NOT on Edit", async () => {
+    const h = buildHarness();
+    habits = [habit({
+      path: "self.tool-use",
+      name: "test-hygiene",
+      match_command: "\\bbun test\\b",
+      action: { kind: "inject", hint: "unset CLOBBER_* first" },
+    })];
+
+    const fired = await post(h, {
+      ...envelope(h.sessionId),
+      hook_event_name: "PreToolUse",
+      tool_name: "Bash",
+      tool_input: { command: "bun test packages/server" },
+      tool_use_id: "toolu_c1",
+    });
+    expect(fired).toEqual({
+      hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: "unset CLOBBER_* first" },
+    });
+
+    const edit = await post(h, {
+      ...envelope(h.sessionId),
+      hook_event_name: "PreToolUse",
+      tool_name: "Edit",
+      tool_input: { file_path: join(repoPath, "src", "main.ts") },
+      tool_use_id: "toolu_c2",
+    });
+    expect(edit).toEqual({ continue: true });
+
+    await teardown(h);
+  });
 });
