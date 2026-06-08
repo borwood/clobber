@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, it, expect } from "bun:test";
 import { buildHookSettings, buildClaudeArgs, ALL_HOOK_EVENTS } from "../src/spawn-config.ts";
 
@@ -39,7 +40,7 @@ describe("buildClaudeArgs", () => {
   const baseSettings = buildHookSettings({ url: "http://x/hook" });
 
   it("emits long-running stream-json mode (no prompt arg — initial prompt streams via stdin)", () => {
-    const args = buildClaudeArgs({
+    const { args, cleanup } = buildClaudeArgs({
       sessionId: "abc-123",
       settings: baseSettings,
     });
@@ -47,9 +48,10 @@ describe("buildClaudeArgs", () => {
     expect(args).toContain("--session-id");
     expect(args[args.indexOf("--session-id") + 1]).toBe("abc-123");
 
+    // settings delivered as a file path, not an inline JSON string
     expect(args).toContain("--settings");
-    const settingsArg = args[args.indexOf("--settings") + 1]!;
-    expect(JSON.parse(settingsArg)).toEqual(baseSettings);
+    const settingsPath = args[args.indexOf("--settings") + 1]!;
+    expect(JSON.parse(readFileSync(settingsPath, "utf8"))).toEqual(baseSettings);
 
     expect(args).toContain("-p");
     expect(args).toContain("--input-format");
@@ -58,37 +60,42 @@ describe("buildClaudeArgs", () => {
     expect(args[args.indexOf("--output-format") + 1]).toBe("stream-json");
     expect(args).toContain("--include-hook-events");
     expect(args).toContain("--verbose");
+
+    cleanup();
   });
 
   it("omits --setting-sources when settingSources is not provided (claude defaults apply)", () => {
-    const args = buildClaudeArgs({
+    const { args, cleanup } = buildClaudeArgs({
       sessionId: "abc",
       settings: baseSettings,
     });
     expect(args).not.toContain("--setting-sources");
+    cleanup();
   });
 
   it("emits --setting-sources as a comma-joined list when settingSources is provided", () => {
-    const args = buildClaudeArgs({
+    const { args, cleanup } = buildClaudeArgs({
       sessionId: "abc",
       settings: baseSettings,
       settingSources: ["user", "project", "local"],
     });
     expect(args).toContain("--setting-sources");
     expect(args[args.indexOf("--setting-sources") + 1]).toBe("user,project,local");
+    cleanup();
   });
 
   it("omits --setting-sources when settingSources is an empty array", () => {
-    const args = buildClaudeArgs({
+    const { args, cleanup } = buildClaudeArgs({
       sessionId: "abc",
       settings: baseSettings,
       settingSources: [],
     });
     expect(args).not.toContain("--setting-sources");
+    cleanup();
   });
 
   it("forwards permission-mode and allowedTools when supplied", () => {
-    const args = buildClaudeArgs({
+    const { args, cleanup } = buildClaudeArgs({
       sessionId: "abc",
       settings: baseSettings,
       permissionMode: "bypassPermissions",
@@ -100,24 +107,28 @@ describe("buildClaudeArgs", () => {
 
     expect(args).toContain("--allowedTools");
     expect(args[args.indexOf("--allowedTools") + 1]).toBe("Bash,Read");
+
+    cleanup();
   });
 
   it("omits --permission-mode and --allowedTools when not supplied", () => {
-    const args = buildClaudeArgs({
+    const { args, cleanup } = buildClaudeArgs({
       sessionId: "abc",
       settings: baseSettings,
     });
     expect(args).not.toContain("--permission-mode");
     expect(args).not.toContain("--allowedTools");
+    cleanup();
   });
 
   it("omits --settings when settings is not supplied", () => {
-    const args = buildClaudeArgs({ sessionId: "abc" });
+    const { args, cleanup } = buildClaudeArgs({ sessionId: "abc" });
     expect(args).not.toContain("--settings");
+    cleanup();
   });
 
   it("emits one --plugin-dir per entry in pluginDirs (in order)", () => {
-    const args = buildClaudeArgs({
+    const { args, cleanup } = buildClaudeArgs({
       sessionId: "abc",
       pluginDirs: ["/tmp/.clobber/roles/manager", "/tmp/.clobber/roles/worker"],
     });
@@ -128,68 +139,127 @@ describe("buildClaudeArgs", () => {
       "/tmp/.clobber/roles/manager",
       "/tmp/.clobber/roles/worker",
     ]);
+    cleanup();
   });
 
   it("does not require --settings when --plugin-dir provides hooks", () => {
-    const args = buildClaudeArgs({
+    const { args, cleanup } = buildClaudeArgs({
       sessionId: "abc",
       pluginDirs: ["/tmp/.clobber/roles/manager"],
     });
     expect(args).not.toContain("--settings");
     expect(args).toContain("--plugin-dir");
+    cleanup();
   });
 
-  it("emits --append-system-prompt with the supplied text", () => {
-    const args = buildClaudeArgs({
+  // AC1 pin: --append-system-prompt-file (not inline) for all prompt sizes.
+  // Pre-fix: args had inline --append-system-prompt ≥131072 bytes → E2BIG on spawn.
+  // Post-fix: always file delivery regardless of size.
+  it("emits --append-system-prompt-file with path to file holding the prompt text", () => {
+    const { args, cleanup } = buildClaudeArgs({
       sessionId: "abc",
       appendSystemPrompt: "You are the Manager.",
     });
-    expect(args).toContain("--append-system-prompt");
-    expect(args[args.indexOf("--append-system-prompt") + 1]).toBe(
-      "You are the Manager.",
-    );
+    expect(args).toContain("--append-system-prompt-file");
+    expect(args).not.toContain("--append-system-prompt");
+    const promptPath = args[args.indexOf("--append-system-prompt-file") + 1]!;
+    expect(readFileSync(promptPath, "utf8")).toBe("You are the Manager.");
+    cleanup();
   });
 
-  it("omits --append-system-prompt when not supplied", () => {
-    const args = buildClaudeArgs({ sessionId: "abc" });
+  // AC1 repro+pin: large prompt (>MAX_ARG_STRLEN=131072) must NOT appear inline.
+  // The cycle path composes a full role charter + CYCLE_ORIENTATION_LAYER that
+  // historically exceeded 131072 bytes and caused E2BIG. The file arg itself is
+  // always a short path, well under the limit.
+  it("delivers oversized appendSystemPrompt (>131072 bytes) via file, keeping the arg itself short", () => {
+    const bigPrompt = "x".repeat(133000); // 133000 > MAX_ARG_STRLEN=131072
+    const { args, cleanup } = buildClaudeArgs({
+      sessionId: "cycle-session",
+      appendSystemPrompt: bigPrompt,
+    });
+    expect(args).toContain("--append-system-prompt-file");
     expect(args).not.toContain("--append-system-prompt");
+    const promptPath = args[args.indexOf("--append-system-prompt-file") + 1]!;
+    expect(readFileSync(promptPath, "utf8")).toBe(bigPrompt);
+    // The arg value is a file path — far shorter than MAX_ARG_STRLEN.
+    expect(Buffer.byteLength(promptPath)).toBeLessThan(131072);
+    cleanup();
+  });
+
+  it("omits --append-system-prompt-file when appendSystemPrompt is not supplied", () => {
+    const { args, cleanup } = buildClaudeArgs({ sessionId: "abc" });
+    expect(args).not.toContain("--append-system-prompt-file");
+    expect(args).not.toContain("--append-system-prompt");
+    cleanup();
   });
 
   it("passes --name when displayName is provided (sets claude's session label)", () => {
-    const args = buildClaudeArgs({ sessionId: "abc", displayName: "deploy-fix" });
+    const { args, cleanup } = buildClaudeArgs({ sessionId: "abc", displayName: "deploy-fix" });
     expect(args).toContain("--name");
     expect(args[args.indexOf("--name") + 1]).toBe("deploy-fix");
+    cleanup();
   });
 
   it("omits --name when displayName is not provided", () => {
-    const args = buildClaudeArgs({ sessionId: "abc" });
+    const { args, cleanup } = buildClaudeArgs({ sessionId: "abc" });
     expect(args).not.toContain("--name");
+    cleanup();
   });
 
   it("omits --name when displayName is the empty string", () => {
-    const args = buildClaudeArgs({ sessionId: "abc", displayName: "" });
+    const { args, cleanup } = buildClaudeArgs({ sessionId: "abc", displayName: "" });
     expect(args).not.toContain("--name");
+    cleanup();
   });
 
   it("emits --effort <level> when effort is supplied", () => {
-    const args = buildClaudeArgs({ sessionId: "abc", effort: "high" });
+    const { args, cleanup } = buildClaudeArgs({ sessionId: "abc", effort: "high" });
     expect(args).toContain("--effort");
     expect(args[args.indexOf("--effort") + 1]).toBe("high");
+    cleanup();
   });
 
   it("omits --effort when effort is not supplied", () => {
-    const args = buildClaudeArgs({ sessionId: "abc" });
+    const { args, cleanup } = buildClaudeArgs({ sessionId: "abc" });
     expect(args).not.toContain("--effort");
+    cleanup();
   });
 
   it("emits --model <value> when model is supplied", () => {
-    const args = buildClaudeArgs({ sessionId: "abc", model: "sonnet" });
+    const { args, cleanup } = buildClaudeArgs({ sessionId: "abc", model: "sonnet" });
     expect(args).toContain("--model");
     expect(args[args.indexOf("--model") + 1]).toBe("sonnet");
+    cleanup();
   });
 
   it("omits --model when model is not supplied (backward-compat: byte-identical to today)", () => {
-    const args = buildClaudeArgs({ sessionId: "abc" });
+    const { args, cleanup } = buildClaudeArgs({ sessionId: "abc" });
     expect(args).not.toContain("--model");
+    cleanup();
+  });
+
+  // AC4 non-leak: settings file is not world-readable (mode 0o600).
+  it("writes settings file with restricted permissions (not world-readable)", () => {
+    const { args, cleanup } = buildClaudeArgs({
+      sessionId: "abc",
+      settings: baseSettings,
+    });
+    const settingsPath = args[args.indexOf("--settings") + 1]!;
+    const { mode } = require("node:fs").statSync(settingsPath);
+    // mode & 0o777 extracts the permission bits; 0o600 = owner rw only
+    expect(mode & 0o777).toBe(0o600);
+    cleanup();
+  });
+
+  // AC4 non-leak: prompt file is not world-readable (mode 0o600).
+  it("writes appendSystemPrompt file with restricted permissions (not world-readable)", () => {
+    const { args, cleanup } = buildClaudeArgs({
+      sessionId: "abc",
+      appendSystemPrompt: "top secret prompt",
+    });
+    const promptPath = args[args.indexOf("--append-system-prompt-file") + 1]!;
+    const { mode } = require("node:fs").statSync(promptPath);
+    expect(mode & 0o777).toBe(0o600);
+    cleanup();
   });
 });

@@ -50,7 +50,16 @@ export interface SpawnedAgent {
 export function spawnAgent(opts: SpawnAgentOptions): SpawnedAgent {
   const sessionId = opts.sessionId === undefined ? randomUUID() : opts.sessionId;
 
-  const command = opts.command ?? buildClaudeCommand(sessionId, opts);
+  let command: RuntimeCommand;
+  let cleanup: () => void;
+  if (opts.command !== undefined) {
+    command = opts.command;
+    cleanup = () => {};
+  } else {
+    const built = buildClaudeCommand(sessionId, opts);
+    command = built.command;
+    cleanup = built.cleanup;
+  }
   const bin = command.bin;
   const args = [...command.args];
   const env = opts.env === undefined ? process.env : opts.env;
@@ -78,7 +87,10 @@ export function spawnAgent(opts: SpawnAgentOptions): SpawnedAgent {
   }
 
   const exited = new Promise<number | null>((resolve) => {
-    child.on("close", (code) => resolve(code));
+    child.on("close", (code) => {
+      cleanup();
+      resolve(code);
+    });
   });
 
   const stderr = collectStderr(child.stderr);
@@ -98,28 +110,36 @@ export function spawnAgent(opts: SpawnAgentOptions): SpawnedAgent {
   };
 }
 
-function buildClaudeCommand(sessionId: string, opts: SpawnAgentOptions): RuntimeCommand {
+function buildClaudeCommand(
+  sessionId: string,
+  opts: SpawnAgentOptions,
+): { command: RuntimeCommand; cleanup: () => void } {
   const settings = resolveSettings(opts);
 
+  const { args, cleanup } = buildClaudeArgs({
+    sessionId,
+    ...(opts.resumeThreadId === undefined ? {} : { resumeThreadId: opts.resumeThreadId }),
+    ...(settings === undefined ? {} : { settings }),
+    ...(opts.pluginDirs === undefined ? {} : { pluginDirs: opts.pluginDirs }),
+    ...(opts.permissionMode === undefined ? {} : { permissionMode: opts.permissionMode }),
+    ...(opts.allowedTools === undefined ? {} : { allowedTools: opts.allowedTools }),
+    ...(opts.effort === undefined ? {} : { effort: opts.effort }),
+    ...(opts.model === undefined ? {} : { model: opts.model }),
+    ...(opts.appendSystemPrompt === undefined
+      ? {}
+      : { appendSystemPrompt: opts.appendSystemPrompt }),
+    ...(opts.displayName === undefined ? {} : { displayName: opts.displayName }),
+    ...(opts.settingSources === undefined
+      ? {}
+      : { settingSources: opts.settingSources }),
+  });
+
   return {
-    bin: opts.claudeBin === undefined ? "claude" : opts.claudeBin,
-    args: buildClaudeArgs({
-      sessionId,
-      ...(opts.resumeThreadId === undefined ? {} : { resumeThreadId: opts.resumeThreadId }),
-      ...(settings === undefined ? {} : { settings }),
-      ...(opts.pluginDirs === undefined ? {} : { pluginDirs: opts.pluginDirs }),
-      ...(opts.permissionMode === undefined ? {} : { permissionMode: opts.permissionMode }),
-      ...(opts.allowedTools === undefined ? {} : { allowedTools: opts.allowedTools }),
-      ...(opts.effort === undefined ? {} : { effort: opts.effort }),
-      ...(opts.model === undefined ? {} : { model: opts.model }),
-      ...(opts.appendSystemPrompt === undefined
-        ? {}
-        : { appendSystemPrompt: opts.appendSystemPrompt }),
-      ...(opts.displayName === undefined ? {} : { displayName: opts.displayName }),
-      ...(opts.settingSources === undefined
-        ? {}
-        : { settingSources: opts.settingSources }),
-    }),
+    command: {
+      bin: opts.claudeBin === undefined ? "claude" : opts.claudeBin,
+      args,
+    },
+    cleanup,
   };
 }
 
