@@ -66,7 +66,7 @@ Clobber spawns `claude` sessions with generated `settings.json` whose hooks call
 
 ## Golden Rules
 
-Clobber is a long-lived engine that future AI agents will work on. These four rules sit above the Engineering Rules below — the engineering rules are the *how*, these are the *why* every change is shaped the way it is.
+Clobber is a long-lived engine that future AI agents will work on. These eight rules sit above the Engineering Rules below — the engineering rules are the *how*, these are the *why* every change is shaped the way it is.
 
 1. **Re-use.** Before writing anything new, look for an existing component to compose or abstract. New components need a *genuine novel-requirements* justification — not "it was easier to write fresh." If an existing one is *almost right*, the work is to generalize it, not duplicate it. *Composition over creation.*
 2. **Modularity.** API/interface-forward. Layers of abstraction, generics, implementation-agnostic cores wired to swappable adapters. The bet is that future AI agents will need to replace pieces — from a component to a service to a whole engine layer — and design today should make those swaps cheap. *Interfaces over implementations.*
