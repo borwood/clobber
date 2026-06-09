@@ -15,6 +15,7 @@ export const MODEL_ALIASES = [
   "opus",
   "sonnet",
   "haiku",
+  "fable",
   "opus[1m]",
   "sonnet[1m]",
   "opusplan",
