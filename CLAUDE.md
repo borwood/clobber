@@ -66,12 +66,29 @@ Clobber spawns `claude` sessions with generated `settings.json` whose hooks call
 
 ## Golden Rules
 
-Clobber is a long-lived engine that future AI agents will work on. These four rules sit above the Engineering Rules below — the engineering rules are the *how*, these are the *why* every change is shaped the way it is.
+Clobber is a long-lived engine that future AI agents will work on. These eight rules sit above the Engineering Rules below — the engineering rules are the *how*, these are the *why* every change is shaped the way it is.
 
 1. **Re-use.** Before writing anything new, look for an existing component to compose or abstract. New components need a *genuine novel-requirements* justification — not "it was easier to write fresh." If an existing one is *almost right*, the work is to generalize it, not duplicate it. *Composition over creation.*
 2. **Modularity.** API/interface-forward. Layers of abstraction, generics, implementation-agnostic cores wired to swappable adapters. The bet is that future AI agents will need to replace pieces — from a component to a service to a whole engine layer — and design today should make those swaps cheap. *Interfaces over implementations.*
 3. **Flexibility.** Clobber is not opinionated about the user's workflow, their preferred SDLC, their roles, their permissions, their policies. It's an engine that ships *sensible defaults for the popular cases* and exposes the seams so any workspace can adapt. Never hard-bake one workflow as *the* workflow. *Engine, not opinion.*
 4. **Ritual.** TDD + typecheck on every change (see Engineering Rules 1 below). Before coding on a new issue, write a north-star narrative via `/clobber-pm narrative write` and confirm comprehension with the human before logging. Run the **blue-sky reframe** — *"what could this feature be if it were insanely useful, novel, enjoyable, dependable?"* — and surface only the genuinely interesting reframes, not every option. When you touch code that doesn't conform to the rules above, raise it: small fold-in fixes get a one-line gesture in the end-of-turn summary; heavier refactors get a "should this be a separate work item?" question.
+5. **Horizontal spines.** Express a new capability as a spine riding shared compositional
+   substrates — never as a parallel one-off. When two features need the same shape, build the
+   substrate once and have both ride it. *Substrates over silos.*
+6. **Single typed source per concern.** Exactly one authoritative, typed schema/contract per
+   concern; everything programmatic (docs, validation, wiring) is projected or derived from it.
+   Contracts fail LOUD, and a loud failure is precious signal: don't just satisfy it —
+   interrogate whether the schema itself must evolve, and check its other consumers. The schema
+   is not sacred; it matures with the codebase. *One source, many projections.*
+7. **Can't-fail beats best-effort for primitives.** For a load-bearing primitive, make the bad
+   outcome structurally impossible — idempotent, type-enforced, DB-constrained — not filtered or
+   compensated after the fact. Best-effort is acceptable only when no structural path exists,
+   and that impossibility must be argued, not assumed. Prefer structurally-armed boundaries over
+   remembered companion steps. *Impossible over improbable.*
+8. **The tip is the agent; the past is a resource.** Deliver to the current embodiment of an
+   agent, never a superseded one; treat history as supersession by lineage, not staleness by
+   wall-clock. A pending obligation outlives restarts and targets whoever the agent is now.
+   *Lineage over wall-clock.*
 
 **The engine/workspace seam — LAW.** GR3 sharpened into an enforced rule. An engine **default** is a *generality contract*: anything that ships as a default — a default role or manifest, a default prompt-module/seed, a plugin-template skill, an engine runbook — MUST be generic enough to serve *any* clobber workspace. Workspace-specific content (a repo's own scars, conventions, known hazards, issue/PR numbers, its memory ledger) belongs in the **workspace overlay** — the shadow/catalog mechanism (`.clobber/prompt-modules/`, `.clobber/skills/`, the workspace's own role pins) — **never baked into the default**. Before adding content to a default surface, ask: *would this serve a stranger's clobber workspace?* If not, it goes in the overlay. The overlay mechanisms are the very seams GR3 promises; enforced at the merge juncture by the `merge-gate` skill's SEAM check.
 
@@ -86,7 +103,7 @@ Clobber is a long-lived engine that future AI agents will work on. These four ru
 
 These mirror what works in adjacent projects. They are the non-negotiable mechanics that implement the Golden Rules above.
 
-1. **TDD mandatory.** Failing test first, then implement. Integration tests over unit tests — write full-flow tests, not isolated function tests. No unit tests unless the user explicitly approves in a comment naming them.
+1. **TDD mandatory.** Failing test first, then implement. Integration tests over unit tests — write full-flow tests, not isolated function tests. No unit tests unless the user explicitly approves in a comment naming them. A test, fix, or gate that passes without exercising the real failing path is inert — prove it on the real path (a populated DB, the actual route, the live flag), not a synthetic proxy.
 2. **Test timeouts are bugs.** Never increase a timeout to make a test pass. Find the underlying async issue.
 3. **No defensive programming.** No null checks, no `??`/`||` defaults, no swallowing errors. Unexpected data → throw. Defaults hide bugs. Only exception: comment with the user's name explicitly approving a defensive check.
 4. **Files ≤ 300 lines.** Split by responsibility when crossing.
@@ -94,8 +111,9 @@ These mirror what works in adjacent projects. They are the non-negotiable mechan
 6. **No deprecated/legacy comments.** Replace, don't accumulate. If you remove code, just remove it — no "this used to be X" notes.
 7. **Quality over speed.** No time pressure. Choose the maintainable approach.
 8. **Forward-only.** Don't worry about backwards compatibility unless it's load-bearing.
-9. **Type safety as DX.** Use mapped, conditional, generic, and `infer` types where they make autocomplete and correctness fall out naturally. The goal: the developer feels guided by the types.
+9. **Type safety as DX.** Use mapped, conditional, generic, and `infer` types where they make autocomplete and correctness fall out naturally. The goal: the developer feels guided by the types. Type-check is a load-bearing correctness gate, not a formality: a type error is a design finding, and a change isn't done until `type-check` is clean.
 10. **Comments explain why, not what.** Good names beat comments. Default to no comments.
+11. **Don't trust a stated count.** Failure counts, baselines, and inventories rot and are scope-relative. Establish ground truth yourself against the real source before attributing or acting on a number someone (or some doc) stated.
 
 ## Worktree Rule
 
