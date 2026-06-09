@@ -248,9 +248,6 @@ export const SCHEMA = `
     ON notifications(recipient_agent_id, state, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_notifications_state
     ON notifications(state, created_at DESC);
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_logical_key
-    ON notifications(logical_key) WHERE logical_key IS NOT NULL;
-
   CREATE TABLE IF NOT EXISTS final_report_consumer_state (
     workspace_id     TEXT    PRIMARY KEY,
     last_consumed_id INTEGER NOT NULL DEFAULT 0,
