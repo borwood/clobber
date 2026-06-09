@@ -160,7 +160,7 @@ describe("notification inbox — store extensions", () => {
 
   it("listUnackedForUser returns delivered user notifications", () => {
     const h = makeStoreHarness();
-    const n = h.store.create(userNotifReq(), T1);
+    const { notification: n } = h.store.create(userNotifReq(), T1);
     h.store.markDelivered(n.id, T2);
     const rows = h.store.listUnackedForUser();
     expect(rows).toHaveLength(1);
@@ -170,7 +170,7 @@ describe("notification inbox — store extensions", () => {
 
   it("listUnackedForUser excludes acked rows", () => {
     const h = makeStoreHarness();
-    const n = h.store.create(userNotifReq(), T1);
+    const { notification: n } = h.store.create(userNotifReq(), T1);
     h.store.markAcked(n.id, T2);
     const rows = h.store.listUnackedForUser();
     expect(rows).toHaveLength(0);
@@ -187,7 +187,7 @@ describe("notification inbox — store extensions", () => {
 
   it("markAcked advances pending->acked, stamps acked_at", () => {
     const h = makeStoreHarness();
-    const n = h.store.create(userNotifReq(), T1);
+    const { notification: n } = h.store.create(userNotifReq(), T1);
     const changed = h.store.markAcked(n.id, T2);
     expect(changed).toBe(true);
     const after = h.store.get(n.id)!;
@@ -198,7 +198,7 @@ describe("notification inbox — store extensions", () => {
 
   it("markAcked is idempotent — second call returns false, state stays acked", () => {
     const h = makeStoreHarness();
-    const n = h.store.create(userNotifReq(), T1);
+    const { notification: n } = h.store.create(userNotifReq(), T1);
     h.store.markAcked(n.id, T2);
     const second = h.store.markAcked(n.id, T3);
     expect(second).toBe(false);
@@ -208,8 +208,8 @@ describe("notification inbox — store extensions", () => {
 
   it("listUnackedForAgent returns pending/delivered agent notifications, not acked", () => {
     const h = makeStoreHarness();
-    const n1 = h.store.create(agentNotifReq(h.agentId, "first"), T1);
-    const n2 = h.store.create(agentNotifReq(h.agentId, "second"), T2);
+    const { notification: n1 } = h.store.create(agentNotifReq(h.agentId, "first"), T1);
+    const { notification: n2 } = h.store.create(agentNotifReq(h.agentId, "second"), T2);
     h.store.markDelivered(n2.id, T2);
     // ack n1
     h.store.markAcked(n1.id, T3);
@@ -225,8 +225,8 @@ describe("notification inbox — store extensions", () => {
 
   it("listPending returns only state='pending' rows", () => {
     const h = makeStoreHarness();
-    const n1 = h.store.create(agentNotifReq(h.agentId, "first"), T1);
-    const n2 = h.store.create(agentNotifReq(h.agentId, "second"), T2);
+    const { notification: n1 } = h.store.create(agentNotifReq(h.agentId, "first"), T1);
+    const { notification: n2 } = h.store.create(agentNotifReq(h.agentId, "second"), T2);
     h.store.markDelivered(n2.id, T2);
     h.store.create(userNotifReq(), T1);
 
@@ -274,7 +274,7 @@ describe("notification inbox — composeUnackedNotifications (non-flushing boot 
 
   it("acked notifications are excluded from the compose output", () => {
     const h = makeStoreHarness();
-    const n = h.store.create(agentNotifReq(h.agentId, "already done"), T1);
+    const { notification: n } = h.store.create(agentNotifReq(h.agentId, "already done"), T1);
     h.store.markAcked(n.id, T2);
 
     const output = composeUnackedNotifications(h.agentId, h.store);
@@ -289,7 +289,7 @@ describe("notification inbox — rearmPending (survive process boundaries)", () 
   it("server-boot: pending row rearms and delivery occurs (spawned)", async () => {
     const h = makeDispatchHarness();
     // Emit with skip-busy path so notification stays pending
-    const n = h.store.create(agentNotifReq(h.agentId, "rearm me"), T1);
+    const { notification: n } = h.store.create(agentNotifReq(h.agentId, "rearm me"), T1);
     // Verify it's pending (no in-memory queue, no session)
     expect(h.store.get(n.id)!.state).toBe("pending");
 
@@ -345,8 +345,8 @@ describe("notification inbox — rearmPending (survive process boundaries)", () 
     const rearmDeps: RearmPendingDeps = { ...baseDeliverDeps, store, clock };
 
     // Both agents have pending notifications
-    const n1 = store.create(agentNotifReq(agent1.id, "for agent1"), T1);
-    const n2 = store.create(agentNotifReq(agent2.id, "for agent2"), T1);
+    const { notification: n1 } = store.create(agentNotifReq(agent1.id, "for agent1"), T1);
+    const { notification: n2 } = store.create(agentNotifReq(agent2.id, "for agent2"), T1);
 
     // Rearm only agent1 (cycle-reseat scope)
     await rearmPending(rearmDeps, agent1.id);
@@ -405,9 +405,9 @@ describe("notification inbox — rearmPending (survive process boundaries)", () 
 
     const poisonAgent = agents.create({ workspace_id: ws.id, role_id: roleRow.id, label: "poison" });
     // First pending row will hit the throwing role lookup
-    const nPoison = store.create(agentNotifReq(poisonAgent.id, "poison body"), T1);
+    const { notification: nPoison } = store.create(agentNotifReq(poisonAgent.id, "poison body"), T1);
     // Second pending row is healthy and should be rearmed
-    const nGood = store.create(agentNotifReq(goodAgent.id, "good body"), T2);
+    const { notification: nGood } = store.create(agentNotifReq(goodAgent.id, "good body"), T2);
 
     // Prime the throw for the first deliver() call
     throwNext = true;
@@ -442,7 +442,7 @@ describe("notification inbox — rearmPending (survive process boundaries)", () 
 describe("notification dispatch — deliver() fold-ins", () => {
   it("user recipient: deliver records notification without throw or spawn", async () => {
     const h = makeDispatchHarness();
-    const n = h.store.create(userNotifReq(), T1);
+    const { notification: n } = h.store.create(userNotifReq(), T1);
 
     const outcome = await deliver(h.deliverDeps, n, { kind: "drop" });
 
@@ -455,7 +455,7 @@ describe("notification dispatch — deliver() fold-ins", () => {
 
   it("user high-prio recipient: deliver records with queued action (Phase-3 wake deferred)", async () => {
     const h = makeDispatchHarness();
-    const n = h.store.create(
+    const { notification: n } = h.store.create(
       {
         type: "message",
         recipient: { kind: "user" },
@@ -480,7 +480,7 @@ describe("notification dispatch — deliver() fold-ins", () => {
       ...h.deliverDeps.agents,
       get: () => null,
     };
-    const n = h.store.create(agentNotifReq(h.agentId, "orphan"), T1);
+    const { notification: n } = h.store.create(agentNotifReq(h.agentId, "orphan"), T1);
 
     const outcome = await deliver({ ...h.deliverDeps, agents: absentAgents }, n, { kind: "drop" });
     expect(outcome.action).toBe("errored");
@@ -496,7 +496,7 @@ describe("notification dispatch — deliver() fold-ins", () => {
       ...h.deliverDeps.roles,
       get: () => null,
     };
-    const n = h.store.create(agentNotifReq(h.agentId, "contract breach"), T1);
+    const { notification: n } = h.store.create(agentNotifReq(h.agentId, "contract breach"), T1);
 
     await expect(
       deliver({ ...h.deliverDeps, roles: absentRoles }, n, { kind: "drop" }),
@@ -510,7 +510,7 @@ describe("notification dispatch — deliver() fold-ins", () => {
       ...h.deliverDeps.workspaces,
       get: () => null,
     };
-    const n = h.store.create(agentNotifReq(h.agentId, "ws breach"), T1);
+    const { notification: n } = h.store.create(agentNotifReq(h.agentId, "ws breach"), T1);
 
     await expect(
       deliver({ ...h.deliverDeps, workspaces: absentWorkspaces as typeof h.deliverDeps.workspaces }, n, { kind: "drop" }),

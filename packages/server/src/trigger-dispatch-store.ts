@@ -5,6 +5,7 @@ export type DispatchOutcome =
   | "resumed"
   | "injected"
   | "skipped-busy"
+  | "skipped-duplicate"
   | "queued"
   | "skipped-at-capacity"
   | "errored"

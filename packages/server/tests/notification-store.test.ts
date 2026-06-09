@@ -43,7 +43,7 @@ describe("notification-store", () => {
     const { agentId } = seedAgent(db);
     const store = createNotificationStore(db);
 
-    const n = store.create(makeReq(agentId), 1_700_000_000_000);
+    const { notification: n } = store.create(makeReq(agentId), 1_700_000_000_000);
     expect(n.state).toBe("pending");
     expect(n.created_at).toBe(1_700_000_000_000);
     expect(n.delivered_at).toBeUndefined();
@@ -66,7 +66,7 @@ describe("notification-store", () => {
     const { agentId } = seedAgent(db);
     const store = createNotificationStore(db);
 
-    const n = store.create(makeReq(agentId), 1_700_000_000_000);
+    const { notification: n } = store.create(makeReq(agentId), 1_700_000_000_000);
     store.markDelivered(n.id, 1_700_000_000_500);
 
     const after = store.get(n.id);
@@ -93,7 +93,7 @@ describe("notification-store", () => {
     const db = createDatabase(":memory:");
     seedAgent(db);
     const store = createNotificationStore(db);
-    const n = store.create(
+    const { notification: n } = store.create(
       {
         type: "message",
         recipient: { kind: "user" },
@@ -113,7 +113,7 @@ describe("notifications migration", () => {
     const db = createDatabase(":memory:");
     const { agentId } = seedAgent(db);
     const store = createNotificationStore(db);
-    const n = store.create(makeReq(agentId), 1);
+    const { notification: n } = store.create(makeReq(agentId), 1);
     expect(store.get(n.id)!.state).toBe("pending");
     db.close();
   });
@@ -145,7 +145,7 @@ describe("notifications migration", () => {
       expect(agentAfter.c).toBe(1);
 
       const store = createNotificationStore(db2);
-      const n = store.create(makeReq(agentId), 42);
+      const { notification: n } = store.create(makeReq(agentId), 42);
       expect(store.get(n.id)!.state).toBe("pending");
       db2.close();
     } finally {

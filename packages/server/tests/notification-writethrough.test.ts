@@ -151,7 +151,7 @@ describe("notification write-through (#573) — real-path tests", () => {
     const stdin = liveSession(h, "live-busy-a1", true); // busy=true
     stdin.on("data", (c: Buffer) => writes.push(c));
 
-    const n = h.store.create(agentNotifReq(h.agentId, "wake-kick: worker-a done"), T1);
+    const { notification: n } = h.store.create(agentNotifReq(h.agentId, "wake-kick: worker-a done"), T1);
     const outcome = await deliver(h.deliverDeps, n, { kind: "drop" });
 
     // Must inject, not skip.
@@ -178,7 +178,7 @@ describe("notification write-through (#573) — real-path tests", () => {
     stdin.on("data", (c: Buffer) => writes.push(c));
 
     for (let i = 0; i < N; i += 1) {
-      const n = h.store.create(agentNotifReq(h.agentId, `worker-${i} done`), T1 + i * 1000);
+      const { notification: n } = h.store.create(agentNotifReq(h.agentId, `worker-${i} done`), T1 + i * 1000);
       const outcome = await deliver(h.deliverDeps, n, { kind: "drop" });
       expect(outcome.action).toBe("injected");
     }

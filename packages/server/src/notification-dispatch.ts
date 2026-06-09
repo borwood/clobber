@@ -19,6 +19,7 @@ export type DeliveryAction =
   | "injected"
   | "queued"
   | "skipped-busy"
+  | "skipped-duplicate"
   | "errored";
 
 export interface DeliveryOutcome {
@@ -169,7 +170,10 @@ export function createNotificationDispatcher(
 ): NotificationDispatcher {
   return {
     async emit(req, transport) {
-      const notification = store.create(req, clock.now().getTime());
+      const { notification, created } = store.create(req, clock.now().getTime());
+      if (!created) {
+        return { notification, outcome: { action: "skipped-duplicate" } };
+      }
       const outcome = await transport(notification);
       if (outcome.action === "spawned" || outcome.action === "resumed" || outcome.action === "injected") {
         store.markDelivered(notification.id, clock.now().getTime());

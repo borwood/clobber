@@ -8,9 +8,11 @@ import {
 } from "@clobber/shared";
 
 export interface NotificationStore {
-  // Persist a new notification in the `pending` state. `now` is supplied by the
-  // caller (the dispatcher's clock) so created_at is testable.
-  create(req: CreateNotification, now: number): Notification;
+  // Persist a notification. When the request carries a source_id, a logical_key
+  // is derived; ON CONFLICT the existing row is returned with created=false so
+  // the dispatcher can skip transport without re-delivering. Absent source_id →
+  // null logical_key → always inserted (today's un-keyed behaviour preserved).
+  create(req: CreateNotification, now: number): { notification: Notification; created: boolean };
   get(id: string): Notification | null;
   // Advance pending → delivered and stamp delivered_at. The transport calls this
   // once a notification actually reached its recipient (spawned / injected).
@@ -41,6 +43,7 @@ interface Row {
   created_at: number;
   delivered_at: number | null;
   acked_at: number | null;
+  logical_key: string | null;
 }
 
 function rowToRecipient(row: Row): RecipientRef {
@@ -74,10 +77,12 @@ export function createNotificationStore(db: Database): NotificationStore {
   const insertStmt = db.prepare(`
     INSERT INTO notifications
       (id, type, recipient_kind, recipient_agent_id, priority,
-       payload_json, provenance_json, metadata_json, state, created_at, delivered_at, acked_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, NULL, NULL)
+       payload_json, provenance_json, metadata_json, state, created_at, delivered_at, acked_at, logical_key)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, NULL, NULL, ?)
+    ON CONFLICT(logical_key) WHERE logical_key IS NOT NULL DO NOTHING
   `);
   const getStmt = db.prepare("SELECT * FROM notifications WHERE id = ?");
+  const getByLogicalKeyStmt = db.prepare("SELECT * FROM notifications WHERE logical_key = ?");
   const markDeliveredStmt = db.prepare(`
     UPDATE notifications
        SET state = 'delivered', delivered_at = ?
@@ -104,7 +109,11 @@ export function createNotificationStore(db: Database): NotificationStore {
       const id = randomUUID();
       const recipientAgentId = req.recipient.kind === "agent" ? req.recipient.agent_id : null;
       const metadata = req.metadata === undefined ? {} : req.metadata;
-      insertStmt.run(
+      const logicalKey =
+        req.provenance.source_id !== undefined
+          ? `${req.provenance.source_kind}:${req.provenance.source_id}:${recipientAgentId ?? "\0user"}`
+          : null;
+      const result = insertStmt.run(
         id,
         req.type,
         req.recipient.kind,
@@ -114,8 +123,14 @@ export function createNotificationStore(db: Database): NotificationStore {
         JSON.stringify(req.provenance),
         JSON.stringify(metadata),
         now,
+        logicalKey,
       );
-      return rowToNotification(getStmt.get(id) as Row);
+      if (result.changes === 0) {
+        // ON CONFLICT: return the existing row that owns the logical_key
+        const existing = getByLogicalKeyStmt.get(logicalKey) as Row;
+        return { notification: rowToNotification(existing), created: false };
+      }
+      return { notification: rowToNotification(getStmt.get(id) as Row), created: true };
     },
 
     get(id) {

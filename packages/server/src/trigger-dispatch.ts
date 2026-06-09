@@ -6,6 +6,7 @@ import {
   type RoleTrigger,
   type Workspace,
 } from "@clobber/shared";
+import type { CompletionWakePayload } from "./completion-wake.ts";
 import type { AgentStore } from "./agent-store.ts";
 import type { RoleStore } from "./role-store.ts";
 import type { WorkspaceStore } from "./workspace-store.ts";
@@ -90,13 +91,17 @@ export async function dispatchTrigger(
   const prompt = deps.synthesize(trigger, payload);
   const promptTag: ClobberPromptTag = { kind: "trigger", attrs: { via: trigger.kind } };
   const wakeProgram = resolveTriggerWakeProgram(workspace, binding.roleId, trigger);
+  const sourceId = triggerSourceId(trigger, payload, firedAt);
 
   const req: CreateNotification = {
     type: "trigger",
     recipient: { kind: "agent", agent_id: binding.agentId },
     priority: "low",
     payload: { body: prompt, tag: promptTag },
-    provenance: { source_kind: "trigger", source_id: trigger.kind },
+    provenance: {
+      source_kind: "trigger",
+      ...(sourceId !== undefined ? { source_id: sourceId } : {}),
+    },
     metadata: wakeProgram === undefined ? {} : { wake_program: wakeProgram },
   };
 
@@ -134,6 +139,38 @@ export async function dispatchTrigger(
     ...(outcome.error === undefined ? {} : { error: outcome.error }),
   });
   return true;
+}
+
+// Derive an occurrence-specific source_id for the notification's provenance so
+// the logical_key is per-event, not per-trigger-kind. Without re-graining,
+// every worker-done fire would share the same key and collapse → the manager
+// misses N-1 completions. Rule: return undefined for trigger kinds that have no
+// stable per-occurrence identity; null logical_key = no dedup = today's behavior.
+function triggerSourceId(
+  trigger: RoleTrigger,
+  payload: unknown,
+  firedAt: number,
+): string | undefined {
+  switch (trigger.kind) {
+    case "worker-done":
+    case "session-ended": {
+      // Prefix with trigger.kind so worker-done and session-ended for the same
+      // session have different logical keys — they are distinct events (#424).
+      // Sorted session IDs make coalesced (multi-ended) wakes deterministic.
+      const sessionKey = (payload as CompletionWakePayload).ended
+        .map((i) => i.sessionId)
+        .sort()
+        .join(",");
+      return `${trigger.kind}:${sessionKey}`;
+    }
+    case "cron":
+      // Each cron tick fires at a unique wall-clock instant; firedAt makes the
+      // occurrence identity stable across the single dispatch path (cron uses drop
+      // not enqueue, so no re-fire of the same tick from the queue side).
+      return `cron:${trigger.expr}:${firedAt}`;
+    default:
+      return undefined;
+  }
 }
 
 // Resolves a fired trigger to its wake-program: a workspace per-trigger override

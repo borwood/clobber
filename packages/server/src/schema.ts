@@ -241,12 +241,15 @@ export const SCHEMA = `
     created_at         INTEGER NOT NULL,
     delivered_at       INTEGER,
     acked_at           INTEGER,
+    logical_key        TEXT,
     FOREIGN KEY (recipient_agent_id) REFERENCES agents(id) ON DELETE CASCADE
   );
   CREATE INDEX IF NOT EXISTS idx_notifications_recipient_agent
     ON notifications(recipient_agent_id, state, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_notifications_state
     ON notifications(state, created_at DESC);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_logical_key
+    ON notifications(logical_key) WHERE logical_key IS NOT NULL;
 
   CREATE TABLE IF NOT EXISTS final_report_consumer_state (
     workspace_id     TEXT    PRIMARY KEY,

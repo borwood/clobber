@@ -19,6 +19,7 @@ import { migrateRoleCommitProvenance } from "./role-commit-provenance-migration.
 import { migrateRoleVersionPinDrop } from "./role-version-pin-drop-migration.ts";
 import { migrateSessionOpLevel } from "./session-op-level-migration.ts";
 import { migrateSessionTokenScope } from "./session-token-scope-migration.ts";
+import { migrateNotificationLogicalKey } from "./notification-logical-key-migration.ts";
 
 export function createDatabase(path: string): Database {
   const db = new Database(path);
@@ -50,6 +51,7 @@ export function createDatabase(path: string): Database {
   migrateRoleVersionPinDrop(db);
   migrateSessionOpLevel(db);
   migrateSessionTokenScope(db);
+  migrateNotificationLogicalKey(db);
   return db;
 }
 
