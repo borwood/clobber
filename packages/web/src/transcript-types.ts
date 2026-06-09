@@ -77,7 +77,6 @@ const PREVIEW_PRIORITY_KEYS = [
   "command",
   "pattern",
   "prompt",
-  "description",
 ] as const;
 
 export function previewToolInput(input: unknown): string | null {
@@ -89,7 +88,10 @@ export function previewToolInput(input: unknown): string | null {
       return truncatePreview(value);
     }
   }
-  for (const value of Object.values(obj)) {
+  // description is rendered as a separate agent-message line above the card (#585);
+  // skip it here so the two surfaces never duplicate.
+  for (const [key, value] of Object.entries(obj)) {
+    if (key === "description") continue;
     if (typeof value === "string" && value.length > 0) {
       return truncatePreview(value);
     }

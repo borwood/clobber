@@ -30,6 +30,85 @@ const toolResultLine = (toolUseId: string, isError: boolean) => ({
   },
 });
 
+// Description-line tests run first so the existing describe's afterAll
+// (which unregisters Happy DOM) fires last.
+describe("ToolCallCard: description line (#585)", () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  it("renders description above the tool name when input has description", () => {
+    act(() => {
+      root.render(
+        <TranscriptViewer
+          lines={[toolUseLine("Agent", { description: "look up prior session", subagent_type: "Explore" })]}
+          showSystem={false}
+          busy={false}
+        />,
+      );
+    });
+    const html = container.innerHTML;
+    // description must appear before the tool name in DOM order
+    expect(html.indexOf("look up prior session")).toBeLessThan(
+      html.indexOf(">Agent<"),
+    );
+  });
+
+  it("description uses agent-message bubble styling", () => {
+    act(() => {
+      root.render(
+        <TranscriptViewer
+          lines={[toolUseLine("Agent", { description: "run the tests" })]}
+          showSystem={false}
+          busy={false}
+        />,
+      );
+    });
+    // ASSISTANT_TEXT_BG = "bg-accent-deep/30 border border-accent-muted/40 rounded px-3 py-2"
+    const el = container.querySelector(".bg-accent-deep\\/30");
+    expect(el).not.toBeNull();
+    expect(el?.textContent).toContain("run the tests");
+  });
+
+  it("preview shows non-description field when both command and description are present", () => {
+    act(() => {
+      root.render(
+        <TranscriptViewer
+          lines={[toolUseLine("Bash", { command: "npm test", description: "run tests" })]}
+          showSystem={false}
+          busy={false}
+        />,
+      );
+    });
+    // description appears as agent-message above
+    const descEl = container.querySelector(".bg-accent-deep\\/30");
+    expect(descEl?.textContent).toContain("run tests");
+    // preview shows command, not description again
+    const previewEl = container.querySelector(".text-text-muted.truncate");
+    expect(previewEl?.textContent).toBe("npm test");
+  });
+
+  it("tool without description renders with no description bubble", () => {
+    act(() => {
+      root.render(
+        <TranscriptViewer
+          lines={[toolUseLine("Read", { file_path: "/repo/foo.ts" })]}
+          showSystem={false}
+          busy={false}
+        />,
+      );
+    });
+    // This transcript has no text blocks — no bg-accent-deep/30 at all.
+    const els = container.querySelectorAll(".bg-accent-deep\\/30");
+    expect(els.length).toBe(0);
+  });
+});
+
 describe("TranscriptViewer: tool-call summary cards (#40)", () => {
   let container: HTMLDivElement;
   let root: Root;

@@ -18,13 +18,13 @@ describe("previewToolInput", () => {
     expect(previewToolInput({ pattern: "**/*.ts" })).toBe("**/*.ts");
   });
 
-  it("returns description as a fallback when no canonical field is set", () => {
+  it("skips description and falls through to next string field — description is shown above the card (#585)", () => {
     expect(
       previewToolInput({
         description: "look up prior session",
         subagent_type: "Explore",
       }),
-    ).toBe("look up prior session");
+    ).toBe("Explore");
   });
 
   it("returns prompt when present (e.g. Task)", () => {
@@ -63,5 +63,23 @@ describe("previewToolInput", () => {
     expect(
       previewToolInput({ file_path: "", command: "ls -la" }),
     ).toBe("ls -la");
+  });
+
+  // #585 — description is rendered as an agent-message line above the tool card;
+  // it must never also appear in the inline preview to avoid duplication.
+  it("never returns description — falls through to next available field (#585)", () => {
+    // when another field is present, that field is used
+    expect(
+      previewToolInput({
+        description: "look up prior session",
+        subagent_type: "Explore",
+      }),
+    ).toBe("Explore");
+  });
+
+  it("returns null when description is the only field (#585)", () => {
+    expect(
+      previewToolInput({ description: "stand-alone description" }),
+    ).toBeNull();
   });
 });
