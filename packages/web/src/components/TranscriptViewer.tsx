@@ -11,10 +11,12 @@ import {
   UserBubble,
   ClobberTurnBubble,
   AssistantBubble,
+} from "./TranscriptBlocks.tsx";
+import {
   NotificationCard,
   SystemLine,
   SystemPromptLine,
-} from "./TranscriptBlocks.tsx";
+} from "./TranscriptCards.tsx";
 
 interface Props {
   readonly lines: readonly TranscriptLine[];
