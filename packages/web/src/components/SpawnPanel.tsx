@@ -20,7 +20,7 @@ const EFFORT_CHOICES: readonly EffortChoice[] = [
   "max",
 ];
 
-const MODEL_CHOICES: readonly ModelChoice[] = ["default", "opus", "sonnet", "haiku"];
+const MODEL_CHOICES: readonly ModelChoice[] = ["default", "opus", "sonnet", "haiku", "fable"];
 
 const DEFAULT_WAKE = "default";
 const CUSTOM_WAKE = "custom";

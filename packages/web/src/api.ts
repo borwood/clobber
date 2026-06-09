@@ -95,7 +95,7 @@ export interface Whiteboard {
 
 export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max";
 
-export type Model = "opus" | "sonnet" | "haiku";
+export type Model = "opus" | "sonnet" | "haiku" | "fable";
 
 export interface SpawnRequest {
   readonly workspace_id: string;

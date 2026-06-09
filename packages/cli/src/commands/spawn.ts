@@ -195,7 +195,7 @@ Flags:
                                  Overrides the role's default for this spawn.
                                  Omit to use the role default.
       --model <model>            Model alias (default|best|opus|sonnet|haiku|
-                                 opus[1m]|sonnet[1m]|opusplan) or a full
+                                 fable|opus[1m]|sonnet[1m]|opusplan) or a full
                                  claude-* API name (e.g. claude-opus-4-8).
                                  Overrides the role's default for this spawn.
                                  Omit to use the role default (or claude's
