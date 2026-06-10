@@ -106,6 +106,7 @@ async function teardown(h: Harness): Promise<void> {
 function userNotifReq(body: string): CreateNotification {
   return {
     type: "push",
+    category: "durable",
     recipient: { kind: "user" },
     priority: "high",
     payload: { body, tag: { kind: "trigger", attrs: { via: "cron" } } },
@@ -116,6 +117,7 @@ function userNotifReq(body: string): CreateNotification {
 function agentNotifReq(agentId: string, body: string): CreateNotification {
   return {
     type: "trigger",
+    category: "transient",
     recipient: { kind: "agent", agent_id: agentId },
     priority: "low",
     payload: { body, tag: { kind: "trigger", attrs: { via: "cron" } } },

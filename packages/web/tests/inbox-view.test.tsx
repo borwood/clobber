@@ -18,6 +18,7 @@ function makeNotification(overrides: Partial<Notification> = {}): Notification {
   return {
     id: "notif-1",
     type: "push",
+    category: "durable",
     recipient: { kind: "user" },
     priority: "high",
     state: "pending",
