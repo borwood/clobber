@@ -113,7 +113,7 @@ function makeHarness(): Harness {
     }),
   };
 
-  const rearmDeps: RearmPendingDeps = { ...deliverDeps, store, clock };
+  const rearmDeps: RearmPendingDeps = { ...deliverDeps, store, clock, resolveOwner: () => null };
 
   return {
     db,

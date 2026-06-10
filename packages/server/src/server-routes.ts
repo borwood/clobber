@@ -24,6 +24,7 @@ import { registerAgentRolesDriftSweepRoute } from "./routes/agent-roles-drift-sw
 import { registerAgentRolesPromptModulesRoutes } from "./routes/agent-roles-prompt-modules.ts";
 import { registerAgentRolesWakeProgramsRoutes } from "./routes/agent-roles-wake-programs.ts";
 import { registerAgentPromptModulesRoutes } from "./routes/agent-prompt-modules.ts";
+import { registerSessionResumeRoutes } from "./routes/session-resume.ts";
 import type { ServerOptions } from "./types.ts";
 import type { ServerDeps } from "./server-deps.ts";
 
@@ -269,6 +270,15 @@ export function registerAllRoutes(
     roleVersions: opts.roleVersions,
     workspaces: opts.workspaces,
     ...roleEmbodiment,
+  });
+  registerSessionResumeRoutes(app, {
+    sessions: opts.sessions,
+    agents: opts.agents,
+    roles: opts.roles,
+    workspaces: opts.workspaces,
+    spawnPipelineDeps,
+    resumeEnded,
+    rearmDeps: deps.rearmDeps,
   });
   registerNotificationsRoutes(app, {
     notifications: deps.notificationStore,

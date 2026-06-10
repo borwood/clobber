@@ -18,6 +18,7 @@ export const USER_TURN_KINDS = [
   "tool-token",
   "message",
   "message-reply",
+  "confirm-resume",
 ] as const;
 
 export const UserTurnKindSchema = z.enum(USER_TURN_KINDS);

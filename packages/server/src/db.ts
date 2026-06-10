@@ -22,6 +22,7 @@ import { migrateSessionTokenScope } from "./session-token-scope-migration.ts";
 import { migrateNotificationLogicalKey } from "./notification-logical-key-migration.ts";
 import { migrateNotificationDeliveryMode } from "./notification-delivery-mode-migration.ts";
 import { migrateNotificationCategory } from "./notification-category-migration.ts";
+import { migrateAgentSpawner } from "./agent-spawner-migration.ts";
 
 export function createDatabase(path: string): Database {
   const db = new Database(path);
@@ -56,6 +57,7 @@ export function createDatabase(path: string): Database {
   migrateNotificationLogicalKey(db);
   migrateNotificationDeliveryMode(db);
   migrateNotificationCategory(db);
+  migrateAgentSpawner(db);
   return db;
 }
 

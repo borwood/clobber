@@ -35,6 +35,9 @@ const SpawnBodySchema = z.object({
   // Caller-supplied layer-C addon for the `custom` built-in (#501). Ignored for
   // all other wake-program selections.
   system_addon: z.string().optional(),
+  // The agent spawning this worker — recorded as the capability-holder / owner
+  // for confirm-resume flows (#621). Absent when spawned by the user directly.
+  spawner_agent_id: z.string().uuid().optional(),
 });
 
 export interface SpawnRouteDeps {
@@ -69,7 +72,7 @@ export function registerSpawnRoutes(app: FastifyInstance, deps: SpawnRouteDeps):
       reply.code(400);
       return { error: "invalid spawn request", issues: parsed.error.issues };
     }
-    const { workspace_id, role_id, prompt, effort, model, wake_program, system_addon } = parsed.data;
+    const { workspace_id, role_id, prompt, effort, model, wake_program, system_addon, spawner_agent_id } = parsed.data;
     const label = normalizeSpawnLabel(parsed.data.label);
     if (label === null) {
       reply.code(400);
@@ -96,6 +99,7 @@ export function registerSpawnRoutes(app: FastifyInstance, deps: SpawnRouteDeps):
       ...(system_addon === undefined ? {} : { systemAddon: system_addon }),
       ...(effort === undefined ? {} : { effortOverride: effort }),
       ...(model === undefined ? {} : { modelOverride: model }),
+      ...(spawner_agent_id === undefined ? {} : { spawnerAgentId: spawner_agent_id }),
     });
     if (!result.ok) {
       const { ok: _ok, status, ...rest } = result;

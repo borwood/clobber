@@ -82,6 +82,7 @@ export async function executeCycle(deps: CycleDeps, input: CycleInput): Promise<
       resumeEndedSession: (input) => resumeEndedSession(deps, input),
       store: deps.notifications,
       clock: deps.clock,
+      resolveOwner: (agentId) => deps.agents.get(agentId)?.spawner_agent_id ?? null,
     },
     agent.id,
   ).catch((err) => console.error("[clobber] rearmPending cycle error:", err));

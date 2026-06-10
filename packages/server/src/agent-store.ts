@@ -14,6 +14,7 @@ interface Row {
   workspace_id: string;
   role_id: string;
   label: string | null;
+  spawner_agent_id: string | null;
   created_at: number;
 }
 
@@ -25,12 +26,13 @@ function rowToAgent(row: Row): Agent {
     created_at: row.created_at,
   };
   if (row.label !== null) input["label"] = row.label;
+  if (row.spawner_agent_id !== null) input["spawner_agent_id"] = row.spawner_agent_id;
   return AgentSchema.parse(input);
 }
 
 export function createAgentStore(db: Database): AgentStore {
   const insertStmt = db.prepare(
-    "INSERT INTO agents (id, workspace_id, role_id, label, created_at) VALUES (?, ?, ?, ?, ?)",
+    "INSERT INTO agents (id, workspace_id, role_id, label, spawner_agent_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
   );
   const getStmt = db.prepare("SELECT * FROM agents WHERE id = ?");
   const listStmt = db.prepare(
@@ -43,7 +45,8 @@ export function createAgentStore(db: Database): AgentStore {
       const id = randomUUID();
       const created_at = Date.now();
       const label = req.label === undefined ? null : req.label;
-      insertStmt.run(id, req.workspace_id, req.role_id, label, created_at);
+      const spawnerAgentId = req.spawner_agent_id === undefined ? null : req.spawner_agent_id;
+      insertStmt.run(id, req.workspace_id, req.role_id, label, spawnerAgentId, created_at);
       const out: Record<string, unknown> = {
         id,
         workspace_id: req.workspace_id,
@@ -51,6 +54,7 @@ export function createAgentStore(db: Database): AgentStore {
         created_at,
       };
       if (req.label !== undefined) out["label"] = req.label;
+      if (req.spawner_agent_id !== undefined) out["spawner_agent_id"] = req.spawner_agent_id;
       return AgentSchema.parse(out);
     },
 

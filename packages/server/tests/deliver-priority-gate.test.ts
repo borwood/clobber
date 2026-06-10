@@ -257,7 +257,7 @@ describe("deliver() priority+persistence gate (#605)", () => {
     // low-priority notification for an asleep persistent agent must survive
     // rearmPending un-delivered (stays pending) and un-duplicated (exactly 1 row).
     const h = makeHarness();
-    const rearmDeps: RearmPendingDeps = { ...h.deliverDeps, store: h.store, clock: h.clock };
+    const rearmDeps: RearmPendingDeps = { ...h.deliverDeps, store: h.store, clock: h.clock, resolveOwner: () => null };
 
     const n = makeNotif(h, h.managerAgentId, "low");
     expect(h.store.listPending()).toHaveLength(1);
