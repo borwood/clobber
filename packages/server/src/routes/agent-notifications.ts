@@ -65,7 +65,7 @@ export function registerAgentNotificationsRoutes(
     "/agent/notifications",
     withAgentAuth("notify.list", deps, async (_request, _reply, { session }) => {
       const agentId = session.agent_id!;
-      const rows = deps.notifications.listUnackedForAgent(agentId);
+      const rows = deps.notifications.listUnackedForAgent(agentId).filter((n) => n.delivery_mode !== "quiet");
       return {
         notifications: rows.map((n) => ({
           id: n.id,

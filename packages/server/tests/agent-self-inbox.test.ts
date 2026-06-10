@@ -212,6 +212,28 @@ describe("GET /agent/notifications — agent self-inbox list", () => {
       await teardown(h);
     }
   });
+
+  it("quiet-mode rows are excluded from list (delivered side-channel via hooks drain)", async () => {
+    const h = buildHarness();
+    try {
+      const T = Date.now();
+      const quietReq = { ...agentNotifReq(h.agentA.agentId, "quiet-row"), delivery_mode: "quiet" as const };
+      h.notifications.create(quietReq, T);
+      h.notifications.create(agentNotifReq(h.agentA.agentId, "normal-row"), T + 1);
+
+      const res = await h.server.inject({
+        method: "GET",
+        url: "/agent/notifications",
+        headers: bearer(h.agentA.token),
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as { notifications: { payload: { body: string } }[] };
+      expect(body.notifications).toHaveLength(1);
+      expect(body.notifications[0]!.payload.body).toBe("normal-row");
+    } finally {
+      await teardown(h);
+    }
+  });
 });
 
 // ─── POST /agent/notifications/:id/ack ────────────────────────────────────────
