@@ -38,6 +38,8 @@ export interface RuntimeProviderCapabilities extends InSessionHabitsCapability {
   readonly livePromptInjection: boolean;
   readonly interrupt: boolean;
   readonly resume: boolean;
+  // True when the runtime cannot start without a prompt (e.g. Codex exec).
+  readonly requiresPrompt?: boolean;
 }
 
 export interface PrepareBundleOptions {
@@ -166,6 +168,7 @@ export const codexRuntimeProvider: RuntimeProvider = {
     interrupt: false,
     resume: true,
     inSessionHabits: false,
+    requiresPrompt: true,
   },
   prepareBundle(opts) {
     return materializeBundle({ ...opts, inSessionHabits: false });
