@@ -170,7 +170,7 @@ describe("POST /agent/spawn", () => {
       method: "POST",
       url: "/agent/spawn",
       headers: { authorization: `Bearer ${boot.managerToken}` },
-      payload: { role: "manager", label: "boot" },
+      payload: { role: "manager", prompt: 42, label: "boot" },
     });
     expect(res.statusCode).toBe(400);
     await teardown(h);
