@@ -317,4 +317,85 @@ describe("rearmPending — category-aware coalescing (#616)", () => {
 
     h.db.close();
   });
+
+  it("(f) transient rearm for a sleeping non-persistent (worker) recipient → stale cancelled, latest stays pending (no spawn)", async () => {
+    // Ephemeral branch: stale transient cancellation applies to non-persistent
+    // recipients too. The latest still reaches deliver() and returns queued
+    // (non-persistent never auto-wakes) — no spawn, but the latest stays as
+    // the single live row while stale rows are cancelled clean.
+    const h = makeHarness();
+
+    h.store.create(transientReq(h.workerAgentId, "wake-stale-1", T0), T0);
+    h.store.create(transientReq(h.workerAgentId, "wake-stale-2", T0 + 1000), T0 + 1000);
+    h.store.create(transientReq(h.workerAgentId, "wake-latest", T0 + 2000), T0 + 2000);
+    expect(h.store.listPending()).toHaveLength(3);
+
+    await rearmPending(h.rearmDeps);
+
+    // No spawn — ephemeral role never auto-wakes.
+    expect(h.spawnedSessions).toHaveLength(0);
+    // The 2 stale rows must be cancelled.
+    const all = h.store.listForAgent(h.workerAgentId);
+    expect(all.filter((n) => n.state === "cancelled")).toHaveLength(2);
+    // The latest is still pending (deliver() returned queued for non-persistent).
+    const pending = h.store.listPending();
+    expect(pending).toHaveLength(1);
+    expect(pending[0]!.payload.body).toBe("wake-latest");
+
+    h.db.close();
+  });
+
+  it("(g) transient rearm for sleeping persistent manager with shutdown tip → resumed (both #612 branches pinned)", async () => {
+    // Pin the resume branch of the sleeping-manager wake path. When a shutdown
+    // tip exists AND resumeEndedSession succeeds, rearm must mark the row
+    // delivered with action=resumed (not spawned). The spawn path is covered
+    // by test (e); this covers the resume path so both branches are exercised.
+    const h = makeHarness();
+
+    // Seed a shutdown-tip session (was_live_at_shutdown=1) so deliver() takes
+    // the resume branch before falling through to fresh-spawn.
+    const tipId = "tip-session-1";
+    h.sessions.create({
+      id: tipId,
+      agent_id: h.managerAgentId,
+      workspace_id: h.workspaceId,
+      role_id: h.managerRoleId,
+      pid: 7777,
+    });
+    h.sessions.markEnded(tipId);
+    h.sessions.markWasLiveAtShutdown(tipId);
+
+    // Build deps with a resumeEndedSession that succeeds.
+    const resumedSessions: string[] = [];
+    const rearmWithResume: RearmPendingDeps = {
+      ...h.rearmDeps,
+      resumeEndedSession: async (input) => {
+        resumedSessions.push(input.sessionId);
+        // The resumed session needs to exist in the DB so audit FKs resolve.
+        h.sessions.create({
+          id: "resumed-1",
+          agent_id: h.managerAgentId,
+          workspace_id: h.workspaceId,
+          role_id: h.managerRoleId,
+          pid: 7778,
+        });
+        return { ok: true, session_id: "resumed-1", pid: 7778 };
+      },
+    };
+
+    h.store.create(transientReq(h.managerAgentId, "worker-done resume", T0), T0);
+
+    await rearmPending(rearmWithResume);
+
+    // resumeEndedSession was called (not attachSession).
+    expect(resumedSessions).toHaveLength(1);
+    expect(resumedSessions[0]).toBe(tipId);
+    expect(h.spawnedSessions).toHaveLength(0);
+    // Row is delivered.
+    expect(h.store.listPending()).toHaveLength(0);
+    const all = h.store.listForAgent(h.managerAgentId);
+    expect(all[0]!.state).toBe("delivered");
+
+    h.db.close();
+  });
 });

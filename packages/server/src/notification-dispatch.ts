@@ -248,6 +248,16 @@ export async function rearmPending(deps: RearmPendingDeps, agentId?: string): Pr
 
   // Cancel stale transient rows before delivering the latest, so they can
   // never trickle-deliver on a future rearm.
+  //
+  // Applies to ALL recipients (persistent AND non-persistent): stale wakes for
+  // a dead ephemeral agent serve no purpose — the agent will never auto-wake and
+  // deliver() would return queued anyway. Cancelling cleans up indefinitely
+  // accumulating rows for ended ephemeral recipients.
+  //
+  // Crash-recovery: cancels commit before deliverAndMark, so if the process
+  // dies between the two calls the stale rows stay cancelled and the latest
+  // row remains pending — it will be retried on the next rearm. No row is
+  // lost; at worst the latest is delivered twice (idempotent at the recipient).
   for (const bucket of transientByRecipient.values()) {
     const staleIds = bucket.slice(0, -1).map((n) => n.id);
     if (staleIds.length > 0) deps.store.cancelBulk(staleIds);
@@ -259,7 +269,9 @@ export async function rearmPending(deps: RearmPendingDeps, agentId?: string): Pr
     await deliverAndMark(deps, latest);
   }
 
-  // Deliver all durable rows.
+  // Deliver all durable rows. Order within a recipient's bucket is oldest-first
+  // (listPending ASC). Cross-recipient delivery order is unguaranteed — durable
+  // rows for different recipients may interleave depending on bucket iteration.
   for (const bucket of durableByRecipient.values()) {
     for (const n of bucket) {
       await deliverAndMark(deps, n);
