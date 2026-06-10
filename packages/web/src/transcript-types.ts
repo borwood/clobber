@@ -140,27 +140,6 @@ function truncatePreview(value: string): string {
 // of consecutive *visible* assistant lines, the label renders only on the
 // first. The run is reset by any visible non-assistant line (user, notification,
 // or — when showSystem is on — a system line like tool_result/attachment).
-// Invisible lines are transparent: filtered (claude's interrupt marker) is
-// always invisible; system lines are invisible when showSystem is off.
-// Thinking-pulse lines are also transparent — the chip is a prelude to the
-// assistant's response, not a separate turn from the user's mental model.
-export function shouldShowAssistantLabel(
-  classified: readonly Classified[],
-  idx: number,
-  opts: { readonly showSystem: boolean },
-): boolean {
-  if (classified[idx]?.kind !== "assistant") return true;
-  for (let i = idx - 1; i >= 0; i--) {
-    const prev = classified[i];
-    if (prev === undefined) return true;
-    if (prev.kind === "filtered") continue;
-    if (prev.kind === "thinking-pulse") continue;
-    if (prev.kind === "system" && !opts.showSystem) continue;
-    return prev.kind !== "assistant";
-  }
-  return true;
-}
-
 export function classifyLine(line: TranscriptLine): Classified {
   const type = line["type"];
   const typeLabel = typeof type === "string" ? type : "unknown";

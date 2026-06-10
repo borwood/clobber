@@ -51,7 +51,7 @@ async function render(question: OpenQuestion, onAnswer: (a: string) => Promise<v
 }
 
 describe("AskWidget panel", () => {
-  it("renders every question + each option's preview and gates Send-all until all answered", async () => {
+  it("tabs each question, switches on tab click, and gates Send-all across tabs until all answered", async () => {
     const answers: string[] = [];
     const question: OpenQuestion = {
       id: "q-multi",
@@ -79,19 +79,25 @@ describe("AskWidget panel", () => {
       answers.push(a);
     });
 
-    // Both questions render, and the focused option's rich preview is visible.
+    // Multi-question: both questions are tabs (headers present), but only the
+    // active question's panel renders — Q1 + its rich preview show, Q2 is
+    // behind its tab.
+    expect(container.textContent).toContain("Store");
+    expect(container.textContent).toContain("Release");
     expect(container.textContent).toContain("Which datastore?");
-    expect(container.textContent).toContain("Which release strategy?");
     expect(container.textContent).toContain("CREATE TABLE foo(...)");
+    expect(container.textContent).not.toContain("Which release strategy?");
 
     // Nothing answered → Send disabled.
     expect(sendButton().disabled).toBe(true);
 
-    // Answer only Q1 → still gated on Q2.
+    // Answer only Q1 (active tab) → still gated on Q2.
     await click("Sqlite");
     expect(sendButton().disabled).toBe(true);
 
-    // Answer Q2 → Send enabled, and it submits a full two-answer envelope.
+    // Switch to the Release tab → Q2's panel now renders; answer it.
+    await click("Release");
+    expect(container.textContent).toContain("Which release strategy?");
     await click("RollForward");
     expect(sendButton().disabled).toBe(false);
     await act(async () => {

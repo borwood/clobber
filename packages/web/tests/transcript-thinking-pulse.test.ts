@@ -1,15 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import {
-  classifyLine,
-  shouldShowAssistantLabel,
-  type Classified,
-} from "../src/transcript-types.ts";
-
-function classify(...lines: object[]): Classified[] {
-  return lines.map((l) => classifyLine(l as Record<string, unknown>));
-}
-
-const userLine = { type: "user", message: { role: "user", content: "hi" } };
+import { classifyLine } from "../src/transcript-types.ts";
 
 const thinkingOnlyAssistant = (timestamp = "2026-05-07T00:00:00Z") => ({
   type: "assistant",
@@ -69,22 +59,5 @@ describe("classifyLine: thinking-pulse", () => {
     expect(c.kind).toBe("thinking-pulse");
     if (c.kind !== "thinking-pulse") return;
     expect(c.timestamp).toBeNull();
-  });
-});
-
-describe("shouldShowAssistantLabel: thinking-pulse is transparent", () => {
-  it("a thinking-pulse between two assistants does NOT reset the run", () => {
-    const c = classify(
-      assistantWithText("a"),
-      thinkingOnlyAssistant(),
-      assistantWithText("b"),
-    );
-    expect(shouldShowAssistantLabel(c, 0, { showSystem: false })).toBe(true);
-    expect(shouldShowAssistantLabel(c, 2, { showSystem: false })).toBe(false);
-  });
-
-  it("a thinking-pulse right after a user message is the first in the run for the next assistant", () => {
-    const c = classify(userLine, thinkingOnlyAssistant(), assistantWithText("a"));
-    expect(shouldShowAssistantLabel(c, 2, { showSystem: false })).toBe(true);
   });
 });
