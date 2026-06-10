@@ -29,6 +29,7 @@ import { createAgentStore } from "../src/agent-store.ts";
 import { createSessionStore } from "../src/session-store.ts";
 import { createAgentRegistry } from "../src/agent-registry.ts";
 import { createNotificationStore } from "../src/notification-store.ts";
+import { createAgentMessageStore } from "../src/agent-message-store.ts";
 import { rearmPending } from "../src/notification-dispatch.ts";
 import { seedWorkspaceRoles } from "../src/seed-workspace-roles.ts";
 import { createTestClock } from "../src/clock.ts";
@@ -154,6 +155,7 @@ function makeRearmHarness(opts: { withOwner: boolean } = { withOwner: true }): R
       const agent = agents.get(agentId);
       return agent?.spawner_agent_id ?? null;
     },
+    agentMessages: createAgentMessageStore(db),
   };
 
   return {
@@ -212,16 +214,23 @@ describe("rearmPending — ephemeral resume-on-confirm (#621)", () => {
     h.db.close();
   });
 
-  it("(a2) idempotent: second rearmPending call → still exactly one confirm notification (logical_key dedup)", async () => {
+  it("(a2) logical_key dedup prevents nagware: two rearmPending calls → exactly one confirm row", async () => {
+    // Seed a DURABLE row and make attachSession fail so the confirm-resume
+    // notification (created on first rearm) stays pending across both calls.
+    // On second rearm, maybeEmitConfirmToOwner tries to create another
+    // confirm-resume — logical_key dedup must suppress it to exactly one row.
     const h = makeRearmHarness({ withOwner: true });
-    seedDeadSession(h, "dead-worker-a2");
-    h.store.create(transientReq(h.workerAgentId, "wake-2"), T0);
+    const failAttach: AttachSessionFn = async () => ({ ok: false, status: 422 as const, error: "runtime requires a prompt" as const });
+    const rearmDeps: RearmPendingDeps = { ...h.rearmDeps, attachSession: failAttach };
 
-    await rearmPending(h.rearmDeps);
-    await rearmPending(h.rearmDeps);
+    seedDeadSession(h, "dead-worker-a2");
+    h.store.create(durableReq(h.workerAgentId, "msg-a2"), T0);
+
+    await rearmPending(rearmDeps);
+    await rearmPending(rearmDeps);
 
     const confirmNotifs = h.store.listForAgent(h.managerAgentId).filter((n) => n.type === "confirm-resume");
-    // Must not produce a second confirm row — logical_key dedup prevents nagware.
+    // Second rearm must not produce a duplicate — logical_key dedup absorbs it.
     expect(confirmNotifs).toHaveLength(1);
 
     h.db.close();
@@ -435,9 +444,11 @@ describe("POST /sessions/:id/confirm-resume (#621)", () => {
     h.notifications.create(durableReq(h.workerAgentId, "msg-alpha"), T0 + 3000);
     h.notifications.create(durableReq(h.workerAgentId, "msg-beta"), T0 + 4000);
 
+    const tok = createAgentMessageStore(h.db).issue({ originator_session_id: "dead-w-c1", recipient_session_id: "dead-w-c1" });
     const res = await h.server.inject({
       method: "POST",
       url: `/sessions/dead-w-c1/confirm-resume`,
+      payload: { token: tok.token },
     });
 
     expect(res.statusCode).toBe(200);
@@ -470,9 +481,11 @@ describe("POST /sessions/:id/confirm-resume (#621)", () => {
     h.notifications.create(durableReq(h.workerAgentId, "msg-d1"), T0);
     h.notifications.create(transientReq(h.workerAgentId, "wake-d1"), T0 + 1000);
 
+    const tok = createAgentMessageStore(h.db).issue({ originator_session_id: "dead-w-d1", recipient_session_id: "dead-w-d1" });
     const res = await h.server.inject({
       method: "POST",
       url: `/sessions/dead-w-d1/decline-resume`,
+      payload: { token: tok.token },
     });
 
     expect(res.statusCode).toBe(200);
@@ -491,6 +504,48 @@ describe("POST /sessions/:id/confirm-resume (#621)", () => {
     expect(pending.length).toBeGreaterThan(0);
 
     h.db.close();
+  });
+
+  it("confirm-resume without token → 403", async () => {
+    const h = endpointHarness;
+    seedDeadWorkerSession(h, "dead-w-403-a");
+    const res = await h.server.inject({
+      method: "POST",
+      url: `/sessions/dead-w-403-a/confirm-resume`,
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("confirm-resume with wrong token → 403", async () => {
+    const h = endpointHarness;
+    seedDeadWorkerSession(h, "dead-w-403-b");
+    const res = await h.server.inject({
+      method: "POST",
+      url: `/sessions/dead-w-403-b/confirm-resume`,
+      payload: { token: "notarealtoken" },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("decline-resume without token → 403", async () => {
+    const h = endpointHarness;
+    seedDeadWorkerSession(h, "dead-w-403-c");
+    const res = await h.server.inject({
+      method: "POST",
+      url: `/sessions/dead-w-403-c/decline-resume`,
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("decline-resume with wrong token → 403", async () => {
+    const h = endpointHarness;
+    seedDeadWorkerSession(h, "dead-w-403-d");
+    const res = await h.server.inject({
+      method: "POST",
+      url: `/sessions/dead-w-403-d/decline-resume`,
+      payload: { token: "notarealtoken" },
+    });
+    expect(res.statusCode).toBe(403);
   });
 
   it("confirm-resume on unknown session → 404", async () => {

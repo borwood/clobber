@@ -12,6 +12,7 @@ import { endSession } from "./session-lifecycle.ts";
 import type { LayoutEventStore } from "./layout-event-store.ts";
 import type { EventStore } from "./event-store.ts";
 import type { Clock } from "./clock.ts";
+import type { AgentMessageStore } from "./agent-message-store.ts";
 
 /**
  * `clobber cycle` (#320, #510) — spawn-first re-seat that guarantees exactly
@@ -39,6 +40,8 @@ export interface CycleDeps extends SpawnPipelineDeps {
   readonly sleep: (ms: number) => Promise<void>;
   // Injectable clock so cycle-reseat rearm timing is testable.
   readonly clock: Clock;
+  // Required by rearmPending for confirm-resume token minting (#621).
+  readonly agentMessages: AgentMessageStore;
 }
 
 export interface CycleInput {
@@ -83,6 +86,7 @@ export async function executeCycle(deps: CycleDeps, input: CycleInput): Promise<
       store: deps.notifications,
       clock: deps.clock,
       resolveOwner: (agentId) => deps.agents.get(agentId)?.spawner_agent_id ?? null,
+      agentMessages: deps.agentMessages,
     },
     agent.id,
   ).catch((err) => console.error("[clobber] rearmPending cycle error:", err));

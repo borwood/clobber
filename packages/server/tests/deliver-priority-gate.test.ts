@@ -26,6 +26,7 @@ import { createAgentStore } from "../src/agent-store.ts";
 import { createSessionStore } from "../src/session-store.ts";
 import { createAgentRegistry } from "../src/agent-registry.ts";
 import { createNotificationStore } from "../src/notification-store.ts";
+import { createAgentMessageStore } from "../src/agent-message-store.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
 import { deliver, rearmPending, createNotificationDispatcher } from "../src/notification-dispatch.ts";
 import { dispatchTrigger } from "../src/trigger-dispatch.ts";
@@ -257,7 +258,7 @@ describe("deliver() priority+persistence gate (#605)", () => {
     // low-priority notification for an asleep persistent agent must survive
     // rearmPending un-delivered (stays pending) and un-duplicated (exactly 1 row).
     const h = makeHarness();
-    const rearmDeps: RearmPendingDeps = { ...h.deliverDeps, store: h.store, clock: h.clock, resolveOwner: () => null };
+    const rearmDeps: RearmPendingDeps = { ...h.deliverDeps, store: h.store, clock: h.clock, resolveOwner: () => null, agentMessages: createAgentMessageStore(h.db) };
 
     const n = makeNotif(h, h.managerAgentId, "low");
     expect(h.store.listPending()).toHaveLength(1);

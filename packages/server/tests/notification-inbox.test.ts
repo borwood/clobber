@@ -19,6 +19,7 @@ import { createAgentStore } from "../src/agent-store.ts";
 import { createSessionStore } from "../src/session-store.ts";
 import { createAgentRegistry } from "../src/agent-registry.ts";
 import { createNotificationStore } from "../src/notification-store.ts";
+import { createAgentMessageStore } from "../src/agent-message-store.ts";
 import { createNotificationDispatcher, deliver, rearmPending } from "../src/notification-dispatch.ts";
 import { composeUnackedNotifications } from "../src/notification-inbox.ts";
 import { seedWorkspaceRoles } from "../src/seed-workspace-roles.ts";
@@ -143,6 +144,7 @@ function makeDispatchHarness(attachOverride?: AttachSessionFn): DispatchHarness 
     store,
     clock,
     resolveOwner: () => null,
+    agentMessages: createAgentMessageStore(db),
   };
 
   return { db, store, deliverDeps, rearmDeps, agentId: agent.id, workspaceId: ws.id, roleId: roleRow.id, spawnCalls, sessions, registry };
@@ -345,7 +347,7 @@ describe("notification inbox — rearmPending (survive process boundaries)", () 
       attachSession,
       resumeEndedSession: async () => ({ ok: false, status: 409, error: "runtime does not support resume" as const }),
     };
-    const rearmDeps: RearmPendingDeps = { ...baseDeliverDeps, store, clock, resolveOwner: () => null };
+    const rearmDeps: RearmPendingDeps = { ...baseDeliverDeps, store, clock, resolveOwner: () => null, agentMessages: createAgentMessageStore(db) };
 
     // Both agents have pending notifications
     const { notification: n1 } = store.create(agentNotifReq(agent1.id, "for agent1"), T1);
@@ -427,6 +429,7 @@ describe("notification inbox — rearmPending (survive process boundaries)", () 
       store,
       clock,
       resolveOwner: () => null,
+      agentMessages: createAgentMessageStore(db),
     };
 
     // Must not reject — batch-isolation catches the throw and continues

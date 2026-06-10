@@ -194,6 +194,7 @@ export function registerAllRoutes(
     onWorkerDone,
     resumeEnded,
     notifications: deps.notificationStore,
+    agentMessages,
     // #385 — the auth gate (whoami/status/report/cycle/sessions…) resolves a
     // commit-pinned role's allow-list through the cache, so these routes don't 500.
     ...roleEmbodiment,
@@ -279,6 +280,7 @@ export function registerAllRoutes(
     spawnPipelineDeps,
     resumeEnded,
     rearmDeps: deps.rearmDeps,
+    agentMessages,
   });
   registerNotificationsRoutes(app, {
     notifications: deps.notificationStore,

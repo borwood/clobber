@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import type { SessionStore } from "../session-store.ts";
 import type { AgentStore } from "../agent-store.ts";
 import type { RoleStore } from "../role-store.ts";
@@ -6,10 +7,13 @@ import type { WorkspaceStore } from "../workspace-store.ts";
 import { rearmPending, type RearmPendingDeps } from "../notification-rearm.ts";
 import { attachSessionToAgent, type SpawnPipelineDeps } from "../spawn-pipeline.ts";
 import type { ResumeEndedResult } from "../resume-pipeline.ts";
+import type { AgentMessageStore } from "../agent-message-store.ts";
 
 interface IdParam {
   id: string;
 }
+
+const ResumeBodySchema = z.object({ token: z.string().min(1) });
 
 export interface SessionResumeRouteDeps {
   readonly sessions: SessionStore;
@@ -18,10 +22,25 @@ export interface SessionResumeRouteDeps {
   readonly workspaces: WorkspaceStore;
   readonly spawnPipelineDeps: SpawnPipelineDeps;
   readonly rearmDeps: RearmPendingDeps;
+  readonly agentMessages: AgentMessageStore;
   readonly resumeEnded: (input: {
     readonly sessionId: string;
     readonly prompt: string | undefined;
   }) => Promise<ResumeEndedResult>;
+}
+
+function validateToken(
+  deps: SessionResumeRouteDeps,
+  sessionId: string,
+  rawBody: unknown,
+): { token: string } | { error: string; status: number } {
+  const parsed = ResumeBodySchema.safeParse(rawBody);
+  if (!parsed.success) return { error: "token required", status: 403 };
+  const { token } = parsed.data;
+  const row = deps.agentMessages.get(token);
+  if (row === null || row.originator_session_id !== sessionId) return { error: "invalid token", status: 403 };
+  if (row.redeemed_at !== null) return { error: "token already used", status: 403 };
+  return { token };
 }
 
 export function registerSessionResumeRoutes(app: FastifyInstance, deps: SessionResumeRouteDeps): void {
@@ -39,6 +58,13 @@ export function registerSessionResumeRoutes(app: FastifyInstance, deps: SessionR
         reply.code(409);
         return { error: "session is still active" };
       }
+
+      const tokenResult = validateToken(deps, sessionId, request.body);
+      if ("error" in tokenResult) {
+        reply.code(tokenResult.status);
+        return { error: tokenResult.error };
+      }
+
       if (session.agent_id === undefined) {
         reply.code(422);
         return { error: "session has no agent" };
@@ -59,6 +85,10 @@ export function registerSessionResumeRoutes(app: FastifyInstance, deps: SessionR
         reply.code(422);
         return { error: "workspace not found" };
       }
+
+      // Consume the token before mutating state so a retry with the same token
+      // is rejected even if the spawn below fails (prevents double-resume).
+      deps.agentMessages.redeem(tokenResult.token);
 
       // Try the native runtime resume (session-history-preserving) first.
       // Falls back to a fresh attach when the session has no provider_thread_id
@@ -104,6 +134,14 @@ export function registerSessionResumeRoutes(app: FastifyInstance, deps: SessionR
         reply.code(409);
         return { error: "session is still active" };
       }
+
+      const tokenResult = validateToken(deps, sessionId, request.body);
+      if ("error" in tokenResult) {
+        reply.code(tokenResult.status);
+        return { error: tokenResult.error };
+      }
+      deps.agentMessages.redeem(tokenResult.token);
+
       // Rows stay pending — the owner chose to leave the worker's backlog for later.
       return { ok: true };
     },

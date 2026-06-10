@@ -146,6 +146,7 @@ export function buildServerDeps(opts: ServerOptions) {
     store: notificationStore,
     clock,
     resolveOwner: (agentId) => opts.agents.get(agentId)?.spawner_agent_id ?? null,
+    agentMessages,
   };
 
   return {

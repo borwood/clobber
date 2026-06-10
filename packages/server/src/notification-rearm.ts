@@ -2,6 +2,7 @@ import type { CreateNotification, Notification } from "@clobber/shared";
 import { deliver, type DeliverDeps, type DeliveryOutcome } from "./notification-dispatch.ts";
 import type { NotificationStore } from "./notification-store.ts";
 import type { Clock } from "./clock.ts";
+import type { AgentMessageStore } from "./agent-message-store.ts";
 
 export interface RearmPendingDeps extends DeliverDeps {
   readonly store: NotificationStore;
@@ -11,6 +12,9 @@ export interface RearmPendingDeps extends DeliverDeps {
   // Default production wiring: read spawner_agent_id from the agents table.
   // The seam lets future roles override escalation logic without engine changes.
   readonly resolveOwner: (agentId: string) => string | null;
+  // Used to mint a single-use authorization token embedded in the confirm-resume
+  // tag. The endpoint requires+consumes it so only the notified owner can resume.
+  readonly agentMessages: AgentMessageStore;
 }
 
 // Re-arm pending rows through the existing deliver() core. Called on server
@@ -140,9 +144,19 @@ async function maybeEmitConfirmToOwner(deps: RearmPendingDeps, recipientAgentId:
   const ownerAgentId = deps.resolveOwner(recipientAgentId);
   if (ownerAgentId === null) return;
 
-  // Use the latest ended session as the authoritative dead session ID.
+  // No ended session → nothing to resume; skip confirm emission.
   const lastEnded = deps.sessions.latestEndedForAgent(recipientAgentId);
-  const deadSessionId = lastEnded !== null ? lastEnded.id : recipientAgentId;
+  if (lastEnded === null) return;
+  const deadSessionId = lastEnded.id;
+
+  // Mint a single-use token bound to the dead session. The endpoint validates
+  // this token before resuming so only the notified owner can trigger a resume.
+  // If the logical_key dedup fires below (notification already exists), the
+  // token becomes an orphan — harmless, since it will never be redeemed.
+  const issued = deps.agentMessages.issue({
+    originator_session_id: deadSessionId,
+    recipient_session_id: deadSessionId,
+  });
 
   const req: CreateNotification = {
     type: "confirm-resume",
@@ -151,7 +165,7 @@ async function maybeEmitConfirmToOwner(deps: RearmPendingDeps, recipientAgentId:
     priority: "high",
     payload: {
       body: `Agent ${recipientAgentId} has queued notifications but its session has ended. Confirm to resume or decline to leave rows queued.`,
-      tag: { kind: "confirm-resume", attrs: { dead_agent_id: recipientAgentId, dead_session_id: deadSessionId } },
+      tag: { kind: "confirm-resume", attrs: { dead_agent_id: recipientAgentId, dead_session_id: deadSessionId, token: issued.token } },
     },
     provenance: {
       source_kind: "confirm-resume",

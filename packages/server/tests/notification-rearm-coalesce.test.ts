@@ -25,6 +25,7 @@ import { createAgentStore } from "../src/agent-store.ts";
 import { createSessionStore } from "../src/session-store.ts";
 import { createAgentRegistry } from "../src/agent-registry.ts";
 import { createNotificationStore } from "../src/notification-store.ts";
+import { createAgentMessageStore } from "../src/agent-message-store.ts";
 import { rearmPending } from "../src/notification-dispatch.ts";
 import { seedWorkspaceRoles } from "../src/seed-workspace-roles.ts";
 import { createTestClock } from "../src/clock.ts";
@@ -109,7 +110,7 @@ function makeHarness(): Harness {
     }),
   };
 
-  const rearmDeps: RearmPendingDeps = { ...deliverDeps, store, clock, resolveOwner: () => null };
+  const rearmDeps: RearmPendingDeps = { ...deliverDeps, store, clock, resolveOwner: () => null, agentMessages: createAgentMessageStore(db) };
 
   return {
     db,
