@@ -81,7 +81,9 @@ describe("completion-wake correctness (#619 + #620)", () => {
     expect(after1.length).toBe(1);
     expect(after1[0]!.dispatch_outcome).toBe("injected");
 
-    // Worker re-tasked on the same session, second completion.
+    // Worker re-tasked on the same session: goes back to working, then done again.
+    // The intermediate "working" post resets prevStatus so the second done fires.
+    await postStatus(h, worker, "working", "assigned PR #200");
     await postStatus(h, worker, "done", "PR #200 opened");
     const after2 = workerDoneDispatches(h, boot.managerAgentId);
     // listForAgent is newest-first; [0] is the second done.
@@ -91,51 +93,21 @@ describe("completion-wake correctness (#619 + #620)", () => {
     await teardown(h);
   });
 
-  it("(d) true duplicate — same completion fired twice → second emission deduped", async () => {
-    // #620 regression guard: after the per-completion re-grain, a genuine
-    // double-emission of the SAME completion (same status log row → same
-    // completionId → same logical_key) must still be deduplicated.
+  it("(d) double-post — two rapid HTTP done posts → exactly one notification", async () => {
+    // #620 HIGH regression guard: the route-level gate (prevStatus?.state !== "done")
+    // skips onWorkerDone on the second rapid post so a network retry or accidental
+    // re-send produces only one dispatch and one notification for the manager.
+    // Tests through the real HTTP route (not via notifications.create directly).
     const h = buildHarness(new Date("2026-06-10T10:00:00.000Z"));
     const boot = await bootManager(h, repo.path, [{ kind: "worker-done" }]);
 
-    const worker = await spawnWorker(h, boot.workspaceId, "issue-620-dedup");
+    const worker = await spawnWorker(h, boot.workspaceId, "issue-620-double-post");
     await postStatus(h, worker, "done", "PR opened");
+    await postStatus(h, worker, "done", "PR opened again"); // rapid retry / double-send
 
-    // Fetch the logical_key that the scheduler stored for this notification.
-    const notifRow = h.db
-      .prepare(
-        "SELECT logical_key FROM notifications WHERE recipient_agent_id = ? ORDER BY created_at DESC LIMIT 1",
-      )
-      .get(boot.managerAgentId) as { logical_key: string | null } | null;
-    expect(notifRow).not.toBeNull();
-    expect(notifRow!.logical_key).not.toBeNull();
+    const dispatches = workerDoneDispatches(h, boot.managerAgentId);
+    expect(dispatches.length).toBe(1);
 
-    // Reverse-engineer the source_id: logical_key = "trigger:<source_id>:<recipientAgentId>"
-    const lk = notifRow!.logical_key!;
-    const sourceId = lk.slice("trigger:".length, lk.length - boot.managerAgentId.length - 1);
-    expect(sourceId.startsWith("worker-done:")).toBe(true);
-
-    // Simulate the double-emission by attempting to insert a notification with the
-    // identical provenance. The notification store's ON CONFLICT gate must return
-    // created=false (skipped-duplicate).
-    const { created } = h.notifications.create(
-      {
-        type: "trigger",
-        category: "transient",
-        recipient: { kind: "agent", agent_id: boot.managerAgentId },
-        priority: "high",
-        payload: {
-          body: "duplicate fire",
-          tag: { kind: "trigger", attrs: { via: "worker-done" } },
-        },
-        provenance: { source_kind: "trigger", source_id: sourceId },
-        metadata: {},
-      },
-      h.clock.now().getTime() + 1,
-    );
-    expect(created).toBe(false);
-
-    // Only 1 non-cancelled notification row must exist for the manager.
     const count = (
       h.db
         .prepare(
@@ -145,6 +117,37 @@ describe("completion-wake correctness (#619 + #620)", () => {
     ).c;
     expect(count).toBe(1);
 
+    await teardown(h);
+  });
+
+  it("(e) sleeping manager (no live session) — worker-done notification is queued", async () => {
+    // Regression guard for the sleeping-manager path post-#619/#620: worker-done
+    // must reach the manager even when the manager has no live session.
+    // dispatchTrigger creates the notification synchronously (store.create runs
+    // before deliver's async spawn), so we can assert on it without draining.
+    const h = buildHarness(new Date("2026-06-10T10:00:00.000Z"));
+    const boot = await bootManager(h, repo.path, [{ kind: "worker-done" }]);
+
+    // End the manager session — it is now sleeping (no active session).
+    await postHook(h, boot.managerSessionId, "SessionEnd");
+
+    const worker = await spawnWorker(h, boot.workspaceId, "sleeping-manager-test");
+    await postStatus(h, worker, "done", "PR opened");
+
+    // store.create is synchronous inside dispatcher.emit, so the notification row
+    // exists immediately after the route handler returns — no drain needed.
+    const notifCount = (
+      h.db
+        .prepare(
+          "SELECT COUNT(*) as c FROM notifications WHERE recipient_agent_id = ? AND state != 'cancelled'",
+        )
+        .get(boot.managerAgentId) as { c: number }
+    ).c;
+    expect(notifCount).toBe(1);
+
+    // Drain the void fire() chain before teardown to prevent DB-closed errors
+    // from the async deliver/spawn path still in-flight.
+    await new Promise<void>((r) => setTimeout(r, 50));
     await teardown(h);
   });
 });

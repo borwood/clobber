@@ -24,7 +24,7 @@ export interface CompletionWakeSchedulers {
   clearAgent(agentId: string): void;
   clearAll(): void;
   fireSessionEnded(workspaceId: string, finishedSessionId: string): Promise<DispatchResult>;
-  fireWorkerDone(workspaceId: string, finishedSessionId: string): Promise<DispatchResult>;
+  fireWorkerDone(workspaceId: string, finishedSessionId: string, completionId?: number): Promise<DispatchResult>;
   // Drains both schedulers' busy-queues on the target's next idle.
   flushPendingWakes(agentId: string): Promise<void>;
 }
@@ -44,17 +44,19 @@ export function createCompletionWakeSchedulers(
       ...(report !== null ? { completionId: report.id } : {}),
     };
   };
-  const buildDoneItem = (sessionId: string): CompletionWakeItem | null => {
+  const buildDoneItem = (sessionId: string, completionId?: number): CompletionWakeItem | null => {
     const session = deps.sessions.get(sessionId);
     if (session === null) return null;
     const status = deps.agentStatusLog.latestForSession(sessionId, "status");
+    // Use the pinned completionId from the route when provided. Pinning prevents
+    // a race where a second rapid post replaces "latest" before this read, which
+    // would give two fires the same row id → same logical_key → wrong dedup (#620 HIGH).
+    const resolvedId = completionId ?? (status !== null ? status.id : undefined);
     return {
       sessionId,
       label: session.label === undefined ? null : session.label,
       summary: status === null ? null : status.summary,
-      // #620: include the status log row id as a per-completion discriminator
-      // so a re-tasked worker's second done gets a distinct logical_key.
-      ...(status !== null ? { completionId: status.id } : {}),
+      ...(resolvedId !== undefined ? { completionId: resolvedId } : {}),
     };
   };
 
@@ -79,7 +81,9 @@ export function createCompletionWakeSchedulers(
       workerDone.clearAll();
     },
     fireSessionEnded: sessionEnded.fire,
-    fireWorkerDone: workerDone.fire,
+    fireWorkerDone(workspaceId, finishedSessionId, completionId) {
+      return workerDone.fire(workspaceId, finishedSessionId, completionId);
+    },
     async flushPendingWakes(agentId) {
       await sessionEnded.flushPendingWakes(agentId);
       await workerDone.flushPendingWakes(agentId);

@@ -49,8 +49,8 @@ export function buildServerDeps(opts: ServerOptions) {
   const onSessionEnded = (workspaceId: string, finishedSessionId: string): void => {
     void scheduler.fireSessionEnded(workspaceId, finishedSessionId);
   };
-  const onWorkerDone = (workspaceId: string, finishedSessionId: string): void => {
-    void scheduler.fireWorkerDone(workspaceId, finishedSessionId);
+  const onWorkerDone = (workspaceId: string, finishedSessionId: string, completionId: number): void => {
+    void scheduler.fireWorkerDone(workspaceId, finishedSessionId, completionId);
   };
 
   const spawnPipelineDeps: SpawnPipelineDeps = {

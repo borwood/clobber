@@ -69,7 +69,7 @@ export interface AgentRouteDeps {
   readonly sleep: (ms: number) => Promise<void>;
   readonly clock: Clock;
   readonly onSessionEnded: (workspaceId: string, finishedSessionId: string) => void;
-  readonly onWorkerDone: (workspaceId: string, finishedSessionId: string) => void;
+  readonly onWorkerDone: (workspaceId: string, finishedSessionId: string, completionId: number) => void;
   readonly resumeEnded: (input: { readonly sessionId: string; readonly prompt: string | undefined }) => Promise<ResumeEndedResult>;
   readonly notifications: NotificationStore;
 }
@@ -196,6 +196,10 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
         reply.code(400);
         return { error: "invalid status update", issues: parsed.error.issues };
       }
+      // Read current status before upserting — needed for the double-post gate below.
+      const prevStatus = parsed.data.state === "done"
+        ? deps.agentStatuses.get(session.id)
+        : null;
       deps.agentStatuses.upsert({
         session_id: session.id,
         state: parsed.data.state,
@@ -206,7 +210,7 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
       // delete, which terminates the session's process before the agent can
       // post status. Type narrowing for an invariant the runtime guarantees.
       const agentId = session.agent_id!;
-      deps.agentStatusLog.append({
+      const logEntry = deps.agentStatusLog.append({
         agent_id: agentId,
         session_id: session.id,
         kind: "status",
@@ -217,12 +221,18 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
       // A worker's `clobber status done` is its terminal handoff — the manager's
       // work-is-done wake keys on this transition (the worker idles after a PR
       // rather than ending, so session-ended never fires on the happy path). See #240.
-      // #619: gate on the poster being ephemeral — a persistent agent (the manager
-      // itself) posting done must not trigger a worker-done wake.
+      // #619: gate on the poster being ephemeral.
+      // #620 HIGH: pinning logEntry.id avoids the race where a second rapid post
+      // replaces "latest" before buildDoneItem reads it, producing two distinct
+      // completionIds for the same intended completion.
+      // #620 double-post: skip if the session was already in "done" state — prevents
+      // double-fire on rapid HTTP retries while still allowing re-tasked workers
+      // to fire again after returning through a non-done state.
       if (parsed.data.state === "done") {
         const posterRole = deps.roles.get(session.role_id);
-        if (posterRole !== null && !posterRole.persistent) {
-          deps.onWorkerDone(session.workspace_id, session.id);
+        if (posterRole === null) throw new Error(`role missing for live session: ${session.role_id}`);
+        if (!posterRole.persistent && prevStatus?.state !== "done") {
+          deps.onWorkerDone(session.workspace_id, session.id, logEntry.id);
         }
       }
       return { ok: true };

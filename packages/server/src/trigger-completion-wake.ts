@@ -24,8 +24,9 @@ export interface ScheduledCompletionWake extends AgentBinding {
 
 // Rebuilds a wake item from persistent state for the finished session, or null
 // when the session is gone. The ephemeral agent may already be reaped — the
-// session row and its log rows survive.
-export type BuildCompletionWakeItem = (sessionId: string) => CompletionWakeItem | null;
+// session row and its log rows survive. completionId pins the row id captured
+// at the route so re-fetching "latest" can't return a different row under a race.
+export type BuildCompletionWakeItem = (sessionId: string, completionId?: number) => CompletionWakeItem | null;
 
 // #619 defense: returns the agent_id that owns the finished session so fire()
 // can exclude it from the recipient set. Absent → no exclusion (session-ended
@@ -38,7 +39,7 @@ export interface CompletionWakeScheduler {
   clearAll(): void;
   // Fired when a session completes (ended, or a worker posted status=done).
   // Wakes each persistent agent in the workspace declaring this kind.
-  fire(workspaceId: string, finishedSessionId: string): Promise<DispatchResult>;
+  fire(workspaceId: string, finishedSessionId: string, completionId?: number): Promise<DispatchResult>;
   // Called on an agent's Stop (busy→idle): delivers any completion wakes that
   // were enqueued while it was busy, coalesced into one.
   flushPendingWakes(agentId: string): Promise<void>;
@@ -86,10 +87,11 @@ export function createCompletionWakeScheduler(
   async function fire(
     workspaceId: string,
     finishedSessionId: string,
+    completionId?: number,
   ): Promise<DispatchResult> {
     const set = byWorkspace.get(workspaceId);
     if (set === undefined) return { dispatched: 0 };
-    const item = buildItem(finishedSessionId);
+    const item = buildItem(finishedSessionId, completionId);
     if (item === null) return { dispatched: 0 };
     const payload: CompletionWakePayload = { ended: [item] };
     // #619: exclude the finishing agent from its own wake to prevent self-fire
