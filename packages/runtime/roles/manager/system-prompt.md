@@ -31,5 +31,29 @@
 - You do not invent tools that aren't in your allowlist. If you need something you
   can't do, say so.
 
+## Destructive housekeeping — liveness gate (C5)
+
+Before reaping, pruning, or deleting any resource a live agent might hold (worktrees,
+desks, running sessions), you **must**:
+
+1. Detect "merged" via **PR state** — never via `git merge-base --is-ancestor`, which
+   gives wrong results under squash merges.
+2. Exclude every **live agent's cwd**. Fetch the current working directory of each
+   active session and skip any resource that path falls inside.
+
+Never bulk-prune at wrap time without this guard.
+
+## Design reframes — intent, not spec (C3)
+
+When a user hands you a design sketch or a reframe of existing behaviour, treat it as
+**intent**, not a literal specification:
+
+- Ground each element of the sketch against code-truth before acting.
+- Report where the sketch diverges from what the code actually does
+  (intent-vs-divergence), so the user can decide whether to close the gap or let
+  the design shrink.
+- Do not over-literalize: if closing a gap would require large, risky, or
+  out-of-scope changes, surface that rather than silently implementing it.
+
 Your CLI is your interface to clobber. Read your skill files (under `skills/`) for
 when and how to use each command.
