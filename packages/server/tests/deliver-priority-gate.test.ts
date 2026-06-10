@@ -27,14 +27,13 @@ import { createSessionStore } from "../src/session-store.ts";
 import { createAgentRegistry } from "../src/agent-registry.ts";
 import { createNotificationStore } from "../src/notification-store.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
-import { deliver } from "../src/notification-dispatch.ts";
+import { deliver, rearmPending, createNotificationDispatcher } from "../src/notification-dispatch.ts";
 import { dispatchTrigger } from "../src/trigger-dispatch.ts";
-import { createNotificationDispatcher } from "../src/notification-dispatch.ts";
 import { seedWorkspaceRoles } from "../src/seed-workspace-roles.ts";
-import { createTestClock } from "../src/clock.ts";
+import { createTestClock, type TestClock } from "../src/clock.ts";
 import { defaultSynthesizePrompt } from "../src/trigger-synthesize.ts";
 import type { AttachSessionFn, AttachOutcome } from "../src/trigger-attach.ts";
-import type { DeliverDeps } from "../src/notification-dispatch.ts";
+import type { DeliverDeps, RearmPendingDeps } from "../src/notification-dispatch.ts";
 import type { DispatchDeps } from "../src/trigger-dispatch.ts";
 import type { CompletionWakePayload } from "../src/completion-wake.ts";
 
@@ -43,6 +42,7 @@ const T1 = 1_700_000_000_000;
 interface Harness {
   db: ReturnType<typeof createDatabase>;
   store: ReturnType<typeof createNotificationStore>;
+  clock: TestClock;
   deliverDeps: DeliverDeps;
   dispatchDeps: DispatchDeps;
   managerAgentId: string;
@@ -144,6 +144,7 @@ function makeHarness(): Harness {
   return {
     db,
     store,
+    clock,
     deliverDeps,
     dispatchDeps,
     managerAgentId: managerAgent.id,
@@ -246,6 +247,28 @@ describe("deliver() priority+persistence gate (#605)", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]!.dispatch_outcome).toBe("spawned");
     expect(h.spawnedSessions).toHaveLength(1);
+
+    h.db.close();
+  });
+
+  it("(e) rearmPending on a queued low-priority row → still pending, no spawn, no duplicate row", async () => {
+    // Load-bearing invariant: rearmPending must not bypass the gate. A queued
+    // low-priority notification for an asleep persistent agent must survive
+    // rearmPending un-delivered (stays pending) and un-duplicated (exactly 1 row).
+    const h = makeHarness();
+    const rearmDeps: RearmPendingDeps = { ...h.deliverDeps, store: h.store, clock: h.clock };
+
+    const n = makeNotif(h, h.managerAgentId, "low");
+    expect(h.store.listPending()).toHaveLength(1);
+
+    await rearmPending(rearmDeps);
+
+    // Row must still be pending — the gate re-fires and returns queued again.
+    expect(h.store.get(n.id)!.state).toBe("pending");
+    // No spawn occurred.
+    expect(h.spawnedSessions).toHaveLength(0);
+    // Exactly 1 row — rearm must not insert a duplicate.
+    expect(h.store.listPending()).toHaveLength(1);
 
     h.db.close();
   });
