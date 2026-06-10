@@ -15,9 +15,9 @@ describe("workerRole", () => {
     expect(workerRole.manifest.effort).toBe("high");
   });
 
-  it("ships the autonomous CLI allowlist (whoami, ask, status, report, reply)", () => {
+  it("ships the autonomous CLI allowlist (whoami, ask, status, report, reply, notify.list, notify.ack)", () => {
     expect([...workerRole.manifest.allowedCliCommands].sort()).toEqual(
-      ["ask", "reply", "report", "status", "whoami"],
+      ["ask", "notify.ack", "notify.list", "reply", "report", "status", "whoami"],
     );
   });
 
