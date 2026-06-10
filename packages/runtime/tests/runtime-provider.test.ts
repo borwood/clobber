@@ -74,6 +74,7 @@ describe("codexRuntimeProvider", () => {
       interrupt: false,
       resume: true,
       inSessionHabits: false,
+      requiresPrompt: true,
     });
   });
 
