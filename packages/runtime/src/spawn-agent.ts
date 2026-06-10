@@ -68,17 +68,11 @@ export function spawnAgent(opts: SpawnAgentOptions): SpawnedAgent {
   const bin = command.bin;
   const args = [...command.args];
   const env = opts.env === undefined ? process.env : opts.env;
-  let child: ChildProcess;
-  try {
-    child = spawn(bin, args, {
-      cwd: opts.cwd,
-      stdio: ["pipe", "pipe", "pipe"],
-      env,
-    });
-  } catch (e) {
-    cleanupOnce();
-    throw e;
-  }
+  const child = spawn(bin, args, {
+    cwd: opts.cwd,
+    stdio: ["pipe", "pipe", "pipe"],
+    env,
+  });
 
   if (child.pid === undefined) {
     child.on("error", () => {});
