@@ -12,6 +12,7 @@ import type {
   AskQuestion,
   SequencedLayoutEvent,
   TranscriptLine,
+  Notification,
 } from "@clobber/shared";
 
 export type {
@@ -25,6 +26,7 @@ export type {
   AskOption,
   AskQuestion,
   TranscriptLine,
+  Notification,
 } from "@clobber/shared";
 
 export interface OpenQuestion {
@@ -225,4 +227,8 @@ export const api = {
     getJson<SequencedLayoutEvent[]>(
       `/workspaces/${encodeURIComponent(workspaceId)}/layout-events?since=${since}`,
     ),
+  listUserNotifications: () =>
+    getJson<{ notifications: readonly Notification[] }>("/notifications?recipient=user"),
+  ackNotification: (id: string) =>
+    postJson<{ ok: true }>(`/notifications/${encodeURIComponent(id)}/ack`, {}),
 };

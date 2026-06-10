@@ -25,6 +25,8 @@ export interface WorkspaceContextValue {
   readonly endSession: (id: string) => Promise<void>;
   readonly resumeSession: (id: string) => Promise<void>;
   readonly wakeAgent: (agentId: string, wakeProgram: string) => Promise<void>;
+  readonly userNotificationCount: number;
+  readonly userNotificationHasHigh: boolean;
 }
 
 const Ctx = createContext<WorkspaceContextValue | null>(null);

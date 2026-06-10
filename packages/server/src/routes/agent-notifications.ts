@@ -42,15 +42,16 @@ export function registerNotificationsRoutes(
 
   app.post("/notifications/:id/ack", async (request, reply) => {
     const { id } = z.object({ id: z.string().min(1) }).parse(request.params);
-    const changed = deps.notifications.markAcked(id, deps.clock.now().getTime());
-    if (!changed) {
-      const n = deps.notifications.get(id);
-      if (n === null) {
-        reply.code(404);
-        return { error: "notification not found" };
-      }
-      // Already acked — idempotent success
+    const n = deps.notifications.get(id);
+    if (n === null) {
+      reply.code(404);
+      return { error: "notification not found" };
     }
+    if (n.recipient.kind !== "user") {
+      reply.code(403);
+      return { error: "notification belongs to an agent" };
+    }
+    deps.notifications.markAcked(id, deps.clock.now().getTime());
     return { ok: true };
   });
 }

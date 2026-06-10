@@ -5,6 +5,7 @@ import { SessionsView } from "../views/SessionsView.tsx";
 import { SpawnView } from "../views/SpawnView.tsx";
 import { MailboxView } from "../views/MailboxView.tsx";
 import { WhiteboardView } from "../views/WhiteboardView.tsx";
+import { InboxView } from "../views/InboxView.tsx";
 import { ActivityDot } from "../components/ActivityDot.tsx";
 import { statusDot } from "../components/state-tones.ts";
 
@@ -13,6 +14,7 @@ const REGISTRY: { [K in ViewId["kind"]]: (view: Extract<ViewId, { kind: K }>) =>
   spawn: () => <SpawnView />,
   mailbox: (view) => <MailboxView sessionId={view.sessionId} />,
   whiteboard: () => <WhiteboardView />,
+  inbox: () => <InboxView />,
 };
 
 export function viewLabel(view: ViewId, sessions?: readonly SessionSummary[]): string {
@@ -27,22 +29,45 @@ export function viewLabel(view: ViewId, sessions?: readonly SessionSummary[]): s
     }
     case "whiteboard":
       return "Whiteboard";
+    case "inbox":
+      return "Inbox";
   }
 }
 
-// Tab label as a node: mailbox (agent transcript) tabs get a live status dot
-// prepended so the tab itself signals the agent's activity. Other kinds are
-// plain text. Re-derives from `sessions` on every poll, so the dot stays live.
-export function tabLabel(view: ViewId, sessions?: readonly SessionSummary[]): ReactNode {
-  const text = viewLabel(view, sessions);
-  if (view.kind !== "mailbox") return text;
-  const dot = statusDot(sessions?.find((s) => s.session_id === view.sessionId));
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <ActivityDot busy={dot.busy} intentDot={dot.dot} hollow={dot.hollow} />
-      {text}
-    </span>
-  );
+export interface TabLabelContext {
+  readonly sessions?: readonly SessionSummary[];
+  readonly inboxUnreadCount?: number;
+  readonly inboxHasHigh?: boolean;
+}
+
+// Tab label as a node: mailbox tabs get a live agent-status dot; inbox tabs
+// get an unread/high-prio dot. Other kinds are plain text.
+export function tabLabel(view: ViewId, ctx: TabLabelContext = {}): ReactNode {
+  const text = viewLabel(view, ctx.sessions);
+  if (view.kind === "mailbox") {
+    const dot = statusDot(ctx.sessions?.find((s) => s.session_id === view.sessionId));
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <ActivityDot busy={dot.busy} intentDot={dot.dot} hollow={dot.hollow} />
+        {text}
+      </span>
+    );
+  }
+  if (view.kind === "inbox" && (ctx.inboxUnreadCount ?? 0) > 0) {
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <span
+          className={[
+            "inline-block size-2 rounded-full",
+            ctx.inboxHasHigh === true ? "bg-danger" : "bg-accent",
+          ].join(" ")}
+          aria-hidden
+        />
+        {text}
+      </span>
+    );
+  }
+  return text;
 }
 
 export function ViewHost(props: { readonly view: ViewId }) {
@@ -57,5 +82,7 @@ export function ViewHost(props: { readonly view: ViewId }) {
       return <>{REGISTRY.mailbox(view)}</>;
     case "whiteboard":
       return <>{REGISTRY.whiteboard(view)}</>;
+    case "inbox":
+      return <>{REGISTRY.inbox(view)}</>;
   }
 }
