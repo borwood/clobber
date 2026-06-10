@@ -126,6 +126,26 @@ describe("compileSelfHabits", () => {
     );
     expect(Object.keys(compiled)).toHaveLength(0);
   });
+
+  // AC6 — compile continuity: session-length registers exactly two matcher-less
+  // handlers (PostToolUse + UserPromptSubmit); zero-habit output byte-identical.
+  it("AC6: self.session-length registers matcher-less handlers on PostToolUse AND UserPromptSubmit", () => {
+    const compiled = compileSelfHabits(
+      [habit({ path: "self.session-length", name: "guard", max_tokens: 100_000, action: { kind: "inject", hint: "h" } })],
+      HOOK_URL,
+    );
+    expect(compiled.PostToolUse).toHaveLength(1);
+    expect(compiled.PostToolUse?.[0]).toEqual({ hooks: [{ type: "http", url: HOOK_URL, async: false }] });
+    expect(compiled.UserPromptSubmit).toHaveLength(1);
+    expect(compiled.UserPromptSubmit?.[0]).toEqual({ hooks: [{ type: "http", url: HOOK_URL, async: false }] });
+    expect(compiled.PreToolUse).toBeUndefined();
+    expect(compiled.Stop).toBeUndefined();
+  });
+
+  it("AC6: zero-habit compile produces empty output (continuity: session-length adds nothing when absent)", () => {
+    const compiled = compileSelfHabits([], HOOK_URL);
+    expect(Object.keys(compiled)).toHaveLength(0);
+  });
 });
 
 describe("materializeBundle — habit compile (the continuity gate)", () => {

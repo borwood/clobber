@@ -86,4 +86,8 @@ export interface ServerOptions {
   // enriched habits are deterministically testable.
   readonly habitRandom?: () => number;
   readonly habitRunBash?: (command: string, cwd: string) => string;
+  // Injectable transcript tail-reader for session-length habit evaluation.
+  // Defaults to the bounded tailReadTranscript helper; override in tests to
+  // count invocations or control the returned lines.
+  readonly habitReadTranscriptTail?: (path: string) => Promise<import("@clobber/shared").TranscriptLine[]>;
 }

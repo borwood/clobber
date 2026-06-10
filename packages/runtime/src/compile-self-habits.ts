@@ -30,7 +30,10 @@ export interface SelfHabitEvent {
 // The single source of truth for self.path → Claude event. The receiver (server)
 // reuses this same forward map to decide which incoming events a habit reacts to,
 // so compile and evaluation can never drift.
-export function claudeEventForHabit(habit: Habit): SelfHabitEvent | null {
+//
+// Returns a single SelfHabitEvent, an array for paths that fire on multiple
+// events (self.session-length), or null for unregistered paths.
+export function claudeEventForHabit(habit: Habit): SelfHabitEvent | readonly SelfHabitEvent[] | null {
   switch (habit.path) {
     case "self.session-message":
       // role:"user" → UserPromptSubmit (wired); role:"assistant" → MessageDisplay (not wired).
@@ -44,6 +47,13 @@ export function claudeEventForHabit(habit: Habit): SelfHabitEvent | null {
       return habit.phase === "pre" ? { event: "PreCompact", nativeMatch: false } : null;
     case "self.stop":
       return { event: "Stop", nativeMatch: false };
+    case "self.session-length":
+      // Fires at PostToolUse (sub-turn cadence) AND UserPromptSubmit (session
+      // resumed without tool use still fires at the next turn). #184-A1.
+      return [
+        { event: "PostToolUse", nativeMatch: false },
+        { event: "UserPromptSubmit", nativeMatch: false },
+      ];
     default:
       return null;
   }
@@ -65,12 +75,15 @@ export function compileSelfHabits(
     const mapped = claudeEventForHabit(habit);
     if (mapped === null) continue;
 
-    const handler = buildHandler(habit, mapped, httpHook);
-    const existing = out[mapped.event];
-    if (existing === undefined) {
-      out[mapped.event] = [handler];
-    } else {
-      existing.push(handler);
+    const events: readonly SelfHabitEvent[] = Array.isArray(mapped) ? mapped : [mapped];
+    for (const ev of events) {
+      const handler = buildHandler(habit, ev, httpHook);
+      const existing = out[ev.event];
+      if (existing === undefined) {
+        out[ev.event] = [handler];
+      } else {
+        existing.push(handler);
+      }
     }
   }
 

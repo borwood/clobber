@@ -1,4 +1,5 @@
-import type { Habit, HookEventName, HookPayload, PathJail, PreToolUsePayload, Session } from "@clobber/shared";
+import type { Habit, HookEventName, InboundHookPayload, PathJail, PreToolUsePayload, Session, TranscriptLine } from "@clobber/shared";
+import { computeContextLength } from "@clobber/shared";
 import { claudeEventForHabit } from "@clobber/runtime";
 import type { SessionStore } from "./session-store.ts";
 import type { WorkspaceStore } from "./workspace-store.ts";
@@ -42,12 +43,22 @@ export interface HabitReceiverDeps {
   // Runs an `inject` habit's optional `bash`, returning stdout. Injected for the
   // same reason — the evaluator never shells out directly.
   readonly runBash: (command: string, cwd: string) => string;
+  // Bounded transcript tail-reader for self.session-length evaluation. Injected
+  // so tests can count invocations without shelling out to the real filesystem.
+  readonly readTranscriptTail: (path: string) => Promise<TranscriptLine[]>;
+  // Once-per-(session, habit) in-memory latch for self.session-length. Prevents
+  // re-firing on every tool call once the threshold is crossed. Server restart
+  // resets the latch → at most one duplicate reminder per restart; acceptable.
+  readonly latch: {
+    has(sessionId: string, habitName: string): boolean;
+    mark(sessionId: string, habitName: string): void;
+  };
 }
 
-export function evaluateSelfHabits(
-  payload: HookPayload,
+export async function evaluateSelfHabits(
+  payload: InboundHookPayload,
   deps: HabitReceiverDeps,
-): HabitInjection | HabitDenial | null {
+): Promise<HabitInjection | HabitDenial | null> {
   const session = deps.sessions.get(payload.session_id);
   if (session === null) return null;
 
@@ -61,7 +72,9 @@ export function evaluateSelfHabits(
     if (habit.action.kind === "refuse") {
       if (payload.hook_event_name !== "PreToolUse") continue;
       const mapped = claudeEventForHabit(habit);
-      if (mapped === null || mapped.event !== payload.hook_event_name) continue;
+      if (mapped === null) continue;
+      const events = Array.isArray(mapped) ? mapped : [mapped];
+      if (!events.some((ev) => ev.event === payload.hook_event_name)) continue;
       if (!matchesHabit(habit, payload, subject)) continue;
       if (habit.rand !== undefined && deps.random() >= habit.rand) continue;
       const predicate = expandSentinels(habit.action.predicate, session, deps);
@@ -78,9 +91,20 @@ export function evaluateSelfHabits(
     // cli and wake actions are the scheduler/CLI's concern (Phase 2+).
     if (habit.action.kind !== "inject") continue;
     const mapped = claudeEventForHabit(habit);
-    if (mapped === null || mapped.event !== payload.hook_event_name) continue;
+    if (mapped === null) continue;
+    const events = Array.isArray(mapped) ? mapped : [mapped];
+    if (!events.some((ev) => ev.event === payload.hook_event_name)) continue;
     if (!matchesHabit(habit, payload, subject)) continue;
     if (habit.rand !== undefined && deps.random() >= habit.rand) continue;
+
+    // self.session-length: bounded tail-read + threshold check + one-shot latch.
+    if (habit.path === "self.session-length") {
+      if (deps.latch.has(payload.session_id, habit.name)) continue;
+      const lines = await deps.readTranscriptTail(payload.transcript_path);
+      const contextLength = computeContextLength(lines);
+      if (contextLength === undefined || contextLength < habit.max_tokens) continue;
+      deps.latch.mark(payload.session_id, habit.name);
+    }
 
     hints.push(renderHint(habit.action.hint, habit.action.bash, payload.cwd, deps));
   }
@@ -97,7 +121,7 @@ export function evaluateSelfHabits(
 // The string a `match` regex tests, per event. Events with no match subject
 // (Stop, PreCompact, SessionStart) return null — a habit on those fires unless it
 // carries a predicate that needs a subject.
-function matchSubject(payload: HookPayload): string | null {
+function matchSubject(payload: InboundHookPayload): string | null {
   if (payload.hook_event_name === "UserPromptSubmit") return payload.prompt;
   if (payload.hook_event_name === "PreToolUse" || payload.hook_event_name === "PostToolUse") {
     return payload.tool_name;
@@ -105,7 +129,7 @@ function matchSubject(payload: HookPayload): string | null {
   return null;
 }
 
-function matchesHabit(habit: Habit, payload: HookPayload, subject: string | null): boolean {
+function matchesHabit(habit: Habit, payload: InboundHookPayload, subject: string | null): boolean {
   if (habit.path === "self.session-start") {
     if (habit.source === undefined) return true;
     return payload.hook_event_name === "SessionStart" && payload.source === habit.source;

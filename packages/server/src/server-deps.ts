@@ -14,6 +14,7 @@ import { resumeSessionTurn, resumeEndedSession } from "./resume-pipeline.ts";
 import { bootServerRoles } from "./boot-server-roles.ts";
 import { createSystemClock } from "./clock.ts";
 import { createSessionHabitsResolver, runHabitBash } from "./resolve-session-habits.ts";
+import { tailReadTranscript } from "./transcript-reader.ts";
 import type { ServerOptions } from "./types.ts";
 
 export function buildServerDeps(opts: ServerOptions) {
@@ -117,6 +118,8 @@ export function buildServerDeps(opts: ServerOptions) {
       : opts.resolveSessionHabits;
   const random = opts.habitRandom === undefined ? Math.random : opts.habitRandom;
   const runBash = opts.habitRunBash === undefined ? runHabitBash : opts.habitRunBash;
+  const readTranscriptTail =
+    opts.habitReadTranscriptTail === undefined ? tailReadTranscript : opts.habitReadTranscriptTail;
   const resumeTurn = (input: { sessionId: string; prompt: string }) =>
     resumeSessionTurn(spawnPipelineDeps, input);
   const resumeEnded = (input: { sessionId: string; prompt: string | undefined }) =>
@@ -147,6 +150,7 @@ export function buildServerDeps(opts: ServerOptions) {
     resolveSessionHabits,
     random,
     runBash,
+    readTranscriptTail,
     resumeTurn,
     resumeEnded,
     finalReportConsumer,
