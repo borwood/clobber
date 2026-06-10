@@ -100,6 +100,26 @@ describe("managerRole", () => {
     }
   });
 
+  it("C5 doctrine: system prompt carries liveness-gate guidance for destructive housekeeping", () => {
+    const text = managerRole.systemPrompt;
+    // Must mention liveness gating before reaping/pruning
+    expect(text).toMatch(/liveness/i);
+    // Must reference PR state (not git merge-base --is-ancestor) as the merge signal
+    expect(text).toMatch(/PR state/i);
+    // Must require excluding every live agent's cwd
+    expect(text).toMatch(/live agent/i);
+  });
+
+  it("C3 doctrine: system prompt carries reframes-are-intent guidance", () => {
+    const text = managerRole.systemPrompt;
+    // Must guide the manager to ground design sketches against code-truth
+    expect(text).toMatch(/reframe/i);
+    // Must mention intent (vs over-literalizing)
+    expect(text).toMatch(/intent/i);
+    // Must reference checking against code reality
+    expect(text).toMatch(/code/i);
+  });
+
   it("inherits the hooks mechanism from base (#355), wrapped in { hooks } with the __CLOBBER_HOOK_URL__ placeholder", () => {
     const pluginRoot = join(managerRole.bundleRoot, managerRole.manifest.pluginTemplatePath);
     // The fork no longer ships its own hooks file; it inherits base's.
