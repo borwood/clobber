@@ -68,6 +68,8 @@ export function registerAllRoutes(
     resolveSessionHabits,
     random,
     runBash,
+    notifications: deps.notificationStore,
+    clock: deps.clock,
     ...(opts.askPollWindowMs === undefined ? {} : { askBridgePollWindowMs: opts.askPollWindowMs }),
   });
   registerEventRoutes(app, { store: opts.store });
