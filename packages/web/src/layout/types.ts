@@ -2,7 +2,8 @@ export type ViewId =
   | { kind: "sessions" }
   | { kind: "spawn" }
   | { kind: "mailbox"; sessionId: string }
-  | { kind: "whiteboard" };
+  | { kind: "whiteboard" }
+  | { kind: "inbox" };
 
 export interface PaneNode {
   readonly kind: "pane";

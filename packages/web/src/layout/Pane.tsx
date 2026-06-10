@@ -18,7 +18,9 @@ const BODY_CLASS = "flex-1 min-h-0 overflow-hidden flex flex-col";
 export function Pane(props: { readonly node: PaneNode }) {
   const { node } = props;
   const { dispatch, setTabDrag, tabDrag, layout } = useLayout();
-  const { configOpen, sessions } = useWorkspace();
+  const { configOpen, sessions, userNotifications } = useWorkspace();
+  const userNotificationCount = userNotifications.length;
+  const userNotificationHasHigh = userNotifications.some((n) => n.priority === "high");
   const active = node.activeIndex === null ? null : node.views[node.activeIndex]!;
 
   // Refs survive across pointer events without re-rendering or being captured
@@ -78,7 +80,11 @@ export function Pane(props: { readonly node: PaneNode }) {
 
   const tabs = node.views.map((v, i) => ({
     id: String(i),
-    label: tabLabel(v, sessions),
+    label: tabLabel(v, {
+      sessions,
+      inboxUnreadCount: userNotificationCount,
+      inboxHasHigh: userNotificationHasHigh,
+    }),
     closable: true,
   }));
 

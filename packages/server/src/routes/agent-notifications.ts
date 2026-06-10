@@ -30,27 +30,32 @@ export function registerNotificationsRoutes(
       notifications: rows.map((n) => ({
         id: n.id,
         type: n.type,
+        recipient: n.recipient,
         priority: n.priority,
         state: n.state,
         payload: n.payload,
         provenance: n.provenance,
+        metadata: n.metadata,
+        delivery_mode: n.delivery_mode,
         created_at: n.created_at,
         delivered_at: n.delivered_at,
+        acked_at: n.acked_at,
       })),
     };
   });
 
   app.post("/notifications/:id/ack", async (request, reply) => {
     const { id } = z.object({ id: z.string().min(1) }).parse(request.params);
-    const changed = deps.notifications.markAcked(id, deps.clock.now().getTime());
-    if (!changed) {
-      const n = deps.notifications.get(id);
-      if (n === null) {
-        reply.code(404);
-        return { error: "notification not found" };
-      }
-      // Already acked — idempotent success
+    const n = deps.notifications.get(id);
+    if (n === null) {
+      reply.code(404);
+      return { error: "notification not found" };
     }
+    if (n.recipient.kind !== "user") {
+      reply.code(403);
+      return { error: "notification belongs to an agent" };
+    }
+    deps.notifications.markAcked(id, deps.clock.now().getTime());
     return { ok: true };
   });
 }

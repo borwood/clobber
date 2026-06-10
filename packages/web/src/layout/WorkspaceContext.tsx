@@ -1,6 +1,7 @@
 import { createContext, useContext, type ReactNode } from "react";
 import type {
   DeskCard,
+  Notification,
   OfficeCard,
   SessionSummary,
   WorkspaceRoleAssignment,
@@ -25,6 +26,7 @@ export interface WorkspaceContextValue {
   readonly endSession: (id: string) => Promise<void>;
   readonly resumeSession: (id: string) => Promise<void>;
   readonly wakeAgent: (agentId: string, wakeProgram: string) => Promise<void>;
+  readonly userNotifications: readonly Notification[];
 }
 
 const Ctx = createContext<WorkspaceContextValue | null>(null);
