@@ -29,6 +29,7 @@ function seedAgent(db: ReturnType<typeof createDatabase>): {
 function makeReq(agentId: string): CreateNotification {
   return {
     type: "trigger",
+    category: "transient",
     recipient: { kind: "agent", agent_id: agentId },
     priority: "low",
     payload: { body: "a cron fired: 0 9 * * *", tag: { kind: "trigger", attrs: { via: "cron" } } },
@@ -96,6 +97,7 @@ describe("notification-store", () => {
     const { notification: n } = store.create(
       {
         type: "message",
+        category: "durable",
         recipient: { kind: "user" },
         priority: "high",
         payload: { body: "hi", tag: { kind: "message" } },

@@ -19,6 +19,7 @@ describe("AC4 — fall-back-to-unique: absent source_id → two rows (no dedup)"
 
     const req: CreateNotification = {
       type: "trigger",
+      category: "transient",
       recipient: { kind: "agent", agent_id: agentId },
       priority: "low",
       payload: { body: "wake", tag: { kind: "trigger", attrs: { via: "cron" } } },

@@ -22,6 +22,14 @@ export const PrioritySchema = z.enum(["high", "low"]);
 export type Priority = z.infer<typeof PrioritySchema>;
 
 /**
+ * Coalescing category. transient (trigger/wake): per-recipient latest-only;
+ * stale rows are cancelled on rearm. durable (message/ask): deliver-all —
+ * distinct messages must not be starved by the latest-only filter.
+ */
+export const NotificationCategorySchema = z.enum(["transient", "durable"]);
+export type NotificationCategory = z.infer<typeof NotificationCategorySchema>;
+
+/**
  * The delivery/ack lifecycle. Generalizes #241's `QuestionStatus`: `answered`
  * is the ask-type's ack, `acked` the generic ack, `delivered` the non-flushing
  * middle state (dumped to chat but not cleared). `pending` covers a record that
@@ -51,6 +59,7 @@ export type NotificationProvenance = z.infer<typeof NotificationProvenanceSchema
 export const NotificationSchema = z.object({
   id: z.string().min(1),
   type: z.string().min(1),
+  category: NotificationCategorySchema,
   recipient: RecipientRefSchema,
   priority: PrioritySchema,
   payload: ClobberTurnSchema,
@@ -69,6 +78,7 @@ export type Notification = z.infer<typeof NotificationSchema>;
 /** The fields an emitter supplies; the store mints id/state/timestamps. */
 export const CreateNotificationSchema = z.object({
   type: z.string().min(1),
+  category: NotificationCategorySchema,
   recipient: RecipientRefSchema,
   priority: PrioritySchema,
   payload: ClobberTurnSchema,

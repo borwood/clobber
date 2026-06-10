@@ -22,6 +22,7 @@ function makeNotification(agentId: string): Notification {
   return {
     id: "notif-1",
     type: "trigger",
+    category: "transient",
     state: "pending",
     priority: "high",
     recipient: { kind: "agent", agent_id: agentId },

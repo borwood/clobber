@@ -88,6 +88,7 @@ export function registerAgentMessagesRoutes(
       const { outcome } = await deps.dispatcher.emit(
         {
           type: "message",
+          category: "durable",
           recipient: { kind: "agent", agent_id: recipientAgent.id },
           priority: "high",
           payload: { body: parsed.data.body, tag },

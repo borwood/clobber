@@ -39,6 +39,7 @@ const T3 = 1_700_000_002_000;
 function agentNotifReq(agentId: string, body = "wake-kick: worker done"): CreateNotification {
   return {
     type: "trigger",
+    category: "transient",
     recipient: { kind: "agent", agent_id: agentId },
     priority: "low",
     payload: { body, tag: { kind: "trigger", attrs: { via: "worker-done" } } },
@@ -196,8 +197,9 @@ describe("notification write-through (#573) — real-path tests", () => {
   it("(c) rearmPending with M pending rows for one busy recipient → 1 inject not M (bounded)", async () => {
     // The storm guard: if write-through injected every pending row on boot/cycle,
     // an accumulated backlog would hit stdin all at once. rearmPending must
-    // coalesce-per-recipient (one wake per recipient), keeping the minimal bound
-    // proved here. The full #424 staleness/category gate can follow separately.
+    // coalesce-per-recipient: 1 injection (the latest), M-1 stale rows cancelled
+    // (#616 category-aware gate). Cancelled rows never trickle-deliver on future
+    // rearms — storm averted and stale suppressed.
     const M = 4;
     const h = makeHarness();
     const writes: Buffer[] = [];
@@ -214,9 +216,11 @@ describe("notification write-through (#573) — real-path tests", () => {
 
     // Exactly 1 injection — not M. Storm averted.
     expect(writes.length).toBe(1);
-    // Exactly 1 delivered row (the coalesced representative).
-    const pending = h.store.listPending();
-    expect(pending.length).toBe(M - 1); // M-1 rows still pending, 1 delivered
+    // 0 pending: 1 delivered (the latest), M-1 cancelled (the stale transients).
+    expect(h.store.listPending()).toHaveLength(0);
+    const all = h.store.listForAgent(h.agentId);
+    expect(all.filter((n) => n.state === "delivered")).toHaveLength(1);
+    expect(all.filter((n) => n.state === "cancelled")).toHaveLength(M - 1);
 
     h.db.close();
   });

@@ -20,6 +20,7 @@ describe("AC1 — non-inert dedup: same logical event twice → 1 row, transport
 
     const req: CreateNotification = {
       type: "trigger",
+      category: "transient",
       recipient: { kind: "agent", agent_id: agentId },
       priority: "low",
       payload: { body: "wake", tag: { kind: "trigger", attrs: { via: "worker-done" } } },

@@ -19,6 +19,7 @@ describe("AC5 — non-duplicate-path delivery byte-unchanged", () => {
 
     const req: CreateNotification = {
       type: "trigger",
+      category: "transient",
       recipient: { kind: "agent", agent_id: agentId },
       priority: "low",
       payload: { body: "first-time wake", tag: { kind: "trigger", attrs: { via: "worker-done" } } },

@@ -362,6 +362,7 @@ describe("self.session-length habit (#184)", () => {
     const notifications = createNotificationStore(h.db);
     const quietReq: CreateNotification = {
       type: "reminder",
+      category: "durable",
       recipient: { kind: "agent", agent_id: h.agentId },
       priority: "low",
       payload: { body: "don't forget to log your decision", tag: { kind: "message" } },
