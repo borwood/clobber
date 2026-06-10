@@ -185,7 +185,7 @@ async function respawnOnce(
     wakeProgram,
   });
   if (!result.ok) {
-    const detail = "role" in result ? ` for role '${result.role}'` : "";
+    const detail = result.error === "role has no current version" ? ` for role '${result.role}'` : "";
     throw new Error(`cycle respawn failed${detail}: ${result.error}`);
   }
   return result;
@@ -222,11 +222,14 @@ async function superviseCycle(deps: CycleDeps, input: SuperviseInput): Promise<v
     // Zero sessions: both died simultaneously (race during cycle or immediate
     // crash of the fresh session). Revive by attaching a new idle session so
     // the agent reappears on the floor without requiring human intervention.
-    await attachSessionToAgent(deps, {
+    const result = await attachSessionToAgent(deps, {
       workspace,
       role,
       agent,
       prompt: undefined,
     });
+    if (!result.ok) {
+      throw new Error(`superviseCycle revival failed: ${result.error}`);
+    }
   }
 }

@@ -26,6 +26,9 @@ import { createAgentQuestionWaiter } from "../src/agent-question-waiter.ts";
 import { createTriggerDispatchStore } from "../src/trigger-dispatch-store.ts";
 import { createFinalReportConsumerStateStore } from "../src/final-report-consumer.ts";
 import type { AgentSpawner, SpawnedAgentInfo } from "../src/types.ts";
+import { attachSessionToAgent } from "../src/spawn-pipeline.ts";
+import { createAgentRegistry } from "../src/agent-registry.ts";
+import { createNotificationStore } from "../src/notification-store.ts";
 import { DRIFT_STUB_API_BASE } from "./_drift-stub.ts";
 
 interface Harness {
@@ -115,6 +118,68 @@ describe("promptless spawn edge cases (#599)", () => {
     expect(body.error).toMatch(/prompt/i);
 
     await teardown(h);
+  });
+
+  // superviseCycle revival path: when both sessions die simultaneously after a
+  // cycle, superviseCycle calls attachSessionToAgent with prompt: undefined to
+  // revive the agent. With codex (requiresPrompt), this returns {ok: false} —
+  // the fix ensures superviseCycle throws rather than silently discarding it.
+  it("codex runtime + no prompt revival → attachSessionToAgent returns error, not throws", async () => {
+    const db = createDatabase(":memory:");
+    const workspaces = createWorkspaceStore(db);
+    const roles = createRoleStore(db);
+    const roleVersions = createRoleVersionStore(db);
+    const workspaceRoles = createWorkspaceRoleStore(db);
+    const agents = createAgentStore(db);
+    const sessions = createSessionStore(db);
+    const sessionTokens = createSessionTokenStore(db);
+    const repoPath = mkdtempSync(join(tmpdir(), "clobber-revival-"));
+
+    const spawner: AgentSpawner = (): SpawnedAgentInfo => {
+      throw new Error("spawner should not be reached");
+    };
+
+    const deps = {
+      workspaces,
+      workspaceRoles,
+      agents,
+      sessions,
+      sessionTokens,
+      spawner,
+      hookUrl: "http://test.invalid/hook",
+      apiBase: DRIFT_STUB_API_BASE,
+      cliEntry: "/dummy/cli.ts",
+      registry: createAgentRegistry(),
+      roles,
+      roleVersions,
+      runtimeProvider: codexRuntimeProvider,
+      agentQuestions: createAgentQuestionStore(db),
+      agentQuestionWaiter: createAgentQuestionWaiter(),
+      onSessionEnded: () => {},
+      notifications: createNotificationStore(db),
+    };
+
+    const ws = workspaces.create({ name: "ws", repo_path: repoPath });
+    const role = roles.create({ name: "manager", persistent: false });
+    workspaceRoles.setCeiling(ws.id, role.id, 5);
+    const agent = agents.create({ workspace_id: ws.id, role_id: role.id, label: "revival-target" });
+
+    // This is exactly the call superviseCycle makes for the zero-session revival.
+    const result = await attachSessionToAgent(deps, {
+      workspace: ws,
+      role,
+      agent,
+      prompt: undefined,
+    });
+
+    // Pre-fix: buildSpawnRequest would throw (unhandled → 500 or crash).
+    // Post-fix: returns a clean error object the caller can act on.
+    expect(result.ok).toBe(false);
+    expect((result as { status: number }).status).toBe(422);
+    expect((result as { error: string }).error).toMatch(/prompt/i);
+
+    db.close();
+    rmSync(repoPath, { recursive: true, force: true });
   });
 
   it("claude runtime + no prompt → session registered idle, not busy", async () => {
