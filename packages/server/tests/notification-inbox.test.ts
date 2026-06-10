@@ -46,7 +46,7 @@ function agentNotifReq(agentId: string, body = "you have a notification"): Creat
   return {
     type: "trigger",
     recipient: { kind: "agent", agent_id: agentId },
-    priority: "low",
+    priority: "high",
     payload: { body, tag: { kind: "trigger", attrs: { via: "cron" } } },
     provenance: { source_kind: "trigger" },
   };

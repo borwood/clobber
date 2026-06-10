@@ -23,7 +23,7 @@ function makeNotification(agentId: string): Notification {
     id: "notif-1",
     type: "trigger",
     state: "pending",
-    priority: "low",
+    priority: "high",
     recipient: { kind: "agent", agent_id: agentId },
     payload: { body: BODY, tag: TAG },
     provenance: { source_kind: "trigger", source_id: "button" },
