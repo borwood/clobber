@@ -171,6 +171,42 @@ describe("GET /notifications?recipient=user — user inbox list", () => {
     }
   });
 
+  it("response includes full inspector fields — metadata, recipient, delivery_mode, acked_at", async () => {
+    const h = buildHarness();
+    try {
+      const T = Date.now();
+      const req: CreateNotification = {
+        ...userNotifReq("inspector shape"),
+        metadata: { ref: "main", run_id: "42" },
+        delivery_mode: "quiet",
+      };
+      const { notification: created } = h.notifications.create(req, T);
+
+      const res = await h.server.inject({ method: "GET", url: "/notifications?recipient=user" });
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as {
+        notifications: Array<{
+          id: string;
+          recipient: { kind: string };
+          metadata: Record<string, unknown>;
+          delivery_mode: string | undefined;
+          acked_at: number | undefined;
+        }>;
+      };
+      expect(body.notifications).toHaveLength(1);
+      const n = body.notifications[0]!;
+      expect(n.id).toBe(created.id);
+      // inspector fields all present
+      expect(n.recipient).toEqual({ kind: "user" });
+      expect(n.metadata).toEqual({ ref: "main", run_id: "42" });
+      expect(n.delivery_mode).toBe("quiet");
+      // acked_at absent for a pending row (not yet acked)
+      expect(n.acked_at).toBeUndefined();
+    } finally {
+      await teardown(h);
+    }
+  });
+
   it("excludes agent-recipient notifications", async () => {
     const h = buildHarness();
     try {

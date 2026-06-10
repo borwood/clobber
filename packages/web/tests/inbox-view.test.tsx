@@ -8,47 +8,61 @@ import { createRoot, type Root } from "react-dom/client";
 import { InboxView } from "../src/views/InboxView.tsx";
 import { WorkspaceProvider } from "../src/layout/WorkspaceContext.tsx";
 import type { WorkspaceContextValue } from "../src/layout/WorkspaceContext.tsx";
+import type { Notification } from "../src/api.ts";
 
 const WORKSPACE_ID = "ws-test";
 
-const BASE_WORKSPACE: WorkspaceContextValue = {
-  activeWorkspaceId: WORKSPACE_ID,
-  invalidWorkspace: false,
-  sessions: [],
-  selectedSession: null,
-  assignments: [],
-  roleId: null,
-  setRoleId: () => {},
-  offices: [],
-  desks: [],
-  now: 1_700_000_000_000,
-  wakingAgents: new Set(),
-  showSystem: false,
-  setShowSystem: () => {},
-  configOpen: false,
-  focusSession: () => {},
-  endSession: async () => {},
-  resumeSession: async () => {},
-  wakeAgent: async () => {},
-  userNotificationCount: 0,
-  userNotificationHasHigh: false,
-};
-
-function makeNotification(overrides: Record<string, unknown> = {}) {
+function makeNotification(overrides: Partial<Notification> = {}): Notification {
   return {
     id: "notif-1",
     type: "push",
+    recipient: { kind: "user" },
     priority: "high",
     state: "pending",
     payload: { body: "Build finished successfully" },
     provenance: { source_kind: "push", emitter_agent_id: "agent-abc" },
     metadata: { ref: "main" },
-    recipient: { kind: "user" },
     created_at: 1_700_000_000_000,
-    delivered_at: undefined,
-    acked_at: undefined,
-    delivery_mode: undefined,
     ...overrides,
+  };
+}
+
+const HIGH_NOTIF = makeNotification({
+  id: "notif-high",
+  priority: "high",
+  payload: { body: "High priority push" },
+  metadata: { ref: "main", run_id: "42" },
+  provenance: { source_kind: "push", emitter_agent_id: "agent-abc" },
+});
+
+const LOW_NOTIF = makeNotification({
+  id: "notif-low",
+  priority: "low",
+  payload: { body: "Low priority note" },
+  metadata: {},
+});
+
+function makeWorkspace(userNotifications: readonly Notification[]): WorkspaceContextValue {
+  return {
+    activeWorkspaceId: WORKSPACE_ID,
+    invalidWorkspace: false,
+    sessions: [],
+    selectedSession: null,
+    assignments: [],
+    roleId: null,
+    setRoleId: () => {},
+    offices: [],
+    desks: [],
+    now: 1_700_000_000_000,
+    wakingAgents: new Set(),
+    showSystem: false,
+    setShowSystem: () => {},
+    configOpen: false,
+    focusSession: () => {},
+    endSession: async () => {},
+    resumeSession: async () => {},
+    wakeAgent: async () => {},
+    userNotifications,
   };
 }
 
@@ -61,17 +75,6 @@ function mockFetch(input: string, init?: RequestInit): Promise<Response> {
       status: 200,
       headers: { "content-type": "application/json" },
     });
-
-  if (path === "/notifications") {
-    return Promise.resolve(
-      json({
-        notifications: [
-          makeNotification({ id: "notif-high", priority: "high", payload: { body: "High priority push" } }),
-          makeNotification({ id: "notif-low", priority: "low", payload: { body: "Low priority note" } }),
-        ],
-      }),
-    );
-  }
   if (path?.match(/^\/notifications\/.+\/ack$/) && init?.method === "POST") {
     const parts = path.split("/");
     postedAckId = parts[2] ?? null;
@@ -102,54 +105,45 @@ afterAll(() => {
   GlobalRegistrator.unregister();
 });
 
-async function flush(ms = 30) {
-  await act(async () => {
-    await new Promise((r) => setTimeout(r, ms));
-  });
-}
-
-function render(ui: React.ReactNode) {
+function render(notifications: readonly Notification[] = [HIGH_NOTIF, LOW_NOTIF]) {
   act(() => {
     root.render(
-      <WorkspaceProvider value={BASE_WORKSPACE}>{ui}</WorkspaceProvider>,
+      <WorkspaceProvider value={makeWorkspace(notifications)}>
+        <InboxView />
+      </WorkspaceProvider>,
     );
   });
 }
 
 describe("InboxView — notification list", () => {
-  it("renders both notifications after poll", async () => {
-    render(<InboxView />);
-    await flush(60);
-
+  it("renders both notifications from context", () => {
+    render();
     const text = container.textContent ?? "";
     expect(text).toContain("High priority push");
     expect(text).toContain("Low priority note");
   });
 
-  it("high-priority row has a loud/unmissable visual marker", async () => {
-    render(<InboxView />);
-    await flush(60);
-
-    // The high-prio row should carry a data attribute or class marking it as high
+  it("high-priority row carries data-priority='high'", () => {
+    render();
     const highRows = container.querySelectorAll("[data-priority='high']");
     expect(highRows.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("low-priority row is not marked as high", async () => {
-    render(<InboxView />);
-    await flush(60);
-
+  it("low-priority row carries data-priority='low'", () => {
+    render();
     const lowRows = container.querySelectorAll("[data-priority='low']");
     expect(lowRows.length).toBeGreaterThanOrEqual(1);
   });
+
+  it("empty state when no notifications", () => {
+    render([]);
+    expect(container.textContent).toContain("No unread");
+  });
 });
 
-describe("InboxView — detail inspector", () => {
-  it("shows inspector content when a notification row is clicked", async () => {
-    render(<InboxView />);
-    await flush(60);
-
-    // Click the first row
+describe("InboxView — detail inspector (real wire shape)", () => {
+  it("inspector shows all fields when a row is clicked", async () => {
+    render([HIGH_NOTIF]);
     const rows = container.querySelectorAll("[data-notification-id]");
     expect(rows.length).toBeGreaterThan(0);
 
@@ -157,62 +151,83 @@ describe("InboxView — detail inspector", () => {
       (rows[0] as HTMLElement).click();
     });
 
-    // Inspector should show provenance fields
     const text = container.textContent ?? "";
-    expect(text).toContain("push"); // source_kind
-    expect(text).toContain("notif-high"); // id in inspector
+    // id and type visible in inspector
+    expect(text).toContain("notif-high");
+    expect(text).toContain("push");
+    // provenance source_kind
+    expect(text).toContain("push");
+    // metadata key visible
+    expect(text).toContain("ref");
   });
 
-  it("inspector shows payload body and metadata", async () => {
-    render(<InboxView />);
-    await flush(60);
+  it("inspector shows payload body on select", async () => {
+    render([HIGH_NOTIF]);
 
-    const rows = container.querySelectorAll("[data-notification-id]");
     await act(async () => {
-      (rows[0] as HTMLElement).click();
+      (container.querySelector("[data-notification-id]") as HTMLElement).click();
+    });
+
+    expect(container.textContent).toContain("High priority push");
+  });
+
+  it("inspector renders notification with empty metadata without crashing", async () => {
+    render([LOW_NOTIF]);
+
+    await act(async () => {
+      (container.querySelector("[data-notification-id]") as HTMLElement).click();
+    });
+
+    expect(container.textContent).toContain("Low priority note");
+  });
+
+  it("inspector shows notification with delivery_mode and acked_at fields", async () => {
+    const withMeta = makeNotification({
+      id: "notif-full",
+      delivery_mode: "quiet",
+      acked_at: 1_700_000_001_000,
+      metadata: { run_id: "99" },
+    });
+    render([withMeta]);
+
+    await act(async () => {
+      (container.querySelector("[data-notification-id]") as HTMLElement).click();
     });
 
     const text = container.textContent ?? "";
-    expect(text).toContain("High priority push");
+    expect(text).toContain("quiet");
+    expect(text).toContain("run_id");
+  });
+
+  it("clicking the same row again collapses the inspector", async () => {
+    render([HIGH_NOTIF]);
+    const row = container.querySelector("[data-notification-id]") as HTMLElement;
+
+    await act(async () => { row.click(); });
+    expect(container.querySelector("[data-action='ack']")).not.toBeNull();
+
+    await act(async () => { row.click(); });
+    expect(container.querySelector("[data-action='ack']")).toBeNull();
   });
 });
 
 describe("InboxView — ack from panel", () => {
-  it("ack button calls POST /notifications/:id/ack after selecting a row", async () => {
-    render(<InboxView />);
-    await flush(60);
-
-    // Select the first row to reveal the inspector (ack button lives there)
-    const rows = container.querySelectorAll("[data-notification-id]");
+  it("ack button appears in inspector after selecting a row", async () => {
+    render();
     await act(async () => {
-      (rows[0] as HTMLElement).click();
+      (container.querySelector("[data-notification-id]") as HTMLElement).click();
     });
-
-    const ackButton = container.querySelector("[data-action='ack']") as HTMLElement | null;
-    expect(ackButton).not.toBeNull();
-
-    await act(async () => {
-      ackButton!.click();
-    });
-
-    expect(postedAckId).not.toBeNull();
+    expect(container.querySelector("[data-action='ack']")).not.toBeNull();
   });
 
-  it("clicking ack on a specific row acks that notification id", async () => {
-    render(<InboxView />);
-    await flush(60);
-
-    // Click the first notification row to select it, then ack
-    const rows = container.querySelectorAll("[data-notification-id]");
+  it("clicking ack calls POST /notifications/:id/ack for the selected row", async () => {
+    render([HIGH_NOTIF]);
     await act(async () => {
-      (rows[0] as HTMLElement).click();
+      (container.querySelector("[data-notification-id]") as HTMLElement).click();
     });
-
-    const ackButton = container.querySelector("[data-action='ack']") as HTMLElement | null;
     await act(async () => {
-      ackButton!.click();
+      (container.querySelector("[data-action='ack']") as HTMLElement).click();
     });
-
     expect(postedAckId).toBe("notif-high");
   });
 });

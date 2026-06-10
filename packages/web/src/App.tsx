@@ -36,8 +36,7 @@ export function App() {
     offices,
     desks,
     now,
-    userNotificationCount,
-    userNotificationHasHigh,
+    userNotifications,
     errors: pollErrors,
   } = useWorkspacePolls(workspaceSlug);
 
@@ -130,8 +129,7 @@ export function App() {
           });
         }
       },
-      userNotificationCount,
-      userNotificationHasHigh,
+      userNotifications,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
@@ -148,8 +146,7 @@ export function App() {
       showSystem,
       configOpen,
       workspaceSlug,
-      userNotificationCount,
-      userNotificationHasHigh,
+      userNotifications,
     ],
   );
 

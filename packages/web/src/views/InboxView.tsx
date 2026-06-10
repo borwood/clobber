@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { api } from "../api.ts";
 import type { Notification } from "../api.ts";
-import { usePolledResource } from "../hooks/usePolledResource.ts";
 import { useWorkspace } from "../layout/WorkspaceContext.tsx";
 
 function formatTs(ms: number): string {
@@ -132,12 +131,7 @@ export function InboxView() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [ackedIds, setAckedIds] = useState<ReadonlySet<string>>(new Set());
 
-  const poll = usePolledResource(
-    () => api.listUserNotifications(),
-    [w.activeWorkspaceId],
-  );
-
-  const notifications = (poll.data?.notifications ?? []).filter((n) => !ackedIds.has(n.id));
+  const notifications = w.userNotifications.filter((n) => !ackedIds.has(n.id));
   const selected = notifications.find((n) => n.id === selectedId) ?? null;
 
   function handleAck(id: string) {
@@ -176,12 +170,8 @@ export function InboxView() {
         </span>
       </div>
 
-      {poll.error !== undefined && (
-        <p className="text-sm text-danger-text px-3 py-2">Failed to load notifications</p>
-      )}
-
       <div className="flex-1 min-h-0 overflow-y-auto">
-        {notifications.length === 0 && poll.error === undefined && (
+        {notifications.length === 0 && (
           <p className="text-sm text-text-subtle px-3 py-4">No unread notifications</p>
         )}
         {notifications.map((n) => (

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import {
   api,
   type DeskCard,
+  type Notification,
   type OfficeCard,
   type SessionSummary,
   type Whiteboard,
@@ -32,8 +33,7 @@ export interface WorkspacePolls {
   readonly offices: readonly OfficeCard[];
   readonly desks: readonly DeskCard[];
   readonly now: number;
-  readonly userNotificationCount: number;
-  readonly userNotificationHasHigh: boolean;
+  readonly userNotifications: readonly Notification[];
   readonly errors: ReadonlyArray<Error | undefined>;
 }
 
@@ -92,8 +92,6 @@ export function useWorkspacePolls(workspaceSlug: string | null): WorkspacePolls 
     [activeWorkspaceId],
     POLL_MS,
   );
-  const notifData = notifPoll.data?.notifications ?? [];
-
   return {
     workspaces,
     workspacesLoaded,
@@ -105,14 +103,14 @@ export function useWorkspacePolls(workspaceSlug: string | null): WorkspacePolls 
     offices: whiteboardPoll.data?.offices ?? EMPTY_OFFICES,
     desks: whiteboardPoll.data?.desks ?? EMPTY_DESKS,
     now: nowPoll.data ?? Date.now(),
-    userNotificationCount: notifData.length,
-    userNotificationHasHigh: notifData.some((n) => n.priority === "high"),
+    userNotifications: (notifPoll.data?.notifications ?? []) as readonly Notification[],
     errors: [
       workspacesPoll.error,
       liveIdsPoll.error,
       rolesPoll.error,
       sessionsPoll.error,
       whiteboardPoll.error,
+      notifPoll.error,
     ],
   };
 }

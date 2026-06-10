@@ -30,12 +30,16 @@ export function registerNotificationsRoutes(
       notifications: rows.map((n) => ({
         id: n.id,
         type: n.type,
+        recipient: n.recipient,
         priority: n.priority,
         state: n.state,
         payload: n.payload,
         provenance: n.provenance,
+        metadata: n.metadata,
+        delivery_mode: n.delivery_mode,
         created_at: n.created_at,
         delivered_at: n.delivered_at,
+        acked_at: n.acked_at,
       })),
     };
   });
