@@ -6,6 +6,7 @@ import type { RoleTrigger } from "@clobber/shared";
 import { createDriftStub, type DriftStub } from "./_drift-stub.ts";
 import { createServer } from "../src/server.ts";
 import { createDatabase } from "../src/db.ts";
+import { createNotificationStore, type NotificationStore } from "../src/notification-store.ts";
 import { createEventStore } from "../src/event-store.ts";
 import { createWorkspaceStore } from "../src/workspace-store.ts";
 import { createRoleStore } from "../src/role-store.ts";
@@ -40,6 +41,7 @@ export interface Harness {
   db: ReturnType<typeof createDatabase>;
   tokens: ReturnType<typeof createSessionTokenStore>;
   dispatches: ReturnType<typeof createTriggerDispatchStore>;
+  notifications: NotificationStore;
   clock: TestClock;
   spawns: SpawnLog[];
   roleRepoDir: string;
@@ -105,7 +107,8 @@ export function buildHarness(initial: Date): Harness {
     roleRepoDir,
   });
 
-  return { server, db, tokens, dispatches, clock, spawns, roleRepoDir, driftStub };
+  const notifications = createNotificationStore(db);
+  return { server, db, tokens, dispatches, notifications, clock, spawns, roleRepoDir, driftStub };
 }
 
 export async function teardown(h: Harness): Promise<void> {

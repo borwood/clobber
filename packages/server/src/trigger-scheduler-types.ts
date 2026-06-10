@@ -16,10 +16,13 @@ import type { NotificationDispatcher, ResumeSessionFn } from "./notification-dis
 import type { AgentBinding, DispatchResult } from "./trigger-dispatch.ts";
 
 // A completion-wake fire entry point: wakes persistent agents in the workspace
-// declaring the corresponding kind for the finished session.
+// declaring the corresponding kind for the finished session. completionId pins
+// the status/report log row id captured at the route so buildItem never re-fetches
+// a different row under a race (#620 HIGH fix).
 export type FireCompletionWake = (
   workspaceId: string,
   finishedSessionId: string,
+  completionId?: number,
 ) => Promise<DispatchResult>;
 
 // The two in-memory index entry shapes the scheduler keeps for the live event
