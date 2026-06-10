@@ -92,7 +92,8 @@ const SelfSessionAge = z.object({
   after_ms: z.number().int().positive(),
 });
 const SelfSessionLength = z.object({
-  // [S] BLOCKED — no hook payload carries context-token count (#184). Shape only.
+  // [V] Wired in #184: evaluated at PostToolUse + UserPromptSubmit via bounded
+  // transcript tail-read → computeContextLength. One-shot per (session, habit).
   path: z.literal("self.session-length"),
   max_tokens: z.number().int().positive(),
 });

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { InboundHookPayloadSchema, type InboundHookPayload } from "@clobber/shared";
+import { InboundHookPayloadSchema, type InboundHookPayload, type TranscriptLine } from "@clobber/shared";
 import type { EventStore } from "../event-store.ts";
 import type { AgentStore } from "../agent-store.ts";
 import type { SessionStore } from "../session-store.ts";
@@ -41,10 +41,11 @@ export interface RegisterHookRoutesDeps {
   scheduler: Pick<TriggerScheduler, "fireSessionEnded" | "flushPendingWakes">;
   askBridgePollWindowMs?: number;
   // #271 — the self.* habit seam: resolve the firing session's habits + the
-  // injectable evaluator dependencies (RNG sampling, bash enrichment).
+  // injectable evaluator dependencies (RNG sampling, bash enrichment, tail reader).
   resolveSessionHabits: HabitReceiverDeps["resolveSessionHabits"];
   random: HabitReceiverDeps["random"];
   runBash: HabitReceiverDeps["runBash"];
+  readTranscriptTail: (path: string) => Promise<TranscriptLine[]>;
   // Quiet-delivery drain: notifications store + clock for drainQuietForAgent.
   notifications: NotificationStore;
   clock: Clock;
@@ -55,6 +56,16 @@ export function registerHookRoutes(
   deps: RegisterHookRoutesDeps,
 ): void {
   const askBridgePollWindowMs = deps.askBridgePollWindowMs ?? DEFAULT_ASK_BRIDGE_POLL_WINDOW_MS;
+  // Once-per-(session, habit) in-memory latch for self.session-length. Scoped to
+  // this registerHookRoutes call so each server instance (test or production)
+  // gets its own latch. Server restart resets it — at most one duplicate reminder
+  // per restart; acceptable and documented.
+  const sessionLengthFired = new Set<string>();
+  const latch: HabitReceiverDeps["latch"] = {
+    has: (sessionId, habitName) => sessionLengthFired.has(`${sessionId}:${habitName}`),
+    mark: (sessionId, habitName) => sessionLengthFired.add(`${sessionId}:${habitName}`),
+  };
+
   app.post("/hook", async (request, reply) => {
     const parsed = InboundHookPayloadSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -98,7 +109,11 @@ export function registerHookRoutes(
 
     // evaluateSelfHabits returns HabitInjection | HabitDenial | null.
     // HabitDenial (PreToolUse only) still short-circuits; inject → collected.
-    const habitResult = evaluateSelfHabits(payload, deps);
+    const habitResult = await evaluateSelfHabits(payload, {
+      ...deps,
+      readTranscriptTail: deps.readTranscriptTail,
+      latch,
+    });
     if (habitResult !== null) {
       const out = habitResult.hookSpecificOutput;
       if ("permissionDecision" in out) {
