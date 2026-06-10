@@ -51,28 +51,43 @@ export function spawnAgent(opts: SpawnAgentOptions): SpawnedAgent {
   const sessionId = opts.sessionId === undefined ? randomUUID() : opts.sessionId;
 
   let command: RuntimeCommand;
-  let cleanup: () => void;
+  let cleanupOnce: () => void;
   if (opts.command !== undefined) {
     command = opts.command;
-    cleanup = () => {};
+    cleanupOnce = () => {};
   } else {
     const built = buildClaudeCommand(sessionId, opts);
     command = built.command;
-    cleanup = built.cleanup;
+    let cleaned = false;
+    cleanupOnce = () => {
+      if (cleaned) return;
+      cleaned = true;
+      built.cleanup();
+    };
   }
   const bin = command.bin;
   const args = [...command.args];
   const env = opts.env === undefined ? process.env : opts.env;
-  const child = spawn(bin, args, {
-    cwd: opts.cwd,
-    stdio: ["pipe", "pipe", "pipe"],
-    env,
-  });
+  let child: ChildProcess;
+  try {
+    child = spawn(bin, args, {
+      cwd: opts.cwd,
+      stdio: ["pipe", "pipe", "pipe"],
+      env,
+    });
+  } catch (e) {
+    cleanupOnce();
+    throw e;
+  }
 
   if (child.pid === undefined) {
+    child.on("error", () => {});
+    cleanupOnce();
     throw new Error(`failed to spawn ${bin}: no pid`);
   }
   if (child.stdin === null) {
+    child.on("error", () => {});
+    cleanupOnce();
     throw new Error(`failed to spawn ${bin}: stdin is null`);
   }
 
@@ -88,7 +103,7 @@ export function spawnAgent(opts: SpawnAgentOptions): SpawnedAgent {
 
   const exited = new Promise<number | null>((resolve) => {
     child.on("close", (code) => {
-      cleanup();
+      cleanupOnce();
       resolve(code);
     });
   });

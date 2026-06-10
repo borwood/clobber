@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnAgent } from "../src/spawn-agent.ts";
@@ -246,5 +246,25 @@ describe("spawnAgent oversized-arg file delivery (AC3 #580)", () => {
     expect(JSON.parse(receivedSettings)).toEqual(settings);
 
     rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe("spawnAgent temp-dir cleanup on spawn failure (#582)", () => {
+  it("removes the clobber-spawn-* temp dir when spawn fails due to bad binary", () => {
+    const tmp = tmpdir();
+    const before = new Set(readdirSync(tmp).filter((f) => f.startsWith("clobber-spawn-")));
+
+    expect(() =>
+      spawnAgent({
+        hookUrl: "http://127.0.0.1:3300/hook",
+        prompt: "test",
+        cwd: process.cwd(),
+        sessionId: "leak-test-session",
+        claudeBin: "/nonexistent/bin/claude-582-test",
+      }),
+    ).toThrow();
+
+    const after = readdirSync(tmp).filter((f) => f.startsWith("clobber-spawn-") && !before.has(f));
+    expect(after).toEqual([]);
   });
 });
