@@ -164,10 +164,11 @@ function triggerSourceId(
       return `${trigger.kind}:${sessionKey}`;
     }
     case "cron":
-      // Each cron tick fires at a unique wall-clock instant; firedAt makes the
-      // occurrence identity stable across the single dispatch path (cron uses drop
-      // not enqueue, so no re-fire of the same tick from the queue side).
-      return `cron:${trigger.expr}:${firedAt}`;
+      // No stable occurrence identity: the scheduler's tick timestamp is not
+      // threaded to dispatchTrigger, so any key we could build here would use
+      // wall-clock dispatch time — unique per call, never actually dedups.
+      // Return undefined: honest no-dedup, null logical_key, always-inserted.
+      return undefined;
     default:
       return undefined;
   }
