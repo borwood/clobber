@@ -15,6 +15,7 @@ import { endSession } from "../session-lifecycle.ts";
 import { applyTaskEvent } from "../task-event-handler.ts";
 import { guardOfficeBoundary } from "../office-boundary-guard.ts";
 import { guardHabitEdit } from "../guard-habit-edit.ts";
+import { guardStopStall } from "../guard-stop-stall.ts";
 import { evaluateSelfHabits, type HabitReceiverDeps } from "../habit-receiver.ts";
 import { bridgeAskUserQuestion } from "../ask-user-question-bridge.ts";
 import { buildFileSizeReminder } from "../file-size-reminder.ts";
@@ -66,6 +67,12 @@ export function registerHookRoutes(
     mark: (sessionId, habitName) => sessionLengthFired.add(`${sessionId}:${habitName}`),
   };
 
+  const stopStallBlocked = new Set<string>();
+  const stopStallLatch = {
+    has: (sessionId: string) => stopStallBlocked.has(sessionId),
+    mark: (sessionId: string) => stopStallBlocked.add(sessionId),
+  };
+
   app.post("/hook", async (request, reply) => {
     const parsed = InboundHookPayloadSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -74,6 +81,16 @@ export function registerHookRoutes(
     }
     const payload = parsed.data;
     deps.store.append(payload);
+
+    // Stop guard: block ephemeral workers with pending phase-plan tasks and no
+    // final report. Short-circuits before lifecycle so busy-reset and wake-flush
+    // only apply when the stop is allowed through. One-shot per session: a second
+    // Stop is never blocked so a legitimately-stuck worker can always exit.
+    if (payload.hook_event_name === "Stop") {
+      const stopBlock = guardStopStall(payload, deps, stopStallLatch);
+      if (stopBlock !== null) return stopBlock;
+    }
+
     await applySessionLifecycle(payload, deps);
 
     // PreToolUse: decision responses (deny/bridge) always short-circuit. These
