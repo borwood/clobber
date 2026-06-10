@@ -25,3 +25,4 @@ export * from "./habit.ts";
 export * from "./port.ts";
 export * from "./cli-capabilities.ts";
 export * from "./cli-scope.ts";
+export * from "./transcript.ts";

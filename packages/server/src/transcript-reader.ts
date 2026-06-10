@@ -1,4 +1,5 @@
-export type TranscriptLine = Record<string, unknown>;
+export type { TranscriptLine } from "@clobber/shared";
+import type { TranscriptLine } from "@clobber/shared";
 
 export async function readTranscript(path: string): Promise<TranscriptLine[]> {
   const file = Bun.file(path);
