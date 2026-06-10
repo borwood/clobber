@@ -13,7 +13,7 @@ interface SpawnResponse {
 
 interface ParsedArgs {
   readonly role: string;
-  readonly prompt: string;
+  readonly prompt?: string;
   readonly label: string;
   readonly briefingDir?: string;
   readonly briefingPairs: readonly { readonly name: string; readonly path: string }[];
@@ -116,9 +116,6 @@ export function parseSpawnArgs(args: readonly string[]): ParsedArgs {
   if (positionals.length > 1) {
     throw new CliUsageError(`unexpected extra arguments: ${positionals.slice(1).join(" ")}`);
   }
-  if (prompt === undefined) {
-    throw new CliUsageError("--prompt is required");
-  }
   if (label === undefined) {
     throw new CliUsageError(
       "--label is required (e.g. --label fix-flaky-test) — names a worker by what it's doing so the workspace board stays legible",
@@ -132,8 +129,8 @@ export function parseSpawnArgs(args: readonly string[]): ParsedArgs {
 
   return {
     role,
-    prompt,
     label,
+    ...(prompt === undefined ? {} : { prompt }),
     ...(briefingDir === undefined ? {} : { briefingDir }),
     briefingPairs,
     ...(effort === undefined ? {} : { effort }),
@@ -174,14 +171,17 @@ function walkDir(root: string, dir: string, out: BriefingFile[]): void {
   }
 }
 
-const SPAWN_USAGE = `usage: clobber spawn <role> --prompt <text> --label <slug> [--briefing-dir <path>] [--briefing <name:path>...] [--effort <level>] [--model <model>] [--wake-program <name>] [--scope <token>...] [--deny <verb>...]
+const SPAWN_USAGE = `usage: clobber spawn <role> --label <slug> [--prompt <text>] [--briefing-dir <path>] [--briefing <name:path>...] [--effort <level>] [--model <model>] [--wake-program <name>] [--scope <token>...] [--deny <verb>...]
 
 Spawn a worker agent into the current workspace. The role must already
 exist in this workspace (see \`clobber roles list\`). Prints the new
 agent_id, session_id, and pid as JSON.
 
 Flags:
-  -p, --prompt <text>            Initial user prompt for the worker (required).
+  -p, --prompt <text>            Initial user prompt for the worker. Omit to
+                                 boot the worker without an opening kick (the
+                                 wake program or role default supplies the
+                                 first turn).
   -l, --label <slug>             Short slug naming what the worker is doing
                                  (required, e.g. fix-flaky-test) so the
                                  workspace board stays legible.
@@ -239,8 +239,8 @@ export const spawnCommand: Command = {
     const files = collectBriefingFiles(parsed);
     const body: Record<string, unknown> = {
       role: parsed.role,
-      prompt: parsed.prompt,
       label: parsed.label,
+      ...(parsed.prompt !== undefined ? { prompt: parsed.prompt } : {}),
     };
     if (files.length > 0) {
       body["briefing"] = { files };

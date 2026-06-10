@@ -76,7 +76,7 @@ export interface AgentRouteDeps {
 
 const AgentSpawnBodySchema = z.object({
   role: z.string().min(1),
-  prompt: z.string().min(1),
+  prompt: z.string().min(1).optional(),
   label: z.string().optional(),
   briefing: BriefingPacketSchema.optional(),
   effort: EffortLevelSchema.optional(),
@@ -157,8 +157,8 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
       const result = await executeSpawn(deps, {
         workspace,
         role,
-        prompt,
         label,
+        ...(prompt === undefined ? {} : { prompt }),
         ...(parsed.data.wake_program === undefined
           ? {}
           : { wakeProgram: parsed.data.wake_program }),

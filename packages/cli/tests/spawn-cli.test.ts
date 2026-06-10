@@ -214,10 +214,11 @@ describe("clobber CLI — spawn", () => {
     expect(s.err()).toMatch(/role/i);
   });
 
-  it("exits 2 with a usage hint when --prompt is missing", async () => {
+  it("spawn without --prompt reaches the server (no client-side arg error)", async () => {
     const s = captureStreams();
+    const before = harness.spawnerCalls.length;
     const code = await run({
-      argv: ["spawn", "manager"],
+      argv: ["spawn", "manager", "--label", "no-prompt-spawn"],
       env: {
         CLOBBER_API_BASE: harness.baseUrl,
         CLOBBER_SESSION_TOKEN: harness.managerToken,
@@ -225,8 +226,10 @@ describe("clobber CLI — spawn", () => {
       stdout: s.stdout,
       stderr: s.stderr,
     });
-    expect(code).toBe(2);
-    expect(s.err()).toMatch(/--prompt/);
+    expect(code).toBe(0);
+    expect(harness.spawnerCalls.length).toBe(before + 1);
+    const call = harness.spawnerCalls[harness.spawnerCalls.length - 1]!;
+    expect(call.prompt).toBeUndefined();
   });
 
   it("exits 2 when --prompt is given without a value", async () => {
