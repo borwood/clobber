@@ -16,8 +16,9 @@ interface NotificationsListResponse {
 const NOTIFY_USAGE = `usage: clobber notify list
        clobber notify ack <id>
 
-Manage the user's notification inbox. Notifications are durable records of
-signals sent to the user (from agents, triggers, or the engine).
+Manage the notification inbox. When called from an agent session, operates on
+that agent's own inbox (recipient inferred from the session token). When called
+from a user context, operates on the user's inbox.
 
 Subcommands:
   list        Show un-acked notifications (state: pending or delivered).
@@ -33,13 +34,15 @@ export const notifyCommand: Command = {
   usage: NOTIFY_USAGE,
   async run(ctx) {
     const [sub, id, ...rest] = ctx.args;
+    const isAgent = ctx.env.agentId !== undefined;
     if (sub === "list") {
       if (rest.length > 0) {
         throw new CliUsageError(`notify list: unexpected arguments: ${rest.join(" ")}`);
       }
+      const listPath = isAgent ? "/agent/notifications" : "/notifications?recipient=user";
       const res = await request<NotificationsListResponse>(ctx.env, {
         method: "GET",
-        path: "/notifications?recipient=user",
+        path: listPath,
       });
       if (res.notifications.length === 0) {
         ctx.stdout.write("No unacknowledged notifications.\n");
@@ -58,9 +61,10 @@ export const notifyCommand: Command = {
       if (rest.length > 0) {
         throw new CliUsageError(`notify ack: unexpected arguments: ${rest.join(" ")}`);
       }
+      const ackPath = isAgent ? `/agent/notifications/${id}/ack` : `/notifications/${id}/ack`;
       await request<{ ok: boolean }>(ctx.env, {
         method: "POST",
-        path: `/notifications/${id}/ack`,
+        path: ackPath,
         body: {},
       });
       ctx.stdout.write(`Acknowledged ${id}\n`);

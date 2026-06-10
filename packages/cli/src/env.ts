@@ -1,6 +1,8 @@
 export interface CliEnv {
   readonly apiBase: string;
   readonly sessionToken: string;
+  // Present when the CLI is running inside a clobber-spawned agent session.
+  readonly agentId: string | undefined;
   // How long the ask command keeps retrying an unreachable server before it
   // declares the ask genuinely undeliverable and returns a trustable notice
   // (#241). A blocking ask never expires waiting for a human — this bounds only
@@ -43,9 +45,11 @@ export function readEnv(env: NodeJS.ProcessEnv): CliEnv {
       "CLOBBER_SESSION_TOKEN is not set — this CLI must be invoked from inside a clobber-spawned agent.",
     );
   }
+  const agentId = env["CLOBBER_AGENT_ID"];
   return {
     apiBase: apiBase.replace(/\/$/, ""),
     sessionToken,
+    agentId: agentId !== undefined && agentId.length > 0 ? agentId : undefined,
     askRetryBudgetMs: readPositiveIntEnv(env, "CLOBBER_ASK_RETRY_BUDGET_MS", 60_000),
     askRetryIntervalMs: readPositiveIntEnv(env, "CLOBBER_ASK_RETRY_INTERVAL_MS", 1_000),
   };

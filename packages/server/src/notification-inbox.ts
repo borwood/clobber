@@ -16,7 +16,7 @@ export function composeUnackedNotifications(
   const rows = store.listUnackedForAgent(agentId).filter((n) => n.delivery_mode !== "quiet");
   if (rows.length === 0) return NEAR_SILENT;
   const lines: string[] = [
-    `[Unacknowledged notifications — ${rows.length} pending]`,
+    `[Unacknowledged notifications — ${rows.length} pending. Use \`clobber notify list\` / \`clobber notify ack <id>\` to review and clear.]`,
     "",
   ];
   for (const n of rows) {
