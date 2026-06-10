@@ -60,6 +60,9 @@ export const NotificationSchema = z.object({
   created_at: z.number().int().nonnegative(),
   delivered_at: z.number().int().nonnegative().optional(),
   acked_at: z.number().int().nonnegative().optional(),
+  // Quiet delivery: row stays pending; drained via hook drain producer instead of
+  // inject/spawn. null / absent = interrupt (today's behaviour preserved).
+  delivery_mode: z.literal("quiet").optional(),
 });
 export type Notification = z.infer<typeof NotificationSchema>;
 
@@ -71,5 +74,6 @@ export const CreateNotificationSchema = z.object({
   payload: ClobberTurnSchema,
   provenance: NotificationProvenanceSchema,
   metadata: z.record(z.string(), z.unknown()).optional(),
+  delivery_mode: z.literal("quiet").optional(),
 });
 export type CreateNotification = z.infer<typeof CreateNotificationSchema>;

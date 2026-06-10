@@ -242,6 +242,7 @@ export const SCHEMA = `
     delivered_at       INTEGER,
     acked_at           INTEGER,
     logical_key        TEXT,
+    delivery_mode      TEXT,
     FOREIGN KEY (recipient_agent_id) REFERENCES agents(id) ON DELETE CASCADE
   );
   CREATE INDEX IF NOT EXISTS idx_notifications_recipient_agent

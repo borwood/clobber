@@ -19,6 +19,8 @@ import { evaluateSelfHabits, type HabitReceiverDeps } from "../habit-receiver.ts
 import { bridgeAskUserQuestion } from "../ask-user-question-bridge.ts";
 import { buildFileSizeReminder } from "../file-size-reminder.ts";
 import type { TriggerScheduler } from "../trigger-scheduler.ts";
+import type { NotificationStore } from "../notification-store.ts";
+import type { Clock } from "../clock.ts";
 
 // The bridge re-arms each window and never expires the ask (#241); this is the
 // long-poll heartbeat, not a deadline.
@@ -43,6 +45,9 @@ export interface RegisterHookRoutesDeps {
   resolveSessionHabits: HabitReceiverDeps["resolveSessionHabits"];
   random: HabitReceiverDeps["random"];
   runBash: HabitReceiverDeps["runBash"];
+  // Quiet-delivery drain: notifications store + clock for drainQuietForAgent.
+  notifications: NotificationStore;
+  clock: Clock;
 }
 
 export function registerHookRoutes(
@@ -59,6 +64,9 @@ export function registerHookRoutes(
     const payload = parsed.data;
     deps.store.append(payload);
     await applySessionLifecycle(payload, deps);
+
+    // PreToolUse: decision responses (deny/bridge) always short-circuit. These
+    // are not additionalContext producers and must not be composed.
     if (payload.hook_event_name === "PreToolUse") {
       const denial = guardOfficeBoundary(payload, deps);
       if (denial !== null) return denial;
@@ -71,18 +79,57 @@ export function registerHookRoutes(
       });
       if (bridged !== null) return bridged;
     }
+
     if (payload.hook_event_name === "PostToolUse") {
       applyTaskEvent(payload, deps);
-      const reminder = buildFileSizeReminder(payload, deps);
-      if (reminder !== null) return reminder;
     }
-    // The self.* habit evaluation rides every event the compile side wired. An
-    // inject habit returns additionalContext; a refuse habit returns a PreToolUse
-    // deny. Both run after the gates/bridges that may short-circuit the turn, and
-    // fall through to {continue:true} when no habit fires.
+
+    // Composer: collect all additionalContext producers into one hookSpecificOutput
+    // wrapper. Fixes the silent drop of co-firing producers (#AC2 — file-size +
+    // habit hints were mutually exclusive before this lift). The hookSpecificOutput
+    // wrapper echoing the firing event's name is mandatory (bare form silently
+    // fails — spike-proven). PreToolUse deny habits still short-circuit above.
+    const producers: string[] = [];
+
+    if (payload.hook_event_name === "PostToolUse") {
+      const reminder = buildFileSizeReminder(payload, deps);
+      if (reminder !== null) producers.push(reminder.hookSpecificOutput.additionalContext);
+    }
+
+    // evaluateSelfHabits returns HabitInjection | HabitDenial | null.
+    // HabitDenial (PreToolUse only) still short-circuits; inject → collected.
     const habitResult = evaluateSelfHabits(payload, deps);
-    if (habitResult !== null) return habitResult;
-    return { continue: true };
+    if (habitResult !== null) {
+      const out = habitResult.hookSpecificOutput;
+      if ("permissionDecision" in out) {
+        return habitResult;
+      }
+      producers.push(out.additionalContext);
+    }
+
+    // Quiet-notification drain: surfaces pending quiet rows on UserPromptSubmit
+    // and PostToolUse only (the hook-set wired in the spike: #AC1).
+    if (
+      payload.hook_event_name === "UserPromptSubmit" ||
+      payload.hook_event_name === "PostToolUse"
+    ) {
+      const session = deps.sessions.get(payload.session_id);
+      if (session?.agent_id !== undefined) {
+        const drained = deps.notifications.drainQuietForAgent(
+          session.agent_id,
+          deps.clock.now().getTime(),
+        );
+        for (const item of drained) producers.push(item.body);
+      }
+    }
+
+    if (producers.length === 0) return { continue: true };
+    return {
+      hookSpecificOutput: {
+        hookEventName: payload.hook_event_name,
+        additionalContext: producers.join("\n\n"),
+      },
+    };
   });
 }
 

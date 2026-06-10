@@ -28,6 +28,10 @@ export interface NotificationStore {
   markAcked(id: string, now: number): boolean;
   // All rows in state='pending'. Used by rearmPending to survive restarts.
   listPending(): readonly Notification[];
+  // Drain pending quiet rows for an agent: atomically claims each row (UPDATE
+  // WHERE state='pending') and returns only those where changes===1. The SELECT
+  // is the sole prepared-statement execution on the zero-pending hot path (AC7).
+  drainQuietForAgent(agentId: string, now: number): readonly { id: string; body: string }[];
 }
 
 interface Row {
@@ -44,6 +48,7 @@ interface Row {
   delivered_at: number | null;
   acked_at: number | null;
   logical_key: string | null;
+  delivery_mode: string | null;
 }
 
 function rowToRecipient(row: Row): RecipientRef {
@@ -70,6 +75,7 @@ function rowToNotification(row: Row): Notification {
   };
   if (row.delivered_at !== null) input["delivered_at"] = row.delivered_at;
   if (row.acked_at !== null) input["acked_at"] = row.acked_at;
+  if (row.delivery_mode !== null) input["delivery_mode"] = row.delivery_mode;
   return NotificationSchema.parse(input);
 }
 
@@ -77,8 +83,9 @@ export function createNotificationStore(db: Database): NotificationStore {
   const insertStmt = db.prepare(`
     INSERT INTO notifications
       (id, type, recipient_kind, recipient_agent_id, priority,
-       payload_json, provenance_json, metadata_json, state, created_at, delivered_at, acked_at, logical_key)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, NULL, NULL, ?)
+       payload_json, provenance_json, metadata_json, state, created_at, delivered_at, acked_at, logical_key,
+       delivery_mode)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, NULL, NULL, ?, ?)
     ON CONFLICT(logical_key) WHERE logical_key IS NOT NULL DO NOTHING
   `);
   const getStmt = db.prepare("SELECT * FROM notifications WHERE id = ?");
@@ -103,6 +110,14 @@ export function createNotificationStore(db: Database): NotificationStore {
   const listPendingStmt = db.prepare(
     "SELECT * FROM notifications WHERE state = 'pending' ORDER BY created_at ASC, id ASC",
   );
+  // AC7 hot path: zero-pending drain = exactly ONE prepared-statement execution,
+  // no JSON parse, no other work. Retrieves only the fields needed for rendering.
+  const selectQuietPendingStmt = db.prepare(
+    "SELECT id, payload_json FROM notifications WHERE recipient_agent_id = ? AND state = 'pending' AND delivery_mode = 'quiet' ORDER BY created_at ASC, id ASC",
+  );
+  const claimQuietRowStmt = db.prepare(
+    "UPDATE notifications SET state = 'delivered', delivered_at = ? WHERE id = ? AND state = 'pending'",
+  );
 
   return {
     create(req, now) {
@@ -113,6 +128,7 @@ export function createNotificationStore(db: Database): NotificationStore {
         req.provenance.source_id !== undefined
           ? `${req.provenance.source_kind}:${req.provenance.source_id}:${recipientAgentId ?? "\0user"}`
           : null;
+      const deliveryMode = req.delivery_mode ?? null;
       const result = insertStmt.run(
         id,
         req.type,
@@ -124,6 +140,7 @@ export function createNotificationStore(db: Database): NotificationStore {
         JSON.stringify(metadata),
         now,
         logicalKey,
+        deliveryMode,
       );
       if (result.changes === 0) {
         // ON CONFLICT: return the existing row that owns the logical_key
@@ -164,6 +181,23 @@ export function createNotificationStore(db: Database): NotificationStore {
     listPending() {
       const rows = listPendingStmt.all() as Row[];
       return rows.map(rowToNotification);
+    },
+
+    drainQuietForAgent(agentId, now) {
+      const rows = selectQuietPendingStmt.all(agentId) as Array<{
+        id: string;
+        payload_json: string;
+      }>;
+      if (rows.length === 0) return [];
+      const claimed: { id: string; body: string }[] = [];
+      for (const row of rows) {
+        const { changes } = claimQuietRowStmt.run(now, row.id);
+        if (changes === 1) {
+          const payload = JSON.parse(row.payload_json) as { body: string };
+          claimed.push({ id: row.id, body: payload.body });
+        }
+      }
+      return claimed;
     },
   };
 }

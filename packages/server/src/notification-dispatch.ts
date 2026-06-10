@@ -73,6 +73,12 @@ export async function deliver(
     // User inbox: record only. Phase-3 will build the wake-push for high-prio.
     return { action: "queued" };
   }
+  // Quiet delivery: row stays pending; the hook drain producer surfaces it to the
+  // agent on its next UserPromptSubmit or PostToolUse. Never wake, never inject.
+  // rearmPending is safe by construction: this branch fires again → still pending.
+  if (n.delivery_mode === "quiet") {
+    return { action: "queued" };
+  }
   const agentId = n.recipient.agent_id;
   const agent = deps.agents.get(agentId);
   if (agent === null) return { action: "errored", error: `recipient agent ${agentId} absent` };

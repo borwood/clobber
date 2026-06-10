@@ -11,7 +11,9 @@ export function composeUnackedNotifications(
   agentId: string,
   store: NotificationStore,
 ): string {
-  const rows = store.listUnackedForAgent(agentId);
+  // Quiet rows are drained via the hook drain producer — excluding them here
+  // prevents double-delivery at session start (fork iii ruling).
+  const rows = store.listUnackedForAgent(agentId).filter((n) => n.delivery_mode !== "quiet");
   if (rows.length === 0) return NEAR_SILENT;
   const lines: string[] = [
     `[Unacknowledged notifications — ${rows.length} pending]`,
