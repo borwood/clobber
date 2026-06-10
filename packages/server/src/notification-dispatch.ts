@@ -139,8 +139,13 @@ export async function deliver(
   // persistent recipient is always busy at session start. Claude's native stdin
   // queue defers a mid-thinking write to a safe tool-result boundary on its own
   // (#367 spike — 14/14, never poisons), so the clobber-side busy gate is
-  // redundant for this runtime. Consequence: N completions while busy produce N
-  // native-queued wakes (not 1 coalesced flush-on-idle); see AC #4.
+  // redundant for this runtime.
+  //
+  // Write-through burst (#424 gap 2, bounded): N transient completions while
+  // the recipient is busy produce N native-queued wakes — not 1 coalesced
+  // flush-on-idle. Full flush-on-idle redesign is out-of-scope here; the
+  // rearmPending path coalesces accumulated transient backlog on boot/cycle.
+  // Durable (message/ask) injections must always all land, so no burst cap.
   if (live !== null && deps.runtimeProvider.capabilities.livePromptInjection) {
     writeUserTurn(live, deps.runtimeProvider, deps.registry, n.payload.body, n.payload.tag);
     return { action: "injected", sessionId: live.sessionId };
@@ -201,11 +206,19 @@ export interface RearmPendingDeps extends DeliverDeps {
   readonly clock: Clock;
 }
 
-// Re-arm durable `pending` rows through the existing deliver() core. Called on
-// server boot and cycle-reseat boot so notifications survive process boundaries.
+// Re-arm pending rows through the existing deliver() core. Called on server
+// boot and cycle-reseat boot so notifications survive process boundaries.
 // The in-memory busy queue evaporates on restart; the DB row stays pending and
 // is picked up here. Optional `agentId` scopes re-arm to a single recipient
 // (cycle-reseat: only that agent's orphaned rows need re-queueing).
+//
+// Category-aware coalescing (#616):
+// - transient (trigger/wake): per-recipient latest-only. Stale rows are
+//   cancelled (never trickle-deliver). listPending() is ASC so the last entry
+//   per recipient is the newest.
+// - durable (message/ask): per-recipient deliver-all. Distinct messages must
+//   not be starved by a latest-only filter.
+// - quiet rows: excluded — drainQuietForAgent owns them.
 export async function rearmPending(deps: RearmPendingDeps, agentId?: string): Promise<void> {
   const pending = deps.store.listPending();
   const targets =
@@ -215,30 +228,67 @@ export async function rearmPending(deps: RearmPendingDeps, agentId?: string): Pr
           (n) => n.recipient.kind === "agent" && n.recipient.agent_id === agentId,
         );
 
-  // Coalesce per-recipient: deliver at most one row per recipient, not one per
-  // row. Naive write-through over the full backlog injects the entire accumulated
-  // pending backlog to stdin at once on boot — that trades the strand for a storm.
-  // One-per-recipient is the minimal bound; listPending() is ASC so last-write
-  // into the map is the most recent row for that recipient. The #424
-  // staleness/category gate can refine this further in a follow-up.
-  const latestByRecipient = new Map<string, Notification>();
+  // Bucket per recipient×category, skipping quiet rows.
+  const transientByRecipient = new Map<string, Notification[]>();
+  const durableByRecipient = new Map<string, Notification[]>();
+
   for (const n of targets) {
+    if (n.delivery_mode === "quiet") continue;
     const key = n.recipient.kind === "user" ? "\0user" : n.recipient.agent_id;
-    latestByRecipient.set(key, n);
+    if (n.category === "transient") {
+      const bucket = transientByRecipient.get(key) ?? [];
+      bucket.push(n);
+      transientByRecipient.set(key, bucket);
+    } else {
+      const bucket = durableByRecipient.get(key) ?? [];
+      bucket.push(n);
+      durableByRecipient.set(key, bucket);
+    }
   }
 
-  for (const n of latestByRecipient.values()) {
-    let outcome: DeliveryOutcome;
-    try {
-      outcome = await deliver(deps, n, { kind: "drop" });
-    } catch {
-      // One poison row (e.g. a DB-inconsistent notification) must not abort
-      // re-arm of the remaining rows — batch-isolation mirrors the drift-sweep
-      // route's per-role try/clean-report pattern.
-      continue;
+  // Cancel stale transient rows before delivering the latest, so they can
+  // never trickle-deliver on a future rearm.
+  //
+  // Applies to ALL recipients (persistent AND non-persistent): stale wakes for
+  // a dead ephemeral agent serve no purpose — the agent will never auto-wake and
+  // deliver() would return queued anyway. Cancelling cleans up indefinitely
+  // accumulating rows for ended ephemeral recipients.
+  //
+  // Crash-recovery: cancels commit before deliverAndMark, so if the process
+  // dies between the two calls the stale rows stay cancelled and the latest
+  // row remains pending — it will be retried on the next rearm. No row is
+  // lost; at worst the latest is delivered twice (idempotent at the recipient).
+  for (const bucket of transientByRecipient.values()) {
+    const staleIds = bucket.slice(0, -1).map((n) => n.id);
+    if (staleIds.length > 0) deps.store.cancelBulk(staleIds);
+  }
+
+  // Deliver the latest transient row per recipient.
+  for (const bucket of transientByRecipient.values()) {
+    const latest = bucket[bucket.length - 1]!;
+    await deliverAndMark(deps, latest);
+  }
+
+  // Deliver all durable rows. Order within a recipient's bucket is oldest-first
+  // (listPending ASC). Cross-recipient delivery order is unguaranteed — durable
+  // rows for different recipients may interleave depending on bucket iteration.
+  for (const bucket of durableByRecipient.values()) {
+    for (const n of bucket) {
+      await deliverAndMark(deps, n);
     }
-    if (outcome.action === "spawned" || outcome.action === "resumed" || outcome.action === "injected") {
-      deps.store.markDelivered(n.id, deps.clock.now().getTime());
-    }
+  }
+}
+
+async function deliverAndMark(deps: RearmPendingDeps, n: Notification): Promise<void> {
+  let outcome: DeliveryOutcome;
+  try {
+    outcome = await deliver(deps, n, { kind: "drop" });
+  } catch {
+    // One poison row must not abort re-arm of the remaining rows — batch
+    // isolation mirrors the drift-sweep route's per-role try/clean-report.
+    return;
+  }
+  if (outcome.action === "spawned" || outcome.action === "resumed" || outcome.action === "injected") {
+    deps.store.markDelivered(n.id, deps.clock.now().getTime());
   }
 }

@@ -165,6 +165,7 @@ function makeNotif(
 ): ReturnType<typeof h.store.create>["notification"] {
   const req: CreateNotification = {
     type: "trigger",
+    category: "transient",
     recipient: { kind: "agent", agent_id: agentId },
     priority,
     payload: { body: "test-wake", tag: { kind: "trigger", attrs: { via: "worker-done" } } },

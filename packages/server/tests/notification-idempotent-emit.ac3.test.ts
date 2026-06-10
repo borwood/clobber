@@ -20,6 +20,7 @@ describe("AC3 — keep-first: re-emit preserves delivered/acked state, no re-del
 
     const req: CreateNotification = {
       type: "trigger",
+      category: "transient",
       recipient: { kind: "agent", agent_id: agentId },
       priority: "low",
       payload: { body: "wake", tag: { kind: "trigger", attrs: { via: "worker-done" } } },
@@ -60,6 +61,7 @@ describe("AC3 — keep-first: re-emit preserves delivered/acked state, no re-del
 
     const req: CreateNotification = {
       type: "trigger",
+      category: "transient",
       recipient: { kind: "agent", agent_id: agentId },
       priority: "low",
       payload: { body: "wake", tag: { kind: "trigger", attrs: { via: "worker-done" } } },

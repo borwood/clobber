@@ -21,6 +21,7 @@ import { migrateSessionOpLevel } from "./session-op-level-migration.ts";
 import { migrateSessionTokenScope } from "./session-token-scope-migration.ts";
 import { migrateNotificationLogicalKey } from "./notification-logical-key-migration.ts";
 import { migrateNotificationDeliveryMode } from "./notification-delivery-mode-migration.ts";
+import { migrateNotificationCategory } from "./notification-category-migration.ts";
 
 export function createDatabase(path: string): Database {
   const db = new Database(path);
@@ -54,6 +55,7 @@ export function createDatabase(path: string): Database {
   migrateSessionTokenScope(db);
   migrateNotificationLogicalKey(db);
   migrateNotificationDeliveryMode(db);
+  migrateNotificationCategory(db);
   return db;
 }
 

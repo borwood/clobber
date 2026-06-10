@@ -4,6 +4,7 @@ import {
   NotificationSchema,
   type CreateNotification,
   type Notification,
+  type NotificationCategory,
   type RecipientRef,
 } from "@clobber/shared";
 
@@ -32,11 +33,16 @@ export interface NotificationStore {
   // WHERE state='pending') and returns only those where changes===1. The SELECT
   // is the sole prepared-statement execution on the zero-pending hot path (AC7).
   drainQuietForAgent(agentId: string, now: number): readonly { id: string; body: string }[];
+  // Mark stale transient rows as cancelled so they never trickle-deliver on a
+  // future rearm. Idempotent: rows already in a terminal state are unaffected
+  // (WHERE state='pending' guard).
+  cancelBulk(ids: readonly string[]): void;
 }
 
 interface Row {
   id: string;
   type: string;
+  category: string;
   recipient_kind: string;
   recipient_agent_id: string | null;
   priority: string;
@@ -65,6 +71,7 @@ function rowToNotification(row: Row): Notification {
   const input: Record<string, unknown> = {
     id: row.id,
     type: row.type,
+    category: row.category as NotificationCategory,
     recipient: rowToRecipient(row),
     priority: row.priority,
     payload: JSON.parse(row.payload_json),
@@ -82,10 +89,10 @@ function rowToNotification(row: Row): Notification {
 export function createNotificationStore(db: Database): NotificationStore {
   const insertStmt = db.prepare(`
     INSERT INTO notifications
-      (id, type, recipient_kind, recipient_agent_id, priority,
+      (id, type, category, recipient_kind, recipient_agent_id, priority,
        payload_json, provenance_json, metadata_json, state, created_at, delivered_at, acked_at, logical_key,
        delivery_mode)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, NULL, NULL, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, NULL, NULL, ?, ?)
     ON CONFLICT(logical_key) WHERE logical_key IS NOT NULL DO NOTHING
   `);
   const getStmt = db.prepare("SELECT * FROM notifications WHERE id = ?");
@@ -118,6 +125,9 @@ export function createNotificationStore(db: Database): NotificationStore {
   const claimQuietRowStmt = db.prepare(
     "UPDATE notifications SET state = 'delivered', delivered_at = ? WHERE id = ? AND state = 'pending'",
   );
+  const cancelStmt = db.prepare(
+    "UPDATE notifications SET state = 'cancelled' WHERE id = ? AND state = 'pending'",
+  );
 
   return {
     create(req, now) {
@@ -132,6 +142,7 @@ export function createNotificationStore(db: Database): NotificationStore {
       const result = insertStmt.run(
         id,
         req.type,
+        req.category,
         req.recipient.kind,
         recipientAgentId,
         req.priority,
@@ -198,6 +209,12 @@ export function createNotificationStore(db: Database): NotificationStore {
         }
       }
       return claimed;
+    },
+
+    cancelBulk(ids) {
+      for (const id of ids) {
+        cancelStmt.run(id);
+      }
     },
   };
 }

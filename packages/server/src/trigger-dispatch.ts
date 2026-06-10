@@ -99,6 +99,7 @@ export async function dispatchTrigger(
   // natural wake (#424 Phase 3).
   const req: CreateNotification = {
     type: "trigger",
+    category: "transient",
     recipient: { kind: "agent", agent_id: binding.agentId },
     priority: "high",
     payload: { body: prompt, tag: promptTag },

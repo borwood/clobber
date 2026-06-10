@@ -136,6 +136,7 @@ function bearer(token: string) {
 function agentNotifReq(agentId: string, body: string): CreateNotification {
   return {
     type: "trigger",
+    category: "transient",
     recipient: { kind: "agent", agent_id: agentId },
     priority: "high",
     payload: { body, tag: { kind: "trigger", attrs: { via: "cron" } } },

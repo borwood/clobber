@@ -35,6 +35,7 @@ const T3 = 1_700_000_002_000;
 function userNotifReq(): CreateNotification {
   return {
     type: "message",
+    category: "durable",
     recipient: { kind: "user" },
     priority: "low",
     payload: { body: "hello user", tag: { kind: "message" } },
@@ -45,6 +46,7 @@ function userNotifReq(): CreateNotification {
 function agentNotifReq(agentId: string, body = "you have a notification"): CreateNotification {
   return {
     type: "trigger",
+    category: "transient",
     recipient: { kind: "agent", agent_id: agentId },
     priority: "high",
     payload: { body, tag: { kind: "trigger", attrs: { via: "cron" } } },
@@ -458,6 +460,7 @@ describe("notification dispatch — deliver() fold-ins", () => {
     const { notification: n } = h.store.create(
       {
         type: "message",
+        category: "durable",
         recipient: { kind: "user" },
         priority: "high",
         payload: { body: "urgent", tag: { kind: "message" } },

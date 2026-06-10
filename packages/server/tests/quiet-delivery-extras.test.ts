@@ -248,6 +248,7 @@ describe("AC5 — interrupt path golden: non-quiet deliver() is byte-unchanged",
     // Non-quiet notification (delivery_mode null — interrupt behaviour)
     const { notification } = store.create({
       type: "trigger",
+      category: "transient",
       recipient: { kind: "agent", agent_id: agent.id },
       priority: "high",
       payload: { body: "you have work to do", tag: { kind: "trigger" } },
@@ -306,6 +307,7 @@ describe("AC7 — hot-path: zero-pending quiet drain = no work beyond the SELECT
     // Insert an interrupt-mode (null delivery_mode) notification
     store.create({
       type: "trigger",
+      category: "transient",
       recipient: { kind: "agent", agent_id: agent.id },
       priority: "high",
       payload: { body: "interrupt me", tag: { kind: "trigger" } },
