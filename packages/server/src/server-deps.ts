@@ -11,6 +11,7 @@ import { createTriggerScheduler } from "./trigger-scheduler.ts";
 import { createFinalReportConsumer } from "./final-report-consumer.ts";
 import { attachSessionToAgent, type SpawnPipelineDeps } from "./spawn-pipeline.ts";
 import { resumeSessionTurn, resumeEndedSession } from "./resume-pipeline.ts";
+import type { RearmPendingDeps } from "./notification-rearm.ts";
 import { bootServerRoles } from "./boot-server-roles.ts";
 import { createSystemClock } from "./clock.ts";
 import { createSessionHabitsResolver, runHabitBash } from "./resolve-session-habits.ts";
@@ -133,6 +134,21 @@ export function buildServerDeps(opts: ServerOptions) {
     clock,
   });
 
+  const rearmDeps: RearmPendingDeps = {
+    agents: opts.agents,
+    roles: opts.roles,
+    workspaces: opts.workspaces,
+    sessions: opts.sessions,
+    registry,
+    runtimeProvider,
+    attachSession: (input) => attachSessionToAgent(spawnPipelineDeps, input),
+    resumeEndedSession: (input) => resumeEndedSession(spawnPipelineDeps, input),
+    store: notificationStore,
+    clock,
+    resolveOwner: (agentId) => opts.agents.get(agentId)?.spawner_agent_id ?? null,
+    agentMessages,
+  };
+
   return {
     registry,
     toolTokens,
@@ -153,6 +169,7 @@ export function buildServerDeps(opts: ServerOptions) {
     readTranscriptTail,
     resumeTurn,
     resumeEnded,
+    rearmDeps,
     finalReportConsumer,
     onSessionEnded,
     onWorkerDone,

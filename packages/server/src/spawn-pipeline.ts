@@ -72,6 +72,9 @@ export interface SpawnPipelineInput {
   readonly effortOverride?: EffortLevel;
   readonly modelOverride?: Model;
   readonly scopeOverride?: CliScope;
+  // The agent spawning this worker — recorded on the new agent row as the
+  // capability-holder / owner for confirm-resume flows (#621).
+  readonly spawnerAgentId?: string;
 }
 
 export interface SpawnPipelineSuccess {
@@ -132,6 +135,7 @@ export async function executeSpawn(
     workspace_id: workspace.id,
     role_id: role.id,
     label,
+    ...(input.spawnerAgentId === undefined ? {} : { spawner_agent_id: input.spawnerAgentId }),
   });
   return attachSessionToAgent(deps, {
     workspace,

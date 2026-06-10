@@ -78,13 +78,15 @@ export const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_wrc_role      ON workspace_role_ceilings(role_id);
 
   CREATE TABLE IF NOT EXISTS agents (
-    id            TEXT    PRIMARY KEY,
-    workspace_id  TEXT    NOT NULL,
-    role_id       TEXT    NOT NULL,
-    label         TEXT,
-    created_at    INTEGER NOT NULL,
-    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
-    FOREIGN KEY (role_id)      REFERENCES roles(id)      ON DELETE CASCADE
+    id                TEXT    PRIMARY KEY,
+    workspace_id      TEXT    NOT NULL,
+    role_id           TEXT    NOT NULL,
+    label             TEXT,
+    spawner_agent_id  TEXT,
+    created_at        INTEGER NOT NULL,
+    FOREIGN KEY (workspace_id)     REFERENCES workspaces(id) ON DELETE CASCADE,
+    FOREIGN KEY (role_id)          REFERENCES roles(id)      ON DELETE CASCADE,
+    FOREIGN KEY (spawner_agent_id) REFERENCES agents(id)     ON DELETE SET NULL
   );
   CREATE INDEX IF NOT EXISTS idx_agents_workspace ON agents(workspace_id, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_agents_role      ON agents(role_id);

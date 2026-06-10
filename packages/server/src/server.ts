@@ -2,8 +2,6 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { buildServerDeps } from "./server-deps.ts";
 import { registerAllRoutes } from "./server-routes.ts";
 import { rearmPending } from "./notification-dispatch.ts";
-import { attachSessionToAgent } from "./spawn-pipeline.ts";
-import { resumeEndedSession } from "./resume-pipeline.ts";
 
 export type {
   AgentSpawnRequest,
@@ -29,18 +27,7 @@ export function createServer(opts: ServerOptions): FastifyInstance {
 
   // Re-arm durable pending notifications that survived the last process boundary
   // (server restart clears the in-memory busy-queue; DB rows stay pending).
-  rearmPending({
-    agents: deps.spawnPipelineDeps.agents,
-    roles: deps.spawnPipelineDeps.roles,
-    workspaces: deps.spawnPipelineDeps.workspaces,
-    sessions: deps.spawnPipelineDeps.sessions,
-    registry: deps.spawnPipelineDeps.registry,
-    runtimeProvider: deps.spawnPipelineDeps.runtimeProvider,
-    attachSession: (input) => attachSessionToAgent(deps.spawnPipelineDeps, input),
-    resumeEndedSession: (input) => resumeEndedSession(deps.spawnPipelineDeps, input),
-    store: deps.notificationStore,
-    clock: deps.clock,
-  }).catch((err) => console.error("[clobber] rearmPending boot error:", err));
+  rearmPending(deps.rearmDeps).catch((err) => console.error("[clobber] rearmPending boot error:", err));
 
   deps.scheduler.start();
   deps.finalReportConsumer.start();

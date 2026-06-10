@@ -35,6 +35,7 @@ import type { LayoutEventStore } from "../layout-event-store.ts";
 import type { EventStore } from "../event-store.ts";
 import type { NotificationStore } from "../notification-store.ts";
 import type { Clock } from "../clock.ts";
+import type { AgentMessageStore } from "../agent-message-store.ts";
 
 export interface AgentRouteDeps {
   readonly sessionTokens: SessionTokenStore;
@@ -72,6 +73,7 @@ export interface AgentRouteDeps {
   readonly onWorkerDone: (workspaceId: string, finishedSessionId: string, completionId: number) => void;
   readonly resumeEnded: (input: { readonly sessionId: string; readonly prompt: string | undefined }) => Promise<ResumeEndedResult>;
   readonly notifications: NotificationStore;
+  readonly agentMessages: AgentMessageStore;
 }
 
 const AgentSpawnBodySchema = z.object({
