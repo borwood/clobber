@@ -91,7 +91,7 @@ export async function dispatchTrigger(
   const prompt = deps.synthesize(trigger, payload);
   const promptTag: ClobberPromptTag = { kind: "trigger", attrs: { via: trigger.kind } };
   const wakeProgram = resolveTriggerWakeProgram(workspace, binding.roleId, trigger);
-  const sourceId = triggerSourceId(trigger, payload, firedAt);
+  const sourceId = triggerSourceId(trigger, payload);
 
   const req: CreateNotification = {
     type: "trigger",
@@ -149,7 +149,6 @@ export async function dispatchTrigger(
 function triggerSourceId(
   trigger: RoleTrigger,
   payload: unknown,
-  firedAt: number,
 ): string | undefined {
   switch (trigger.kind) {
     case "worker-done":

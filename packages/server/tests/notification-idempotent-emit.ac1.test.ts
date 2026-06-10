@@ -4,7 +4,7 @@ import { createDatabase } from "../src/db.ts";
 import { createNotificationStore } from "../src/notification-store.ts";
 import { createNotificationDispatcher, type DeliveryOutcome } from "../src/notification-dispatch.ts";
 import { createTestClock } from "../src/clock.ts";
-import { seedWorkspace, NOOP_TRANSPORT } from "./notification-idempotent-emit.helpers.ts";
+import { seedWorkspace, NOOP_TRANSPORT } from "./trigger-dispatch.helpers.ts";
 
 // ─── AC1 ─────────────────────────────────────────────────────────────────────
 // Same logical event emitted twice: the store must produce exactly 1 row AND

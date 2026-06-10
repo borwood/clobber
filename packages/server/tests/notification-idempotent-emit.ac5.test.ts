@@ -4,7 +4,7 @@ import { createDatabase } from "../src/db.ts";
 import { createNotificationStore } from "../src/notification-store.ts";
 import { createNotificationDispatcher, type DeliveryOutcome } from "../src/notification-dispatch.ts";
 import { createTestClock } from "../src/clock.ts";
-import { seedWorkspace } from "./notification-idempotent-emit.helpers.ts";
+import { seedWorkspace } from "./trigger-dispatch.helpers.ts";
 
 // ─── AC5 ─────────────────────────────────────────────────────────────────────
 // Non-duplicate-path golden: the non-duplicate path (first emit) must deliver

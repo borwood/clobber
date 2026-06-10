@@ -4,7 +4,7 @@ import { createDatabase } from "../src/db.ts";
 import { createNotificationStore } from "../src/notification-store.ts";
 import { createNotificationDispatcher, type DeliveryOutcome } from "../src/notification-dispatch.ts";
 import { createTestClock } from "../src/clock.ts";
-import { seedWorkspace } from "./notification-idempotent-emit.helpers.ts";
+import { seedWorkspace } from "./trigger-dispatch.helpers.ts";
 
 // ─── AC4 ─────────────────────────────────────────────────────────────────────
 // Fall-back-to-unique: absent source_id → null logical_key → always-distinct.

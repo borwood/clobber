@@ -4,7 +4,7 @@ import { createDatabase } from "../src/db.ts";
 import { createNotificationStore } from "../src/notification-store.ts";
 import { createNotificationDispatcher, type DeliveryOutcome } from "../src/notification-dispatch.ts";
 import { createTestClock } from "../src/clock.ts";
-import { seedWorkspace } from "./notification-idempotent-emit.helpers.ts";
+import { seedWorkspace } from "./trigger-dispatch.helpers.ts";
 
 // ─── AC3 ─────────────────────────────────────────────────────────────────────
 // Keep-first: once a notification has advanced to delivered or acked, a

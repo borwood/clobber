@@ -2,7 +2,7 @@ import { describe, it, expect } from "bun:test";
 import type { RoleTrigger } from "@clobber/shared";
 import { dispatchTrigger } from "../src/trigger-dispatch.ts";
 import type { CompletionWakePayload } from "../src/completion-wake.ts";
-import { makeDispatchHarness } from "./notification-idempotent-emit.helpers.ts";
+import { makeDispatchHarness } from "./trigger-dispatch.helpers.ts";
 
 // ─── AC2 ─────────────────────────────────────────────────────────────────────
 // Two completion triggers for different sessions must NOT be collapsed.
