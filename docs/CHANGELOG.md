@@ -4,6 +4,8 @@
 
 _Generated from git history of source metadata files._
 
+- 2026-06-10 feat(cli,server): make --prompt optional on spawn (server is the validator)
+- 2026-06-09 feat(shared,web,cli): add fable as a supported model alias (#583)
 - 2026-06-07 feat(server,cli): PR2 — per-agent scope override + effective_scope surface (#567) (#569)
 - 2026-06-07 feat(shared,server,cli): Track C step 4 — workspace perms tier + live 2-tier resolution (#565) (#566)
 - 2026-06-07 feat(shared): Track C step 3 — scope grammar + isCliCommandAllowed shim (#560) (#561)
