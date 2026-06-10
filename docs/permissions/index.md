@@ -9,6 +9,7 @@ Capabilities grouped by access level. Internal capabilities are not listed.
 | Capability | Description |
 | ---------- | ----------- |
 | `agents` | List live agents in the current workspace. |
+| `notify.list` | List the calling agent's unacknowledged notifications. |
 | `reports` | Read worker final-reports and findings. |
 | `roles.diff` | Show working-copy changes against the checked-out role's branch tip. |
 | `roles.list` | List roles available in the current workspace. |
@@ -27,6 +28,7 @@ Capabilities grouped by access level. Internal capabilities are not listed.
 | `ask` | Post a blocking question to the user and await the answer. |
 | `finding` | Submit a freetext triage finding. |
 | `message` | Send a message to another session in the workspace. |
+| `notify.ack` | Acknowledge one of the calling agent's own notifications by ID. |
 | `reply` | Reply to a received message. |
 | `report` | Submit the session's structured final-report. |
 | `status` | Post the agent's current status string. |
