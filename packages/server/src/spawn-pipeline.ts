@@ -96,10 +96,17 @@ export interface SpawnPipelineNoBundleError {
   readonly role: string;
 }
 
+export interface SpawnPipelinePromptRequiredError {
+  readonly ok: false;
+  readonly status: 422;
+  readonly error: "runtime requires a prompt";
+}
+
 export type SpawnPipelineResult =
   | SpawnPipelineSuccess
   | SpawnPipelineCapacityError
-  | SpawnPipelineNoBundleError;
+  | SpawnPipelineNoBundleError
+  | SpawnPipelinePromptRequiredError;
 
 export async function executeSpawn(
   deps: SpawnPipelineDeps,
@@ -171,7 +178,7 @@ export interface AttachSessionInput {
 export async function attachSessionToAgent(
   deps: SpawnPipelineDeps,
   input: AttachSessionInput,
-): Promise<SpawnPipelineSuccess | SpawnPipelineNoBundleError> {
+): Promise<SpawnPipelineSuccess | SpawnPipelineNoBundleError | SpawnPipelinePromptRequiredError> {
   const { workspace, role, agent, prompt, promptTag, wakeProgram, systemAddon, opLevelAddon, briefing, effortOverride, modelOverride, scopeOverride } = input;
   const sessionId = randomUUID();
   const pin = rolePin(role);
@@ -195,6 +202,10 @@ export async function attachSessionToAgent(
   });
   if (!prepared.ok) return prepared;
   const ctx = prepared.context;
+
+  if (deps.runtimeProvider.capabilities.requiresPrompt && ctx.spawnOptions.prompt === undefined) {
+    return { ok: false, status: 422, error: "runtime requires a prompt" };
+  }
 
   const spawnReq = deps.runtimeProvider.buildSpawnRequest(ctx.spawnOptions);
   const spawned = deps.spawner(spawnReq);
@@ -228,9 +239,7 @@ export async function attachSessionToAgent(
     ...(ctx.spawnOptions.model === undefined ? {} : { model: ctx.spawnOptions.model }),
     ...(ctx.spawnOptions.effort === undefined ? {} : { effort: ctx.spawnOptions.effort }),
   });
-  // A fresh attach always delivers the opening kick (or prompt), so a turn is in
-  // flight — register busy until its `Stop`.
-  bindLiveSession(deps, sessionId, ctx, spawned, true);
+  bindLiveSession(deps, sessionId, ctx, spawned, ctx.spawnOptions.prompt !== undefined);
 
   return { ok: true, agent_id: agent.id, session_id: sessionId, pid: spawned.pid };
 }

@@ -2,6 +2,7 @@ import type { Agent, ClobberPromptTag, Role, Workspace } from "@clobber/shared";
 import type {
   SpawnPipelineSuccess,
   SpawnPipelineNoBundleError,
+  SpawnPipelinePromptRequiredError,
 } from "./spawn-pipeline.ts";
 
 // The contract a trigger fire uses to materialize a session for an idle agent.
@@ -9,7 +10,8 @@ import type {
 // core (which invokes it).
 export type AttachOutcome =
   | SpawnPipelineSuccess
-  | SpawnPipelineNoBundleError;
+  | SpawnPipelineNoBundleError
+  | SpawnPipelinePromptRequiredError;
 export type AttachSessionFn = (input: {
   readonly workspace: Workspace;
   readonly role: Role;

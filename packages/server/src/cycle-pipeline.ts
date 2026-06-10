@@ -185,7 +185,8 @@ async function respawnOnce(
     wakeProgram,
   });
   if (!result.ok) {
-    throw new Error(`cycle respawn failed for role '${result.role}': ${result.error}`);
+    const detail = "role" in result ? ` for role '${result.role}'` : "";
+    throw new Error(`cycle respawn failed${detail}: ${result.error}`);
   }
   return result;
 }
