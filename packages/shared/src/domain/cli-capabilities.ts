@@ -61,6 +61,11 @@ export const CLI_CAPABILITY_REGISTRY: Readonly<Record<string, CliCapability>> = 
     description: "List the current role's granted self-skills and workspace policy.",
     tag: "read",
   },
+  "notify.list": {
+    name: "notify.list",
+    description: "List the calling agent's unacknowledged notifications.",
+    tag: "read",
+  },
   "transcript": {
     name: "transcript",
     description: "Read a session's transcript.",
@@ -88,6 +93,11 @@ export const CLI_CAPABILITY_REGISTRY: Readonly<Record<string, CliCapability>> = 
   "message": {
     name: "message",
     description: "Send a message to another session in the workspace.",
+    tag: "write",
+  },
+  "notify.ack": {
+    name: "notify.ack",
+    description: "Acknowledge one of the calling agent's own notifications by ID.",
     tag: "write",
   },
   "reply": {

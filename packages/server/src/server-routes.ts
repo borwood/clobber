@@ -12,7 +12,7 @@ import { registerAgentMessagesRoutes } from "./routes/agent-messages.ts";
 import { registerAgentRolesRoutes } from "./routes/agent-roles.ts";
 import { registerAgentSelfSkillsRoutes } from "./routes/agent-self-skills.ts";
 import { registerAgentAskRoutes } from "./routes/agent-ask.ts";
-import { registerNotificationsRoutes } from "./routes/agent-notifications.ts";
+import { registerNotificationsRoutes, registerAgentNotificationsRoutes } from "./routes/agent-notifications.ts";
 import { registerPersistentAgentsRoutes } from "./routes/persistent-agents.ts";
 import { registerWhiteboardRoutes } from "./routes/whiteboard.ts";
 import { registerWebhookTriggersRoutes } from "./routes/webhook-triggers.ts";
@@ -273,5 +273,16 @@ export function registerAllRoutes(
   registerNotificationsRoutes(app, {
     notifications: deps.notificationStore,
     clock: deps.clock,
+  });
+  registerAgentNotificationsRoutes(app, {
+    notifications: deps.notificationStore,
+    clock: deps.clock,
+    sessionTokens: opts.sessionTokens,
+    sessions: opts.sessions,
+    roles: opts.roles,
+    roleVersions: opts.roleVersions,
+    workspaces: opts.workspaces,
+    ...(opts.roleContentCache !== undefined ? { roleContentCache: opts.roleContentCache } : {}),
+    ...(opts.roleRepoDir !== undefined ? { roleRepoDir: opts.roleRepoDir } : {}),
   });
 }

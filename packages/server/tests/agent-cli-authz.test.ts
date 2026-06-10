@@ -284,7 +284,7 @@ describe("agent CLI authz — manager wildcard vs worker allow-list", () => {
       // Git-native fork: the allow-list rides the fork's commit, not a version row.
       const cloneDir = join(dirname(h.roleRepoDir), "role-repos", h.workspaceId);
       const contract = loadRoleContractAtCommit(cloneDir, sha);
-      expect(contract.allowedCliCommands).toEqual(["whoami", "ask", "status", "report", "reply"]);
+      expect(contract.allowedCliCommands).toEqual(["whoami", "ask", "status", "report", "reply", "notify.list", "notify.ack"]);
       expect(role_id).toBeDefined();
     } finally {
       await teardown(h);
