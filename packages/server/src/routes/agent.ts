@@ -217,8 +217,13 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
       // A worker's `clobber status done` is its terminal handoff — the manager's
       // work-is-done wake keys on this transition (the worker idles after a PR
       // rather than ending, so session-ended never fires on the happy path). See #240.
+      // #619: gate on the poster being ephemeral — a persistent agent (the manager
+      // itself) posting done must not trigger a worker-done wake.
       if (parsed.data.state === "done") {
-        deps.onWorkerDone(session.workspace_id, session.id);
+        const posterRole = deps.roles.get(session.role_id);
+        if (posterRole !== null && !posterRole.persistent) {
+          deps.onWorkerDone(session.workspace_id, session.id);
+        }
       }
       return { ok: true };
     }),

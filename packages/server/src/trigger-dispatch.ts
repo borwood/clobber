@@ -160,9 +160,14 @@ function triggerSourceId(
     case "session-ended": {
       // Prefix with trigger.kind so worker-done and session-ended for the same
       // session have different logical keys — they are distinct events (#424).
-      // Sorted session IDs make coalesced (multi-ended) wakes deterministic.
+      // #620: append completionId (status/report log row id) when present so
+      // re-tasked workers' successive completions get distinct keys. A missing
+      // completionId (crash/kill — no log row) falls back to the session-only key.
+      // Sorted entries make coalesced (multi-ended) wakes deterministic.
       const sessionKey = (payload as CompletionWakePayload).ended
-        .map((i) => i.sessionId)
+        .map((i) =>
+          i.completionId !== undefined ? `${i.sessionId}:${i.completionId}` : i.sessionId,
+        )
         .sort()
         .join(",");
       return `${trigger.kind}:${sessionKey}`;

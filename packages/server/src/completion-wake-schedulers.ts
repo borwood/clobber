@@ -41,6 +41,7 @@ export function createCompletionWakeSchedulers(
       sessionId,
       label: session.label === undefined ? null : session.label,
       summary: report === null ? null : report.summary,
+      ...(report !== null ? { completionId: report.id } : {}),
     };
   };
   const buildDoneItem = (sessionId: string): CompletionWakeItem | null => {
@@ -51,11 +52,20 @@ export function createCompletionWakeSchedulers(
       sessionId,
       label: session.label === undefined ? null : session.label,
       summary: status === null ? null : status.summary,
+      // #620: include the status log row id as a per-completion discriminator
+      // so a re-tasked worker's second done gets a distinct logical_key.
+      ...(status !== null ? { completionId: status.id } : {}),
     };
   };
 
   const sessionEnded = createCompletionWakeScheduler("session-ended", buildEndedItem, dispatchDeps);
-  const workerDone = createCompletionWakeScheduler("worker-done", buildDoneItem, dispatchDeps);
+  // #619: pass excludeFinisherFor so fire() skips the finishing agent's own entry.
+  const workerDone = createCompletionWakeScheduler(
+    "worker-done",
+    buildDoneItem,
+    dispatchDeps,
+    (sid) => deps.sessions.get(sid)?.agent_id ?? undefined,
+  );
 
   return {
     registerSessionEnded: sessionEnded.register,

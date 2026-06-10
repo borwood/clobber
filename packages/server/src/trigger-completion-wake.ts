@@ -27,6 +27,11 @@ export interface ScheduledCompletionWake extends AgentBinding {
 // session row and its log rows survive.
 export type BuildCompletionWakeItem = (sessionId: string) => CompletionWakeItem | null;
 
+// #619 defense: returns the agent_id that owns the finished session so fire()
+// can exclude it from the recipient set. Absent → no exclusion (session-ended
+// wake has no need to exclude a persistent recipient).
+export type ExcludeFinisherFor = (finishedSessionId: string) => string | undefined;
+
 export interface CompletionWakeScheduler {
   register(entry: ScheduledCompletionWake): void;
   clearAgent(agentId: string): void;
@@ -43,6 +48,7 @@ export function createCompletionWakeScheduler(
   kind: CompletionWakeKind,
   buildItem: BuildCompletionWakeItem,
   dispatchDeps: DispatchDeps,
+  excludeFinisherFor?: ExcludeFinisherFor,
 ): CompletionWakeScheduler {
   const byAgent = new Map<string, Set<ScheduledCompletionWake>>();
   const byWorkspace = new Map<string, Set<ScheduledCompletionWake>>();
@@ -86,8 +92,12 @@ export function createCompletionWakeScheduler(
     const item = buildItem(finishedSessionId);
     if (item === null) return { dispatched: 0 };
     const payload: CompletionWakePayload = { ended: [item] };
+    // #619: exclude the finishing agent from its own wake to prevent self-fire
+    // when the finisher is also registered as a recipient.
+    const excludeAgentId = excludeFinisherFor?.(finishedSessionId);
     let dispatched = 0;
     for (const entry of set) {
+      if (excludeAgentId !== undefined && entry.agentId === excludeAgentId) continue;
       if (
         await dispatchTrigger(dispatchDeps, entry, entry.trigger, payload, enqueueWhileBusy)
       ) {

@@ -11,6 +11,11 @@ export interface CompletionWakeItem {
   // or its final-report summary), or null when the session ended without one
   // (crash / kill) — which the manager triages.
   readonly summary: string | null;
+  // #620: status/report log row id used as a per-completion discriminator for
+  // the logical_key. Present when a log row exists; absent for crash/kill where
+  // no status row was written. Absent → falls back to session-only key (old
+  // behavior) which is still correct for session-ended (ends exactly once).
+  readonly completionId?: number;
 }
 
 export interface CompletionWakePayload {
