@@ -12,6 +12,8 @@ import type { Notification } from "../src/api.ts";
 
 const WORKSPACE_ID = "ws-test";
 
+const STUB_TAG = { kind: "trigger" as const, attrs: {} };
+
 function makeNotification(overrides: Partial<Notification> = {}): Notification {
   return {
     id: "notif-1",
@@ -19,7 +21,7 @@ function makeNotification(overrides: Partial<Notification> = {}): Notification {
     recipient: { kind: "user" },
     priority: "high",
     state: "pending",
-    payload: { body: "Build finished successfully" },
+    payload: { body: "Build finished successfully", tag: STUB_TAG },
     provenance: { source_kind: "push", emitter_agent_id: "agent-abc" },
     metadata: { ref: "main" },
     created_at: 1_700_000_000_000,
@@ -30,7 +32,7 @@ function makeNotification(overrides: Partial<Notification> = {}): Notification {
 const HIGH_NOTIF = makeNotification({
   id: "notif-high",
   priority: "high",
-  payload: { body: "High priority push" },
+  payload: { body: "High priority push", tag: STUB_TAG },
   metadata: { ref: "main", run_id: "42" },
   provenance: { source_kind: "push", emitter_agent_id: "agent-abc" },
 });
@@ -38,7 +40,7 @@ const HIGH_NOTIF = makeNotification({
 const LOW_NOTIF = makeNotification({
   id: "notif-low",
   priority: "low",
-  payload: { body: "Low priority note" },
+  payload: { body: "Low priority note", tag: STUB_TAG },
   metadata: {},
 });
 
@@ -187,6 +189,7 @@ describe("InboxView — detail inspector (real wire shape)", () => {
       delivery_mode: "quiet",
       acked_at: 1_700_000_001_000,
       metadata: { run_id: "99" },
+      payload: { body: "full shape test", tag: STUB_TAG },
     });
     render([withMeta]);
 
