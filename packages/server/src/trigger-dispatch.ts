@@ -91,7 +91,7 @@ export async function dispatchTrigger(
   const prompt = deps.synthesize(trigger, payload);
   const promptTag: ClobberPromptTag = { kind: "trigger", attrs: { via: trigger.kind } };
   const wakeProgram = resolveTriggerWakeProgram(workspace, binding.roleId, trigger);
-  const sourceId = triggerSourceId(trigger, payload, firedAt);
+  const sourceId = triggerSourceId(trigger, payload);
 
   const req: CreateNotification = {
     type: "trigger",
@@ -149,7 +149,6 @@ export async function dispatchTrigger(
 function triggerSourceId(
   trigger: RoleTrigger,
   payload: unknown,
-  firedAt: number,
 ): string | undefined {
   switch (trigger.kind) {
     case "worker-done":
@@ -164,10 +163,11 @@ function triggerSourceId(
       return `${trigger.kind}:${sessionKey}`;
     }
     case "cron":
-      // Each cron tick fires at a unique wall-clock instant; firedAt makes the
-      // occurrence identity stable across the single dispatch path (cron uses drop
-      // not enqueue, so no re-fire of the same tick from the queue side).
-      return `cron:${trigger.expr}:${firedAt}`;
+      // No stable occurrence identity: the scheduler's tick timestamp is not
+      // threaded to dispatchTrigger, so any key we could build here would use
+      // wall-clock dispatch time — unique per call, never actually dedups.
+      // Return undefined: honest no-dedup, null logical_key, always-inserted.
+      return undefined;
     default:
       return undefined;
   }
