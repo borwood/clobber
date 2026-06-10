@@ -11,6 +11,7 @@ import type {
   UpdateWorkspaceConfigRequest,
   AskQuestion,
   SequencedLayoutEvent,
+  TranscriptLine,
 } from "@clobber/shared";
 
 export type {
@@ -23,6 +24,7 @@ export type {
   SettingSource,
   AskOption,
   AskQuestion,
+  TranscriptLine,
 } from "@clobber/shared";
 
 export interface OpenQuestion {
@@ -115,8 +117,6 @@ export interface SpawnResponse {
   readonly session_id: string;
   readonly pid: number;
 }
-
-export type TranscriptLine = Record<string, unknown>;
 
 async function failureMessage(res: Response): Promise<string> {
   const text = await res.text();
