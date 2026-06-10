@@ -92,6 +92,13 @@ export async function deliver(
     .filter((s) => s.agent_id === agentId);
 
   if (activeForAgent.length === 0) {
+    // Recipient-lifecycle gate (#605 / #424 Phase 3):
+    // - non-persistent role → never auto-wake (resume-on-confirm is a later phase).
+    // - low priority → enqueue; delivered at next natural wake.
+    // Only high+persistent proceeds to the resume-tip-or-spawn path below.
+    if (!role.persistent) return { action: "queued" };
+    if (n.priority !== "high") return { action: "queued" };
+
     const wakeProgram = readWakeProgram(n);
     const shutdownTip = deps.sessions.latestShutdownSessionForAgentIfTip(agentId);
     if (shutdownTip !== null) {

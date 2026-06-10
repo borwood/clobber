@@ -93,10 +93,14 @@ export async function dispatchTrigger(
   const wakeProgram = resolveTriggerWakeProgram(workspace, binding.roleId, trigger);
   const sourceId = triggerSourceId(trigger, payload);
 
+  // All trigger fires are wake signals — high priority so the #605 gate in
+  // deliver() lets them through to a sleeping persistent agent. Low priority is
+  // reserved for passive informational notifications that wait for the next
+  // natural wake (#424 Phase 3).
   const req: CreateNotification = {
     type: "trigger",
     recipient: { kind: "agent", agent_id: binding.agentId },
-    priority: "low",
+    priority: "high",
     payload: { body: prompt, tag: promptTag },
     provenance: {
       source_kind: "trigger",
