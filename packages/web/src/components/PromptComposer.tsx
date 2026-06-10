@@ -1,9 +1,14 @@
-import { useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { classifyComposerKey } from "./composer-key.ts";
 import { computeContextLength } from "../context-length.ts";
 import type { TranscriptLine } from "../api.ts";
 import { FilesystemBrowser } from "./FilesystemBrowser.tsx";
+import { Markdown } from "./Markdown.tsx";
+import { ComposerOptionsMenu } from "./ComposerOptionsMenu.tsx";
 import { api } from "../api.ts";
+
+// Ceiling the textarea grows to before it starts scrolling (~8 lines).
+const MAX_TEXTAREA_HEIGHT = 192;
 
 interface Props {
   readonly sessionId: string;
@@ -31,13 +36,27 @@ export function PromptComposer({
   const [interrupting, setInterrupting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fileBrowser, setFileBrowser] = useState<FileBrowserState>(null);
+  const [focused, setFocused] = useState(false);
+  const [markdownPreview, setMarkdownPreview] = useState(true);
   const deskButtonRef = useRef<HTMLButtonElement>(null);
   const officeButtonRef = useRef<HTMLButtonElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const hasText = prompt.trim().length > 0;
   const canSend = !ended && !sending && hasText;
   const canInterrupt = !ended && busy && !interrupting;
   const contextTokens = transcript !== undefined ? computeContextLength(transcript) : undefined;
+
+  // Grow the textarea to fit its content up to a ceiling, then scroll. The CSS
+  // min-height (set on the element) supplies the floor: one line when idle+empty,
+  // the taller resting size once focused or filled. Re-runs on text + focus
+  // changes and after a programmatic clear (send), since those aren't input events.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (el === null) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_HEIGHT)}px`;
+  }, [prompt, focused]);
 
   async function send() {
     if (!canSend) return;
@@ -97,6 +116,17 @@ export function PromptComposer({
     }
   }
 
+  function insertHardBreak() {
+    const el = textareaRef.current;
+    if (el === null) return;
+    const { selectionStart: start, selectionEnd: end } = el;
+    const insert = "\\\n";
+    setPrompt(prompt.slice(0, start) + insert + prompt.slice(end));
+    requestAnimationFrame(() => {
+      el.selectionStart = el.selectionEnd = start + insert.length;
+    });
+  }
+
   function onKey(e: KeyboardEvent<HTMLTextAreaElement>) {
     const action = classifyComposerKey(e, {
       hasTextSelection: hasTextSelection(),
@@ -111,6 +141,12 @@ export function PromptComposer({
       return;
     }
     if (action === "newline") {
+      // Interim hard-break: a single "\n" is a soft break that markdown
+      // collapses to a space, so what's typed wouldn't match what renders.
+      // A trailing backslash is CommonMark's hard line break. Proper fix rides
+      // the live-markdown-editor issue (CodeMirror 6).
+      e.preventDefault();
+      insertHardBreak();
       return;
     }
     if (action === "interrupt") {
@@ -146,11 +182,20 @@ export function PromptComposer({
   }
 
   return (
-    <div className="border-t border-border bg-bg p-3 space-y-2">
+    <div className="border-t border-border bg-bg p-3">
+      <div className="mx-auto max-w-3xl space-y-2">
+      {markdownPreview && hasText && (
+        <div className="rounded border border-border bg-surface/40 px-3 py-2 max-h-40 overflow-y-auto">
+          <Markdown text={prompt} />
+        </div>
+      )}
       <textarea
+        ref={textareaRef}
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
         onKeyDown={onKey}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
         disabled={sending}
         placeholder={
           ended
@@ -159,13 +204,17 @@ export function PromptComposer({
               ? "Agent is working… (Ctrl+C to interrupt)"
               : "Follow-up prompt… (Enter to send, Shift+Enter for newline)"
         }
-        rows={3}
-        className="w-full resize-none rounded border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-faint focus:outline-none focus:border-border-strong disabled:opacity-50"
+        style={{
+          minHeight: focused || hasText ? "4.75rem" : "2.25rem",
+          maxHeight: `${MAX_TEXTAREA_HEIGHT}px`,
+        }}
+        className="w-full resize-none overflow-y-auto rounded border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-faint focus:outline-none focus:border-border-strong disabled:opacity-50"
       />
       <div className="flex items-center gap-2 relative">
-        <span className="text-xs text-text-faint font-mono truncate">
-          {sessionId.slice(0, 8)}
-        </span>
+        <ComposerOptionsMenu
+          markdownPreview={markdownPreview}
+          onToggleMarkdownPreview={() => setMarkdownPreview((v) => !v)}
+        />
         {contextTokens !== undefined && (
           <span className="text-xs text-text-faint font-mono">
             ~{Math.round(contextTokens / 1000)}k ctx
@@ -217,6 +266,7 @@ export function PromptComposer({
             onCancel={() => setFileBrowser(null)}
           />
         )}
+      </div>
       </div>
     </div>
   );

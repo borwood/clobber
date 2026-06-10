@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { OpenQuestion, SessionSummary } from "../api.ts";
-import { STATE_DOT, pickTone } from "./state-tones.ts";
+import { pickTone, statusDot } from "./state-tones.ts";
+import { ActivityDot } from "./ActivityDot.tsx";
+import { useSessionCardMenu } from "./useSessionCardMenu.tsx";
 
 function openQuestionLabel(q: OpenQuestion): string {
   const first = q.questions[0]!.question;
@@ -29,19 +31,7 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume, o
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [endingId, setEndingId] = useState<string | null>(null);
   const [resumingId, setResumingId] = useState<string | null>(null);
-  const [menu, setMenu] = useState<{ x: number; y: number; sessionId: string } | null>(null);
-
-  useEffect(() => {
-    if (menu === null) return;
-    const dismiss = () => setMenu(null);
-    window.addEventListener("click", dismiss);
-    window.addEventListener("contextmenu", dismiss, { capture: true });
-    window.addEventListener("keydown", (e) => e.key === "Escape" && setMenu(null));
-    return () => {
-      window.removeEventListener("click", dismiss);
-      window.removeEventListener("contextmenu", dismiss, { capture: true } as EventListenerOptions);
-    };
-  }, [menu]);
+  const { openMenuAt, menu } = useSessionCardMenu(onOpenInPane);
 
   if (sessions.length === 0) {
     return (
@@ -53,26 +43,7 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume, o
 
   return (
     <>
-    {menu !== null && onOpenInPane !== undefined && (
-      <div
-        role="menu"
-        className="fixed z-50 min-w-[14rem] rounded border border-border-strong bg-surface shadow-lg text-sm text-text"
-        style={{ left: menu.x, top: menu.y }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button
-          type="button"
-          role="menuitem"
-          className="w-full text-left px-3 py-2 hover:bg-elevated"
-          onClick={() => {
-            onOpenInPane(menu.sessionId, menu.x, menu.y);
-            setMenu(null);
-          }}
-        >
-          Open in pane…
-        </button>
-      </div>
-    )}
+    {menu}
     <ul className="divide-y divide-border">
       {sessions.map((s) => {
         const isSelected = s.session_id === selectedId;
@@ -87,14 +58,7 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume, o
           <li
             key={s.session_id}
             className="relative"
-            onContextMenu={
-              onOpenInPane === undefined
-                ? undefined
-                : (e) => {
-                    e.preventDefault();
-                    setMenu({ x: e.clientX, y: e.clientY, sessionId: s.session_id });
-                  }
-            }
+            onContextMenu={(e) => openMenuAt(e, s.session_id)}
           >
             <button
               type="button"
@@ -115,15 +79,15 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume, o
                     ?
                   </span>
                 )}
-                {s.latest_status !== undefined && !isEnded && (
-                  <span
-                    className={
-                      "inline-block w-2 h-2 rounded-full shrink-0 " +
-                      STATE_DOT[s.latest_status.state]
-                    }
-                    title={s.latest_status.state}
-                  />
-                )}
+                {!isEnded &&
+                  (() => {
+                    const d = statusDot(s);
+                    return (
+                      <span className="shrink-0" title={s.latest_status?.state}>
+                        <ActivityDot busy={d.busy} intentDot={d.dot} hollow={d.hollow} />
+                      </span>
+                    );
+                  })()}
                 <span className="px-1.5 py-0.5 rounded bg-elevated text-text-soft text-[10px] uppercase tracking-wider shrink-0">
                   {s.role_name}
                 </span>

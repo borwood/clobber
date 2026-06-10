@@ -59,7 +59,7 @@ describe("ToolCallCard: description line (#585)", () => {
     );
   });
 
-  it("description uses agent-message bubble styling", () => {
+  it("description renders as a muted italic caption above the tool", () => {
     act(() => {
       root.render(
         <TranscriptViewer
@@ -69,8 +69,9 @@ describe("ToolCallCard: description line (#585)", () => {
         />,
       );
     });
-    // ASSISTANT_TEXT_BG = "bg-accent-deep/30 border border-accent-muted/40 rounded px-3 py-2"
-    const el = container.querySelector(".bg-accent-deep\\/30");
+    // The description is a secondary italic line (text-text-muted italic), not a
+    // bubble — it reads as a caption *about* the call.
+    const el = container.querySelector("p.italic");
     expect(el).not.toBeNull();
     expect(el?.textContent).toContain("run the tests");
   });
@@ -85,8 +86,8 @@ describe("ToolCallCard: description line (#585)", () => {
         />,
       );
     });
-    // description appears as agent-message above
-    const descEl = container.querySelector(".bg-accent-deep\\/30");
+    // description appears as the muted italic caption above
+    const descEl = container.querySelector("p.italic");
     expect(descEl?.textContent).toContain("run tests");
     // preview shows command, not description again
     const previewEl = container.querySelector(".text-text-muted.truncate");
@@ -103,8 +104,8 @@ describe("ToolCallCard: description line (#585)", () => {
         />,
       );
     });
-    // This transcript has no text blocks — no bg-accent-deep/30 at all.
-    const els = container.querySelectorAll(".bg-accent-deep\\/30");
+    // No description field → no caption line is rendered.
+    const els = container.querySelectorAll("p.italic");
     expect(els.length).toBe(0);
   });
 });

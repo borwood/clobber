@@ -1,42 +1,17 @@
-import { useState } from "react";
-import type { AgentState, DeskCard, OfficeCard, SessionView } from "../api.ts";
+import { useState, type MouseEvent } from "react";
+import type { DeskCard, OfficeCard, SessionView } from "../api.ts";
 import { relativeTime } from "./relative-time.ts";
+import { ActivityDot } from "./ActivityDot.tsx";
+import {
+  STATUS_VISUAL,
+  STATUS_ASLEEP,
+  STATUS_FALLBACK,
+  type StatusVisual,
+} from "./state-tones.ts";
 
-interface IntentStyle {
-  readonly label: string;
-  readonly accent: string;
-  readonly dot: string;
-}
-
-const INTENT_STYLES: Record<AgentState, IntentStyle> = {
-  working: {
-    label: "working",
-    accent: "border-l-working",
-    dot: "bg-working",
-  },
-  blocked: {
-    label: "blocked",
-    accent: "border-l-blocked",
-    dot: "bg-blocked",
-  },
-  done: {
-    label: "done",
-    accent: "border-l-text-muted",
-    dot: "bg-text-muted",
-  },
-};
-
-const ASLEEP_STYLE = {
-  accent: "border-l-border-strong",
-  dot: "bg-done",
-} as const;
-
-const FALLBACK_ACCENT = "border-l-info";
-const FALLBACK_DOT = "bg-info";
-
-function intentStyleFor(session: SessionView): IntentStyle | null {
+function intentStyleFor(session: SessionView): StatusVisual | null {
   if (session.latest_status === null) return null;
-  return INTENT_STYLES[session.latest_status.state];
+  return STATUS_VISUAL[session.latest_status.state];
 }
 
 interface OfficeCardViewProps {
@@ -44,18 +19,19 @@ interface OfficeCardViewProps {
   readonly now: number;
   readonly isWaking: boolean;
   readonly onOpenSession: (sessionId: string) => void;
+  readonly onContextMenu: ((e: MouseEvent) => void) | undefined;
   readonly onWake: (agentId: string, wakeProgram: string) => void;
 }
 
 export function OfficeCardView(props: OfficeCardViewProps) {
-  const { office, now, isWaking, onOpenSession, onWake } = props;
+  const { office, now, isWaking, onOpenSession, onContextMenu, onWake } = props;
   const isAsleep = office.active_session === null;
   const intentStyle =
     office.active_session === null ? null : intentStyleFor(office.active_session);
   const accent = isAsleep
-    ? ASLEEP_STYLE.accent
+    ? STATUS_ASLEEP.accent
     : intentStyle === null
-      ? FALLBACK_ACCENT
+      ? STATUS_FALLBACK.accent
       : intentStyle.accent;
 
   const className = `text-left rounded-md border border-border border-l-4 ${accent} bg-surface/60 p-4 flex flex-col gap-2 transition-colors`;
@@ -65,7 +41,7 @@ export function OfficeCardView(props: OfficeCardViewProps) {
       <header className="flex items-center gap-2">
         {isAsleep ? (
           <>
-            <span className={`size-2 rounded-full ${ASLEEP_STYLE.dot}`} aria-hidden />
+            <span className={`size-2 rounded-full ${STATUS_ASLEEP.dot}`} aria-hidden />
             <span className="text-xs uppercase tracking-wider text-text-muted">
               asleep
             </span>
@@ -73,7 +49,7 @@ export function OfficeCardView(props: OfficeCardViewProps) {
         ) : (
           <ActivityDot
             busy={office.active_session!.busy}
-            intentDot={intentStyle === null ? FALLBACK_DOT : intentStyle.dot}
+            intentDot={intentStyle === null ? STATUS_FALLBACK.dot : intentStyle.dot}
           />
         )}
         <span className="ml-auto font-mono text-xs text-text-subtle">
@@ -111,6 +87,7 @@ export function OfficeCardView(props: OfficeCardViewProps) {
     <button
       type="button"
       onClick={() => onOpenSession(office.active_session!.id)}
+      onContextMenu={onContextMenu}
       className={`${className} hover:bg-surface`}
     >
       {header}
@@ -187,18 +164,20 @@ interface DeskCardViewProps {
   readonly desk: DeskCard;
   readonly now: number;
   readonly onOpenSession: (sessionId: string) => void;
+  readonly onContextMenu: (e: MouseEvent) => void;
 }
 
 export function DeskCardView(props: DeskCardViewProps) {
-  const { desk, now, onOpenSession } = props;
+  const { desk, now, onOpenSession, onContextMenu } = props;
   const intentStyle = intentStyleFor(desk.session);
-  const accent = intentStyle === null ? FALLBACK_ACCENT : intentStyle.accent;
-  const dot = intentStyle === null ? FALLBACK_DOT : intentStyle.dot;
+  const accent = intentStyle === null ? STATUS_FALLBACK.accent : intentStyle.accent;
+  const dot = intentStyle === null ? STATUS_FALLBACK.dot : intentStyle.dot;
 
   return (
     <button
       type="button"
       onClick={() => onOpenSession(desk.session.id)}
+      onContextMenu={onContextMenu}
       className={`text-left rounded-md border border-border border-l-4 ${accent} bg-surface/40 hover:bg-surface p-3 flex flex-col gap-1.5 transition-colors`}
     >
       <header className="flex items-center gap-2">
@@ -216,25 +195,6 @@ export function DeskCardView(props: DeskCardViewProps) {
         intentLabel={intentStyle === null ? null : intentStyle.label}
       />
     </button>
-  );
-}
-
-interface ActivityDotProps {
-  readonly busy: boolean;
-  readonly intentDot: string;
-}
-
-function ActivityDot(props: ActivityDotProps) {
-  const { busy, intentDot } = props;
-  return (
-    <span className="relative inline-flex size-2" aria-hidden>
-      {busy && (
-        <span
-          className={`absolute inset-0 rounded-full ${intentDot} opacity-60 animate-ping`}
-        />
-      )}
-      <span className={`relative size-2 rounded-full ${intentDot}`} />
-    </span>
   );
 }
 

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { encodePanelAnswer, type PanelAnswerPart } from "@clobber/shared";
 import type { OpenQuestion } from "../api.ts";
 import { QuestionPanel } from "./QuestionPanel.tsx";
+import { Tabs } from "../layout/Tabs.tsx";
 
 interface Props {
   readonly question: OpenQuestion;
@@ -26,6 +27,7 @@ export function AskWidget({ question, onAnswer }: Props) {
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [active, setActive] = useState(0);
 
   function toggle(index: number, label: string): void {
     setSelected((prev) =>
@@ -87,17 +89,38 @@ export function AskWidget({ question, onAnswer }: Props) {
           message.
         </p>
       )}
-      {questions.map((q, i) => (
-        <QuestionPanel
-          key={i}
-          question={q}
-          selected={selected[i]!}
-          free={free[i]!}
-          disabled={submitting}
-          onToggle={(opt) => toggle(i, opt)}
-          onFree={(value) => setFreeAt(i, value)}
+      {questions.length > 1 && (
+        <Tabs
+          variant="ask"
+          ariaLabel="Questions"
+          activeId={String(active)}
+          onSelect={(id) => setActive(Number(id))}
+          tabs={questions.map((q, i) => ({
+            id: String(i),
+            label: (
+              <span className="inline-flex items-center gap-1.5">
+                {q.header === undefined ? `Q${i + 1}` : q.header}
+                <span className={answered(i) ? "text-working" : "text-provenance-text/40"}>
+                  {answered(i) ? "✓" : "•"}
+                </span>
+              </span>
+            ),
+          }))}
         />
-      ))}
+      )}
+      {questions.map((q, i) =>
+        questions.length > 1 && i !== active ? null : (
+          <QuestionPanel
+            key={i}
+            question={q}
+            selected={selected[i]!}
+            free={free[i]!}
+            disabled={submitting}
+            onToggle={(opt) => toggle(i, opt)}
+            onFree={(value) => setFreeAt(i, value)}
+          />
+        ),
+      )}
       <button
         type="button"
         disabled={submitting || !allAnswered}

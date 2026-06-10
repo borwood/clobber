@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { SessionSummary } from "../api.ts";
-import { STATE_DOT, pickTone } from "./state-tones.ts";
+import { pickTone, statusDot } from "./state-tones.ts";
+import { ActivityDot } from "./ActivityDot.tsx";
 
 interface Props {
   readonly session: SessionSummary;
@@ -11,17 +12,15 @@ export function SessionHeader({ session }: Props) {
   const tone = pickTone(session, isEnded);
   const status = session.latest_status;
   const showSummary = status !== undefined && !isEnded;
+  const dot = isEnded ? null : statusDot(session);
 
   return (
     <div className={"px-6 py-3 border-l-4 " + tone.accent + " " + tone.base}>
       <div className="flex items-center gap-3">
-        {showSummary && (
-          <span
-            className={
-              "inline-block w-2.5 h-2.5 rounded-full shrink-0 " + STATE_DOT[status.state]
-            }
-            title={status.state}
-          />
+        {dot !== null && (
+          <span className="shrink-0" title={status?.state}>
+            <ActivityDot busy={dot.busy} intentDot={dot.dot} hollow={dot.hollow} />
+          </span>
         )}
         <span className="px-1.5 py-0.5 rounded bg-elevated text-text-soft text-[10px] uppercase tracking-wider shrink-0">
           {session.role_name}

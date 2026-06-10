@@ -1,7 +1,7 @@
 import React, { useRef, useState } from "react";
 import type { PaneNode } from "./types.ts";
 import { Tabs } from "./Tabs.tsx";
-import { ViewHost, viewLabel } from "./ViewHost.tsx";
+import { ViewHost, tabLabel } from "./ViewHost.tsx";
 import { useLayout } from "./provider.tsx";
 import { useWorkspace } from "./WorkspaceContext.tsx";
 import { usePointerDrag } from "./usePointerDrag.ts";
@@ -78,7 +78,7 @@ export function Pane(props: { readonly node: PaneNode }) {
 
   const tabs = node.views.map((v, i) => ({
     id: String(i),
-    label: viewLabel(v, sessions),
+    label: tabLabel(v, sessions),
     closable: true,
   }));
 

@@ -18,6 +18,14 @@ const VARIANTS = {
     active: "text-text border-accent-hover",
     idle: "text-text-muted border-transparent hover:text-text-dim hover:border-border-strong",
   },
+  // Ask panel: question-per-tab in the amber provenance palette, so a
+  // multi-question ask reads as tabs rather than a tall stack.
+  ask: {
+    strip: "flex items-stretch gap-1 border-b border-provenance-strong/40",
+    base: "px-2.5 py-1 text-xs rounded-t border-b-2 transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-provenance",
+    active: "text-provenance-fg border-provenance",
+    idle: "text-provenance-text/70 border-transparent hover:text-provenance-text hover:border-provenance-strong/60",
+  },
 } as const;
 
 type TabsVariant = keyof typeof VARIANTS;

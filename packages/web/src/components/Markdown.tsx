@@ -49,7 +49,7 @@ export const Markdown = memo(function Markdown({ text }: Props) {
               return <code className={`font-mono text-xs ${className}`}>{children}</code>;
             }
             return (
-              <code className="font-mono text-[0.85em] bg-surface border border-border px-1 py-0.5 rounded text-accent-text">
+              <code className="font-mono text-[0.85em] bg-surface border border-border px-1 py-0.5 rounded text-text">
                 {children}
               </code>
             );
@@ -64,7 +64,7 @@ export const Markdown = memo(function Markdown({ text }: Props) {
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-accent-text underline hover:text-accent-text"
+              className="text-info-text underline hover:text-info"
             >
               {children}
             </a>

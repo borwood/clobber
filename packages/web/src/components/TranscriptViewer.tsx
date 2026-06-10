@@ -1,10 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState, type UIEvent } from "react";
 import type { TranscriptLine } from "../api.ts";
-import {
-  classifyLine,
-  shouldShowAssistantLabel,
-  buildToolResultIndex,
-} from "../transcript-types.ts";
+import { classifyLine, buildToolResultIndex } from "../transcript-types.ts";
 import { deriveWorkingState } from "../working-state.ts";
 import { WorkingIndicator } from "./WorkingIndicator.tsx";
 import {
@@ -67,7 +63,7 @@ export function TranscriptViewer({ lines, showSystem, busy }: Props) {
             No transcript yet. Wait for the agent to start.
           </p>
         ) : (
-          <div className="space-y-3">
+          <div className="mx-auto max-w-3xl space-y-3">
             {classified.map((c, idx) => {
               if (c.kind === "filtered") {
                 return null;
@@ -83,7 +79,6 @@ export function TranscriptViewer({ lines, showSystem, busy }: Props) {
                   <AssistantBubble
                     key={idx}
                     line={c.line}
-                    showLabel={shouldShowAssistantLabel(classified, idx, { showSystem })}
                     showDetails={showSystem}
                     toolResults={toolResults}
                   />
