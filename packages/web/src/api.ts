@@ -55,6 +55,7 @@ export interface SessionSummary {
   readonly busy?: boolean;
   readonly model?: string;
   readonly effort?: string;
+  readonly context_tokens?: number;
 }
 
 export interface OfficePeek {

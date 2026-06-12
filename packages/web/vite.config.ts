@@ -21,6 +21,7 @@ export default defineConfig({
       "/persistent-agents": serverBase,
       "/roles": serverBase,
       "/fs": serverBase,
+      "/notifications": serverBase,
     },
   },
 });

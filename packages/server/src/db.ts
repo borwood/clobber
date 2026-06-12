@@ -25,6 +25,7 @@ import { migrateNotificationCategory } from "./notification-category-migration.t
 import { migrateAgentSpawner } from "./agent-spawner-migration.ts";
 import { migrateAgentWorktreeIdentity } from "./agent-worktree-identity-migration.ts";
 import { migrateAgentMessageTokenAgentIds } from "./agent-message-token-agent-id-migration.ts";
+import { migrateSessionContextTokens } from "./session-context-tokens-migration.ts";
 
 export function createDatabase(path: string): Database {
   const db = new Database(path);
@@ -62,6 +63,7 @@ export function createDatabase(path: string): Database {
   migrateAgentSpawner(db);
   migrateAgentWorktreeIdentity(db);
   migrateAgentMessageTokenAgentIds(db);
+  migrateSessionContextTokens(db);
   return db;
 }
 

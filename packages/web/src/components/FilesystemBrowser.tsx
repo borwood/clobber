@@ -21,6 +21,8 @@ type Props = (DirModeProps | FileModeProps) & {
 };
 
 const PANEL_HEIGHT_ESTIMATE = 320;
+const PANEL_WIDTH_DIR = 384;   // w-96
+const PANEL_WIDTH_FILE = 512;  // w-[32rem]
 
 export function FilesystemBrowser(props: Props) {
   const [data, setData] = useState<BrowseDirResponse | null>(null);
@@ -61,16 +63,18 @@ export function FilesystemBrowser(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const panelWidth = fileView !== null ? PANEL_WIDTH_FILE : PANEL_WIDTH_DIR;
   const pos = computePanelPosition(
     props.triggerRect,
     PANEL_HEIGHT_ESTIMATE,
+    panelWidth,
     window.innerHeight,
     window.innerWidth,
   );
   const panelStyle: React.CSSProperties = {
     position: "fixed",
     top: pos.top,
-    right: pos.right,
+    left: pos.left,
     zIndex: 50,
   };
 

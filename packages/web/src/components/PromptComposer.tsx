@@ -208,7 +208,7 @@ export function PromptComposer({
           minHeight: focused || hasText ? "4.75rem" : "2.25rem",
           maxHeight: `${MAX_TEXTAREA_HEIGHT}px`,
         }}
-        className="w-full resize-none overflow-y-auto rounded border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-faint focus:outline-none focus:border-border-strong disabled:opacity-50"
+        className={`w-full resize-none overflow-y-auto rounded border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-faint focus:outline-none focus:border-border-strong disabled:opacity-50 ring-1 transition-[box-shadow] duration-300 ${!busy && !ended ? "ring-accent" : "ring-accent/0"}`}
       />
       <div className="flex items-center gap-2 relative">
         <ComposerOptionsMenu

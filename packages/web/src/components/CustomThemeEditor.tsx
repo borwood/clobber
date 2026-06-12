@@ -222,6 +222,13 @@ function CustomThemeForm({ theme, onPatch }: FormProps) {
                   invalid ? "border-danger" : "border-border"
                 }`}
               />
+              <input
+                type="color"
+                value={/^#[0-9a-fA-F]{6}$/.test(text) ? text : "#000000"}
+                onChange={(e) => editToken(token, e.target.value)}
+                className="h-6 w-6 shrink-0 rounded cursor-pointer border border-border bg-bg p-0"
+                title={token}
+              />
             </label>
           );
         })}

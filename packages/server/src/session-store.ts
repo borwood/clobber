@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { SessionSchema, type Session, type CreateSessionRequest } from "@clobber/shared";
+import { type Row, rowToSession } from "./session-row.ts";
 
 export interface SessionStore {
   create(req: CreateSessionRequest): Session;
@@ -34,61 +35,10 @@ export interface SessionStore {
   updateModelEffort(id: string, model: string | undefined, effort: string | undefined): boolean;
   updateProviderThreadId(id: string, providerThreadId: string): boolean;
   updateTranscriptPath(id: string, path: string): boolean;
+  updateContextTokens(id: string, tokens: number): boolean;
   listForWorkspace(workspaceId: string): Session[];
   listActiveForWorkspace(workspaceId: string): Session[];
   listActive(): Session[];
-}
-
-interface Row {
-  id: string;
-  agent_id: string | null;
-  workspace_id: string;
-  role_id: string;
-  role_commit_branch: string | null;
-  role_commit_sha: string | null;
-  runtime_provider: string;
-  provider_thread_id: string | null;
-  wake_program: string | null;
-  op_level_addon: string | null;
-  label: string | null;
-  pid: number;
-  started_at: number;
-  ended_at: number | null;
-  transcript_path: string | null;
-  was_live_at_shutdown: number;
-  composed_system_prompt: string | null;
-  model: string | null;
-  effort: string | null;
-}
-
-function rowToSession(row: Row): Session {
-  const input: Record<string, unknown> = {
-    id: row.id,
-    workspace_id: row.workspace_id,
-    role_id: row.role_id,
-    runtime_provider: row.runtime_provider,
-    pid: row.pid,
-    started_at: row.started_at,
-  };
-  if (row.agent_id !== null) input["agent_id"] = row.agent_id;
-  if (row.role_commit_branch !== null && row.role_commit_sha !== null) {
-    input["role_commit"] = { branch: row.role_commit_branch, sha: row.role_commit_sha };
-  }
-  if (row.provider_thread_id !== null) {
-    input["provider_thread_id"] = row.provider_thread_id;
-  }
-  if (row.wake_program !== null) input["wake_program"] = row.wake_program;
-  if (row.op_level_addon !== null) input["op_level_addon"] = row.op_level_addon;
-  if (row.label !== null) input["label"] = row.label;
-  if (row.ended_at !== null) input["ended_at"] = row.ended_at;
-  if (row.transcript_path !== null) input["transcript_path"] = row.transcript_path;
-  if (row.was_live_at_shutdown === 1) input["was_live_at_shutdown"] = true;
-  if (row.composed_system_prompt !== null) {
-    input["composed_system_prompt"] = row.composed_system_prompt;
-  }
-  if (row.model !== null) input["model"] = row.model;
-  if (row.effort !== null) input["effort"] = row.effort;
-  return SessionSchema.parse(input);
 }
 
 export function createSessionStore(db: Database): SessionStore {
@@ -133,6 +83,9 @@ export function createSessionStore(db: Database): SessionStore {
   );
   const updateTranscriptStmt = db.prepare(
     "UPDATE sessions SET transcript_path = ? WHERE id = ?",
+  );
+  const updateContextTokensStmt = db.prepare(
+    "UPDATE sessions SET context_tokens = ? WHERE id = ?",
   );
   const listStmt = db.prepare(
     "SELECT * FROM sessions WHERE workspace_id = ? ORDER BY started_at DESC, id DESC",
@@ -279,6 +232,11 @@ export function createSessionStore(db: Database): SessionStore {
 
     updateTranscriptPath(id, path) {
       const result = updateTranscriptStmt.run(path, id);
+      return result.changes > 0;
+    },
+
+    updateContextTokens(id, tokens) {
+      const result = updateContextTokensStmt.run(tokens, id);
       return result.changes > 0;
     },
 

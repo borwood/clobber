@@ -13,6 +13,8 @@ import type { AgentStatusLogStore } from "../agent-status-log-store.ts";
 import type { WorkspaceStore } from "../workspace-store.ts";
 import { endSession } from "../session-lifecycle.ts";
 import { applyTaskEvent } from "../task-event-handler.ts";
+import { tailReadTranscript } from "../transcript-reader.ts";
+import { computeContextLength } from "@clobber/shared";
 import { guardOfficeBoundary } from "../office-boundary-guard.ts";
 import { guardHabitEdit } from "../guard-habit-edit.ts";
 import { guardStopStall } from "../guard-stop-stall.ts";
@@ -192,6 +194,11 @@ async function applySessionLifecycle(
     // queued while the manager was mid-turn (#171).
     if (session.agent_id !== undefined) {
       await deps.scheduler.flushPendingWakes(session.agent_id);
+    }
+    const lines = await tailReadTranscript(payload.transcript_path);
+    const tokens = computeContextLength(lines);
+    if (tokens !== undefined) {
+      deps.sessions.updateContextTokens(payload.session_id, tokens);
     }
   }
 
