@@ -10,6 +10,10 @@ export const AgentSchema = z.object({
   // spawned without a recorded spawner.
   spawner_agent_id: z.string().uuid().optional(),
   created_at: z.number().int().nonnegative(),
+  // Stored once at first-attach when spawn_worktree is on (#635).
+  // Null until first attach; null forever for off-policy agents.
+  worktree_branch: z.string().optional(),
+  worktree_path: z.string().optional(),
 });
 export type Agent = z.infer<typeof AgentSchema>;
 

@@ -240,3 +240,105 @@ describe("spawn_worktree (#174): per-workspace auto-worktree on spawn", () => {
     await teardown(h);
   });
 });
+
+describe("spawn_worktree (#635): persist worktree identity — derive once, read stored", () => {
+  it("(a) first-attach stores worktree_branch and worktree_path on the agent row", async () => {
+    const h = buildHarness(claudeRuntimeProvider);
+    gitInit(h.repoPath);
+    const ws = h.workspaces.create({
+      name: "ws",
+      repo_path: h.repoPath,
+      spawn_worktree: { kind: "on" },
+    });
+    const role = h.roles.create({ name: "worker", persistent: false });
+    h.workspaceRoles.setCeiling(ws.id, role.id, 1);
+
+    const res = await spawnWorker(h, ws.id, role.id, "42");
+    expect(res.statusCode).toBe(200);
+    const agentId = (res.json() as { agent_id: string }).agent_id;
+
+    const row = h.db
+      .prepare("SELECT worktree_branch, worktree_path FROM agents WHERE id = ?")
+      .get(agentId) as { worktree_branch: string | null; worktree_path: string | null };
+    expect(row.worktree_branch).toBe("clobber/42");
+    expect(row.worktree_path).toBe(h.records[0]!.req.cwd);
+
+    rmSync(worktreesRoot(h.repoPath), { recursive: true, force: true });
+    await teardown(h);
+  });
+
+  it("(a2) second attach reads stored identity without re-deriving — cwd is unchanged", async () => {
+    const h = buildHarness(claudeRuntimeProvider);
+    gitInit(h.repoPath);
+    const ws = h.workspaces.create({
+      name: "ws",
+      repo_path: h.repoPath,
+      spawn_worktree: { kind: "on" },
+    });
+    const role = h.roles.create({ name: "manager", persistent: true });
+    h.workspaceRoles.setCeiling(ws.id, role.id, 1);
+
+    const first = await spawnWorker(h, ws.id, role.id, "manager");
+    expect(first.statusCode).toBe(200);
+    const agentId = (first.json() as { agent_id: string }).agent_id;
+    const firstCwd = h.records[0]!.req.cwd;
+    await h.records[0]!.exit(0);
+
+    // Wake: must return the stored path, not re-derive.
+    // Verify by confirming stored columns match and cwd is unchanged on second attach.
+    const row = h.db
+      .prepare("SELECT worktree_branch, worktree_path FROM agents WHERE id = ?")
+      .get(agentId) as { worktree_branch: string | null; worktree_path: string | null };
+    expect(row.worktree_branch).toBe("clobber/manager");
+    expect(row.worktree_path).toBe(firstCwd);
+
+    const wake = await h.server.inject({
+      method: "POST",
+      url: `/persistent-agents/${agentId}/wake`,
+      payload: {},
+    });
+    expect(wake.statusCode).toBe(200);
+    expect(h.records[1]!.req.cwd).toBe(firstCwd);
+
+    rmSync(worktreesRoot(h.repoPath), { recursive: true, force: true });
+    await teardown(h);
+  });
+
+  it("(c) off→on flip — existing agent creates worktree on next attach (strand-victim fix #631)", async () => {
+    const h = buildHarness(claudeRuntimeProvider);
+    gitInit(h.repoPath);
+
+    const ws = h.workspaces.create({
+      name: "ws",
+      repo_path: h.repoPath,
+      spawn_worktree: { kind: "off" },
+    });
+    const role = h.roles.create({ name: "manager", persistent: true });
+    h.workspaceRoles.setCeiling(ws.id, role.id, 1);
+
+    // First wake: policy=off, cwd is the repo, no worktree on disk.
+    const first = await spawnWorker(h, ws.id, role.id, "manager");
+    expect(first.statusCode).toBe(200);
+    const agentId = (first.json() as { agent_id: string }).agent_id;
+    expect(h.records[0]!.req.cwd).toBe(h.repoPath);
+    await h.records[0]!.exit(0);
+
+    // Flip policy on.
+    h.workspaces.updateConfig(ws.id, { spawn_worktree: { kind: "on" } });
+
+    // Second wake: agent has no stored identity; policy=on; mode=attach.
+    // Must create the worktree now rather than returning a non-existent path.
+    const wake = await h.server.inject({
+      method: "POST",
+      url: `/persistent-agents/${agentId}/wake`,
+      payload: {},
+    });
+    expect(wake.statusCode).toBe(200);
+    const cwd = h.records[1]!.req.cwd;
+    expect(cwd).not.toBe(h.repoPath);
+    expect(existsSync(cwd)).toBe(true);
+
+    rmSync(worktreesRoot(h.repoPath), { recursive: true, force: true });
+    await teardown(h);
+  });
+});

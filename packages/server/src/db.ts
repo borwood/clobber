@@ -23,6 +23,7 @@ import { migrateNotificationLogicalKey } from "./notification-logical-key-migrat
 import { migrateNotificationDeliveryMode } from "./notification-delivery-mode-migration.ts";
 import { migrateNotificationCategory } from "./notification-category-migration.ts";
 import { migrateAgentSpawner } from "./agent-spawner-migration.ts";
+import { migrateAgentWorktreeIdentity } from "./agent-worktree-identity-migration.ts";
 
 export function createDatabase(path: string): Database {
   const db = new Database(path);
@@ -58,6 +59,7 @@ export function createDatabase(path: string): Database {
   migrateNotificationDeliveryMode(db);
   migrateNotificationCategory(db);
   migrateAgentSpawner(db);
+  migrateAgentWorktreeIdentity(db);
   return db;
 }
 

@@ -7,6 +7,7 @@ export interface AgentStore {
   get(id: string): Agent | null;
   delete(id: string): boolean;
   listForWorkspace(workspaceId: string): Agent[];
+  setWorktreeIdentity(id: string, branch: string, path: string): void;
 }
 
 interface Row {
@@ -16,6 +17,8 @@ interface Row {
   label: string | null;
   spawner_agent_id: string | null;
   created_at: number;
+  worktree_branch: string | null;
+  worktree_path: string | null;
 }
 
 function rowToAgent(row: Row): Agent {
@@ -27,6 +30,8 @@ function rowToAgent(row: Row): Agent {
   };
   if (row.label !== null) input["label"] = row.label;
   if (row.spawner_agent_id !== null) input["spawner_agent_id"] = row.spawner_agent_id;
+  if (row.worktree_branch !== null) input["worktree_branch"] = row.worktree_branch;
+  if (row.worktree_path !== null) input["worktree_path"] = row.worktree_path;
   return AgentSchema.parse(input);
 }
 
@@ -39,6 +44,9 @@ export function createAgentStore(db: Database): AgentStore {
     "SELECT * FROM agents WHERE workspace_id = ? ORDER BY created_at DESC, rowid DESC",
   );
   const deleteStmt = db.prepare("DELETE FROM agents WHERE id = ?");
+  const setWorktreeStmt = db.prepare(
+    "UPDATE agents SET worktree_branch = ?, worktree_path = ? WHERE id = ?",
+  );
 
   return {
     create(req) {
@@ -71,6 +79,10 @@ export function createAgentStore(db: Database): AgentStore {
     delete(id) {
       const result = deleteStmt.run(id);
       return result.changes > 0;
+    },
+
+    setWorktreeIdentity(id, branch, path) {
+      setWorktreeStmt.run(branch, path, id);
     },
   };
 }
