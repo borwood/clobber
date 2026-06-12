@@ -21,6 +21,10 @@ export const SpawnWorktreeOnSchema = z.object({
   // Workspace-configured branch prefix. Empty/absent = bare <slug> (default).
   // Example: "clobber" → branch "clobber/<slug>"; "team" → "team/<slug>".
   branch_prefix: z.string().optional(),
+  // Workspace-configured root directory under which per-agent worktree dirs
+  // land. Absent = .clobber/worktrees/ inside the repo (default).
+  // Example: "/mnt/fast-ssd/worktrees" → worktree at "<root>/<slug>".
+  worktree_root: z.string().optional(),
 });
 
 export const SpawnWorktreeSchema = z.discriminatedUnion("kind", [

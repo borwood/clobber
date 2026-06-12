@@ -23,6 +23,7 @@ const SetAgentBody = z.object({
 
 const SetDefaultBody = z.object({
   branch_prefix: z.string(),
+  worktree_root: z.string().optional(),
 });
 
 function moveWorktree(repoPath: string, from: string, to: string): void {
@@ -119,18 +120,23 @@ export function registerAgentWorktreesRoutes(
         reply.code(400);
         return { error: "invalid request", issues: parsed.error.issues };
       }
-      const prefix = parsed.data.branch_prefix;
+      const { branch_prefix: prefix, worktree_root: root } = parsed.data;
       const updated = deps.workspaces.updateConfig(session.workspace_id, {
         spawn_worktree: {
           kind: "on",
           ...(prefix !== "" ? { branch_prefix: prefix } : {}),
+          ...(root !== undefined && root !== "" ? { worktree_root: root } : {}),
         },
       });
       if (updated === null) {
         reply.code(404);
         return { error: "workspace not found" };
       }
-      return { ok: true, branch_prefix: prefix !== "" ? prefix : null };
+      return {
+        ok: true,
+        branch_prefix: prefix !== "" ? prefix : null,
+        worktree_root: root !== undefined && root !== "" ? root : null,
+      };
     }),
   );
 }
