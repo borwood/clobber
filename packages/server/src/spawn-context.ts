@@ -245,13 +245,9 @@ export async function prepareSpawnContext(
 
   const effectiveEffort = effortOverride ?? role.effort;
   const effectiveModel = modelOverride ?? role.model;
-  // A worktree is agent-scoped: created on the agent's first attach, reused
-  // thereafter. The agent having any session on record (this attach's row is
-  // written later, in attachSessionToAgent) means this is not its first.
-  const agentHasSession = deps.sessions
-    .listForWorkspace(workspace.id)
-    .some((s) => s.agent_id === agent.id);
-  const cwd = resolveSpawnCwd(workspace, agent, mode, agentHasSession);
+  const cwd = resolveSpawnCwd(workspace, agent, mode, (branch, path) =>
+    deps.agents.setWorktreeIdentity(agent.id, branch, path),
+  );
   const spawnOptions: RuntimeSpawnOptions = {
     hookUrl: deps.hookUrl,
     prompt: kick,

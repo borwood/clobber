@@ -5,24 +5,40 @@ import type { SpawnMode } from "./spawn-context.ts";
 
 // Resolves the working directory a session is spawned into. With the
 // workspace's spawn_worktree policy off this is the shared checkout (today's
-// behavior). With it on, the worktree is agent-scoped: created on the agent's
-// FIRST attach, reused on every attach and resume after. A persistent agent's
-// wake is a fresh attach for an existing agent, so keying create on first-attach
-// (not on `mode` or `role.persistent`) is what lets it re-wake without git
-// refusing a second `worktree add` (#217). first-attach is the invariant;
-// persistence is only a proxy for it.
+// behavior). With it on, the worktree is agent-scoped:
+//   - First attach (no stored identity yet): derive branch+path, create the
+//     worktree via git, persist the identity on the agent row via setIdentity.
+//   - Every later attach/resume: read the stored identity and return it
+//     directly without calling deriveWorktree. If the path is no longer on
+//     disk (strand victim — e.g. off→on flip after #631), recreate it;
+//     git arbitrates: its loud failure is the no-silent-reuse guarantee (#217).
 //
 // Cleanup of these worktrees is out of scope (#198); this only ever creates.
 export function resolveSpawnCwd(
   workspace: Workspace,
   agent: Agent,
   mode: SpawnMode,
-  agentHasSession: boolean,
+  setIdentity: (branch: string, path: string) => void,
 ): string {
   if (workspace.spawn_worktree.kind === "off") return workspace.repo_path;
+
+  if (agent.worktree_branch !== undefined && agent.worktree_path !== undefined) {
+    // Stored identity: reuse. If the path is gone (strand victim), recreate it.
+    // Do NOT existsSync-skip git — let git worktree add arbitrate, surfacing
+    // failures loudly to preserve the #217 collision guarantee.
+    if (!existsSync(agent.worktree_path)) {
+      createWorktree(workspace.repo_path, agent.worktree_branch, agent.worktree_path);
+    }
+    return agent.worktree_path;
+  }
+
+  // No stored identity yet. Derive + create on any attach (covers first-attach
+  // and off→on flip strand victims where the agent already has sessions).
   const { branch, worktreePath } = deriveWorktree(workspace.repo_path, agent);
-  const firstAttach = mode === "attach" && !agentHasSession;
-  if (firstAttach) createWorktree(workspace.repo_path, branch, worktreePath);
+  if (mode === "attach") {
+    createWorktree(workspace.repo_path, branch, worktreePath);
+    setIdentity(branch, worktreePath);
+  }
   return worktreePath;
 }
 
