@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { join } from "node:path";
 import { slugify, type Agent, type SpawnWorktree, type Workspace } from "@clobber/shared";
 import type { SpawnMode } from "./spawn-context.ts";
 
@@ -45,6 +45,9 @@ export function resolveSpawnCwd(
 // Pure path math: the worktree root a session with `label` would use for
 // `policy`. When policy is off (or label is undefined), returns `repoPath`.
 // Exported for the habit-receiver sentinel expansion — no I/O.
+//
+// Default root is .clobber/worktrees/ inside the repo (gitignored). A custom
+// root stored in policy.worktree_root places worktrees elsewhere.
 export function worktreeRootFor(
   repoPath: string,
   label: string | undefined,
@@ -53,7 +56,11 @@ export function worktreeRootFor(
   if (policy.kind === "off" || label === undefined) return repoPath;
   const slug = slugify(label);
   if (slug === "") return repoPath;
-  return join(dirname(repoPath), `${basename(repoPath)}-worktrees`, slug);
+  const root =
+    policy.kind === "on" && policy.worktree_root !== undefined && policy.worktree_root !== ""
+      ? policy.worktree_root
+      : join(repoPath, ".clobber", "worktrees");
+  return join(root, slug);
 }
 
 // Branch and path are derived deterministically from the agent label (the

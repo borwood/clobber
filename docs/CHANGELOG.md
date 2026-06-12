@@ -4,6 +4,7 @@
 
 _Generated from git history of source metadata files._
 
+- 2026-06-12 feat(cli,server,shared): worktrees caps + CLI verb + bare-slug branch default + branch_prefix config (#636 PR1) (#641)
 - 2026-06-10 feat: agent self-inbox — list + ack own notifications (#613) (#614)
 - 2026-06-10 feat(cli,server): make --prompt optional on spawn (#597)
 - 2026-06-09 feat(shared,web,cli): add fable as a supported model alias (#583)

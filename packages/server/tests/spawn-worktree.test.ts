@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { join } from "node:path";
 import { claudeRuntimeProvider } from "@clobber/runtime";
 import { buildHarness, teardown, type Harness } from "./_spawn-harness.ts";
 
@@ -44,10 +44,12 @@ function gitInitWithLocalDep(repoPath: string): void {
   gitRun(repoPath, ["commit", "-q", "-m", "add package with local dep"]);
 }
 
-// Worktrees land beside the repo at <dirname>/<basename>-worktrees/, outside
-// repoPath — so teardown(h) (which only removes repoPath) won't reach them.
+// Worktrees land inside repoPath at .clobber/worktrees/, so teardown(h)
+// (which removes repoPath recursively) cleans them up automatically.
+// This helper is kept for the rmSync calls below which are now no-ops but
+// harmless (force: true).
 function worktreesRoot(repoPath: string): string {
-  return join(dirname(repoPath), `${basename(repoPath)}-worktrees`);
+  return join(repoPath, ".clobber", "worktrees");
 }
 
 async function spawnWorker(

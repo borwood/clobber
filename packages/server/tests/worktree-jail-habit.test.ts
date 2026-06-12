@@ -8,14 +8,14 @@
 // match real absolute paths so isPathJailed always returns false).
 import { describe, it, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { basename, dirname, join } from "node:path";
+import { join } from "node:path";
 import { slugify } from "@clobber/shared";
 import { buildHarness, teardown, habit, type RefuseHarness } from "./_habit-refuse-harness.ts";
 
 const REPO = "/tmp/clobber-jail-test";
 const LABEL = "test-worker";
 const SLUG = slugify(LABEL);
-const WORKTREE = join(dirname(REPO), `${basename(REPO)}-worktrees`, SLUG);
+const WORKTREE = join(REPO, ".clobber", "worktrees", SLUG);
 
 // The habit as stored in worktree-jail.json — sentinels not yet expanded.
 const JAIL_HABIT = habit({

@@ -11,7 +11,7 @@
 import { describe, it, expect } from "bun:test";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { claudeRuntimeProvider } from "@clobber/runtime";
 import { buildHarness, teardown, type Harness } from "./_spawn-harness.ts";
@@ -32,7 +32,7 @@ function gitInit(repoPath: string): void {
 }
 
 function worktreesRoot(repoPath: string): string {
-  return join(dirname(repoPath), `${basename(repoPath)}-worktrees`);
+  return join(repoPath, ".clobber", "worktrees");
 }
 
 // Mint a session token for an agent with the given role.
