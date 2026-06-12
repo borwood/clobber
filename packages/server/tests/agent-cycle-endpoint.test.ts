@@ -359,7 +359,7 @@ describe("clobber cycle (#320)", () => {
     // Exhaust every retry: action throws, token stays live as durable record.
     h.control.failNextSpawns = 50;
     const failed = await cycle(h, boot.callerToken, { token });
-    expect(failed.status).toBe(500);
+    expect(failed.status).toBe(503);
     expect(tokenRows(h, token)).toBe(1);
 
     // Spawn-first: old session was NEVER touched → agent keeps exactly one live session.
@@ -443,6 +443,36 @@ describe("clobber cycle (#320)", () => {
     expect(active).toHaveLength(1);
     expect(active[0]!.id).not.toBe(targetBody.session_id);
     expect(active[0]!.wake_program).toBe("custom");
+    await teardown(h);
+  });
+
+  it("exhausted-retry cycle: response body carries the real boot-failure reason, NOT a generic server error", async () => {
+    const h = buildHarness();
+    const boot = await bootManager(h, 1);
+    await cycle(h, boot.callerToken, { prompt: "handoff" });
+    const { token } = await waitForInterjectedToken(h, boot.callerSessionId);
+
+    h.control.failNextSpawns = 50;
+    const failed = await cycle(h, boot.callerToken, { token });
+
+    // Must surface the real reason (the spawner threw), NOT Fastify's generic message.
+    expect(typeof failed.json["error"]).toBe("string");
+    expect(failed.json["error"]).toContain("simulated boot failure");
+    await teardown(h);
+  });
+
+  it("non-boot gate rejection (wrong caller) is NOT labeled as a boot failure", async () => {
+    const h = buildHarness();
+    const boot = await bootManager(h, 1);
+    // Boot a second session so we can mint a token that's bound to session A
+    // and then try to redeem it as session A with a bogus token.
+    const r = await cycle(h, boot.callerToken, { token: "no-such-token" });
+    // Gate rejects it cleanly — no boot failure involved
+    expect(r.status).toBe(403);
+    expect(typeof r.json["error"]).toBe("string");
+    expect(r.json["error"]).toBe("invalid or revoked token");
+    // Crucially: NOT labeled as a boot failure
+    expect(r.json["error"]).not.toContain("boot");
     await teardown(h);
   });
 

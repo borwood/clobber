@@ -15,6 +15,26 @@ import type { Clock } from "./clock.ts";
 import type { AgentMessageStore } from "./agent-message-store.ts";
 
 /**
+ * Thrown by `respawnWithRetry` after all retry attempts are exhausted.
+ * Carries the real spawn/git stderr so the route can surface it as a structured
+ * error rather than letting it escape as a generic Fastify 500 (#632).
+ * Typed so the cycle-specific redeem branch can catch it without touching the
+ * shared tool-token gate (GR3 — the gate is the generic chokepoint; boot-failure
+ * handling is cycle's concern).
+ */
+export class BootFailureError extends Error {
+  readonly reason: string;
+  readonly reasonStack: string | undefined;
+  constructor(cause: unknown) {
+    const reason = cause instanceof Error ? cause.message : String(cause);
+    super(`cycle boot failed: ${reason}`);
+    this.name = "BootFailureError";
+    this.reason = reason;
+    this.reasonStack = cause instanceof Error ? cause.stack : undefined;
+  }
+}
+
+/**
  * `clobber cycle` (#320, #510) — spawn-first re-seat that guarantees exactly
  * one live session throughout the operation.
  *
@@ -145,7 +165,7 @@ async function respawnWithRetry(
       }
     }
   }
-  throw lastError;
+  throw new BootFailureError(lastError);
 }
 
 function recordBootFailure(
