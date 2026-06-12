@@ -1,7 +1,7 @@
 import { claudeRuntimeProvider } from "@clobber/runtime";
 import { createAgentMessageStore } from "./agent-message-store.ts";
 import { createNotificationStore } from "./notification-store.ts";
-import { createNotificationDispatcher } from "./notification-dispatch.ts";
+import { createNotificationDispatcher, type ResumeSessionFn } from "./notification-dispatch.ts";
 import { createAgentRegistry } from "./agent-registry.ts";
 import { createToolTokenStore } from "./tool-token-store.ts";
 import type { ToolTokenGateDeps } from "./tool-token-gate.ts";
@@ -10,6 +10,7 @@ import { createLayoutEventStore } from "./layout-event-store.ts";
 import { createTriggerScheduler } from "./trigger-scheduler.ts";
 import { createFinalReportConsumer } from "./final-report-consumer.ts";
 import { attachSessionToAgent, type SpawnPipelineDeps } from "./spawn-pipeline.ts";
+import type { AttachSessionFn } from "./trigger-attach.ts";
 import { resumeSessionTurn, resumeEndedSession } from "./resume-pipeline.ts";
 import type { RearmPendingDeps } from "./notification-rearm.ts";
 import { bootServerRoles } from "./boot-server-roles.ts";
@@ -125,6 +126,8 @@ export function buildServerDeps(opts: ServerOptions) {
     resumeSessionTurn(spawnPipelineDeps, input);
   const resumeEnded = (input: { sessionId: string; prompt: string | undefined }) =>
     resumeEndedSession(spawnPipelineDeps, input);
+  const attachSession: AttachSessionFn = (input) => attachSessionToAgent(spawnPipelineDeps, input);
+  const resumeEndedFn: ResumeSessionFn = (input) => resumeEndedSession(spawnPipelineDeps, input);
 
   const finalReportConsumer = createFinalReportConsumer({
     db: opts.db,
@@ -169,6 +172,8 @@ export function buildServerDeps(opts: ServerOptions) {
     readTranscriptTail,
     resumeTurn,
     resumeEnded,
+    attachSession,
+    resumeEndedFn,
     rearmDeps,
     finalReportConsumer,
     onSessionEnded,

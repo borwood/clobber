@@ -2,18 +2,24 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { ClobberPromptTag, Session } from "@clobber/shared";
 import { injectPrompt, type InjectPromptDeps } from "../inject-prompt.ts";
+import { deliver, type DeliverDeps, type ResumeSessionFn } from "../notification-dispatch.ts";
 import type { AgentStore } from "../agent-store.ts";
+import type { WorkspaceStore } from "../workspace-store.ts";
 import type { AgentStatusLogStore } from "../agent-status-log-store.ts";
 import type { AgentMessageStore } from "../agent-message-store.ts";
 import type { NotificationDispatcher } from "../notification-dispatch.ts";
+import type { AttachSessionFn } from "../trigger-attach.ts";
 import { withAgentAuth, type WithAgentAuthDeps } from "./_with-agent-auth.ts";
 
 export type AgentMessagesRouteDeps = WithAgentAuthDeps &
   InjectPromptDeps & {
     readonly agents: AgentStore;
+    readonly workspaces: WorkspaceStore;
     readonly agentStatusLog: AgentStatusLogStore;
     readonly agentMessages: AgentMessageStore;
     readonly dispatcher: NotificationDispatcher;
+    readonly attachSession: AttachSessionFn;
+    readonly resumeEndedSession: ResumeSessionFn;
   };
 
 const MessageBodySchema = z.object({
@@ -39,6 +45,19 @@ function senderLabel(session: Session, deps: AgentMessagesRouteDeps): string {
 
 function summarize(body: string): string {
   return body.length <= 80 ? body : body.slice(0, 80);
+}
+
+function deliverDepsFrom(deps: AgentMessagesRouteDeps): DeliverDeps {
+  return {
+    agents: deps.agents,
+    roles: deps.roles,
+    workspaces: deps.workspaces,
+    sessions: deps.sessions,
+    registry: deps.registry,
+    runtimeProvider: deps.runtimeProvider,
+    attachSession: deps.attachSession,
+    resumeEndedSession: deps.resumeEndedSession,
+  };
 }
 
 export function registerAgentMessagesRoutes(
@@ -77,6 +96,8 @@ export function registerAgentMessagesRoutes(
       const issued = deps.agentMessages.issue({
         originator_session_id: session.id,
         recipient_session_id: recipientSession.id,
+        originator_agent_id: session.agent_id!,
+        recipient_agent_id: recipientAgent.id,
       });
       const tag: ClobberPromptTag = {
         kind: "message",
@@ -151,31 +172,51 @@ export function registerAgentMessagesRoutes(
         reply.code(404);
         return { error: "token not found" };
       }
-      if (tokenRow.recipient_session_id !== session.id) {
+      // Authz by agent identity so replies survive recipient cycling.
+      if (tokenRow.recipient_agent_id !== session.agent_id) {
         reply.code(403);
-        return { error: "token not addressed to this session" };
+        return { error: "token not addressed to this agent" };
       }
       if (tokenRow.redeemed_at !== null) {
         reply.code(410);
         return { error: "token already redeemed" };
       }
+
+      const tag: ClobberPromptTag = {
+        kind: "message-reply",
+        attrs: { from: senderLabel(session, deps) },
+      };
+
+      // Route reply via the notification spine so deliver() resolves the
+      // originator's current tip (handles agent cycling, queuing, spawning).
+      // REORDER: emit first, redeem only on successful (non-errored) delivery so a
+      // failed delivery never burns the single-use token.
+      const { outcome } = await deps.dispatcher.emit(
+        {
+          type: "message-reply",
+          category: "durable",
+          recipient: { kind: "agent", agent_id: tokenRow.originator_agent_id! },
+          priority: "high",
+          payload: { body: parsed.data.body, tag },
+          provenance: {
+            source_kind: "message-reply",
+            source_id: tokenRow.message_id,
+            emitter_agent_id: session.agent_id!,
+          },
+          metadata: { message_id: tokenRow.message_id },
+        },
+        (n) => deliver(deliverDepsFrom(deps), n, { kind: "drop" }),
+      );
+
+      if (outcome.action === "errored") {
+        reply.code(502);
+        return { error: `delivery failed: ${outcome.error ?? "unknown"}` };
+      }
+
       const redeemed = deps.agentMessages.redeem(parsed.data.token);
       if (!redeemed) {
         reply.code(410);
         return { error: "token already redeemed" };
-      }
-
-      const result = await injectPrompt(
-        tokenRow.originator_session_id,
-        parsed.data.body,
-        deps,
-        { kind: "message-reply", attrs: { from: senderLabel(session, deps) } },
-      );
-      if (!result.ok) {
-        reply.code(result.status);
-        return result.detail === undefined
-          ? { error: result.error }
-          : { error: result.error, detail: result.detail };
       }
 
       // Logged on the replier's (worker's) agent — its floor entry — which is
@@ -187,12 +228,12 @@ export function registerAgentMessagesRoutes(
         state: "replied",
         summary: summarize(parsed.data.body),
         details: {
-          originator_session_id: tokenRow.originator_session_id,
+          originator_agent_id: tokenRow.originator_agent_id,
           message_id: tokenRow.message_id,
           body: parsed.data.body,
         },
       });
-      return { replied_at: row.created_at };
+      return { action: outcome.action, replied_at: row.created_at };
     }),
   );
 }

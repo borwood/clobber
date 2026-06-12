@@ -3,6 +3,7 @@ import { request } from "../http.ts";
 import { CliUsageError } from "../usage-error.ts";
 
 interface ReplyResponse {
+  readonly action: string;
   readonly replied_at: number;
 }
 
@@ -22,6 +23,13 @@ Example:
   clobber reply ab12cd34ef "yes — migration ran clean against staging first"
 
 Skill: see worker:reply for when to reply vs. just absorb the note.`;
+
+const ACTION_LABELS: Record<string, string> = {
+  injected: "delivered (injected into manager's running session)",
+  resumed: "delivered (manager woken via resume)",
+  spawned: "delivered (manager woken via fresh spawn)",
+  queued: "queued (manager offline — will land on next wake)",
+};
 
 export const replyCommand: Command = {
   name: "reply",
@@ -43,7 +51,8 @@ export const replyCommand: Command = {
       path: "/agent/messages/replies",
       body: { token, body },
     });
-    ctx.stdout.write(`${JSON.stringify(res, null, 2)}\n`);
+    const label = ACTION_LABELS[res.action] ?? `replied (${res.action})`;
+    ctx.stdout.write(`replied: ${label}\n`);
     return 0;
   },
 };

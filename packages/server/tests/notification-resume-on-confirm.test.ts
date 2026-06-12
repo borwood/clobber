@@ -444,7 +444,12 @@ describe("POST /sessions/:id/confirm-resume (#621)", () => {
     h.notifications.create(durableReq(h.workerAgentId, "msg-alpha"), T0 + 3000);
     h.notifications.create(durableReq(h.workerAgentId, "msg-beta"), T0 + 4000);
 
-    const tok = createAgentMessageStore(h.db).issue({ originator_session_id: "dead-w-c1", recipient_session_id: "dead-w-c1" });
+    const tok = createAgentMessageStore(h.db).issue({
+      originator_session_id: "dead-w-c1",
+      recipient_session_id: "dead-w-c1",
+      originator_agent_id: h.workerAgentId,
+      recipient_agent_id: h.workerAgentId,
+    });
     const res = await h.server.inject({
       method: "POST",
       url: `/sessions/dead-w-c1/confirm-resume`,
@@ -481,7 +486,12 @@ describe("POST /sessions/:id/confirm-resume (#621)", () => {
     h.notifications.create(durableReq(h.workerAgentId, "msg-d1"), T0);
     h.notifications.create(transientReq(h.workerAgentId, "wake-d1"), T0 + 1000);
 
-    const tok = createAgentMessageStore(h.db).issue({ originator_session_id: "dead-w-d1", recipient_session_id: "dead-w-d1" });
+    const tok = createAgentMessageStore(h.db).issue({
+      originator_session_id: "dead-w-d1",
+      recipient_session_id: "dead-w-d1",
+      originator_agent_id: h.workerAgentId,
+      recipient_agent_id: h.workerAgentId,
+    });
     const res = await h.server.inject({
       method: "POST",
       url: `/sessions/dead-w-d1/decline-resume`,
