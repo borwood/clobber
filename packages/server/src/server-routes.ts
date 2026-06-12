@@ -42,6 +42,8 @@ export function registerAllRoutes(
     readTranscriptTail,
     resumeTurn,
     resumeEnded,
+    attachSession,
+    resumeEndedFn,
     onSessionEnded,
     onWorkerDone,
   } = deps;
@@ -196,6 +198,9 @@ export function registerAllRoutes(
     agentStatusLog: opts.agentStatusLog,
     agentMessages,
     dispatcher: notificationDispatcher,
+    workspaces: opts.workspaces,
+    attachSession,
+    resumeEndedSession: resumeEndedFn,
   });
   registerAgentExtRoutes(app, opts, deps);
 }
