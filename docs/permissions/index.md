@@ -32,6 +32,7 @@ Capabilities grouped by access level. Internal capabilities are not listed.
 | `reply` | Reply to a received message. |
 | `report` | Submit the session's structured final-report. |
 | `status` | Post the agent's current status string. |
+| `worktrees.set` | Move the caller's own agent worktree to a new path. |
 
 ## Admin
 
@@ -57,3 +58,5 @@ Capabilities grouped by access level. Internal capabilities are not listed.
 | `self-skills.grant` | Grant a skill to the current role (within workspace policy). |
 | `self-skills.release` | Remove a granted self-skill from the current role. |
 | `spawn` | Spawn a new agent in the current workspace. |
+| `worktrees.set-agent` | Move a named agent's worktree to a new path (agent must be idle). |
+| `worktrees.set-default` | Set the workspace default branch-prefix convention for new agent worktrees. |

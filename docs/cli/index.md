@@ -25,3 +25,4 @@
 | [`transcript`](transcript.md) | Read a session transcript with selectors and detail levels. |
 | [`whoami`](whoami.md) | Show this agent's session, workspace, and role. |
 | [`workspace`](workspace.md) | Load or patch a workspace (create + apply triggers, or live config patch). |
+| [`worktrees`](worktrees.md) | Move agent worktrees or configure the workspace branch-prefix convention. |
