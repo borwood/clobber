@@ -2,8 +2,6 @@ import type { Role, RoleEditManifest, RoleTrigger } from "@clobber/shared";
 import { commitOnBranch, ensureEditBranch } from "./role-checkout-repo.ts";
 import type { CommitProvenance } from "./role-git.ts";
 import { loadRoleContractAtCommit } from "./role-repo.ts";
-import { resolveCurrentRoleVersion } from "./resolve-role-content.ts";
-import { roleSnapshotToContract } from "./role-tree-snapshot.ts";
 import type { RoleTreeContract } from "./role-tree.ts";
 import {
   ensureCommitPinned,
@@ -117,9 +115,10 @@ export interface PatchThroughPinInput {
 }
 
 // The one-shot front-door: pin the role (lazy per-role cutover if still
-// row-backed), read its current content as a contract from the pinned tree,
-// apply the in-memory patch, and finalize the commit. No faked checkout — the
-// contract goes straight to `commitOnBranch`.
+// row-backed), read its current content as a contract directly from the pinned
+// git tree via loadRoleContractAtCommit (preserving every tree-only field,
+// including habits), apply the in-memory patch, and finalize the commit. No
+// faked checkout — the contract goes straight to `commitOnBranch`.
 export function patchRoleThroughPin(
   deps: RoleCheckoutDeps,
   input: PatchThroughPinInput,
@@ -147,11 +146,7 @@ export function patchRoleThroughPin(
   const branch = role.name;
   ensureEditBranch(repoDir, branch, commit.sha);
 
-  const view = resolveCurrentRoleVersion(role, deps);
-  if (view === null) {
-    throw new Error(`commit-pinned role ${role.name} resolved no content view`);
-  }
-  const patched = input.apply(roleSnapshotToContract(view));
+  const patched = input.apply(loadRoleContractAtCommit(repoDir, commit.sha));
 
   const manifest: RoleEditManifest = {
     ...manifestFromRole(role),

@@ -3,8 +3,11 @@ import { mkdtempSync, writeFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { PassThrough, Readable } from "node:stream";
+import type { Habit } from "@clobber/shared";
 import { createServer } from "@clobber/server/server.ts";
 import { loadRoleContractAtCommit } from "@clobber/server/role-repo.ts";
+import { commitOnBranch, ensureEditBranch } from "@clobber/server/role-checkout-repo.ts";
+import { readTreeAtCommit } from "@clobber/server/role-git.ts";
 import { createDatabase } from "@clobber/server/db.ts";
 import { createEventStore } from "@clobber/server/event-store.ts";
 import { createWorkspaceStore } from "@clobber/server/workspace-store.ts";
@@ -557,5 +560,116 @@ describe("clobber CLI — roles edit", () => {
     });
     expect(code).toBe(2);
     expect(s.err()).toMatch(/json/i);
+  });
+});
+
+// #650 — patchRoleThroughPin silently wipes git-authored habits. The fix reads
+// the current contract directly from the pinned git tree instead of going through
+// the lossy snapshot round-trip (which has no habits column → habits: []).
+describe("clobber CLI — roles edit — #650 habit roundtrip regression", () => {
+  function workerRepoDir(): string {
+    const cloneDir = join(dirname(harness.roleRepoDir), "role-repos", harness.workspaceId);
+    return existsSync(join(cloneDir, ".git")) ? cloneDir : harness.roleRepoDir;
+  }
+
+  // Idempotent: filters out the companion-habit-seed skill before re-adding it, so
+  // calling this twice in the same harness doesn't produce duplicate skill entries.
+  function seedHabitAndCompanion(repoDir: string): string {
+    const sha = workerPinSha();
+    const base = loadRoleContractAtCommit(repoDir, sha);
+    const habit: Habit = {
+      path: "self.session-start",
+      name: "cycle-reminder",
+      enabled: true,
+      scope: "self",
+      action: { kind: "inject", hint: "Cycle soon." },
+    };
+    const seededSkills = [
+      ...base.skills.filter((sk) => sk.name !== "companion-habit-seed"),
+      {
+        name: "companion-habit-seed",
+        body: "# companion habit seed\n",
+        files: { "helper.md": "# helper content\n" },
+      },
+    ];
+    ensureEditBranch(repoDir, "worker", sha);
+    const ref = commitOnBranch(repoDir, "worker", { ...base, habits: [habit], skills: seededSkills }, "test: seed habit + companion for #650");
+    harness.db
+      .prepare("UPDATE roles SET current_commit_branch = ?, current_commit_sha = ? WHERE id = ?")
+      .run(ref.branch, ref.sha, harness.workerRoleId);
+    return ref.sha;
+  }
+
+  function treeDiff(repoDir: string, parentSha: string, childSha: string): Set<string> {
+    const parentTree = readTreeAtCommit(repoDir, parentSha);
+    const childTree = readTreeAtCommit(repoDir, childSha);
+    const changed = new Set<string>();
+    for (const [path, content] of childTree) {
+      if (parentTree.get(path) !== content) changed.add(path);
+    }
+    for (const [path] of parentTree) {
+      if (!childTree.has(path)) changed.add(path);
+    }
+    return changed;
+  }
+
+  it("#650: roles edit --add-skill preserves habits; tree-diff = only the new skill (fails on the bug)", async () => {
+    const repoDir = workerRepoDir();
+    const habitSha = seedHabitAndCompanion(repoDir);
+
+    expect(loadRoleContractAtCommit(repoDir, habitSha).habits).toHaveLength(1);
+
+    const s = captureStreams();
+    const skillFile = join(harness.tmpDir, "roundtrip-skill.md");
+    writeFileSync(skillFile, "# roundtrip skill\n");
+
+    const code = await run({
+      argv: ["roles", "edit", "worker", "--add-skill", `roundtrip=${skillFile}`],
+      env: envFor(harness.managerToken),
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(code).toBe(0);
+
+    const newSha = workerPinSha();
+    expect(newSha).not.toBe(habitSha);
+
+    // Primary assertion (fails on the bug): the only changed paths are the new skill files.
+    // On the bug, habits/self/session-start/cycle-reminder.json is also in the diff (deleted).
+    const changed = treeDiff(repoDir, habitSha, newSha);
+    for (const path of changed) {
+      expect(path.startsWith("skills/roundtrip/")).toBe(true);
+    }
+    expect(changed.size).toBeGreaterThan(0);
+
+    // Secondary assertion (#450): companion files on an existing skill round-trip through the edit.
+    const final = loadRoleContractAtCommit(repoDir, newSha);
+    const companion = final.skills.find((sk) => sk.name === "companion-habit-seed");
+    expect(companion?.files?.["helper.md"]).toBe("# helper content\n");
+  });
+
+  it("#650: wake-programs add preserves habits (second patchRoleThroughPin caller)", async () => {
+    const repoDir = workerRepoDir();
+    const habitSha = seedHabitAndCompanion(repoDir);
+
+    const res = await harness.app.inject({
+      method: "POST",
+      url: `/agent/roles/${harness.workerRoleId}/wake-programs`,
+      headers: { Authorization: `Bearer ${harness.managerToken}` },
+      payload: { name: "habit-test-prog", system: "Run the habit test.", user: null },
+    });
+    expect(res.statusCode).toBe(200);
+
+    const newSha = workerPinSha();
+    const changed = treeDiff(repoDir, habitSha, newSha);
+
+    // Tree-diff must be ONLY wake-program files (fails on the bug — habits are deleted).
+    for (const path of changed) {
+      expect(path.startsWith("wake-programs/")).toBe(true);
+    }
+
+    const final = loadRoleContractAtCommit(repoDir, newSha);
+    expect(final.habits).toHaveLength(1);
+    expect(final.habits[0]!.name).toBe("cycle-reminder");
   });
 });
