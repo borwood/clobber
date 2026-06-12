@@ -260,7 +260,7 @@ describe("spawn_worktree (#635): persist worktree identity — derive once, read
     const row = h.db
       .prepare("SELECT worktree_branch, worktree_path FROM agents WHERE id = ?")
       .get(agentId) as { worktree_branch: string | null; worktree_path: string | null };
-    expect(row.worktree_branch).toBe("clobber/42");
+    expect(row.worktree_branch).toBe("42");
     expect(row.worktree_path).toBe(h.records[0]!.req.cwd);
 
     rmSync(worktreesRoot(h.repoPath), { recursive: true, force: true });
@@ -289,7 +289,7 @@ describe("spawn_worktree (#635): persist worktree identity — derive once, read
     const row = h.db
       .prepare("SELECT worktree_branch, worktree_path FROM agents WHERE id = ?")
       .get(agentId) as { worktree_branch: string | null; worktree_path: string | null };
-    expect(row.worktree_branch).toBe("clobber/manager");
+    expect(row.worktree_branch).toBe("manager");
     expect(row.worktree_path).toBe(firstCwd);
 
     const wake = await h.server.inject({

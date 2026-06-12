@@ -39,6 +39,7 @@ export interface Harness {
   readonly roles: ReturnType<typeof createRoleStore>;
   readonly roleVersions: ReturnType<typeof createRoleVersionStore>;
   readonly workspaceRoles: ReturnType<typeof createWorkspaceRoleStore>;
+  readonly agents: ReturnType<typeof createAgentStore>;
   readonly sessions: ReturnType<typeof createSessionStore>;
   readonly sessionTokens: ReturnType<typeof createSessionTokenStore>;
   readonly records: SpawnRecord[];
@@ -134,7 +135,7 @@ export function buildHarness(runtimeProvider: RuntimeProvider): Harness {
     finalReportConsumerState: createFinalReportConsumerStateStore(db),
   });
   const repoPath = mkdtempSync(join(tmpdir(), "clobber-prep-spawn-ctx-"));
-  return { server, db, workspaces, roles, roleVersions, workspaceRoles, sessions, sessionTokens, records, repoPath, driftStub };
+  return { server, db, workspaces, roles, roleVersions, workspaceRoles, agents, sessions, sessionTokens, records, repoPath, driftStub };
 }
 
 export async function teardown(h: Harness): Promise<void> {

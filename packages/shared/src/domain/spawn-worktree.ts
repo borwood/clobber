@@ -18,6 +18,9 @@ export const SpawnWorktreeOffSchema = z.object({
 
 export const SpawnWorktreeOnSchema = z.object({
   kind: z.literal("on"),
+  // Workspace-configured branch prefix. Empty/absent = bare <slug> (default).
+  // Example: "clobber" → branch "clobber/<slug>"; "team" → "team/<slug>".
+  branch_prefix: z.string().optional(),
 });
 
 export const SpawnWorktreeSchema = z.discriminatedUnion("kind", [

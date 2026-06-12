@@ -227,6 +227,21 @@ export const CLI_CAPABILITY_REGISTRY: Readonly<Record<string, CliCapability>> = 
     tag: "admin",
     internal: true,
   },
+  "worktrees.set": {
+    name: "worktrees.set",
+    description: "Move the caller's own agent worktree to a new path.",
+    tag: "write",
+  },
+  "worktrees.set-agent": {
+    name: "worktrees.set-agent",
+    description: "Move a named agent's worktree to a new path (agent must be idle).",
+    tag: "admin",
+  },
+  "worktrees.set-default": {
+    name: "worktrees.set-default",
+    description: "Set the workspace default branch-prefix convention for new agent worktrees.",
+    tag: "admin",
+  },
 });
 
 export function getCliCapability(name: string): CliCapability | undefined {

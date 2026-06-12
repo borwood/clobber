@@ -4,6 +4,7 @@
 
 _Generated from git history of source metadata files._
 
+- 2026-06-10 feat: agent self-inbox — list + ack own notifications (#613) (#614)
 - 2026-06-10 feat(cli,server): make --prompt optional on spawn (#597)
 - 2026-06-09 feat(shared,web,cli): add fable as a supported model alias (#583)
 - 2026-06-07 feat(server,cli): PR2 — per-agent scope override + effective_scope surface (#567) (#569)

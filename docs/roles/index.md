@@ -26,6 +26,6 @@ Autonomous SDLC worker. Spawned with one issue assignment; walks the SDLC profil
 - Persistent: false
 - Default ceiling: 3
 - Effort: high
-- Allowed CLI commands: whoami, ask, status, report, reply, notify.list, notify.ack
+- Allowed CLI commands: whoami, ask, status, report, reply, notify.list, notify.ack, worktrees.set
 - Allowed tools: Bash, Read, Edit, Write, Glob, Grep
 
