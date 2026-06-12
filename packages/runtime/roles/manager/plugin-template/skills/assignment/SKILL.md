@@ -82,6 +82,13 @@ PR's blast radius). Otherwise, run `/assignment` once per issue.
    — a worker that reads 800 lines of preamble has lost half its context
    budget before it starts. One screen is the goal.
 
+   - **Pin observable contract values.** Name any value the worker must not
+     improvise — HTTP status codes (e.g. a 503 with a structured body vs. a
+     generic 500), serialization format (compact vs. spaced JSON), exact
+     error strings or shapes, on-disk or golden-file formats. An unmade
+     decision in the brief is a coin-flip the worker pays for in a debug
+     cycle.
+
    `context.md` is for things the worker *won't infer from the repo*:
    workspace branch naming, commit message style, special CI gates, prior
    PR's worth referencing. Skip it if the repo's `CLAUDE.md` already covers
@@ -131,6 +138,12 @@ packet: a single `boot-tasks.json` that walks both issues in dep order,
 and an `assignment.md` whose top section frames *why these issues belong
 together* and whose body has one section per issue. The worker spawns
 once, walks the combined plan, opens one PR that closes both.
+
+**Split-issue PR linkage.** When a *single* issue is large enough to span
+multiple PRs, brief the worker to write "Part of #X" (not "Closes #X") in
+every PR but the last — "Closes #X" auto-closes the parent at the first
+PR's merge. You (the manager) close the parent manually after the final PR
+merges.
 
 ## When to refuse
 
