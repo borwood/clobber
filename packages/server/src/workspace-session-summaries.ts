@@ -34,6 +34,7 @@ export interface SessionSummary {
   readonly open_question?: OpenSessionQuestion;
   readonly model?: string;
   readonly effort?: string;
+  readonly context_tokens?: number;
 }
 
 export interface WorkspaceSessionSummaries {
@@ -59,6 +60,7 @@ interface Row {
   question_status: string | null;
   model: string | null;
   effort: string | null;
+  context_tokens: number | null;
 }
 
 function pickStatus(row: Row): LatestAgentStatus | undefined {
@@ -119,8 +121,9 @@ export function createWorkspaceSessionSummaries(db: Database): WorkspaceSessionS
       q.questions_json AS question_questions_json,
       q.asked_at       AS question_asked_at,
       q.status         AS question_status,
-      s.model       AS model,
-      s.effort      AS effort
+      s.model          AS model,
+      s.effort         AS effort,
+      s.context_tokens AS context_tokens
     FROM sessions s
     JOIN roles r                ON r.id          = s.role_id
     LEFT JOIN agents a          ON a.id          = s.agent_id
@@ -158,6 +161,7 @@ export function createWorkspaceSessionSummaries(db: Database): WorkspaceSessionS
           ...(open_question === undefined ? {} : { open_question }),
           ...(row.model === null ? {} : { model: row.model }),
           ...(row.effort === null ? {} : { effort: row.effort }),
+          ...(row.context_tokens === null ? {} : { context_tokens: row.context_tokens }),
         };
       });
     },

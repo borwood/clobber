@@ -114,20 +114,16 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume, o
                     was live
                   </span>
                 )}
-                {isEnded ? (
+                {isEnded && (
                   <span className="px-1.5 py-0.5 rounded bg-elevated text-text-subtle">
                     ended
                   </span>
-                ) : s.last_event_name === undefined ? (
-                  <span className="px-1.5 py-0.5 rounded bg-elevated text-text-subtle italic">
-                    no events yet
-                  </span>
-                ) : (
-                  <span className="px-1.5 py-0.5 rounded bg-elevated text-text-soft">
-                    {s.last_event_name}
+                )}
+                {s.context_tokens !== undefined && (
+                  <span className="font-mono">
+                    ~{Math.round(s.context_tokens / 1000)}k ctx
                   </span>
                 )}
-                <span>{s.event_count} events</span>
                 <span className="ml-auto">{relativeTime(s.last_seen_at)}</span>
               </div>
             </button>

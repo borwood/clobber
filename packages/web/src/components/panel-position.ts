@@ -1,14 +1,15 @@
-const MARGIN = 4;
+const MARGIN = 8;
 
 export interface PanelPosition {
   readonly top: number;
-  readonly right: number;
+  readonly left: number;
   readonly placement: "above" | "below";
 }
 
 export function computePanelPosition(
   triggerRect: DOMRect,
   panelHeight: number,
+  panelWidth: number,
   viewportHeight: number,
   viewportWidth: number,
 ): PanelPosition {
@@ -18,8 +19,9 @@ export function computePanelPosition(
     placement === "below"
       ? triggerRect.bottom + MARGIN
       : triggerRect.top - panelHeight - MARGIN;
-  // Clamp so panel never goes off-screen (top or bottom).
   top = Math.max(MARGIN, Math.min(top, viewportHeight - panelHeight - MARGIN));
-  const right = viewportWidth - triggerRect.right;
-  return { top, right, placement };
+  // Align left edge with trigger, clamped so panel never exits the viewport.
+  let left = triggerRect.left;
+  left = Math.max(MARGIN, Math.min(left, viewportWidth - panelWidth - MARGIN));
+  return { top, left, placement };
 }
