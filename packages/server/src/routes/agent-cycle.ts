@@ -6,7 +6,7 @@ import {
   runToolTokenGate,
   type ToolTokenGateResult,
 } from "../tool-token-gate.ts";
-import { executeCycle } from "../cycle-pipeline.ts";
+import { executeCycle, BootFailureError } from "../cycle-pipeline.ts";
 
 /**
  * `clobber cycle` (#320) — the first real consumer of the tool-token gate
@@ -100,20 +100,32 @@ export function registerAgentCycleRoutes(app: FastifyInstance, deps: AgentRouteD
 
       // Redeem: the bearer (this session) presents the token; the gate validates
       // it is the bound target, then fires the kill-first cycle on itself.
-      const result = await runToolTokenGate<CycleArgs>(
-        {
-          tool: TOOL,
-          callerSessionId: session.id,
-          token: body.token,
-          brief: CYCLE_BRIEF,
-          action: (args) =>
-            executeCycle(
-              { ...deps, layoutEvents: deps.layoutEvents },
-              { killSessionId: session.id, prompt: args.prompt, wakeProgram: args.wakeProgram },
-            ),
-        },
-        deps.gate,
-      );
+      let result: ToolTokenGateResult;
+      try {
+        result = await runToolTokenGate<CycleArgs>(
+          {
+            tool: TOOL,
+            callerSessionId: session.id,
+            token: body.token,
+            brief: CYCLE_BRIEF,
+            action: (args) =>
+              executeCycle(
+                { ...deps, layoutEvents: deps.layoutEvents },
+                { killSessionId: session.id, prompt: args.prompt, wakeProgram: args.wakeProgram },
+              ),
+          },
+          deps.gate,
+        );
+      } catch (err) {
+        if (err instanceof BootFailureError) {
+          reply.code(503);
+          return {
+            error: err.reason,
+            ...(err.reasonStack !== undefined ? { error_stack: err.reasonStack } : {}),
+          };
+        }
+        throw err;
+      }
       return mapResult(result, reply);
     }),
   );
