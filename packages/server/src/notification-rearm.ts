@@ -156,6 +156,8 @@ async function maybeEmitConfirmToOwner(deps: RearmPendingDeps, recipientAgentId:
   const issued = deps.agentMessages.issue({
     originator_session_id: deadSessionId,
     recipient_session_id: deadSessionId,
+    originator_agent_id: recipientAgentId,
+    recipient_agent_id: ownerAgentId,
   });
 
   const req: CreateNotification = {

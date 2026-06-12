@@ -18,6 +18,8 @@ export interface AgentMessageToken {
   readonly token: string;
   readonly originator_session_id: string;
   readonly recipient_session_id: string;
+  readonly originator_agent_id: string | null;
+  readonly recipient_agent_id: string | null;
   readonly message_id: string;
   readonly created_at: number;
   readonly redeemed_at: number | null;
@@ -26,6 +28,8 @@ export interface AgentMessageToken {
 export interface IssueTokenRequest {
   readonly originator_session_id: string;
   readonly recipient_session_id: string;
+  readonly originator_agent_id: string;
+  readonly recipient_agent_id: string;
 }
 
 export interface AgentMessageStore {
@@ -42,6 +46,8 @@ interface Row {
   token: string;
   originator_session_id: string;
   recipient_session_id: string;
+  originator_agent_id: string | null;
+  recipient_agent_id: string | null;
   message_id: string;
   created_at: number;
   redeemed_at: number | null;
@@ -52,6 +58,8 @@ function rowToToken(row: Row): AgentMessageToken {
     token: row.token,
     originator_session_id: row.originator_session_id,
     recipient_session_id: row.recipient_session_id,
+    originator_agent_id: row.originator_agent_id,
+    recipient_agent_id: row.recipient_agent_id,
     message_id: row.message_id,
     created_at: row.created_at,
     redeemed_at: row.redeemed_at,
@@ -61,8 +69,9 @@ function rowToToken(row: Row): AgentMessageToken {
 export function createAgentMessageStore(db: Database): AgentMessageStore {
   const insertStmt = db.prepare(`
     INSERT INTO agent_message_tokens
-      (token, originator_session_id, recipient_session_id, message_id, created_at, redeemed_at)
-    VALUES (?, ?, ?, ?, ?, NULL)
+      (token, originator_session_id, recipient_session_id, originator_agent_id, recipient_agent_id,
+       message_id, created_at, redeemed_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
     RETURNING *
   `);
   const getStmt = db.prepare("SELECT * FROM agent_message_tokens WHERE token = ?");
@@ -76,6 +85,8 @@ export function createAgentMessageStore(db: Database): AgentMessageStore {
         generateToken(),
         req.originator_session_id,
         req.recipient_session_id,
+        req.originator_agent_id,
+        req.recipient_agent_id,
         randomUUID(),
         Date.now(),
       ) as Row;
