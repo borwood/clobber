@@ -6,6 +6,14 @@ import type { RoleTree } from "./role-tree.ts";
 // version store (role-repo.ts) and the working-copy verbs (role-checkout-repo.ts).
 // Pure mechanics: run git in a dir, materialize a tree to disk, read one back.
 
+// #637 — identity of the agent that authored a working-copy commit.
+export interface CommitProvenance {
+  readonly label: string;
+  readonly role: string;
+  readonly pin: string;
+  readonly sessionId: string;
+}
+
 export function git(dir: string, ...args: string[]): string {
   const res = Bun.spawnSync(["git", "-C", dir, ...args], { stdout: "pipe", stderr: "pipe" });
   if (res.exitCode !== 0) {
@@ -25,23 +33,35 @@ export function revParse(dir: string, ref: string): string {
 // branch left behind; git content-addresses blobs, so files whose bytes match
 // the parent reuse its objects and the merge-base stays shared. `--allow-empty`
 // keeps a fork that happens to equal base a legitimate (empty) commit.
-export function commitTree(dir: string, tree: RoleTree, message: string): void {
+// When `provenance` is supplied, the commit author is set to the agent label and
+// four Clobber-* trailers are appended so authorship is auditable in git log.
+export function commitTree(
+  dir: string,
+  tree: RoleTree,
+  message: string,
+  provenance?: CommitProvenance,
+): void {
   clearWorkingTree(dir);
   writeTreeToDir(dir, tree);
   git(dir, "add", "-A");
+  const authorName = provenance !== undefined ? provenance.label : "clobber";
+  const fullMessage =
+    provenance !== undefined
+      ? `${message}\n\nClobber-Agent-Label: ${provenance.label}\nClobber-Role: ${provenance.role}\nClobber-Commit-Pin: ${provenance.pin}\nClobber-Session-Id: ${provenance.sessionId}`
+      : message;
   git(
     dir,
     "-c",
     "user.email=clobber@local",
     "-c",
-    "user.name=clobber",
+    `user.name=${authorName}`,
     "-c",
     "commit.gpgsign=false",
     "commit",
     "--allow-empty",
     "-q",
     "-m",
-    message,
+    fullMessage,
   );
 }
 

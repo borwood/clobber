@@ -4,6 +4,7 @@ import { resolveRoleRepoDir } from "../resolve-role-repo-dir.ts";
 import {
   diffRoleVsUpstream,
   fetchUpstream,
+  logBranchChangelog,
   logUpstreamAhead,
 } from "../role-upstream-diff.ts";
 import { withAgentAuth } from "./_with-agent-auth.ts";
@@ -70,11 +71,11 @@ export function registerAgentRoleUpstreamRoutes(
     ),
   );
 
-  // List commits on the upstream default not yet in the local pin — "what
-  // changed upstream since my fork". Returns --oneline log text.
-  app.get<{ Params: { idOrName: string } }>(
+  // #637 AC3 — no ?range: branch changelog (sha + message + provenance, newest-first).
+  // ?range=@{upstream}..: upstream-ahead list (legacy --oneline log text, unchanged).
+  app.get<{ Params: { idOrName: string }; Querystring: { range?: string } }>(
     "/agent/roles/:idOrName/upstream/log",
-    withAgentAuth<{ Params: { idOrName: string } }>(
+    withAgentAuth<{ Params: { idOrName: string }; Querystring: { range?: string } }>(
       "roles.upstream.log",
       deps,
       async (request, reply, { session }) => {
@@ -88,6 +89,23 @@ export function registerAgentRoleUpstreamRoutes(
           reply.code(422);
           return { error: `role ${role.name} has no commit pin` };
         }
+
+        const range = request.query.range;
+        if (range === undefined) {
+          const repoDir = resolveRoleRepoDir(role, deps);
+          if (repoDir === undefined) {
+            reply.code(422);
+            return { error: `no role repo resolves for role ${role.name}` };
+          }
+          try {
+            const entries = logBranchChangelog(repoDir, role);
+            return { entries };
+          } catch (err) {
+            reply.code(422);
+            return { error: (err as Error).message };
+          }
+        }
+
         const { roleForks, workspaceRepos } = deps;
         if (roleForks === undefined || workspaceRepos === undefined) {
           reply.code(422);

@@ -3,7 +3,8 @@ import { request } from "../http.ts";
 import { CliUsageError } from "../usage-error.ts";
 
 // #401 step-1 — the upstream read verbs: fetch / diff @{upstream} / log @{upstream}..
-// All git work is server-side; these are thin HTTP wrappers over the new routes.
+// #637 AC3 — log with no range returns branch changelog (entries[]); with @{upstream}..
+// returns legacy upstream-ahead list. All git work is server-side.
 
 interface FetchResponse {
   readonly fetched: boolean;
@@ -15,6 +16,14 @@ interface UpstreamDiffResponse {
 
 interface UpstreamLogResponse {
   readonly log: string;
+}
+
+interface BranchChangelogResponse {
+  readonly entries: ReadonlyArray<{
+    sha: string;
+    message: string;
+    provenance: { label: string; role: string; pin: string; sessionId: string } | null;
+  }>;
 }
 
 // `roles fetch` — refresh upstream remote-tracking refs in the workspace clone.
@@ -50,29 +59,52 @@ export async function runDiffUpstream(
   return 0;
 }
 
-// `roles log <role> @{upstream}..` — commits on upstream not yet in local pin.
+// `roles log <role> [@{upstream}..]` — branch changelog (no range) or
+// upstream-ahead list (with @{upstream}..).
 export async function runLogUpstream(
   ctx: CommandContext,
   json: boolean,
   rest: readonly string[],
 ): Promise<number> {
-  const [roleName, range, ...extra] = rest;
+  const [roleName, ...restArgs] = rest;
   if (roleName === undefined) {
     throw new CliUsageError(
-      "roles log: missing role name (usage: `roles log <name|id> @{upstream}..`)",
+      "roles log: missing role name (usage: `roles log <name|id> [@{upstream}..]`)",
     );
   }
-  if (range !== "@{upstream}.." && range !== "@{upstream}") {
-    throw new CliUsageError(
-      `roles log: expected @{upstream}.. or @{upstream}, got: ${range ?? "(nothing)"}`,
-    );
+
+  let range: string | undefined;
+  const remaining = [...restArgs];
+  if (remaining.length > 0 && (remaining[0] === "@{upstream}.." || remaining[0] === "@{upstream}")) {
+    range = remaining.shift();
   }
-  if (extra.length > 0) {
-    throw new CliUsageError(`roles log: unexpected arguments: ${extra.join(" ")}`);
+  if (remaining.length > 0) {
+    throw new CliUsageError(`roles log: unexpected arguments: ${remaining.join(" ")}`);
   }
+
+  if (range === undefined) {
+    const result = await request<BranchChangelogResponse>(ctx.env, {
+      method: "GET",
+      path: `/agent/roles/${encodeURIComponent(roleName)}/upstream/log`,
+    });
+    if (json) {
+      ctx.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+      return 0;
+    }
+    if (result.entries.length === 0) {
+      ctx.stdout.write("(no commits on branch)\n");
+      return 0;
+    }
+    for (const entry of result.entries) {
+      const prov = entry.provenance !== null ? ` [${entry.provenance.label}]` : "";
+      ctx.stdout.write(`${entry.sha.slice(0, 8)} ${entry.message}${prov}\n`);
+    }
+    return 0;
+  }
+
   const result = await request<UpstreamLogResponse>(ctx.env, {
     method: "GET",
-    path: `/agent/roles/${encodeURIComponent(roleName)}/upstream/log`,
+    path: `/agent/roles/${encodeURIComponent(roleName)}/upstream/log?range=${encodeURIComponent(range)}`,
   });
   if (json) {
     ctx.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

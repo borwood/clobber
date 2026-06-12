@@ -7,6 +7,7 @@ import {
   readTreeAtCommit,
   revParse,
   writeTreeToDir,
+  type CommitProvenance,
 } from "./role-git.ts";
 import { serializeRoleTree, type RoleTree, type RoleTreeContract } from "./role-tree.ts";
 import type { ForkRef } from "./role-repo.ts";
@@ -37,9 +38,10 @@ export function commitOnBranch(
   branch: string,
   contract: RoleTreeContract,
   message: string,
+  provenance?: CommitProvenance,
 ): ForkRef {
   git(dir, "checkout", "-q", branch);
-  commitTree(dir, serializeRoleTree(contract), message);
+  commitTree(dir, serializeRoleTree(contract), message, provenance);
   return { branch, sha: revParse(dir, branch) };
 }
 

@@ -4,9 +4,15 @@ import { join } from "node:path";
 import type { Role } from "@clobber/shared";
 import type { ForkRef } from "./role-repo.ts";
 import { BASE_BRANCH } from "./role-repo.ts";
-import { git, gitDiffNoIndex, readTreeAtCommit, writeTreeToDir } from "./role-git.ts";
+import { git, gitDiffNoIndex, readTreeAtCommit, writeTreeToDir, type CommitProvenance } from "./role-git.ts";
 import { UPSTREAM_REMOTE } from "./workspace-role-repos.ts";
 import type { RoleTree } from "./role-tree.ts";
+
+export interface BranchLogEntry {
+  readonly sha: string;
+  readonly message: string;
+  readonly provenance: CommitProvenance | null;
+}
 
 // #401 step-1 — upstream read verbs for the roles-as-VCS workflow. The workspace
 // clone carries an `upstream` remote pointing at the engine repo; these helpers
@@ -152,4 +158,38 @@ export function logUpstreamAhead(
 ): string {
   const upstreamRef = resolveUpstreamRef(repoDir, role, roleForks);
   return git(repoDir, "log", "--oneline", `${role.current_commit!.sha}..${upstreamRef}`);
+}
+
+function parseProvenance(body: string): CommitProvenance | null {
+  const label = /^Clobber-Agent-Label: (.+)$/m.exec(body)?.[1];
+  const role = /^Clobber-Role: (.+)$/m.exec(body)?.[1];
+  const pin = /^Clobber-Commit-Pin: ([0-9a-f]{40})$/m.exec(body)?.[1];
+  const sessionId = /^Clobber-Session-Id: (.+)$/m.exec(body)?.[1];
+  if (
+    label === undefined ||
+    role === undefined ||
+    pin === undefined ||
+    sessionId === undefined
+  ) {
+    return null;
+  }
+  return { label, role, pin, sessionId };
+}
+
+// #637 AC3 — list all commits on the role's local branch, newest-first, with
+// parsed provenance. No upstream deps; works from the local repo alone.
+export function logBranchChangelog(repoDir: string, role: Role): BranchLogEntry[] {
+  const output = git(repoDir, "log", "--format=%H%x00%B%x1E", role.name);
+  if (!output.trim()) return [];
+  return output
+    .split("\x1e")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+    .map((entry) => {
+      const nullIdx = entry.indexOf("\0");
+      const sha = entry.slice(0, nullIdx);
+      const body = entry.slice(nullIdx + 1);
+      const message = body.split("\n")[0] ?? "";
+      return { sha, message, provenance: parseProvenance(body) };
+    });
 }

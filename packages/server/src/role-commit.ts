@@ -1,5 +1,6 @@
 import type { Role, RoleEditManifest, RoleTrigger } from "@clobber/shared";
 import { commitOnBranch, ensureEditBranch } from "./role-checkout-repo.ts";
+import type { CommitProvenance } from "./role-git.ts";
 import { loadRoleContractAtCommit } from "./role-repo.ts";
 import { resolveCurrentRoleVersion } from "./resolve-role-content.ts";
 import { roleSnapshotToContract } from "./role-tree-snapshot.ts";
@@ -43,6 +44,8 @@ export interface FinalizeRoleCommitInput {
   readonly contract: RoleTreeContract;
   readonly manifest: RoleEditManifest;
   readonly message: string;
+  // #637 — present on working-copy commits only; one-shot patches leave it absent.
+  readonly provenance?: CommitProvenance;
 }
 
 // The shared tail lifted from `commitCheckout`: serialize the in-memory contract
@@ -62,7 +65,13 @@ export function finalizeRoleCommit(
   const baseTriggers = JSON.stringify(
     loadRoleContractAtCommit(input.repoDir, input.baseSha).triggers,
   );
-  const newRef = commitOnBranch(input.repoDir, input.branch, input.contract, input.message);
+  const newRef = commitOnBranch(
+    input.repoDir,
+    input.branch,
+    input.contract,
+    input.message,
+    input.provenance,
+  );
 
   // Re-sync the pin + index/cache immediately after the commit returns the sha,
   // so a failure after this point leaves a coherent row. pinCommit is idempotent.
