@@ -34,7 +34,7 @@ export function resolveSpawnCwd(
 
   // No stored identity yet. Derive + create on any attach (covers first-attach
   // and off→on flip strand victims where the agent already has sessions).
-  const { branch, worktreePath } = deriveWorktree(workspace.repo_path, agent);
+  const { branch, worktreePath } = deriveWorktree(workspace.repo_path, agent, workspace.spawn_worktree);
   if (mode === "attach") {
     createWorktree(workspace.repo_path, branch, worktreePath);
     setIdentity(branch, worktreePath);
@@ -61,9 +61,14 @@ export function worktreeRootFor(
 // Determinism is also what makes the collision guarantee meaningful: two
 // spawns sharing a label resolve to the same branch/path, and git refuses the
 // second — no silent reuse.
+//
+// Branch name = "<prefix>/<slug>" when policy carries a branch_prefix, or
+// bare "<slug>" (default). Root path delegates to worktreeRootFor (T1: single
+// source — worktreeRootFor is also exported for the habit-receiver sentinel).
 function deriveWorktree(
   repoPath: string,
   agent: Agent,
+  policy: SpawnWorktree,
 ): { readonly branch: string; readonly worktreePath: string } {
   if (agent.label === undefined) {
     throw new Error(
@@ -74,12 +79,9 @@ function deriveWorktree(
   if (slug === "") {
     throw new Error(`spawn_worktree could not derive a slug from label "${agent.label}"`);
   }
-  const branch = `clobber/${slug}`;
-  const worktreePath = join(
-    dirname(repoPath),
-    `${basename(repoPath)}-worktrees`,
-    slug,
-  );
+  const prefix = policy.kind === "on" ? policy.branch_prefix : undefined;
+  const branch = prefix !== undefined && prefix !== "" ? `${prefix}/${slug}` : slug;
+  const worktreePath = worktreeRootFor(repoPath, agent.label, policy);
   return { branch, worktreePath };
 }
 

@@ -15,6 +15,7 @@ import { messageCommand } from "./commands/message.ts";
 import { notifyCommand } from "./commands/notify.ts";
 import { replyCommand } from "./commands/reply.ts";
 import { rolesCommand } from "./commands/roles.ts";
+import { worktreesCommand } from "./commands/worktrees.ts";
 import { workspaceCommand } from "./commands/workspace.ts";
 import { promptModulesCommand } from "./commands/prompt-modules.ts";
 import { selfSkillsCommand } from "./commands/self-skills.ts";
@@ -51,6 +52,7 @@ export function buildCommandRegistry(): CommandRegistry {
   registry.register(notifyCommand);
   registry.register(replyCommand);
   registry.register(rolesCommand);
+  registry.register(worktreesCommand);
   registry.register(workspaceCommand);
   registry.register(promptModulesCommand);
   registry.register(selfSkillsCommand);
