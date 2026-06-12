@@ -305,7 +305,7 @@ describe("#216 role working-copy commit (closes #396)", () => {
       method: "POST",
       url: "/agent/role-checkout/commit",
       headers: { authorization: `Bearer ${token}` },
-      payload: {},
+      payload: { message: "test commit" },
     });
     expect(commit.statusCode, commit.body).toBe(200);
 
@@ -445,7 +445,7 @@ describe("#216 role working-copy commit (closes #396)", () => {
       method: "POST",
       url: "/agent/role-checkout/commit",
       headers: { authorization: `Bearer ${token}` },
-      payload: {},
+      payload: { message: "stale-tip test" },
     });
     expect(refused.statusCode).toBe(409);
 
@@ -453,7 +453,7 @@ describe("#216 role working-copy commit (closes #396)", () => {
       method: "POST",
       url: "/agent/role-checkout/commit",
       headers: { authorization: `Bearer ${token}` },
-      payload: { force: true },
+      payload: { message: "stale-tip force", force: true },
     });
     expect(forced.statusCode, forced.body).toBe(200);
 

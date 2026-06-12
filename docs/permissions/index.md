@@ -16,7 +16,7 @@ Capabilities grouped by access level. Internal capabilities are not listed.
 | `roles.show` | Show a role's current version, history, and configuration. |
 | `roles.status` | Show whether a role checkout is open and which files changed. |
 | `roles.upstream.diff` | Line-level diff of the local role pin versus its upstream default. |
-| `roles.upstream.log` | List upstream commits not yet in the local role pin. |
+| `roles.upstream.log` | Branch changelog (no range) or upstream-ahead list (with @{upstream}..). |
 | `self-skills.list` | List the current role's granted self-skills and workspace policy. |
 | `transcript` | Read a session's transcript. |
 | `whoami` | Return the caller's session and role identity. |

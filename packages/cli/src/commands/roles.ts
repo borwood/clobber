@@ -137,13 +137,13 @@ export const rolesCommand: Command = {
     "Upstream verbs (compare local role state to engine defaults):\n" +
     "  roles fetch                                  Refresh upstream remote-tracking refs in the workspace clone.\n" +
     "  roles diff <name|id> @{upstream} [--json]    Line-level diff of local pin vs upstream default.\n" +
-    "  roles log <name|id> @{upstream}.. [--json]   Commits on upstream not yet in local pin.\n\n" +
+    "  roles log <name|id> [@{upstream}..] [--json]  Branch changelog (no range) or upstream-ahead list (with @{upstream}..).\n\n" +
     "Working-copy verbs (edit a role like code — commit advances the git pin, no new version row):\n" +
     "  roles checkout <name|id> [--json]            Materialize the role's branch into the desk; edit the files, then commit.\n" +
     "  roles checkout -b <new-name> --from <src>    Create/fork a role as a fresh git branch off <src> (commit-pinned, no version row).\n" +
     "  roles status [--json]                        Is a checkout open? for which role? which files changed? stale?\n" +
     "  roles diff [--json]                          Show the working copy's changes against the branch tip.\n" +
-    "  roles commit [-m <msg>] [--force] [--json]   Serialize the edits onto the branch + advance the pin (--force overrides a stale tip).\n" +
+    "  roles commit -m <msg> [--force] [--json]     Serialize the edits onto the branch + advance the pin (-m is required; --force overrides a stale tip).\n" +
     "  roles discard [--json]                       Throw the checkout away (the branch is untouched).\n\n" +
     "Flags (roles edit):\n" +
     "  --system-prompt-file FILE      Replace system prompt from a file.\n" +

@@ -15,7 +15,7 @@ import {
   materializeCheckout,
   readCheckout,
 } from "./role-checkout-repo.ts";
-import { revParse } from "./role-git.ts";
+import { revParse, type CommitProvenance } from "./role-git.ts";
 import { finalizeRoleCommit } from "./role-commit.ts";
 import { resolveRoleByIdOrName } from "./resolve-role.ts";
 import {
@@ -181,7 +181,7 @@ export function diffCheckout(deps: RoleCheckoutDeps, session: Session): RouteRes
 }
 
 export interface CommitOptions {
-  readonly message?: string | undefined;
+  readonly message: string;
   readonly force?: boolean | undefined;
 }
 
@@ -235,7 +235,20 @@ export function commitCheckout(
   } catch (err) {
     return { status: 400, body: { error: `invalid role tree: ${(err as Error).message}` } };
   }
-  const message = opts.message ?? `edit ${role.name} via working copy`;
+
+  if (session.label === undefined) {
+    return {
+      status: 422,
+      body: { error: "session has no label; cannot stamp agent identity on commit" },
+    };
+  }
+  const provenance: CommitProvenance = {
+    label: session.label,
+    role: role.name,
+    pin: session.role_commit!.sha,
+    sessionId: session.id,
+  };
+
   const result = finalizeRoleCommit(deps, cfg, {
     role,
     repoDir,
@@ -243,7 +256,8 @@ export function commitCheckout(
     baseSha: sidecar.base_sha,
     contract,
     manifest,
-    message,
+    message: opts.message,
+    provenance,
   });
 
   if (result.status === 200) clearCheckout(deskDir);

@@ -200,8 +200,11 @@ export async function runCommit(
       throw new CliUsageError(`roles commit: unexpected argument: ${arg}`);
     }
   }
-  const body: { message?: string; force?: boolean } = {
-    ...(message === undefined ? {} : { message }),
+  if (message === undefined) {
+    throw new CliUsageError("roles commit: -m <message> is required");
+  }
+  const body: { message: string; force?: boolean } = {
+    message,
     ...(force ? { force: true } : {}),
   };
   const result = await request<CommitResponse>(ctx.env, {

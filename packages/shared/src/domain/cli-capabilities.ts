@@ -53,7 +53,7 @@ export const CLI_CAPABILITY_REGISTRY: Readonly<Record<string, CliCapability>> = 
   },
   "roles.upstream.log": {
     name: "roles.upstream.log",
-    description: "List upstream commits not yet in the local role pin.",
+    description: "Branch changelog (no range) or upstream-ahead list (with @{upstream}..).",
     tag: "read",
   },
   "self-skills.list": {

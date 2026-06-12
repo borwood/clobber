@@ -18,7 +18,7 @@ import type { AgentRolesRouteDeps } from "./agent-roles.ts";
 
 const CommitBodySchema = z
   .object({
-    message: z.string().min(1).optional(),
+    message: z.string().min(1),
     force: z.boolean().optional(),
   })
   .strict();

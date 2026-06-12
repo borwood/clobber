@@ -194,7 +194,7 @@ describe("roles upstream read verbs (#401 step-1)", () => {
   it("GET /agent/roles/manager/upstream/log lists commits in upstream not in local", async () => {
     const res = await harness.server.inject({
       method: "GET",
-      url: "/agent/roles/manager/upstream/log",
+      url: `/agent/roles/manager/upstream/log?range=${encodeURIComponent("@{upstream}..")}`,
       headers: auth(harness.managerToken),
     });
     expect(res.statusCode, res.body).toBe(200);
@@ -312,7 +312,7 @@ describe("roles upstream read verbs (#401 step-1)", () => {
 
     const logRes = await harness.server.inject({
       method: "GET",
-      url: "/agent/roles/unmodified-fork/upstream/log",
+      url: `/agent/roles/unmodified-fork/upstream/log?range=${encodeURIComponent("@{upstream}..")}`,
       headers: auth(harness.managerToken),
     });
     expect(logRes.statusCode, logRes.body).toBe(200);
