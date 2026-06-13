@@ -7,9 +7,9 @@ import type { PromptModule } from "@clobber/shared";
 // same composition. A filesystem module of the same name shadows a default
 // (see resolvePromptModuleCatalog).
 //
-//  - office-manifest: a dynamic module that injects the agent's *actual* office
-//    and desk paths plus a listing of its office notes, so a woken agent never
-//    reconstructs a filesystem layout it should have been told (#211 comment).
+//  - office-manifest: emits the two location anchors (office + desk paths) so a
+//    woken agent never reconstructs filesystem layout it should have been told
+//    (#211). Note listings come from office-context; no per-file loop here.
 //  - repo-sdlc: a static pointer at the repo's conventions.
 //  - wisdom-pointer: the migrated #166 boot-context pointer; refed by the
 //    manager role alone so workers no longer receive it.
@@ -26,7 +26,7 @@ const STATIC_PROMPT_MODULES: readonly PromptModule[] = [
         command: "sh",
         args: [
           "-c",
-          'echo "[Your locations]"; echo "office notes: $CLOBBER_OFFICE_DIR"; echo "desk: $CLOBBER_DESK_DIR"; for f in "$CLOBBER_OFFICE_DIR"/*; do [ -e "$f" ] && echo "- $f"; done; true',
+          'echo "[Your locations]"; echo "office: $CLOBBER_OFFICE_DIR"; echo "desk: $CLOBBER_DESK_DIR"',
         ],
       },
     },
