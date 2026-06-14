@@ -4,6 +4,7 @@
 
 _Generated from git history of source metadata files._
 
+- 2026-06-14 fix(cli,server): complete read-merge-write symmetry for set-default (#643)
 - 2026-06-14 feat(cli,server): worktrees set-default --worktree-root + read-merge-write (#643)
 - 2026-06-12 feat(server,cli,shared): role commit legibility — required message, agent provenance, branch changelog (#637) (#646)
 - 2026-06-12 feat(server,cli): route clobber reply to agent tip, survive cycling (#638) (#645)
