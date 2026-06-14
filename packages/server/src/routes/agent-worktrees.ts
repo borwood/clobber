@@ -110,8 +110,10 @@ export function registerAgentWorktreesRoutes(
     }),
   );
 
-  // worktrees.set-default — set the workspace branch-prefix convention for new
-  // agent worktrees. Empty string clears any prefix (reverts to bare slug).
+  // worktrees.set-default — set the workspace branch-prefix/worktree-root
+  // convention for new agent worktrees. Read-merge-write: only the fields
+  // present in the request body are updated; absent fields keep their current
+  // values. Empty branch_prefix reverts to bare slug (clears any prefix).
   app.put(
     "/agent/worktrees/default",
     withAgentAuth("worktrees.set-default", deps, async (request, reply, { session }) => {
@@ -121,11 +123,22 @@ export function registerAgentWorktreesRoutes(
         return { error: "invalid request", issues: parsed.error.issues };
       }
       const { branch_prefix: prefix, worktree_root: root } = parsed.data;
+      const workspace = deps.workspaces.get(session.workspace_id);
+      if (workspace === null) {
+        reply.code(404);
+        return { error: "workspace not found" };
+      }
+      // Preserve sibling fields not present in this request
+      const existingRoot =
+        workspace.spawn_worktree.kind === "on"
+          ? workspace.spawn_worktree.worktree_root
+          : undefined;
+      const resolvedRoot = root !== undefined && root !== "" ? root : existingRoot;
       const updated = deps.workspaces.updateConfig(session.workspace_id, {
         spawn_worktree: {
           kind: "on",
           ...(prefix !== "" ? { branch_prefix: prefix } : {}),
-          ...(root !== undefined && root !== "" ? { worktree_root: root } : {}),
+          ...(resolvedRoot !== undefined ? { worktree_root: resolvedRoot } : {}),
         },
       });
       if (updated === null) {
@@ -135,7 +148,7 @@ export function registerAgentWorktreesRoutes(
       return {
         ok: true,
         branch_prefix: prefix !== "" ? prefix : null,
-        worktree_root: root !== undefined && root !== "" ? root : null,
+        worktree_root: resolvedRoot !== undefined ? resolvedRoot : null,
       };
     }),
   );
