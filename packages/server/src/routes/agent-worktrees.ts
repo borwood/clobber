@@ -22,7 +22,7 @@ const SetAgentBody = z.object({
 });
 
 const SetDefaultBody = z.object({
-  branch_prefix: z.string(),
+  branch_prefix: z.string().optional(),
   worktree_root: z.string().optional(),
 });
 
@@ -110,8 +110,10 @@ export function registerAgentWorktreesRoutes(
     }),
   );
 
-  // worktrees.set-default — set the workspace branch-prefix convention for new
-  // agent worktrees. Empty string clears any prefix (reverts to bare slug).
+  // worktrees.set-default — set the workspace branch-prefix/worktree-root
+  // convention for new agent worktrees. Read-merge-write: only the fields
+  // present in the request body are updated; absent fields keep their current
+  // values. Empty branch_prefix reverts to bare slug (clears any prefix).
   app.put(
     "/agent/worktrees/default",
     withAgentAuth("worktrees.set-default", deps, async (request, reply, { session }) => {
@@ -121,11 +123,25 @@ export function registerAgentWorktreesRoutes(
         return { error: "invalid request", issues: parsed.error.issues };
       }
       const { branch_prefix: prefix, worktree_root: root } = parsed.data;
+      const workspace = deps.workspaces.get(session.workspace_id);
+      if (workspace === null) {
+        reply.code(404);
+        return { error: "workspace not found" };
+      }
+      // Symmetric read-merge-write: absent field → preserve existing;
+      // explicit "" for branch_prefix → clear to bare slug.
+      const existing = workspace.spawn_worktree.kind === "on" ? workspace.spawn_worktree : { kind: "on" as const };
+      const resolvedPrefix = prefix !== undefined
+        ? (prefix !== "" ? prefix : undefined)
+        : existing.branch_prefix;
+      const resolvedRoot = root !== undefined && root !== ""
+        ? root
+        : existing.worktree_root;
       const updated = deps.workspaces.updateConfig(session.workspace_id, {
         spawn_worktree: {
           kind: "on",
-          ...(prefix !== "" ? { branch_prefix: prefix } : {}),
-          ...(root !== undefined && root !== "" ? { worktree_root: root } : {}),
+          ...(resolvedPrefix !== undefined ? { branch_prefix: resolvedPrefix } : {}),
+          ...(resolvedRoot !== undefined ? { worktree_root: resolvedRoot } : {}),
         },
       });
       if (updated === null) {
@@ -134,8 +150,8 @@ export function registerAgentWorktreesRoutes(
       }
       return {
         ok: true,
-        branch_prefix: prefix !== "" ? prefix : null,
-        worktree_root: root !== undefined && root !== "" ? root : null,
+        branch_prefix: resolvedPrefix !== undefined ? resolvedPrefix : null,
+        worktree_root: resolvedRoot !== undefined ? resolvedRoot : null,
       };
     }),
   );

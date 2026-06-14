@@ -4,7 +4,10 @@
 
 _Generated from git history of source metadata files._
 
-- 2026-06-12 feat(server,cli,shared): role commit legibility — required message, agent provenance, branch changelog (#637)
+- 2026-06-14 fix(cli,server): complete read-merge-write symmetry for set-default (#643)
+- 2026-06-14 feat(cli,server): worktrees set-default --worktree-root + read-merge-write (#643)
+- 2026-06-12 feat(server,cli,shared): role commit legibility — required message, agent provenance, branch changelog (#637) (#646)
+- 2026-06-12 feat(server,cli): route clobber reply to agent tip, survive cycling (#638) (#645)
 - 2026-06-12 feat(cli,server,shared): worktrees caps + CLI verb + bare-slug branch default + branch_prefix config (#636 PR1) (#641)
 - 2026-06-10 feat: agent self-inbox — list + ack own notifications (#613) (#614)
 - 2026-06-10 feat(cli,server): make --prompt optional on spawn (#597)
