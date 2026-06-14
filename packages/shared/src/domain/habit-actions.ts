@@ -8,8 +8,12 @@ import { z } from "zod";
 //   cli    — fire-and-forget `clobber <verb> [args]` (status / note / finding).
 //   wake   — the COMPOSE seam to wake-programs (#212/#213/#214): it SELECTS a
 //            program by name, it does not contain one (layered architecture).
-//   refuse — BLOCK a PreToolUse juncture (deny) when the path-jail predicate
-//            fires; the first negative action kind (#398-D1).
+//   refuse — BLOCK a PreToolUse juncture (deny). When `predicate` is present,
+//            the path-jail gates the denial. When absent, the trigger match alone
+//            is sufficient (#648 — block-freehand/force-skill ceiling).
+//            Best-effort: evasion via heredoc / --body-file / interpreter (python3
+//            -c, perl -e) is not caught; over-blocking on innocent mentions is
+//            possible. This is the intended ceiling, not a bug.
 //
 // Additive-later members, expressed as the union grows:
 //   { kind:"broadcast"; targets; payload } — #382 (one → many)
@@ -52,7 +56,7 @@ export type PathJail = z.infer<typeof PathJailSchema>;
 
 export const RefuseActionSchema = z.object({
   kind: z.literal("refuse"),
-  predicate: PathJailSchema,
+  predicate: PathJailSchema.optional(),
   reason: z.string().min(1).optional(),
 });
 export type RefuseAction = z.infer<typeof RefuseActionSchema>;
