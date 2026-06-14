@@ -451,7 +451,7 @@ describe("workspace theme — defaults + creation", () => {
 
   it("accepts a custom mode + accent on creation", async () => {
     const ws = await createWorkspace({ theme: { mode: "light", accent: "violet" } });
-    expect(ws.theme).toEqual({ mode: "light", accent: "violet", custom: [] });
+    expect(ws.theme).toEqual({ mode: "light", accent: "violet", custom: [], pfpSize: "medium" });
   });
 
   it("rejects an unknown mode (no silent fallback to dark)", async () => {
@@ -494,6 +494,7 @@ describe("PATCH /workspaces/:id — updating theme", () => {
       mode: "light",
       accent: "blue",
       custom: [],
+      pfpSize: "medium",
     });
 
     const back = await app.inject({
@@ -517,6 +518,7 @@ describe("PATCH /workspaces/:id — updating theme", () => {
       mode: "paper",
       accent: "rose",
       custom: [],
+      pfpSize: "medium",
     });
   });
 
@@ -562,6 +564,7 @@ describe("workspace theme — custom themes (#370)", () => {
   const customTheme: WorkspaceTheme = {
     mode: "c1",
     accent: "emerald",
+    pfpSize: "medium",
     custom: [
       {
         id: "c1",

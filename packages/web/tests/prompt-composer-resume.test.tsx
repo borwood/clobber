@@ -46,6 +46,8 @@ function makeComposer(
     sessionId: "test-session-id",
     ended,
     busy: false,
+    showDetails: false,
+    onToggleShowDetails: noop,
     onSend,
     onResume,
     onInterrupt: noop,
