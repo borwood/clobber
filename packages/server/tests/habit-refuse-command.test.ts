@@ -11,6 +11,7 @@ import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { HabitSchema } from "@clobber/shared";
 import { buildHarness, teardown, bootAgent, habit } from "./_habit-refuse-harness.ts";
 
 function bashPayload(sessionId: string, cwd: string, command: string) {
@@ -205,5 +206,51 @@ describe("command-predicate refuse: path-jail habits with predicate unaffected",
     expect(res.json() as unknown).toEqual({ continue: true });
     rmSync(safeDir, { recursive: true, force: true });
     await teardown(h);
+  });
+});
+
+// ── Schema regression: predicate-less + match-less refuse must be rejected ────
+
+describe("HabitSchema validation: predicate-less refuse without match criterion", () => {
+  it("rejects a refuse habit with no predicate AND no match/match_command/match_path", () => {
+    const result = HabitSchema.safeParse({
+      path: "self.tool-use",
+      name: "deny-all",
+      action: { kind: "refuse", reason: "oops" },
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const messages = result.error.issues.map((i) => i.message).join(" ");
+      expect(messages).toContain("deny-all");
+    }
+  });
+
+  it("accepts a refuse habit with no predicate but with match_command set", () => {
+    const result = HabitSchema.safeParse({
+      path: "self.tool-use",
+      name: "block-rm",
+      match_command: "rm\\s+-rf",
+      action: { kind: "refuse", reason: "forbidden" },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a refuse habit with no predicate but with match set", () => {
+    const result = HabitSchema.safeParse({
+      path: "self.tool-use",
+      name: "block-all-tools",
+      match: ".*",
+      action: { kind: "refuse", reason: "explicit deny-all via match" },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a refuse habit WITH predicate and no match criterion (path-jail only)", () => {
+    const result = HabitSchema.safeParse({
+      path: "self.tool-use",
+      name: "path-jail",
+      action: { kind: "refuse", predicate: { outside: "/some/path" }, reason: "jailed" },
+    });
+    expect(result.success).toBe(true);
   });
 });
