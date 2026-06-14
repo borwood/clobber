@@ -3,8 +3,10 @@ import { api, type SettingSource, type Workspace } from "../api.ts";
 import {
   BUILT_IN_MODES,
   BUILT_IN_ACCENTS,
+  PFP_SIZES,
   type BuiltInAccent,
   type CustomTheme,
+  type PfpSize,
 } from "@clobber/shared";
 import { previewWorkspaceTheme } from "../lib/apply-theme.ts";
 import { CustomThemeEditor } from "./CustomThemeEditor.tsx";
@@ -24,14 +26,15 @@ export function WorkspaceConfigModal({ workspace, onClose, onSaved }: Props) {
   const [mode, setMode] = useState<string>(workspace.theme.mode);
   const [accent, setAccent] = useState<BuiltInAccent>(workspace.theme.accent);
   const [custom, setCustom] = useState<CustomTheme[]>([...workspace.theme.custom]);
+  const [pfpSize, setPfpSize] = useState<PfpSize>(workspace.theme.pfpSize);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Live preview: paint the in-progress theme on the real UI (no cache write) on
   // every change. Reverting on cancel repaints the workspace's saved theme.
   useEffect(() => {
-    previewWorkspaceTheme({ mode, accent, custom });
-  }, [mode, accent, custom]);
+    previewWorkspaceTheme({ mode, accent, custom, pfpSize });
+  }, [mode, accent, custom, pfpSize]);
 
   function cancel(): void {
     previewWorkspaceTheme(workspace.theme);
@@ -47,7 +50,7 @@ export function WorkspaceConfigModal({ workspace, onClose, onSaved }: Props) {
     try {
       const updated = await api.updateWorkspaceConfig(workspace.id, {
         setting_sources: sources,
-        theme: { mode, accent, custom },
+        theme: { mode, accent, custom, pfpSize },
       });
       onSaved(updated);
     } catch (e) {
@@ -164,6 +167,26 @@ export function WorkspaceConfigModal({ workspace, onClose, onSaved }: Props) {
                     accent === a ? "border-text" : "border-transparent"
                   }`}
                 />
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="text-xs text-text-subtle">agent picture size</div>
+            <div className="flex gap-2">
+              {PFP_SIZES.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setPfpSize(s)}
+                  className={`flex-1 px-3 py-2 rounded border bg-bg text-xs capitalize ${
+                    pfpSize === s
+                      ? "border-accent text-text-dim"
+                      : "border-border hover:border-border-strong text-text-subtle"
+                  }`}
+                >
+                  {s}
+                </button>
               ))}
             </div>
           </div>

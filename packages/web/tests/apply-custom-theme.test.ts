@@ -21,6 +21,7 @@ function customTheme(): WorkspaceTheme {
   return {
     mode: "c1",
     accent: "emerald",
+    pfpSize: "large",
     custom: [
       {
         id: "c1",
@@ -52,6 +53,7 @@ describe("applyWorkspaceTheme — custom theme", () => {
     applyWorkspaceTheme({
       mode: "c1",
       accent: "emerald",
+      pfpSize: "large",
       custom: [{ id: "c1", name: "No Accent", base: "paper", tokens: {} }],
     });
     expect(root().dataset.accent).toBe("emerald");
@@ -69,7 +71,7 @@ describe("applyWorkspaceTheme — custom theme", () => {
   it("cleans up stale custom props when switching to a built-in theme", () => {
     applyWorkspaceTheme(customTheme());
     expect(root().style.getPropertyValue("--color-bg")).toBe("#101010");
-    applyWorkspaceTheme({ mode: "dark", accent: "blue", custom: [] });
+    applyWorkspaceTheme({ mode: "dark", accent: "blue", pfpSize: "large", custom: [] });
     expect(root().style.getPropertyValue("--color-bg")).toBe("");
     expect(root().dataset.theme).toBe("dark");
     expect(root().dataset.accent).toBe("blue");
@@ -77,7 +79,7 @@ describe("applyWorkspaceTheme — custom theme", () => {
 
   it("throws when the selected custom id is not in custom[] (no silent fallback)", () => {
     expect(() =>
-      applyWorkspaceTheme({ mode: "ghost", accent: "emerald", custom: [] }),
+      applyWorkspaceTheme({ mode: "ghost", accent: "emerald", pfpSize: "large", custom: [] }),
     ).toThrow();
   });
 });

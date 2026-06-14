@@ -23,6 +23,7 @@ import {
   type TriggerOverrides,
   type Workspace,
   type WorkspaceTheme,
+  WorkspaceThemeSchema,
 } from "@clobber/shared";
 
 export interface WorkspaceConfigPatch {
@@ -76,7 +77,7 @@ function rowToWorkspace(row: Row): Workspace {
     spawn_worktree: JSON.parse(row.spawn_worktree),
     file_size_policy: JSON.parse(row.file_size_policy),
     manager_skill_policy: JSON.parse(row.manager_skill_policy),
-    theme: JSON.parse(row.theme),
+    theme: WorkspaceThemeSchema.parse(JSON.parse(row.theme)),
     perms_scope: JSON.parse(row.perms_scope),
     created_at: row.created_at,
   });

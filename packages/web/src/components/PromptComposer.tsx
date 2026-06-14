@@ -15,6 +15,8 @@ interface Props {
   readonly ended: boolean;
   readonly busy: boolean;
   readonly transcript?: readonly TranscriptLine[];
+  readonly showDetails: boolean;
+  readonly onToggleShowDetails: () => void;
   readonly onSend: (prompt: string) => Promise<void>;
   readonly onResume: (prompt?: string) => Promise<void>;
   readonly onInterrupt: () => Promise<void>;
@@ -27,6 +29,8 @@ export function PromptComposer({
   ended,
   busy,
   transcript,
+  showDetails,
+  onToggleShowDetails,
   onSend,
   onResume,
   onInterrupt,
@@ -214,6 +218,8 @@ export function PromptComposer({
         <ComposerOptionsMenu
           markdownPreview={markdownPreview}
           onToggleMarkdownPreview={() => setMarkdownPreview((v) => !v)}
+          showDetails={showDetails}
+          onToggleShowDetails={onToggleShowDetails}
         />
         {contextTokens !== undefined && (
           <span className="text-xs text-text-faint font-mono">

@@ -2,7 +2,9 @@ import {
   WorkspaceThemeSchema,
   DEFAULT_WORKSPACE_THEME,
   BUILT_IN_MODES,
+  PFP_SIZE_PX,
   type BuiltInMode,
+  type PfpSize,
   type WorkspaceTheme,
 } from "@clobber/shared";
 
@@ -28,6 +30,7 @@ function isBuiltInMode(mode: string): mode is BuiltInMode {
 interface ResolvedTheme {
   readonly mode: BuiltInMode;
   readonly accent: string;
+  readonly pfpSize: PfpSize;
   readonly tokens: Readonly<Record<string, string>>;
 }
 
@@ -37,14 +40,14 @@ interface ResolvedTheme {
 // (Engineering Rule 3 / the simplest-fallback trap).
 function resolveTheme(theme: WorkspaceTheme): ResolvedTheme {
   if (isBuiltInMode(theme.mode)) {
-    return { mode: theme.mode, accent: theme.accent, tokens: {} };
+    return { mode: theme.mode, accent: theme.accent, pfpSize: theme.pfpSize, tokens: {} };
   }
   const custom = theme.custom.find((c) => c.id === theme.mode);
   if (custom === undefined) {
     throw new Error(`custom theme not found: ${theme.mode}`);
   }
   const accent = custom.accent === undefined ? theme.accent : custom.accent;
-  return { mode: custom.base, accent, tokens: custom.tokens };
+  return { mode: custom.base, accent, pfpSize: theme.pfpSize, tokens: custom.tokens };
 }
 
 function paint(theme: WorkspaceTheme): void {
@@ -52,6 +55,7 @@ function paint(theme: WorkspaceTheme): void {
   const resolved = resolveTheme(theme);
   root.dataset.theme = resolved.mode;
   root.dataset.accent = resolved.accent;
+  root.style.setProperty("--pfp-size", `${PFP_SIZE_PX[resolved.pfpSize]}px`);
 
   for (const prop of appliedCustomProps) root.style.removeProperty(prop);
   appliedCustomProps = [];

@@ -1,0 +1,51 @@
+/* ── Syntax-highlight rendering (#369) ─────────────────────────────────────
+   One rule set, painted from the --hljs-* vars the mode blocks repoint. `.hljs`
+   stays transparent so the <pre>'s token-driven surface carries the background
+   in every mode. */
+.hljs {
+  color: var(--hljs-text);
+  background: transparent;
+}
+.hljs-comment,
+.hljs-quote {
+  color: var(--hljs-comment);
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-type,
+.hljs-name,
+.hljs-tag {
+  color: var(--hljs-keyword);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-doctag,
+.hljs-addition {
+  color: var(--hljs-string);
+}
+.hljs-title,
+.hljs-section,
+.hljs-built_in {
+  color: var(--hljs-title);
+}
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link {
+  color: var(--hljs-number);
+}
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-meta {
+  color: var(--hljs-attr);
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 600;
+}

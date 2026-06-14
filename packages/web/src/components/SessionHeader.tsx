@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { SessionSummary } from "../api.ts";
-import { pickTone, statusDot } from "./state-tones.ts";
-import { ActivityDot } from "./ActivityDot.tsx";
+import { statusDot } from "./state-tones.ts";
+import { AgentAvatar } from "./AgentAvatar.tsx";
 
 interface Props {
   readonly session: SessionSummary;
@@ -9,41 +9,48 @@ interface Props {
 
 export function SessionHeader({ session }: Props) {
   const isEnded = session.ended_at !== undefined;
-  const tone = pickTone(session, isEnded);
   const status = session.latest_status;
   const showSummary = status !== undefined && !isEnded;
-  const dot = isEnded ? null : statusDot(session);
+  const dot = statusDot(session);
 
   return (
-    <div className={"px-6 py-3 border-l-4 " + tone.accent + " " + tone.base}>
-      <div className="flex items-center gap-3">
-        {dot !== null && (
-          <span className="shrink-0" title={status?.state}>
-            <ActivityDot busy={dot.busy} intentDot={dot.dot} hollow={dot.hollow} />
-          </span>
-        )}
-        <span className="px-1.5 py-0.5 rounded bg-elevated text-text-soft text-[10px] uppercase tracking-wider shrink-0">
-          {session.role_name}
+    <div className="relative overflow-hidden border-b border-border px-6 py-3">
+      <div className="flex items-start gap-3">
+        <span className="shrink-0 flex" title={status?.state}>
+          <AgentAvatar
+            label={session.label === undefined ? session.role_name : session.label}
+            role={session.role_name}
+            statusBg={dot.hollow ? "bg-text-faint" : dot.dot}
+            busy={dot.busy}
+            muted={dot.hollow}
+          />
         </span>
-        <RoleVersionBadge session={session} />
-        <ModelEffortBadges session={session} />
-        {session.label !== undefined && (
-          <span className="text-sm text-text font-medium truncate min-w-0">
-            {session.label}
-          </span>
-        )}
-        {isEnded && (
-          <span className="px-1.5 py-0.5 rounded bg-elevated text-text-subtle text-xs shrink-0">
-            ended
-          </span>
-        )}
-        <CopyableId id={session.session_id} />
-      </div>
-      {showSummary && (
-        <div className="mt-1 text-xs text-text-soft truncate pl-[22px]">
-          {status.summary}
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            {session.label !== undefined && (
+              <span className="text-sm text-text font-medium break-words">
+                {session.label}
+              </span>
+            )}
+            <span className="px-1.5 py-0.5 rounded bg-elevated text-text-soft text-[10px] uppercase tracking-wider">
+              {session.role_name}
+            </span>
+            <RoleVersionBadge session={session} />
+            <ModelEffortBadges session={session} />
+            {isEnded && (
+              <span className="px-1.5 py-0.5 rounded bg-elevated text-text-subtle text-xs">
+                ended
+              </span>
+            )}
+            <CopyableId id={session.session_id} />
+          </div>
+          {showSummary && (
+            <div className="mt-1 text-xs text-text-soft break-words">
+              {status.summary}
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

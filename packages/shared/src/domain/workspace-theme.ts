@@ -114,11 +114,24 @@ export type CustomTheme = z.infer<typeof CustomThemeSchema>;
 // dangling pointer and is rejected at the persistence boundary — same
 // no-silent-fallback contract the built-in enums carry (Engineering Rule 3). The
 // apply layer re-checks at render time (it needs the def to paint).
+// Agent profile-picture size in the transcript header. Persisted with the theme
+// (it's a per-workspace display preference); px values are the single source the
+// apply layer paints into `--pfp-size`.
+export const PfpSizeSchema = z.enum(["small", "medium", "large"]);
+export type PfpSize = z.infer<typeof PfpSizeSchema>;
+export const PFP_SIZES = PfpSizeSchema.options;
+export const PFP_SIZE_PX: Record<PfpSize, number> = {
+  small: 25,
+  medium: 50,
+  large: 75,
+};
+
 export const WorkspaceThemeSchema = z
   .object({
     mode: z.union([BuiltInModeSchema, z.string().min(1)]),
     accent: BuiltInAccentSchema,
     custom: z.array(CustomThemeSchema).default([]),
+    pfpSize: PfpSizeSchema.default("medium"),
   })
   .refine(
     (t) =>
@@ -135,4 +148,5 @@ export const DEFAULT_WORKSPACE_THEME: WorkspaceTheme = {
   mode: "dark",
   accent: "emerald",
   custom: [],
+  pfpSize: "medium",
 };

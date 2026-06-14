@@ -25,18 +25,6 @@ export function MailboxContent(props: MailboxContentProps) {
       ? undefined
       : sessions.find((s) => s.session_id === selectedSession);
 
-  const detailsCheckbox = (
-    <label className="flex items-center gap-2 text-xs text-text-subtle cursor-pointer select-none">
-      <input
-        type="checkbox"
-        checked={showSystem}
-        onChange={(e) => setShowSystem(e.target.checked)}
-        className="accent-accent"
-      />
-      show details
-    </label>
-  );
-
   return (
     <>
       {selected === undefined ? (
@@ -44,16 +32,10 @@ export function MailboxContent(props: MailboxContentProps) {
           <h2 className="text-sm uppercase tracking-wider text-text-subtle">
             select a session
           </h2>
-          <span className="ml-auto">{detailsCheckbox}</span>
         </div>
       ) : (
-        <div className="flex items-stretch shrink-0">
-          <div className="flex-1 min-w-0">
-            <SessionHeader session={selected} />
-          </div>
-          <div className="flex items-center px-6 border-l border-border">
-            {detailsCheckbox}
-          </div>
+        <div className="shrink-0">
+          <SessionHeader session={selected} />
         </div>
       )}
       <TranscriptViewer
@@ -83,6 +65,8 @@ export function MailboxContent(props: MailboxContentProps) {
             ended={selected.ended_at !== undefined}
             busy={selected.busy === true}
             transcript={transcript}
+            showDetails={showSystem}
+            onToggleShowDetails={() => setShowSystem(!showSystem)}
             onSend={async (prompt) => {
               await api.sendPrompt(selectedSession, prompt);
             }}
