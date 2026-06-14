@@ -91,8 +91,9 @@ async function runSetDefault(ctx: CommandContext, rest: readonly string[]): Prom
     );
   }
 
-  const prefix = positionals[0] ?? "";
-  const body: { branch_prefix: string; worktree_root?: string } = { branch_prefix: prefix };
+  const prefix = positionals[0];
+  const body: { branch_prefix?: string; worktree_root?: string } = {};
+  if (prefix !== undefined) body.branch_prefix = prefix;
   if (worktreeRoot !== undefined) body.worktree_root = worktreeRoot;
 
   const result = await request<SetDefaultResponse>(ctx.env, {
@@ -100,8 +101,10 @@ async function runSetDefault(ctx: CommandContext, rest: readonly string[]): Prom
     path: "/agent/worktrees/default",
     body,
   });
-  const displayPrefix = result.branch_prefix !== null ? result.branch_prefix : "(bare slug)";
-  ctx.stdout.write(`set workspace branch-prefix to: ${displayPrefix}\n`);
+  if (prefix !== undefined) {
+    const displayPrefix = result.branch_prefix !== null ? result.branch_prefix : "(bare slug)";
+    ctx.stdout.write(`set workspace branch-prefix to: ${displayPrefix}\n`);
+  }
   if (result.worktree_root !== null) {
     ctx.stdout.write(`set workspace worktree-root to: ${result.worktree_root}\n`);
   }
@@ -119,8 +122,8 @@ export const worktreesCommand: Command = {
     "  worktrees set-default [<prefix>] [--worktree-root <path>]\n" +
     "                                                        Set the workspace branch-prefix and/or worktree root\n" +
     "                                                        directory convention. Each field is updated independently;\n" +
-    "                                                        omitting one leaves its current value unchanged.\n" +
-    "                                                        Empty <prefix> reverts to bare slug (default).\n\n" +
+    "                                                        omitting a field leaves its current value unchanged.\n" +
+    "                                                        Explicit empty <prefix> (set-default \"\") clears to bare slug.\n\n" +
     "Examples:\n" +
     "  clobber worktrees set /data/worktrees/636\n" +
     "  clobber worktrees set-agent <uuid> /data/worktrees/old-worker\n" +

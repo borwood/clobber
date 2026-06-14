@@ -1,9 +1,10 @@
 // #643 — worktrees set-default read-merge-write + --worktree-root CLI flag
 //
 // Covers:
-//   AC_RMW1: setting branch_prefix only preserves existing worktree_root
-//   AC_RMW2: setting worktree_root only preserves existing branch_prefix
-//   AC_RESP: response body includes worktree_root
+//   AC_RMW1:        setting branch_prefix only preserves existing worktree_root
+//   AC_RMW2:        sequence set-both then set-prefix-only preserves root
+//   AC_RMW_MIRROR:  setting worktree_root only preserves existing branch_prefix
+//   AC_RESP:        response body includes worktree_root
 
 import { describe, it, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
@@ -97,6 +98,40 @@ describe("worktrees set-default read-merge-write (AC_RMW2)", () => {
       kind: "on",
       branch_prefix: "feature",
       worktree_root: "/data/worktrees",
+    });
+
+    await teardown(h);
+  });
+});
+
+// ── AC_RMW_MIRROR: set root-only, assert prefix survives ─────────────────────
+
+describe("worktrees set-default read-merge-write (AC_RMW_MIRROR)", () => {
+  it("setting worktree_root only does not clobber existing branch_prefix", async () => {
+    const h = buildHarness(claudeRuntimeProvider);
+    const ws = h.workspaces.create({
+      name: "ws",
+      repo_path: h.repoPath,
+      spawn_worktree: { kind: "on", branch_prefix: "team" },
+    });
+    seedWorkspaceRoles(h.db, ws.id);
+    const { token } = mintToken(h, ws.id, "manager");
+
+    // Root-only request — no branch_prefix in body (mirrors the CLI --worktree-root-only path)
+    const res = await h.server.inject({
+      method: "PUT",
+      url: "/agent/worktrees/default",
+      headers: bearer(token),
+      payload: { worktree_root: "/data/fast" },
+    });
+    expect(res.statusCode).toBe(200);
+
+    // branch_prefix must survive
+    const workspace = h.workspaces.get(ws.id)!;
+    expect(workspace.spawn_worktree).toMatchObject({
+      kind: "on",
+      branch_prefix: "team",
+      worktree_root: "/data/fast",
     });
 
     await teardown(h);

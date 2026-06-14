@@ -22,7 +22,7 @@ const SetAgentBody = z.object({
 });
 
 const SetDefaultBody = z.object({
-  branch_prefix: z.string(),
+  branch_prefix: z.string().optional(),
   worktree_root: z.string().optional(),
 });
 
@@ -128,16 +128,19 @@ export function registerAgentWorktreesRoutes(
         reply.code(404);
         return { error: "workspace not found" };
       }
-      // Preserve sibling fields not present in this request
-      const existingRoot =
-        workspace.spawn_worktree.kind === "on"
-          ? workspace.spawn_worktree.worktree_root
-          : undefined;
-      const resolvedRoot = root !== undefined && root !== "" ? root : existingRoot;
+      // Symmetric read-merge-write: absent field → preserve existing;
+      // explicit "" for branch_prefix → clear to bare slug.
+      const existing = workspace.spawn_worktree.kind === "on" ? workspace.spawn_worktree : { kind: "on" as const };
+      const resolvedPrefix = prefix !== undefined
+        ? (prefix !== "" ? prefix : undefined)
+        : existing.branch_prefix;
+      const resolvedRoot = root !== undefined && root !== ""
+        ? root
+        : existing.worktree_root;
       const updated = deps.workspaces.updateConfig(session.workspace_id, {
         spawn_worktree: {
           kind: "on",
-          ...(prefix !== "" ? { branch_prefix: prefix } : {}),
+          ...(resolvedPrefix !== undefined ? { branch_prefix: resolvedPrefix } : {}),
           ...(resolvedRoot !== undefined ? { worktree_root: resolvedRoot } : {}),
         },
       });
@@ -147,7 +150,7 @@ export function registerAgentWorktreesRoutes(
       }
       return {
         ok: true,
-        branch_prefix: prefix !== "" ? prefix : null,
+        branch_prefix: resolvedPrefix !== undefined ? resolvedPrefix : null,
         worktree_root: resolvedRoot !== undefined ? resolvedRoot : null,
       };
     }),
