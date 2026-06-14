@@ -14,12 +14,30 @@ import type { SpawnMode } from "./spawn-context.ts";
 //     git arbitrates: its loud failure is the no-silent-reuse guarantee (#217).
 //
 // Cleanup of these worktrees is out of scope (#198); this only ever creates.
-export function resolveSpawnCwd(
+export const INSTALL_TIMEOUT_MS = 120_000;
+
+// Thrown by createWorktree/installDeps and caught at the spawn-pipeline layer
+// to produce a structured HTTP error instead of a bare Fastify 500 (#656).
+export class WorktreeError extends Error {
+  constructor(
+    readonly kind: "collision" | "install-failed",
+    readonly branch: string,
+    readonly path: string,
+    readonly stderr: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = "WorktreeError";
+  }
+}
+
+export async function resolveSpawnCwd(
   workspace: Workspace,
   agent: Agent,
   mode: SpawnMode,
   setIdentity: (branch: string, path: string) => void,
-): string {
+  installTimeoutMs = INSTALL_TIMEOUT_MS,
+): Promise<string> {
   if (workspace.spawn_worktree.kind === "off") return workspace.repo_path;
 
   if (agent.worktree_branch !== undefined && agent.worktree_path !== undefined) {
@@ -27,7 +45,9 @@ export function resolveSpawnCwd(
     // Do NOT existsSync-skip git — let git worktree add arbitrate, surfacing
     // failures loudly to preserve the #217 collision guarantee.
     if (!existsSync(agent.worktree_path)) {
-      createWorktree(workspace.repo_path, agent.worktree_branch, agent.worktree_path);
+      // Recreate path: rollback on failure but MUST NOT clear the identity row
+      // (a later attach re-recreates from the still-valid stored identity).
+      await createWorktree(workspace.repo_path, agent.worktree_branch, agent.worktree_path, installTimeoutMs);
     }
     return agent.worktree_path;
   }
@@ -36,7 +56,7 @@ export function resolveSpawnCwd(
   // and off→on flip strand victims where the agent already has sessions).
   const { branch, worktreePath } = deriveWorktree(workspace.repo_path, agent, workspace.spawn_worktree);
   if (mode === "attach") {
-    createWorktree(workspace.repo_path, branch, worktreePath);
+    await createWorktree(workspace.repo_path, branch, worktreePath, installTimeoutMs);
     setIdentity(branch, worktreePath);
   }
   return worktreePath;
@@ -101,11 +121,16 @@ function deriveWorktree(
 // git itself throws loudly if the branch or target path already exists — that
 // failure IS the no-silent-reuse guarantee, so we surface its stderr rather
 // than pre-checking.
-function createWorktree(
+//
+// TRANSACTIONAL: a successful `git worktree add` followed by a failing install
+// is rolled back (worktree remove --force + branch -D) so a same-label retry
+// starts clean (#658). Rollback failures are surfaced in the thrown error.
+async function createWorktree(
   repoPath: string,
   branch: string,
   worktreePath: string,
-): void {
+  installTimeoutMs: number,
+): Promise<void> {
   const originRef = resolveOriginDefault(repoPath);
   if (originRef !== undefined) {
     const fetchRes = Bun.spawnSync(
@@ -113,7 +138,11 @@ function createWorktree(
       { stdout: "pipe", stderr: "pipe" },
     );
     if (fetchRes.exitCode !== 0) {
-      throw new Error(
+      throw new WorktreeError(
+        "collision",
+        branch,
+        worktreePath,
+        fetchRes.stderr.toString().trim(),
         `git fetch origin failed (exit ${fetchRes.exitCode}): ${fetchRes.stderr.toString().trim()}`,
       );
     }
@@ -124,11 +153,35 @@ function createWorktree(
       : ["git", "-C", repoPath, "worktree", "add", worktreePath, "-b", branch];
   const res = Bun.spawnSync(worktreeCmd, { stdout: "pipe", stderr: "pipe" });
   if (res.exitCode !== 0) {
-    throw new Error(
+    throw new WorktreeError(
+      "collision",
+      branch,
+      worktreePath,
+      res.stderr.toString().trim(),
       `git worktree add failed (exit ${res.exitCode}): ${res.stderr.toString().trim()}`,
     );
   }
-  installDeps(worktreePath);
+  // Worktree is now durable. Any failure from here must be rolled back so a
+  // retry with the same label starts clean (no stranded branch/worktree).
+  try {
+    await installDeps(worktreePath, installTimeoutMs);
+  } catch (err) {
+    const installMsg = err instanceof Error ? err.message : String(err);
+    const removeRes = Bun.spawnSync(
+      ["git", "-C", repoPath, "worktree", "remove", "--force", worktreePath],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    const branchRes = Bun.spawnSync(
+      ["git", "-C", repoPath, "branch", "-D", branch],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    const rollbackErrors: string[] = [];
+    if (removeRes.exitCode !== 0) rollbackErrors.push(`worktree remove: ${removeRes.stderr.toString().trim()}`);
+    if (branchRes.exitCode !== 0) rollbackErrors.push(`branch -D: ${branchRes.stderr.toString().trim()}`);
+    const suffix = rollbackErrors.length > 0 ? `; rollback errors: ${rollbackErrors.join(", ")}` : "";
+    throw new WorktreeError("install-failed", branch, worktreePath, installMsg,
+      `bun install failed in worktree ${worktreePath}${suffix}`);
+  }
 }
 
 // Reads the symbolic ref git sets when a remote is cloned or `git remote
@@ -150,16 +203,36 @@ function resolveOriginDefault(repoPath: string): string | undefined {
 // immediately workable (#201). A repo with no package.json has nothing to
 // install; skipping it keeps non-node worktrees (and bun, which errors with
 // no manifest) from breaking the spawn.
-function installDeps(worktreePath: string): void {
+//
+// Uses async Bun.spawn (not spawnSync) so the event loop services other
+// requests during install — preventing cross-workspace DoS (#657).
+// A timeout kills a wedged install so the spawn fails fast (#658 AC2).
+async function installDeps(worktreePath: string, installTimeoutMs: number): Promise<void> {
   if (!existsSync(join(worktreePath, "package.json"))) return;
-  const res = Bun.spawnSync(["bun", "install"], {
+  const proc = Bun.spawn(["bun", "install"], {
     cwd: worktreePath,
-    stdout: "pipe",
+    stdout: "ignore",
     stderr: "pipe",
   });
-  if (res.exitCode !== 0) {
+
+  // Promise.race so the timeout rejects immediately even if proc.exited is
+  // delayed by bun blocking in waitpid() for a child lifecycle script.
+  // SIGKILL (not SIGTERM) ensures bun install can't ignore/defer the signal.
+  let killTimer: ReturnType<typeof setTimeout> | undefined;
+  const code = await Promise.race([
+    proc.exited.finally(() => clearTimeout(killTimer)),
+    new Promise<never>((_, reject) => {
+      killTimer = setTimeout(() => {
+        proc.kill("SIGKILL");
+        reject(new Error(`bun install timed out after ${installTimeoutMs}ms in ${worktreePath}`));
+      }, installTimeoutMs);
+    }),
+  ]);
+
+  if (code !== 0) {
+    const stderr = await new Response(proc.stderr).text();
     throw new Error(
-      `bun install failed in worktree ${worktreePath} (exit ${res.exitCode}): ${res.stderr.toString().trim()}`,
+      `bun install failed in worktree ${worktreePath} (exit ${code}): ${stderr.trim().slice(0, 500)}`,
     );
   }
 }

@@ -90,4 +90,6 @@ export interface ServerOptions {
   // Defaults to the bounded tailReadTranscript helper; override in tests to
   // count invocations or control the returned lines.
   readonly habitReadTranscriptTail?: (path: string) => Promise<import("@clobber/shared").TranscriptLine[]>;
+  // Test seam: override the bun install timeout in spawned worktrees (#657).
+  readonly installTimeoutMs?: number;
 }

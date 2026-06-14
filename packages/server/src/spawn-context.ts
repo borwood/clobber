@@ -245,8 +245,9 @@ export async function prepareSpawnContext(
 
   const effectiveEffort = effortOverride ?? role.effort;
   const effectiveModel = modelOverride ?? role.model;
-  const cwd = resolveSpawnCwd(workspace, agent, mode, (branch, path) =>
+  const cwd = await resolveSpawnCwd(workspace, agent, mode, (branch, path) =>
     deps.agents.setWorktreeIdentity(agent.id, branch, path),
+    deps.installTimeoutMs,
   );
   const spawnOptions: RuntimeSpawnOptions = {
     hookUrl: deps.hookUrl,

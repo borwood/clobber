@@ -3,6 +3,7 @@ import type {
   SpawnPipelineSuccess,
   SpawnPipelineNoBundleError,
   SpawnPipelinePromptRequiredError,
+  SpawnPipelineWorktreeError,
 } from "./spawn-pipeline.ts";
 
 // The contract a trigger fire uses to materialize a session for an idle agent.
@@ -11,7 +12,8 @@ import type {
 export type AttachOutcome =
   | SpawnPipelineSuccess
   | SpawnPipelineNoBundleError
-  | SpawnPipelinePromptRequiredError;
+  | SpawnPipelinePromptRequiredError
+  | SpawnPipelineWorktreeError;
 export type AttachSessionFn = (input: {
   readonly workspace: Workspace;
   readonly role: Role;

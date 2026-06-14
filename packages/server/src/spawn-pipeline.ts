@@ -14,8 +14,9 @@ import type { AgentQuestionStore } from "./agent-question-store.ts";
 import type { AgentQuestionWaiter } from "./agent-question-waiter.ts";
 import type { NotificationStore } from "./notification-store.ts";
 import { endSession } from "./session-lifecycle.ts";
-import { prepareSpawnContext, type SpawnContext } from "./spawn-context.ts";
+import { prepareSpawnContext, type SpawnContext, type PrepareSpawnContextResult } from "./spawn-context.ts";
 import { bindRuntimeEvents } from "./runtime-event-binder.ts";
+import { WorktreeError } from "./spawn-worktree.ts";
 import { embodyRole, rolePin } from "./embody-role.ts";
 import type { RoleContentCache } from "./role-content-cache.ts";
 
@@ -48,6 +49,7 @@ export interface SpawnPipelineDeps {
   // Phase-2 boot re-dump: un-acked notifications surface in the agent's system
   // prompt on every wake (persistent agents only, non-flushing).
   readonly notifications: NotificationStore;
+  readonly installTimeoutMs?: number; // test seam: override bun install timeout
 }
 
 export interface SpawnPipelineInput {
@@ -104,12 +106,16 @@ export interface SpawnPipelinePromptRequiredError {
   readonly status: 422;
   readonly error: "runtime requires a prompt";
 }
-
+export interface SpawnPipelineWorktreeError {
+  readonly ok: false; readonly status: 409 | 422; readonly error: "worktree-collision" | "worktree-install-failed";
+  readonly branch: string; readonly path: string; readonly stderr: string;
+}
 export type SpawnPipelineResult =
   | SpawnPipelineSuccess
   | SpawnPipelineCapacityError
   | SpawnPipelineNoBundleError
-  | SpawnPipelinePromptRequiredError;
+  | SpawnPipelinePromptRequiredError
+  | SpawnPipelineWorktreeError;
 
 export async function executeSpawn(
   deps: SpawnPipelineDeps,
@@ -182,28 +188,31 @@ export interface AttachSessionInput {
 export async function attachSessionToAgent(
   deps: SpawnPipelineDeps,
   input: AttachSessionInput,
-): Promise<SpawnPipelineSuccess | SpawnPipelineNoBundleError | SpawnPipelinePromptRequiredError> {
+): Promise<SpawnPipelineSuccess | SpawnPipelineNoBundleError | SpawnPipelinePromptRequiredError | SpawnPipelineWorktreeError> {
   const { workspace, role, agent, prompt, promptTag, wakeProgram, systemAddon, opLevelAddon, briefing, effortOverride, modelOverride, scopeOverride } = input;
   const sessionId = randomUUID();
   const pin = rolePin(role);
 
-  const prepared = await prepareSpawnContext(deps, {
-    mode: "attach",
-    workspace,
-    role,
-    agent,
-    sessionId,
-    pin,
-    prompt,
-    ...(promptTag === undefined ? {} : { promptTag }),
-    ...(wakeProgram === undefined ? {} : { wakeProgram }),
-    ...(systemAddon === undefined ? {} : { systemAddon }),
-    ...(opLevelAddon === undefined ? {} : { opLevelAddon }),
-    ...(briefing === undefined ? {} : { briefing }),
-    ...(effortOverride === undefined ? {} : { effortOverride }),
-    ...(modelOverride === undefined ? {} : { modelOverride }),
-    ...(scopeOverride === undefined ? {} : { scopeOverride }),
-  });
+  let prepared: PrepareSpawnContextResult;
+  try {
+    prepared = await prepareSpawnContext(deps, {
+      mode: "attach",
+      workspace, role, agent, sessionId, pin, prompt,
+      ...(promptTag === undefined ? {} : { promptTag }),
+      ...(wakeProgram === undefined ? {} : { wakeProgram }),
+      ...(systemAddon === undefined ? {} : { systemAddon }),
+      ...(opLevelAddon === undefined ? {} : { opLevelAddon }),
+      ...(briefing === undefined ? {} : { briefing }),
+      ...(effortOverride === undefined ? {} : { effortOverride }),
+      ...(modelOverride === undefined ? {} : { modelOverride }),
+      ...(scopeOverride === undefined ? {} : { scopeOverride }),
+    });
+  } catch (err) {
+    if (!(err instanceof WorktreeError)) throw err;
+    return { ok: false, status: err.kind === "collision" ? 409 : 422,
+      error: err.kind === "collision" ? "worktree-collision" : "worktree-install-failed",
+      branch: err.branch, path: err.path, stderr: err.stderr };
+  }
   if (!prepared.ok) return prepared;
   const ctx = prepared.context;
 
