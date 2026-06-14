@@ -77,8 +77,10 @@ export async function evaluateSelfHabits(
       if (!events.some((ev) => ev.event === payload.hook_event_name)) continue;
       if (!matchesHabit(habit, payload, subject)) continue;
       if (habit.rand !== undefined && deps.random() >= habit.rand) continue;
-      const predicate = expandSentinels(habit.action.predicate, session, deps);
-      if (!isPathJailed(predicate, payload as PreToolUsePayload)) continue;
+      if (habit.action.predicate !== undefined) {
+        const predicate = expandSentinels(habit.action.predicate, session, deps);
+        if (!isPathJailed(predicate, payload as PreToolUsePayload)) continue;
+      }
       return {
         hookSpecificOutput: {
           hookEventName: "PreToolUse",

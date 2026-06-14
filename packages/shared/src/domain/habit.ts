@@ -28,7 +28,28 @@ const commonHabitFields = {
 
 // The discriminated trigger-path intersected with the common fields. Discrimination
 // on `path` survives the intersection, so a parsed Habit narrows by `path`.
-export const HabitSchema = z.intersection(TriggerPathSchema, z.object(commonHabitFields));
+//
+// superRefine: a predicate-less refuse habit without any match criterion is a
+// silent deny-all. Require at least one of match / match_command / match_path
+// so an intentional deny-all must be explicit (e.g. match: ".*").
+export const HabitSchema = z
+  .intersection(TriggerPathSchema, z.object(commonHabitFields))
+  .superRefine((habit, ctx) => {
+    if (habit.action.kind !== "refuse" || habit.action.predicate !== undefined) return;
+    const h = habit as Record<string, unknown>;
+    const hasMatchCriterion =
+      (typeof h["match"] === "string" && h["match"].length > 0) ||
+      (typeof h["match_command"] === "string" && h["match_command"].length > 0) ||
+      (typeof h["match_path"] === "string" && h["match_path"].length > 0);
+    if (!hasMatchCriterion) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["action"],
+        message:
+          "a refuse habit without a predicate must set at least one of match, match_command, or match_path — omitting all is an implicit deny-all",
+      });
+    }
+  });
 export type Habit = z.infer<typeof HabitSchema>;
 
 // ── Composed view (the desk artifact, read-mostly) ────────────────────────────
