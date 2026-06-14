@@ -74,6 +74,7 @@ export function buildServerDeps(opts: ServerOptions) {
     agentQuestionWaiter: opts.agentQuestionWaiter,
     onSessionEnded,
     notifications: notificationStore,
+    ...(opts.installTimeoutMs !== undefined ? { installTimeoutMs: opts.installTimeoutMs } : {}),
   };
 
   scheduler = createTriggerScheduler({

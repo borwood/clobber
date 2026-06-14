@@ -75,7 +75,7 @@ export function turnProvider(): RuntimeProvider {
 // via the shipped bundle (latestForRole fallback). Spawn uses embodyRole which
 // falls back to latestForRole when no commit pin is set. No git setup needed in
 // the harness for version-row-backed tests.
-export function buildHarness(runtimeProvider: RuntimeProvider): Harness {
+export function buildHarness(runtimeProvider: RuntimeProvider, opts?: { readonly installTimeoutMs?: number }): Harness {
   const db = createDatabase(":memory:");
   const workspaces = createWorkspaceStore(db);
   const roles = createRoleStore(db);
@@ -133,6 +133,7 @@ export function buildHarness(runtimeProvider: RuntimeProvider): Harness {
     cliEntry: "/abs/cli.ts",
     dispatches: createTriggerDispatchStore(db),
     finalReportConsumerState: createFinalReportConsumerStateStore(db),
+    ...(opts?.installTimeoutMs !== undefined ? { installTimeoutMs: opts.installTimeoutMs } : {}),
   });
   const repoPath = mkdtempSync(join(tmpdir(), "clobber-prep-spawn-ctx-"));
   return { server, db, workspaces, roles, roleVersions, workspaceRoles, agents, sessions, sessionTokens, records, repoPath, driftStub };

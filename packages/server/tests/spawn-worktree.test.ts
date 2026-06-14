@@ -125,9 +125,11 @@ describe("spawn_worktree (#174): per-workspace auto-worktree on spawn", () => {
     expect(first.statusCode).toBe(200);
 
     // Same label derives the same branch + path; the second spawn must not
-    // silently reuse — it surfaces the failure (500) rather than nesting.
+    // silently reuse — it surfaces the failure as a structured 409 (#656 AC5).
     const second = await spawnWorker(h, ws.id, role.id, "dup");
-    expect(second.statusCode).toBe(500);
+    expect(second.statusCode).toBe(409);
+    const body = second.json() as { error?: string };
+    expect(body.error).toBe("worktree-collision");
     expect(h.records).toHaveLength(1);
 
     await teardown(h);
