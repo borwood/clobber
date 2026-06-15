@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { claudeRuntimeProvider } from "@clobber/runtime";
@@ -373,45 +373,36 @@ function gitInitWithWorkspaceDep(repoPath: string): void {
 }
 
 describe("spawn_worktree (#664): seed node_modules from parent before installDeps", () => {
-  // AC2: workspace symlinks preserved by cp -al resolve into the worktree, not the parent.
-  it("AC2: seeded worktree — @x/shared symlink resolves into worktree's packages/shared (content marker)", async () => {
-    const h = buildHarness(claudeRuntimeProvider);
-    gitInitWithWorkspaceDep(h.repoPath);
+  // AC2 (isolated): seedNodeModules alone, no bun install afterward — proves the seed
+  // itself preserves relative workspace symlinks correctly. If the seed were a no-op,
+  // the link would be absent and the test would fail.
+  it("AC2 (isolated seed): cp -al preserves relative @x/shared symlink — resolves into worktree, not parent", () => {
+    const repoPath = mkdtempSync(join(tmpdir(), "clobber-test-664-ac2-"));
+    const worktreePath = mkdtempSync(join(tmpdir(), "clobber-test-664-ac2-wt-"));
+    try {
+      // Parent: packages/shared + packages/app/node_modules with bun-style relative symlink.
+      mkdirSync(join(repoPath, "packages", "shared"), { recursive: true });
+      writeFileSync(join(repoPath, "packages", "shared", "index.js"), "// parent-source\n");
+      mkdirSync(join(repoPath, "packages", "app", "node_modules", "@x"), { recursive: true });
+      // Relative target: from @x/shared → ../../../shared (3 levels up from @x/ = packages/app/ → packages/)
+      symlinkSync("../../../shared", join(repoPath, "packages", "app", "node_modules", "@x", "shared"));
 
-    // Materialize parent node_modules (source for cp -al).
-    Bun.spawnSync(["bun", "install"], { cwd: h.repoPath, stdout: "ignore", stderr: "ignore" });
+      // Worktree: packages/shared with distinct content (proves resolution targets worktree, not parent).
+      mkdirSync(join(worktreePath, "packages", "shared"), { recursive: true });
+      writeFileSync(join(worktreePath, "packages", "shared", "index.js"), "// worktree-source\n");
+      mkdirSync(join(worktreePath, "packages", "app"), { recursive: true });
 
-    // Distinct content in parent so any wrong-source resolution is detectable.
-    writeFileSync(join(h.repoPath, "packages", "shared", "index.js"), "// parent-marker\n");
+      seedNodeModules(repoPath, worktreePath);
 
-    const ws = h.workspaces.create({
-      name: "ws",
-      repo_path: h.repoPath,
-      spawn_worktree: { kind: "on" },
-    });
-    const role = h.roles.create({ name: "worker", persistent: false });
-    h.workspaceRoles.setCeiling(ws.id, role.id, 1);
-
-    const res = await spawnWorker(h, ws.id, role.id, "664-ac2");
-    expect(res.statusCode).toBe(200);
-
-    const cwd = h.records[0]!.req.cwd;
-
-    // Write worktree-specific marker post-spawn (worktree's packages/shared is from git checkout).
-    writeFileSync(join(cwd, "packages", "shared", "index.js"), "// worktree-marker\n");
-
-    const link = join(cwd, "packages", "app", "node_modules", "@x", "shared");
-    // Symlink must exist (seed or install put it there).
-    expect(existsSync(link)).toBe(true);
-    // realpath resolves into the WORKTREE, never the parent.
-    expect(realpathSync(link)).toBe(realpathSync(join(cwd, "packages", "shared")));
-    expect(realpathSync(link)).not.toBe(realpathSync(join(h.repoPath, "packages", "shared")));
-    // Content marker: reading through the link yields the WORKTREE's content.
-    expect(readFileSync(join(link, "index.js"), "utf-8")).toBe("// worktree-marker\n");
-    expect(readFileSync(join(h.repoPath, "packages", "shared", "index.js"), "utf-8")).toBe("// parent-marker\n");
-
-    rmSync(worktreesRoot(h.repoPath), { recursive: true, force: true });
-    await teardown(h);
+      const link = join(worktreePath, "packages", "app", "node_modules", "@x", "shared");
+      expect(existsSync(link)).toBe(true);
+      expect(realpathSync(link)).toBe(realpathSync(join(worktreePath, "packages", "shared")));
+      expect(realpathSync(link)).not.toBe(realpathSync(join(repoPath, "packages", "shared")));
+      expect(readFileSync(join(link, "index.js"), "utf-8")).toBe("// worktree-source\n");
+    } finally {
+      rmSync(repoPath, { recursive: true, force: true });
+      rmSync(worktreePath, { recursive: true, force: true });
+    }
   });
 
   // AC1: same-FS + parent node_modules present → seed runs (cp -al produces hardlinks).
@@ -479,6 +470,52 @@ describe("spawn_worktree (#664): seed node_modules from parent before installDep
       expect(() => seedNodeModules(repoPath, worktreePath)).not.toThrow();
       expect(existsSync(join(worktreePath, "node_modules"))).toBe(false);
     } finally {
+      rmSync(repoPath, { recursive: true, force: true });
+      rmSync(worktreePath, { recursive: true, force: true });
+    }
+  });
+
+  // Fix 1: parent has a package the worktree branch lacks — must skip, not ENOENT-crash.
+  it("fix1: parent packages/extra/node_modules present but worktree lacks packages/extra → seed skips, no throw", () => {
+    const repoPath = mkdtempSync(join(tmpdir(), "clobber-test-664-fix1-"));
+    const worktreePath = mkdtempSync(join(tmpdir(), "clobber-test-664-fix1-wt-"));
+    try {
+      // Parent has two packages; worktree only has one.
+      const sharedNM = join(repoPath, "packages", "shared", "node_modules");
+      mkdirSync(sharedNM, { recursive: true });
+      writeFileSync(join(sharedNM, ".keep"), "");
+      const extraNM = join(repoPath, "packages", "extra", "node_modules");
+      mkdirSync(extraNM, { recursive: true });
+      writeFileSync(join(extraNM, ".keep"), "");
+
+      // Worktree has packages/shared but NOT packages/extra.
+      mkdirSync(join(worktreePath, "packages", "shared"), { recursive: true });
+
+      expect(() => seedNodeModules(repoPath, worktreePath)).not.toThrow();
+      // packages/shared was seedable (parent dir exists in worktree).
+      expect(existsSync(join(worktreePath, "packages", "shared", "node_modules"))).toBe(true);
+      // packages/extra was absent from worktree — skipped, not created.
+      expect(existsSync(join(worktreePath, "packages", "extra"))).toBe(false);
+    } finally {
+      rmSync(repoPath, { recursive: true, force: true });
+      rmSync(worktreePath, { recursive: true, force: true });
+    }
+  });
+
+  // Fix 2: cp -al failure (permissions) degrades to full-install fallback — spawn survives.
+  it("fix2: cp -al failure → seed skips candidate, seedNodeModules does not throw", () => {
+    const repoPath = mkdtempSync(join(tmpdir(), "clobber-test-664-fix2-"));
+    const worktreePath = mkdtempSync(join(tmpdir(), "clobber-test-664-fix2-wt-"));
+    try {
+      const srcNM = join(repoPath, "node_modules");
+      mkdirSync(srcNM);
+      writeFileSync(join(srcNM, ".keep"), "");
+      // Make worktreePath read-only so cp can't create node_modules inside it.
+      chmodSync(worktreePath, 0o555);
+      // Must not throw — cp failure degrades to "skip this candidate".
+      expect(() => seedNodeModules(repoPath, worktreePath)).not.toThrow();
+    } finally {
+      chmodSync(worktreePath, 0o755);
       rmSync(repoPath, { recursive: true, force: true });
       rmSync(worktreePath, { recursive: true, force: true });
     }

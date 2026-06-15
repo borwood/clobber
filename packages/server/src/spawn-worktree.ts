@@ -220,14 +220,12 @@ function resolveOriginDefault(repoPath: string): string | undefined {
 // before installDeps runs, so the subsequent bun install is incremental and fast
 // instead of materializing all packages from scratch (#664).
 //
-// Discovery is generic: root node_modules + each packages/*/node_modules (no
-// hardcoded package names — engine default per SEAM rule). Skips any candidate
-// whose source is missing or whose worktree counterpart already exists.
+// Pure optimization: NEVER makes a spawn fail that would have succeeded without
+// it. Any candidate that can't be seeded (worktree lacks the package dir, cross-FS
+// st_dev, cp failure) is silently skipped — installDeps is always the fallback.
 //
-// FS-safety: cp -al is ambiguous cross-FS on coreutils 9.4 (may exit 0 and
-// content-copy instead of hardlink). We stat both sides up front and skip when
-// st_dev differs — the existing full installDeps is the documented fallback.
-// statDev is a test seam (default: statSync(p).dev).
+// Discovery: root node_modules + each packages/*/node_modules (no hardcoded
+// names — engine default per SEAM rule). statDev is a test seam.
 export function seedNodeModules(
   repoPath: string,
   worktreePath: string,
@@ -249,11 +247,10 @@ export function seedNodeModules(
   }
   for (const { src, dst } of candidates) {
     if (existsSync(dst)) continue;
-    if (statDev(src) !== statDev(dirname(dst))) continue;
+    if (!existsSync(dirname(dst))) continue;  // worktree branch lacks this package dir
+    if (statDev(src) !== statDev(dirname(dst))) continue;  // cross-FS: full install fallback
     const res = Bun.spawnSync(["cp", "-al", src, dst], { stdout: "pipe", stderr: "pipe" });
-    if (res.exitCode !== 0) {
-      throw new Error(`seed node_modules failed (${src} → ${dst}): ${res.stderr.toString().trim()}`);
-    }
+    if (res.exitCode !== 0) continue;  // cp failed (perms/ENOSPC): degrade to full install
   }
 }
 
