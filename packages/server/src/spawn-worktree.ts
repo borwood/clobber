@@ -20,7 +20,7 @@ export const INSTALL_TIMEOUT_MS = 120_000;
 // to produce a structured HTTP error instead of a bare Fastify 500 (#656).
 export class WorktreeError extends Error {
   constructor(
-    readonly kind: "collision" | "install-failed",
+    readonly kind: "collision" | "fetch-failed" | "install-failed",
     readonly branch: string,
     readonly path: string,
     readonly stderr: string,
@@ -57,7 +57,14 @@ export async function resolveSpawnCwd(
   const { branch, worktreePath } = deriveWorktree(workspace.repo_path, agent, workspace.spawn_worktree);
   if (mode === "attach") {
     await createWorktree(workspace.repo_path, branch, worktreePath, installTimeoutMs);
-    setIdentity(branch, worktreePath);
+    // setIdentity is outside createWorktree's own catch, so wrap it here:
+    // a failing identity-persist strands the durable worktree+branch (#660).
+    try {
+      setIdentity(branch, worktreePath);
+    } catch (err) {
+      rollbackWorktree(workspace.repo_path, branch, worktreePath);
+      throw err;
+    }
   }
   return worktreePath;
 }
@@ -139,7 +146,7 @@ async function createWorktree(
     );
     if (fetchRes.exitCode !== 0) {
       throw new WorktreeError(
-        "collision",
+        "fetch-failed",
         branch,
         worktreePath,
         fetchRes.stderr.toString().trim(),
@@ -167,21 +174,29 @@ async function createWorktree(
     await installDeps(worktreePath, installTimeoutMs);
   } catch (err) {
     const installMsg = err instanceof Error ? err.message : String(err);
-    const removeRes = Bun.spawnSync(
-      ["git", "-C", repoPath, "worktree", "remove", "--force", worktreePath],
-      { stdout: "pipe", stderr: "pipe" },
-    );
-    const branchRes = Bun.spawnSync(
-      ["git", "-C", repoPath, "branch", "-D", branch],
-      { stdout: "pipe", stderr: "pipe" },
-    );
-    const rollbackErrors: string[] = [];
-    if (removeRes.exitCode !== 0) rollbackErrors.push(`worktree remove: ${removeRes.stderr.toString().trim()}`);
-    if (branchRes.exitCode !== 0) rollbackErrors.push(`branch -D: ${branchRes.stderr.toString().trim()}`);
+    const rollbackErrors = rollbackWorktree(repoPath, branch, worktreePath);
     const suffix = rollbackErrors.length > 0 ? `; rollback errors: ${rollbackErrors.join(", ")}` : "";
     throw new WorktreeError("install-failed", branch, worktreePath, installMsg,
       `bun install failed in worktree ${worktreePath}${suffix}`);
   }
+}
+
+// Removes a durable worktree and deletes its branch. Returns any git error
+// strings (rollback itself failing is rare but possible; the caller surfaces
+// them in the thrown error it was already building).
+function rollbackWorktree(repoPath: string, branch: string, worktreePath: string): string[] {
+  const removeRes = Bun.spawnSync(
+    ["git", "-C", repoPath, "worktree", "remove", "--force", worktreePath],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  const branchRes = Bun.spawnSync(
+    ["git", "-C", repoPath, "branch", "-D", branch],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  const errors: string[] = [];
+  if (removeRes.exitCode !== 0) errors.push(`worktree remove: ${removeRes.stderr.toString().trim()}`);
+  if (branchRes.exitCode !== 0) errors.push(`branch -D: ${branchRes.stderr.toString().trim()}`);
+  return errors;
 }
 
 // Reads the symbolic ref git sets when a remote is cloned or `git remote
