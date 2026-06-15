@@ -39,7 +39,7 @@ function mockFetch(input: string): Promise<Response> {
   if (path!.endsWith("/roles")) return Promise.resolve(jsonResponse([]));
   if (path!.endsWith("/open")) return Promise.resolve(jsonResponse({ dispatched: 0 }));
   if (path === "/sessions") return Promise.resolve(jsonResponse([]));
-  if (path!.endsWith("/transcript")) return Promise.resolve(jsonResponse([]));
+  if (path!.endsWith("/transcript")) return Promise.resolve(jsonResponse({ lines: [], cursor: 0 }));
   return Promise.resolve(jsonResponse([]));
 }
 
