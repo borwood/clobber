@@ -1,4 +1,5 @@
 import type { TranscriptLine } from "../api.ts";
+import { BoundedRaw } from "./BoundedRaw.tsx";
 
 export function NotificationCard({
   summary,
@@ -36,9 +37,10 @@ export function NotificationCard({
         </div>
         <div className="break-words">{summary}</div>
         {showRaw && (
-          <pre className="mt-1 whitespace-pre-wrap text-[10px] text-text-subtle bg-bg p-2 rounded border border-border overflow-x-auto">
-            {JSON.stringify(raw, null, 2)}
-          </pre>
+          <BoundedRaw
+            text={JSON.stringify(raw, null, 2)}
+            className="mt-1 whitespace-pre-wrap text-[10px] text-text-subtle bg-bg p-2 rounded border border-border overflow-x-auto"
+          />
         )}
       </div>
     </div>
@@ -62,9 +64,10 @@ export function SystemLine({
           <span className="text-text-subtle"> · {summary}</span>
         )}
       </summary>
-      <pre className="whitespace-pre-wrap mt-1 text-text-subtle bg-bg p-2 rounded border border-border overflow-x-auto">
-        {JSON.stringify(raw, null, 2)}
-      </pre>
+      <BoundedRaw
+        text={JSON.stringify(raw, null, 2)}
+        className="whitespace-pre-wrap mt-1 text-text-subtle bg-bg p-2 rounded border border-border overflow-x-auto"
+      />
     </details>
   );
 }
@@ -81,9 +84,10 @@ export function SystemPromptLine({ raw }: { raw: TranscriptLine }) {
         <span className="font-mono text-text-muted">system prompt</span>
         <span className="text-text-subtle"> · composed at spawn</span>
       </summary>
-      <pre className="whitespace-pre-wrap mt-1 text-text-muted bg-bg p-2 rounded border border-border overflow-x-auto">
-        {text}
-      </pre>
+      <BoundedRaw
+        text={text}
+        className="whitespace-pre-wrap mt-1 text-text-muted bg-bg p-2 rounded border border-border overflow-x-auto"
+      />
     </details>
   );
 }

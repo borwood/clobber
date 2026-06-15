@@ -8,6 +8,7 @@ import {
   type ToolStatus,
 } from "../transcript-types.ts";
 import { Markdown } from "./Markdown.tsx";
+import { BoundedRaw } from "./BoundedRaw.tsx";
 
 export function UserBubble({ line }: { line: UserLine }) {
   const content = line.message.content;
@@ -195,9 +196,10 @@ function ToolCallCard({
             )}
           </div>
           {showDetails && (
-            <pre className="whitespace-pre-wrap text-text-soft bg-bg p-2 rounded border border-border overflow-x-auto">
-              {JSON.stringify(input, null, 2)}
-            </pre>
+            <BoundedRaw
+              text={JSON.stringify(input, null, 2)}
+              className="whitespace-pre-wrap text-text-soft bg-bg p-2 rounded border border-border overflow-x-auto"
+            />
           )}
         </div>
       </div>

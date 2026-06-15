@@ -1,6 +1,14 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 GlobalRegistrator.register();
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+// @tanstack/virtual-core's getRect uses offsetHeight/offsetWidth (not getBoundingClientRect).
+// Scroll container (no data-index) → 600px; virtual item wrappers (data-index set) → 50px.
+// Without these stubs the virtualizer renders 0 items in happy-dom's no-layout environment.
+Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+  configurable: true,
+  get() { return this.hasAttribute("data-index") ? 50 : 600; },
+});
+Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get: () => 800 });
 
 import { afterAll, beforeEach, describe, expect, it } from "bun:test";
 import { act } from "react";
