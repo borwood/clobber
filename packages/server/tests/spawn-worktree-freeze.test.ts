@@ -286,3 +286,40 @@ describe("T5 (AC2, #657): timed-out install fails the spawn instead of hanging",
     await teardown(h);
   });
 });
+
+// ─── T6 ─────────────────────────────────────────────────────────────────────
+
+// AC4 (#664): workspace install_timeout_ms config field is respected end-to-end.
+// Uses the HTTP inject path to prove the config seam flows through spawn-context.ts.
+describe("T6 (AC4, #664): workspace install_timeout_ms config respected via spawn pipeline", () => {
+  it("hanging install killed at workspace-configured timeout, not the constant default", async () => {
+    const h = buildHarness(claudeRuntimeProvider);
+    gitInitHangingInstall(h.repoPath);
+
+    // workspace-level 600ms timeout — well under INSTALL_TIMEOUT_MS (900s).
+    const ws = h.workspaces.create({
+      name: "ws",
+      repo_path: h.repoPath,
+      spawn_worktree: { kind: "on", install_timeout_ms: 600 },
+    });
+    const role = h.roles.create({ name: "worker", persistent: false });
+    h.workspaceRoles.setCeiling(ws.id, role.id, 1);
+
+    const started = Date.now();
+    const res = await h.server.inject({
+      method: "POST",
+      url: "/spawn",
+      payload: { workspace_id: ws.id, role_id: role.id, label: "timeout-cfg", prompt: "go" },
+    });
+    const elapsed = Date.now() - started;
+
+    // Spawn must fail with install-failed (config timeout killed it).
+    expect(res.statusCode).toBe(422);
+    const body = res.json() as { error: string };
+    expect(body.error).toBe("worktree-install-failed");
+    // Killed well under the constant default (900s) — proves config seam, not fallback.
+    expect(elapsed).toBeLessThan(8_000);
+
+    await teardown(h);
+  });
+});

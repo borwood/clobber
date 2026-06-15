@@ -1,5 +1,5 @@
-import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readdirSync, statSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { slugify, type Agent, type SpawnWorktree, type Workspace } from "@clobber/shared";
 import type { SpawnMode } from "./spawn-context.ts";
 
@@ -14,7 +14,10 @@ import type { SpawnMode } from "./spawn-context.ts";
 //     git arbitrates: its loud failure is the no-silent-reuse guarantee (#217).
 //
 // Cleanup of these worktrees is out of scope (#198); this only ever creates.
-export const INSTALL_TIMEOUT_MS = 120_000;
+// Generous default covers large monorepos; workspaces can tighten via install_timeout_ms
+// config or the test seam. Seed dramatically cuts real install time (#664), so the
+// default is a safety net for the fallback full-install path (e.g. cross-FS worktrees).
+export const INSTALL_TIMEOUT_MS = 900_000;
 
 // Thrown by createWorktree/installDeps and caught at the spawn-pipeline layer
 // to produce a structured HTTP error instead of a bare Fastify 500 (#656).
@@ -171,6 +174,7 @@ async function createWorktree(
   // Worktree is now durable. Any failure from here must be rolled back so a
   // retry with the same label starts clean (no stranded branch/worktree).
   try {
+    seedNodeModules(repoPath, worktreePath);
     await installDeps(worktreePath, installTimeoutMs);
   } catch (err) {
     const installMsg = err instanceof Error ? err.message : String(err);
@@ -210,6 +214,47 @@ function resolveOriginDefault(repoPath: string): string | undefined {
   );
   if (res.exitCode !== 0) return undefined;
   return res.stdout.toString().trim() || undefined;
+}
+
+// Hardlink-copies node_modules from the parent checkout into the fresh worktree
+// before installDeps runs, so the subsequent bun install is incremental and fast
+// instead of materializing all packages from scratch (#664).
+//
+// Discovery is generic: root node_modules + each packages/*/node_modules (no
+// hardcoded package names — engine default per SEAM rule). Skips any candidate
+// whose source is missing or whose worktree counterpart already exists.
+//
+// FS-safety: cp -al is ambiguous cross-FS on coreutils 9.4 (may exit 0 and
+// content-copy instead of hardlink). We stat both sides up front and skip when
+// st_dev differs — the existing full installDeps is the documented fallback.
+// statDev is a test seam (default: statSync(p).dev).
+export function seedNodeModules(
+  repoPath: string,
+  worktreePath: string,
+  statDev: (p: string) => number = (p) => statSync(p).dev,
+): void {
+  const candidates: Array<{ src: string; dst: string }> = [];
+  const rootNM = join(repoPath, "node_modules");
+  if (existsSync(rootNM)) {
+    candidates.push({ src: rootNM, dst: join(worktreePath, "node_modules") });
+  }
+  const pkgsDir = join(repoPath, "packages");
+  if (existsSync(pkgsDir)) {
+    for (const entry of readdirSync(pkgsDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const srcNM = join(pkgsDir, entry.name, "node_modules");
+      if (!existsSync(srcNM)) continue;
+      candidates.push({ src: srcNM, dst: join(worktreePath, "packages", entry.name, "node_modules") });
+    }
+  }
+  for (const { src, dst } of candidates) {
+    if (existsSync(dst)) continue;
+    if (statDev(src) !== statDev(dirname(dst))) continue;
+    const res = Bun.spawnSync(["cp", "-al", src, dst], { stdout: "pipe", stderr: "pipe" });
+    if (res.exitCode !== 0) {
+      throw new Error(`seed node_modules failed (${src} → ${dst}): ${res.stderr.toString().trim()}`);
+    }
+  }
 }
 
 // A fresh worktree shares no files with the shared checkout, so it has no

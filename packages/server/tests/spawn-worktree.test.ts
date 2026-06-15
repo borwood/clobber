@@ -1,8 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { claudeRuntimeProvider } from "@clobber/runtime";
+import { seedNodeModules } from "../src/spawn-worktree.ts";
 import { buildHarness, teardown, type Harness } from "./_spawn-harness.ts";
 
 function gitRun(repoPath: string, args: string[]): void {
@@ -344,5 +345,142 @@ describe("spawn_worktree (#635): persist worktree identity — derive once, read
 
     rmSync(worktreesRoot(h.repoPath), { recursive: true, force: true });
     await teardown(h);
+  });
+});
+
+// Bun workspace fixture: root + packages/{shared,app} where app depends on @x/shared.
+// After `bun install` in repoPath, packages/app/node_modules/@x/shared is a relative
+// symlink (../../../shared) that resolves inside whichever repo root contains the link.
+function gitInitWithWorkspaceDep(repoPath: string): void {
+  gitInit(repoPath);
+  writeFileSync(
+    join(repoPath, "package.json"),
+    JSON.stringify({ name: "root", private: true, workspaces: ["packages/*"] }),
+  );
+  mkdirSync(join(repoPath, "packages", "shared"), { recursive: true });
+  writeFileSync(
+    join(repoPath, "packages", "shared", "package.json"),
+    JSON.stringify({ name: "@x/shared", version: "1.0.0" }),
+  );
+  writeFileSync(join(repoPath, "packages", "shared", "index.js"), "// initial\n");
+  mkdirSync(join(repoPath, "packages", "app"), { recursive: true });
+  writeFileSync(
+    join(repoPath, "packages", "app", "package.json"),
+    JSON.stringify({ name: "@x/app", version: "1.0.0", dependencies: { "@x/shared": "workspace:*" } }),
+  );
+  gitRun(repoPath, ["add", "-A"]);
+  gitRun(repoPath, ["commit", "-q", "-m", "add workspace packages"]);
+}
+
+describe("spawn_worktree (#664): seed node_modules from parent before installDeps", () => {
+  // AC2: workspace symlinks preserved by cp -al resolve into the worktree, not the parent.
+  it("AC2: seeded worktree — @x/shared symlink resolves into worktree's packages/shared (content marker)", async () => {
+    const h = buildHarness(claudeRuntimeProvider);
+    gitInitWithWorkspaceDep(h.repoPath);
+
+    // Materialize parent node_modules (source for cp -al).
+    Bun.spawnSync(["bun", "install"], { cwd: h.repoPath, stdout: "ignore", stderr: "ignore" });
+
+    // Distinct content in parent so any wrong-source resolution is detectable.
+    writeFileSync(join(h.repoPath, "packages", "shared", "index.js"), "// parent-marker\n");
+
+    const ws = h.workspaces.create({
+      name: "ws",
+      repo_path: h.repoPath,
+      spawn_worktree: { kind: "on" },
+    });
+    const role = h.roles.create({ name: "worker", persistent: false });
+    h.workspaceRoles.setCeiling(ws.id, role.id, 1);
+
+    const res = await spawnWorker(h, ws.id, role.id, "664-ac2");
+    expect(res.statusCode).toBe(200);
+
+    const cwd = h.records[0]!.req.cwd;
+
+    // Write worktree-specific marker post-spawn (worktree's packages/shared is from git checkout).
+    writeFileSync(join(cwd, "packages", "shared", "index.js"), "// worktree-marker\n");
+
+    const link = join(cwd, "packages", "app", "node_modules", "@x", "shared");
+    // Symlink must exist (seed or install put it there).
+    expect(existsSync(link)).toBe(true);
+    // realpath resolves into the WORKTREE, never the parent.
+    expect(realpathSync(link)).toBe(realpathSync(join(cwd, "packages", "shared")));
+    expect(realpathSync(link)).not.toBe(realpathSync(join(h.repoPath, "packages", "shared")));
+    // Content marker: reading through the link yields the WORKTREE's content.
+    expect(readFileSync(join(link, "index.js"), "utf-8")).toBe("// worktree-marker\n");
+    expect(readFileSync(join(h.repoPath, "packages", "shared", "index.js"), "utf-8")).toBe("// parent-marker\n");
+
+    rmSync(worktreesRoot(h.repoPath), { recursive: true, force: true });
+    await teardown(h);
+  });
+
+  // AC1: same-FS + parent node_modules present → seed runs (cp -al produces hardlinks).
+  it("AC1: same-FS — sentinel file hardlinked into worktree proves cp -al ran before installDeps", async () => {
+    const h = buildHarness(claudeRuntimeProvider);
+    gitInitWithWorkspaceDep(h.repoPath);
+
+    Bun.spawnSync(["bun", "install"], { cwd: h.repoPath, stdout: "ignore", stderr: "ignore" });
+
+    // Sentinel file in parent root node_modules — bun install would never create this.
+    const sentinelSrc = join(h.repoPath, "node_modules", ".clobber-seed-sentinel");
+    writeFileSync(sentinelSrc, "sentinel-content");
+
+    const ws = h.workspaces.create({
+      name: "ws",
+      repo_path: h.repoPath,
+      spawn_worktree: { kind: "on" },
+    });
+    const role = h.roles.create({ name: "worker", persistent: false });
+    h.workspaceRoles.setCeiling(ws.id, role.id, 1);
+
+    const res = await spawnWorker(h, ws.id, role.id, "664-ac1");
+    expect(res.statusCode).toBe(200);
+
+    const cwd = h.records[0]!.req.cwd;
+    const sentinelDst = join(cwd, "node_modules", ".clobber-seed-sentinel");
+
+    // Sentinel must be present in the worktree (cp -al seeded it).
+    expect(existsSync(sentinelDst)).toBe(true);
+    // Same inode = hardlink, proving cp -al ran (not a bun install side effect).
+    expect(statSync(sentinelDst).ino).toBe(statSync(sentinelSrc).ino);
+
+    rmSync(worktreesRoot(h.repoPath), { recursive: true, force: true });
+    await teardown(h);
+  });
+
+  // AC3a: cross-FS (injected st_dev mismatch) → seed skipped, worktree counterpart absent.
+  it("AC3a: cross-FS st_dev mismatch → seedNodeModules skips cp -al, no worktree node_modules created", () => {
+    const repoPath = mkdtempSync(join(tmpdir(), "clobber-test-664-ac3a-"));
+    const worktreePath = mkdtempSync(join(tmpdir(), "clobber-test-664-ac3a-wt-"));
+    try {
+      const srcNM = join(repoPath, "node_modules");
+      mkdirSync(srcNM);
+      writeFileSync(join(srcNM, ".keep"), "");
+
+      // Inject differing dev numbers to simulate cross-FS without needing two mounts.
+      let callIdx = 0;
+      const statDev = (_p: string) => (callIdx++ % 2 === 0 ? 100 : 200);
+
+      seedNodeModules(repoPath, worktreePath, statDev);
+
+      expect(existsSync(join(worktreePath, "node_modules"))).toBe(false);
+    } finally {
+      rmSync(repoPath, { recursive: true, force: true });
+      rmSync(worktreePath, { recursive: true, force: true });
+    }
+  });
+
+  // AC3b: no parent node_modules → seed skips silently, no error.
+  it("AC3b: absent parent node_modules → seedNodeModules returns without error or worktree side-effects", () => {
+    const repoPath = mkdtempSync(join(tmpdir(), "clobber-test-664-ac3b-"));
+    const worktreePath = mkdtempSync(join(tmpdir(), "clobber-test-664-ac3b-wt-"));
+    try {
+      // No node_modules at all in parent.
+      expect(() => seedNodeModules(repoPath, worktreePath)).not.toThrow();
+      expect(existsSync(join(worktreePath, "node_modules"))).toBe(false);
+    } finally {
+      rmSync(repoPath, { recursive: true, force: true });
+      rmSync(worktreePath, { recursive: true, force: true });
+    }
   });
 });
