@@ -42,6 +42,19 @@
   --color-accent-muted: oklch(37.8% 0.077 168.94); /* emerald-900 */
   --color-accent-deep: oklch(26.2% 0.051 172.552); /* emerald-950 */
 
+  /* Accent-as-text legible on the active surface (inline code, the working
+     verb above the composer). Indirects into the accent ramp so it recolors
+     with data-accent, but picks the rung that reads on the surface — the light
+     -400 here for dark, re-pointed to -strong in the light/paper block. Distinct
+     from accent-text, which several consumers use *on* dark accent chips. */
+  --color-accent-ink: var(--color-accent-text);
+
+  /* Secondary tool text — the detail line, the preview after the tool name,
+     and the ✓ status glyph (NOT the tool name itself, NOT the rail). A muted
+     rung (zinc-400) on dark; the light/paper block re-points it lighter so it
+     isn't near-body-dark on white. */
+  --color-tool: var(--color-text-muted);
+
   /* Status — working/blocked/done generalize state-tones.ts */
   --color-working: oklch(69.6% 0.17 162.48); /* emerald-500 */
   --color-blocked: oklch(76.9% 0.188 70.08); /* amber-500 */
@@ -166,6 +179,15 @@
   --color-provenance-strong: oklch(55.5% 0.163 48.998); /* amber-700 */
   --color-provenance-muted: oklch(92.4% 0.12 95.746); /* amber-200 */
   --color-provenance-deep: oklch(96.2% 0.059 95.617); /* amber-100 */
+
+  /* Accent ink re-points to the darker accent rung so it reads on a light
+     surface (the -400 default washes out on white/cream). */
+  --color-accent-ink: var(--color-accent-strong);
+
+  /* Secondary tool text re-points lighter on a light surface: text-muted here
+     is zinc-600 (near body-dark) — text-subtle (zinc-500) recedes while staying
+     readable. */
+  --color-tool: var(--color-text-subtle);
 
   /* Syntax — github-light token colors */
   --hljs-text: oklch(27.4% 0.006 286.033); /* zinc-800 */

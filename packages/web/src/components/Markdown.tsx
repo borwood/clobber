@@ -49,7 +49,7 @@ export const Markdown = memo(function Markdown({ text }: Props) {
               return <code className={`font-mono text-xs ${className}`}>{children}</code>;
             }
             return (
-              <code className="font-mono text-[0.85em] bg-surface border border-border px-1 py-0.5 rounded text-accent">
+              <code className="font-mono text-[0.85em] bg-surface border border-border px-1 py-0.5 rounded text-accent-ink">
                 {children}
               </code>
             );
@@ -78,7 +78,7 @@ export const Markdown = memo(function Markdown({ text }: Props) {
             <strong className="font-semibold text-text">{children}</strong>
           ),
           em: ({ children }) => <em className="italic text-text">{children}</em>,
-          hr: () => <hr className="border-border my-3" />,
+          hr: () => <hr className="border-border-strong my-3" />,
           table: ({ children }) => (
             <table className="text-xs my-2 border border-border">{children}</table>
           ),

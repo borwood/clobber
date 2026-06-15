@@ -184,7 +184,7 @@ function ToolCallCard({
   return (
     <div className="mt-3 border-l-2 border-border-strong pl-3 space-y-1">
       {description !== null && (
-        <p className="text-sm italic text-text-muted leading-relaxed">{description}</p>
+        <p className="text-sm italic text-tool leading-relaxed">{description}</p>
       )}
       <div className="flex items-start gap-2 text-xs">
         <ToolStatusMark status={status} />
@@ -192,7 +192,7 @@ function ToolCallCard({
           <div className="flex items-baseline gap-2">
             <span className="text-text-dim font-mono shrink-0">{name}</span>
             {preview !== null && (
-              <span className="text-text-muted truncate font-mono">{preview}</span>
+              <span className="text-tool truncate font-mono">{preview}</span>
             )}
           </div>
           {showDetails && (
@@ -224,7 +224,7 @@ function ToolStatusMark({ status }: { status: ToolStatus }) {
   }
   if (status === "ok") {
     return (
-      <span data-status={status} aria-label={status} className={`${base} text-text-muted text-[10px] leading-none`}>
+      <span data-status={status} aria-label={status} className={`${base} text-tool text-[10px] leading-none`}>
         ✓
       </span>
     );

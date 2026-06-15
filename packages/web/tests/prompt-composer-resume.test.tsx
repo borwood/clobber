@@ -7,6 +7,7 @@ import { act } from "react";
 import { createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { PromptComposer } from "../src/components/PromptComposer.tsx";
+import { setDraft } from "../src/draft-store.ts";
 
 // Stub api.getSessionLocations so openFileBrowser never fails.
 import { api } from "../src/api.ts";
@@ -27,6 +28,10 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  // These tests reuse one sessionId and assume a fresh empty composer each
+  // time; clear the per-session draft so one test's typed text can't restore
+  // into the next mount.
+  setDraft("test-session-id", "");
 });
 
 afterAll(() => {
