@@ -1,5 +1,10 @@
 export type TranscriptLine = Record<string, unknown>;
 
+export interface TranscriptFetchResponse {
+  readonly lines: readonly TranscriptLine[];
+  readonly cursor: number;
+}
+
 interface UsageBlock {
   readonly input_tokens?: number;
   readonly cache_read_input_tokens?: number;

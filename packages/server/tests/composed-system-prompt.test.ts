@@ -50,10 +50,10 @@ describe("composed system prompt capture (#253)", () => {
       url: `/sessions/${session_id}/transcript`,
     });
     expect(transcript.statusCode).toBe(200);
-    const lines = transcript.json() as Array<Record<string, unknown>>;
-    expect(lines.length).toBeGreaterThan(0);
-    expect(lines[0]!["type"]).toBe("system-prompt");
-    expect(lines[0]!["prompt"]).toBe(composed);
+    const body = transcript.json() as { lines: Array<Record<string, unknown>>; cursor: number };
+    expect(body.lines.length).toBeGreaterThan(0);
+    expect(body.lines[0]!["type"]).toBe("system-prompt");
+    expect(body.lines[0]!["prompt"]).toBe(composed);
 
     await h.records[0]!.exit(0);
     await teardown(h);

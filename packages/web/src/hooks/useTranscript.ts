@@ -1,12 +1,9 @@
 import { api, type TranscriptLine } from "../api.ts";
-import { usePolledResource } from "./usePolledResource.ts";
-
-const EMPTY: readonly TranscriptLine[] = [];
+import { useAppendPoll } from "./useAppendPoll.ts";
 
 export function useTranscript(sessionId: string | null): readonly TranscriptLine[] {
-  const poll = usePolledResource(
-    () => (sessionId === null ? Promise.resolve(EMPTY) : api.getTranscript(sessionId)),
+  return useAppendPoll<TranscriptLine>(
+    (cursor) => (sessionId === null ? null : api.getTranscript(sessionId, cursor)),
     [sessionId],
   );
-  return poll.data ?? EMPTY;
 }

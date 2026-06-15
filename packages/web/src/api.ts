@@ -12,6 +12,7 @@ import type {
   AskQuestion,
   SequencedLayoutEvent,
   TranscriptLine,
+  TranscriptFetchResponse,
   Notification,
 } from "@clobber/shared";
 
@@ -26,6 +27,7 @@ export type {
   AskOption,
   AskQuestion,
   TranscriptLine,
+  TranscriptFetchResponse,
   Notification,
 } from "@clobber/shared";
 
@@ -177,8 +179,10 @@ export const api = {
       `/persistent-agents/${encodeURIComponent(agentId)}/wake`,
       wakeProgram === undefined ? {} : { wake_program: wakeProgram },
     ),
-  getTranscript: (sessionId: string) =>
-    getJson<TranscriptLine[]>(`/sessions/${encodeURIComponent(sessionId)}/transcript`),
+  getTranscript: (sessionId: string, since?: number) =>
+    getJson<TranscriptFetchResponse>(
+      `/sessions/${encodeURIComponent(sessionId)}/transcript${since !== undefined ? `?since=${since}` : ""}`,
+    ),
   endSession: (sessionId: string) =>
     postJson<{ ok: true }>(
       `/sessions/${encodeURIComponent(sessionId)}/end`,

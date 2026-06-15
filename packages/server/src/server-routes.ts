@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { registerHookRoutes } from "./routes/hooks.ts";
 import { registerEventRoutes } from "./routes/events.ts";
 import { registerSessionRoutes } from "./routes/sessions.ts";
+import { registerSessionTranscriptRoute } from "./routes/session-transcript.ts";
 import { registerSpawnRoutes } from "./routes/spawn.ts";
 import { registerWorkspaceRoutes } from "./routes/workspaces.ts";
 import { registerFsRoutes } from "./routes/fs.ts";
@@ -70,6 +71,7 @@ export function registerAllRoutes(
     ...(opts.askPollWindowMs === undefined ? {} : { askBridgePollWindowMs: opts.askPollWindowMs }),
   });
   registerEventRoutes(app, { store: opts.store });
+  registerSessionTranscriptRoute(app, { sessions: opts.sessions });
   registerSessionRoutes(app, {
     sessions: opts.sessions,
     agents: opts.agents,

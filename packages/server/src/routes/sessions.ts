@@ -16,7 +16,6 @@ import type { WorkspaceSessionSummaries } from "../workspace-session-summaries.t
 import type { AgentRegistry } from "../agent-registry.ts";
 import type { AgentQuestionStore } from "../agent-question-store.ts";
 import type { AgentQuestionWaiter } from "../agent-question-waiter.ts";
-import { readTranscript } from "../transcript-reader.ts";
 import { terminateSession } from "../session-lifecycle.ts";
 import { appendTranscriptNotification } from "../transcript-marker.ts";
 import type {
@@ -98,27 +97,6 @@ export function registerSessionRoutes(
     const ids = new Set(deps.sessions.listActive().map((s) => s.workspace_id));
     return [...ids];
   });
-
-  app.get<{ Params: IdParam }>(
-    "/sessions/:id/transcript",
-    async (request, reply) => {
-      const session = deps.sessions.get(request.params.id);
-      if (session === null) {
-        reply.code(404);
-        return { error: "session not found" };
-      }
-      // The clobber-composed prompt rides as a leading pseudo-line ahead of
-      // claude's own emissions, so the audit view shows what the agent was told
-      // on this wake (#253). The web classifier renders it as a showSystem-gated
-      // entry; it never reaches the agent's actual transcript file.
-      const prefix =
-        session.composed_system_prompt === undefined
-          ? []
-          : [{ type: "system-prompt", prompt: session.composed_system_prompt }];
-      if (session.transcript_path === undefined) return prefix;
-      return [...prefix, ...(await readTranscript(session.transcript_path))];
-    },
-  );
 
   app.post<{ Params: IdParam }>(
     "/sessions/:id/prompt",

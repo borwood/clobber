@@ -93,7 +93,175 @@ function seedSession(h: Harness): Seeded {
   return { sessionId };
 }
 
-describe("GET /sessions/:id/transcript", () => {
+interface TranscriptResponse {
+  lines: Array<Record<string, unknown>>;
+  cursor: number;
+}
+
+function asResponse(json: unknown): TranscriptResponse {
+  return json as TranscriptResponse;
+}
+
+describe("GET /sessions/:id/transcript — ?since cursor (incremental fetch)", () => {
+  it("cold fetch returns { lines, cursor } shape with cursor = JSONL line count", async () => {
+    const h = buildHarness();
+    const seed = seedSession(h);
+    const path = join(h.tmp, `${seed.sessionId}.jsonl`);
+    writeFileSync(
+      path,
+      [
+        JSON.stringify({ type: "user", message: { role: "user", content: "a" } }),
+        JSON.stringify({ type: "assistant", message: { role: "assistant", content: [] } }),
+        JSON.stringify({ type: "user", message: { role: "user", content: "b" } }),
+        "",
+      ].join("\n"),
+    );
+    h.sessions.updateTranscriptPath(seed.sessionId, path);
+
+    const res = await h.server.inject({
+      method: "GET",
+      url: `/sessions/${seed.sessionId}/transcript`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = asResponse(res.json());
+    expect(body.lines).toHaveLength(3);
+    expect(body.cursor).toBe(3);
+    await teardown(h);
+  });
+
+  it("cold fetch returns cursor=0 when no transcript file", async () => {
+    const h = buildHarness();
+    const seed = seedSession(h);
+    const res = await h.server.inject({
+      method: "GET",
+      url: `/sessions/${seed.sessionId}/transcript`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = asResponse(res.json());
+    expect(body.lines).toEqual([]);
+    expect(body.cursor).toBe(0);
+    await teardown(h);
+  });
+
+  it("?since=N returns lines from offset N onward (inclusive), no prefix, cursor = total JSONL", async () => {
+    const h = buildHarness();
+    const seed = seedSession(h);
+    const path = join(h.tmp, `${seed.sessionId}.jsonl`);
+    writeFileSync(
+      path,
+      [
+        JSON.stringify({ type: "user", message: { role: "user", content: "first" } }),  // offset 0
+        JSON.stringify({ type: "user", message: { role: "user", content: "second" } }), // offset 1
+        JSON.stringify({ type: "user", message: { role: "user", content: "third" } }),  // offset 2
+        "",
+      ].join("\n"),
+    );
+    h.sessions.updateTranscriptPath(seed.sessionId, path);
+
+    const res = await h.server.inject({
+      method: "GET",
+      url: `/sessions/${seed.sessionId}/transcript?since=2`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = asResponse(res.json());
+    // since=2 → lines from offset 2 onward → only "third"
+    expect(body.lines).toHaveLength(1);
+    expect((body.lines[0]! as { message: { content: string } }).message.content).toBe("third");
+    expect(body.cursor).toBe(3);
+    await teardown(h);
+  });
+
+  it("?since=cursor returns empty lines when nothing new, cursor unchanged", async () => {
+    const h = buildHarness();
+    const seed = seedSession(h);
+    const path = join(h.tmp, `${seed.sessionId}.jsonl`);
+    writeFileSync(
+      path,
+      [JSON.stringify({ type: "user", message: { role: "user", content: "msg" } }), ""].join("\n"),
+    );
+    h.sessions.updateTranscriptPath(seed.sessionId, path);
+
+    const res = await h.server.inject({
+      method: "GET",
+      url: `/sessions/${seed.sessionId}/transcript?since=1`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = asResponse(res.json());
+    expect(body.lines).toEqual([]);
+    expect(body.cursor).toBe(1);
+    await teardown(h);
+  });
+
+  it("append flow: cold fetch then incremental grows array by exactly new lines", async () => {
+    const h = buildHarness();
+    const seed = seedSession(h);
+    const path = join(h.tmp, `${seed.sessionId}.jsonl`);
+    const lineA = JSON.stringify({ type: "user", message: { role: "user", content: "A" } });
+    const lineB = JSON.stringify({ type: "user", message: { role: "user", content: "B" } });
+    const lineC = JSON.stringify({ type: "user", message: { role: "user", content: "C" } });
+    writeFileSync(path, [lineA, lineB, ""].join("\n"));
+    h.sessions.updateTranscriptPath(seed.sessionId, path);
+
+    // Cold fetch — gets A and B
+    const cold = await h.server.inject({
+      method: "GET",
+      url: `/sessions/${seed.sessionId}/transcript`,
+    });
+    const coldBody = asResponse(cold.json());
+    expect(coldBody.lines).toHaveLength(2);
+    const cursor = coldBody.cursor;
+    expect(cursor).toBe(2);
+
+    // Append a new line to the file
+    writeFileSync(path, [lineA, lineB, lineC, ""].join("\n"));
+
+    // Incremental fetch — gets only C
+    const inc = await h.server.inject({
+      method: "GET",
+      url: `/sessions/${seed.sessionId}/transcript?since=${cursor}`,
+    });
+    const incBody = asResponse(inc.json());
+    expect(incBody.lines).toHaveLength(1);
+    expect((incBody.lines[0]! as { message: { content: string } }).message.content).toBe("C");
+    expect(incBody.cursor).toBe(3);
+    await teardown(h);
+  });
+
+  it("incremental fetch does not include the system-prompt prefix", async () => {
+    const h = buildHarness();
+    const seed = seedSession(h);
+    h.sessions.updateComposedSystemPrompt(seed.sessionId, "You are a test agent.");
+    const path = join(h.tmp, `${seed.sessionId}.jsonl`);
+    writeFileSync(
+      path,
+      [JSON.stringify({ type: "user", message: { role: "user", content: "msg" } }), ""].join(
+        "\n",
+      ),
+    );
+    h.sessions.updateTranscriptPath(seed.sessionId, path);
+
+    // Cold fetch includes prefix
+    const cold = await h.server.inject({
+      method: "GET",
+      url: `/sessions/${seed.sessionId}/transcript`,
+    });
+    const coldBody = asResponse(cold.json());
+    expect(coldBody.lines[0]!["type"]).toBe("system-prompt");
+    expect(coldBody.cursor).toBe(1); // prefix not counted
+
+    // Incremental fetch does NOT include prefix
+    const inc = await h.server.inject({
+      method: "GET",
+      url: `/sessions/${seed.sessionId}/transcript?since=0`,
+    });
+    const incBody = asResponse(inc.json());
+    expect(incBody.lines[0]!["type"]).not.toBe("system-prompt");
+    expect(incBody.lines[0]!["type"]).toBe("user");
+    await teardown(h);
+  });
+});
+
+describe("GET /sessions/:id/transcript — cold fetch", () => {
   it("404 when the session does not exist", async () => {
     const h = buildHarness();
     const res = await h.server.inject({
@@ -105,7 +273,7 @@ describe("GET /sessions/:id/transcript", () => {
     await teardown(h);
   });
 
-  it("returns [] when the session has no transcript_path", async () => {
+  it("returns empty lines + cursor=0 when the session has no transcript_path", async () => {
     const h = buildHarness();
     const seed = seedSession(h);
 
@@ -114,11 +282,13 @@ describe("GET /sessions/:id/transcript", () => {
       url: `/sessions/${seed.sessionId}/transcript`,
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json() as unknown).toEqual([]);
+    const body = asResponse(res.json());
+    expect(body.lines).toEqual([]);
+    expect(body.cursor).toBe(0);
     await teardown(h);
   });
 
-  it("returns [] when transcript_path is set but the file does not exist", async () => {
+  it("returns empty lines when transcript_path is set but the file does not exist", async () => {
     const h = buildHarness();
     const seed = seedSession(h);
     h.sessions.updateTranscriptPath(seed.sessionId, join(h.tmp, "missing.jsonl"));
@@ -128,7 +298,9 @@ describe("GET /sessions/:id/transcript", () => {
       url: `/sessions/${seed.sessionId}/transcript`,
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json() as unknown).toEqual([]);
+    const body = asResponse(res.json());
+    expect(body.lines).toEqual([]);
+    expect(body.cursor).toBe(0);
     await teardown(h);
   });
 
@@ -155,11 +327,12 @@ describe("GET /sessions/:id/transcript", () => {
       url: `/sessions/${seed.sessionId}/transcript`,
     });
     expect(res.statusCode).toBe(200);
-    const lines = res.json() as Array<Record<string, unknown>>;
-    expect(lines).toHaveLength(3);
-    expect(lines[0]!["type"]).toBe("permission-mode");
-    expect(lines[1]!["type"]).toBe("assistant");
-    expect(lines[2]!["type"]).toBe("user");
+    const body = asResponse(res.json());
+    expect(body.lines).toHaveLength(3);
+    expect(body.lines[0]!["type"]).toBe("permission-mode");
+    expect(body.lines[1]!["type"]).toBe("assistant");
+    expect(body.lines[2]!["type"]).toBe("user");
+    expect(body.cursor).toBe(3);
     await teardown(h);
   });
 
@@ -182,10 +355,10 @@ describe("GET /sessions/:id/transcript", () => {
       url: `/sessions/${seed.sessionId}/transcript`,
     });
     expect(res.statusCode).toBe(200);
-    const lines = res.json() as Array<Record<string, unknown>>;
-    expect(lines).toHaveLength(2);
-    expect(lines[0]!["type"]).toBe("user");
-    expect(lines[1]!["type"]).toBe("assistant");
+    const body = asResponse(res.json());
+    expect(body.lines).toHaveLength(2);
+    expect(body.lines[0]!["type"]).toBe("user");
+    expect(body.lines[1]!["type"]).toBe("assistant");
     await teardown(h);
   });
 });
