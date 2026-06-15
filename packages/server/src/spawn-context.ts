@@ -16,7 +16,7 @@ import { OFFICE_NOTES_SKILL } from "./office-notes-skill.ts";
 import { deskDirFor, writeBriefingPacket } from "./desk-store.ts";
 import { generateTokenValue } from "./session-token-store.ts";
 import { resolveCurrentRoleVersion } from "./resolve-role-content.ts";
-import { resolveSpawnCwd } from "./spawn-worktree.ts";
+import { INSTALL_TIMEOUT_MS, resolveSpawnCwd } from "./spawn-worktree.ts";
 import { embodyRole, type RolePin } from "./embody-role.ts";
 import type { SpawnPipelineDeps } from "./spawn-pipeline.ts";
 
@@ -245,9 +245,12 @@ export async function prepareSpawnContext(
 
   const effectiveEffort = effortOverride ?? role.effort;
   const effectiveModel = modelOverride ?? role.model;
+  // Timeout resolution: workspace install_timeout_ms > test-seam deps.installTimeoutMs > constant default.
+  const configTimeout = workspace.spawn_worktree.kind === "on" ? workspace.spawn_worktree.install_timeout_ms : undefined;
+  const installTimeoutMs = configTimeout ?? deps.installTimeoutMs ?? INSTALL_TIMEOUT_MS;
   const cwd = await resolveSpawnCwd(workspace, agent, mode, (branch, path) =>
     deps.agents.setWorktreeIdentity(agent.id, branch, path),
-    deps.installTimeoutMs,
+    installTimeoutMs,
   );
   const spawnOptions: RuntimeSpawnOptions = {
     hookUrl: deps.hookUrl,

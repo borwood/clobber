@@ -25,6 +25,10 @@ export const SpawnWorktreeOnSchema = z.object({
   // land. Absent = .clobber/worktrees/ inside the repo (default).
   // Example: "/mnt/fast-ssd/worktrees" → worktree at "<root>/<slug>".
   worktree_root: z.string().optional(),
+  // Per-workspace bun install timeout in milliseconds. Absent = INSTALL_TIMEOUT_MS
+  // default (generous for large monorepos). Useful to tighten in CI or when
+  // the repo installs fast and a shorter deadline surfaces real hangs sooner.
+  install_timeout_ms: z.number().int().positive().optional(),
 });
 
 export const SpawnWorktreeSchema = z.discriminatedUnion("kind", [
