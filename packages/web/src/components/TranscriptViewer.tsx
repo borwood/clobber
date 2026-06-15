@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState, type UIEvent } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import type { TranscriptLine } from "../api.ts";
+import type { SessionSummary, TranscriptLine } from "../api.ts";
 import { classifyLine, buildToolResultIndex, type Classified } from "../transcript-types.ts";
 import { deriveWorkingState } from "../working-state.ts";
 import { WorkingIndicator } from "./WorkingIndicator.tsx";
@@ -19,6 +19,7 @@ interface Props {
   readonly lines: readonly TranscriptLine[];
   readonly showSystem: boolean;
   readonly busy: boolean;
+  readonly session?: SessionSummary | undefined;
 }
 
 // Feed item: every Classified kind except the two that never produce DOM output.
@@ -29,7 +30,7 @@ type FeedItem = Extract<
 
 const PIN_THRESHOLD_PX = 100;
 
-export function TranscriptViewer({ lines, showSystem, busy }: Props) {
+export function TranscriptViewer({ lines, showSystem, busy, session }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [pinned, setPinned] = useState(true);
 
@@ -125,7 +126,7 @@ export function TranscriptViewer({ lines, showSystem, busy }: Props) {
           </button>
         )}
       </div>
-      {busy && <WorkingIndicator state={workingState} />}
+      {busy && <WorkingIndicator state={workingState} session={session} />}
     </div>
   );
 }

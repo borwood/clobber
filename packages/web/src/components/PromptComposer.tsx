@@ -6,6 +6,7 @@ import { FilesystemBrowser } from "./FilesystemBrowser.tsx";
 import { Markdown } from "./Markdown.tsx";
 import { ComposerOptionsMenu } from "./ComposerOptionsMenu.tsx";
 import { api } from "../api.ts";
+import { getDraft, setDraft } from "../draft-store.ts";
 
 // Ceiling the textarea grows to before it starts scrolling (~8 lines).
 const MAX_TEXTAREA_HEIGHT = 192;
@@ -35,7 +36,7 @@ export function PromptComposer({
   onResume,
   onInterrupt,
 }: Props) {
-  const [prompt, setPrompt] = useState("");
+  const [prompt, setPromptState] = useState(() => getDraft(sessionId));
   const [sending, setSending] = useState(false);
   const [interrupting, setInterrupting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +46,13 @@ export function PromptComposer({
   const deskButtonRef = useRef<HTMLButtonElement>(null);
   const officeButtonRef = useRef<HTMLButtonElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Mirror every edit into the per-session draft store so an unsent draft
+  // survives this composer unmounting on a tab/session switch.
+  function setPrompt(next: string) {
+    setPromptState(next);
+    setDraft(sessionId, next);
+  }
 
   const hasText = prompt.trim().length > 0;
   const canSend = !ended && !sending && hasText;

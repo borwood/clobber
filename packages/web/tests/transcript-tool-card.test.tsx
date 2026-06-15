@@ -97,8 +97,9 @@ describe("ToolCallCard: description line (#585)", () => {
     // description appears as the muted italic caption above
     const descEl = container.querySelector("p.italic");
     expect(descEl?.textContent).toContain("run tests");
-    // preview shows command, not description again
-    const previewEl = container.querySelector(".text-text-muted.truncate");
+    // preview shows command, not description again (text-tool: the shared
+    // secondary-tool-text token)
+    const previewEl = container.querySelector(".text-tool.truncate");
     expect(previewEl?.textContent).toBe("npm test");
   });
 
