@@ -126,10 +126,24 @@ export const PFP_SIZE_PX: Record<PfpSize, number> = {
   large: 75,
 };
 
+// A custom accent is a single seed color; the 6-step accent ramp is derived
+// from it at apply time (apply-theme.ts) via CSS relative-color, so only the
+// seed is stored. Shape-distinct from the built-in string enum so the union
+// discriminates by type: a string is a built-in accent, an object is custom.
+// Mirrors how `mode` widened to (built-in | custom theme id) for #370.
+export const CustomAccentSchema = z.object({
+  kind: z.literal("custom"),
+  color: CssColorSchema,
+});
+export type CustomAccent = z.infer<typeof CustomAccentSchema>;
+
+export const AccentSchema = z.union([BuiltInAccentSchema, CustomAccentSchema]);
+export type Accent = z.infer<typeof AccentSchema>;
+
 export const WorkspaceThemeSchema = z
   .object({
     mode: z.union([BuiltInModeSchema, z.string().min(1)]),
-    accent: BuiltInAccentSchema,
+    accent: AccentSchema,
     custom: z.array(CustomThemeSchema).default([]),
     pfpSize: PfpSizeSchema.default("medium"),
   })
@@ -141,7 +155,11 @@ export const WorkspaceThemeSchema = z
       message: "selected mode must be a built-in mode or a defined custom theme id",
       path: ["mode"],
     },
-  );
+  )
+  .meta({
+    title: "Theme",
+    description: "Color mode, accent, custom themes, and agent picture size.",
+  });
 export type WorkspaceTheme = z.infer<typeof WorkspaceThemeSchema>;
 
 export const DEFAULT_WORKSPACE_THEME: WorkspaceTheme = {

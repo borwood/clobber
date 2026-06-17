@@ -1,15 +1,11 @@
-import { useEffect, useState } from "react";
-import { api, type SettingSource, type Workspace } from "../api.ts";
-import {
-  BUILT_IN_MODES,
-  BUILT_IN_ACCENTS,
-  PFP_SIZES,
-  type BuiltInAccent,
-  type CustomTheme,
-  type PfpSize,
-} from "@clobber/shared";
+import { useMemo, useState } from "react";
+import { UpdateWorkspaceConfigRequestSchema } from "@clobber/shared";
+import { api, type Workspace } from "../api.ts";
+import { describeSchema } from "../lib/schema-introspect.ts";
 import { previewWorkspaceTheme } from "../lib/apply-theme.ts";
-import { CustomThemeEditor } from "./CustomThemeEditor.tsx";
+import { SchemaField, type OverrideRegistry } from "./settings/SchemaField.tsx";
+import { ThemeField } from "./settings/ThemeField.tsx";
+import { ActionButton } from "./ActionButton.tsx";
 
 interface Props {
   readonly workspace: Workspace;
@@ -17,24 +13,26 @@ interface Props {
   readonly onSaved: (updated: Workspace) => void;
 }
 
-// Workspace config surface. Each knob is its own section so future config
-// rows slot in without restructuring the modal.
+// Differentiated fields re-introduced as override branches; everything else
+// renders structurally from the schema.
+const OVERRIDES: OverrideRegistry = { theme: ThemeField };
+
+// The settings surface projects entirely from the canonical workspace schema:
+// every patchable field renders by rule, so a new field appears here the moment
+// it lands in the schema — no edit to this modal.
 export function WorkspaceConfigModal({ workspace, onClose, onSaved }: Props) {
-  const initial = new Set<SettingSource>(workspace.setting_sources);
-  const [project, setProject] = useState(initial.has("project"));
-  const [local, setLocal] = useState(initial.has("local"));
-  const [mode, setMode] = useState<string>(workspace.theme.mode);
-  const [accent, setAccent] = useState<BuiltInAccent>(workspace.theme.accent);
-  const [custom, setCustom] = useState<CustomTheme[]>([...workspace.theme.custom]);
-  const [pfpSize, setPfpSize] = useState<PfpSize>(workspace.theme.pfpSize);
+  const root = useMemo(() => describeSchema(UpdateWorkspaceConfigRequestSchema), []);
+  const keys = root.kind === "object" ? root.fields.map((f) => f.key) : [];
+
+  const initial = useMemo(() => {
+    const seed: Record<string, unknown> = {};
+    for (const k of keys) seed[k] = (workspace as unknown as Record<string, unknown>)[k];
+    return seed;
+  }, [workspace, keys]);
+
+  const [draft, setDraft] = useState<Record<string, unknown>>(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Live preview: paint the in-progress theme on the real UI (no cache write) on
-  // every change. Reverting on cancel repaints the workspace's saved theme.
-  useEffect(() => {
-    previewWorkspaceTheme({ mode, accent, custom, pfpSize });
-  }, [mode, accent, custom, pfpSize]);
 
   function cancel(): void {
     previewWorkspaceTheme(workspace.theme);
@@ -42,16 +40,23 @@ export function WorkspaceConfigModal({ workspace, onClose, onSaved }: Props) {
   }
 
   async function save() {
-    const sources: SettingSource[] = ["user"];
-    if (project) sources.push("project");
-    if (local) sources.push("local");
+    const patch: Record<string, unknown> = {};
+    for (const k of keys) {
+      if (JSON.stringify(draft[k]) !== JSON.stringify(initial[k])) patch[k] = draft[k];
+    }
+    if (Object.keys(patch).length === 0) {
+      onClose();
+      return;
+    }
+    const parsed = UpdateWorkspaceConfigRequestSchema.safeParse(patch);
+    if (!parsed.success) {
+      setError(parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      const updated = await api.updateWorkspaceConfig(workspace.id, {
-        setting_sources: sources,
-        theme: { mode, accent, custom, pfpSize },
-      });
+      const updated = await api.updateWorkspaceConfig(workspace.id, parsed.data);
       onSaved(updated);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -60,152 +65,33 @@ export function WorkspaceConfigModal({ workspace, onClose, onSaved }: Props) {
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center"
-      onClick={cancel}
-    >
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center" onClick={cancel}>
       <div
         className="w-[32rem] max-w-[90vw] max-h-[90vh] overflow-y-auto bg-bg border border-border-strong rounded-md shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-4 py-3 border-b border-border">
-          <div className="text-sm font-semibold text-text">
-            workspace settings
-          </div>
+          <div className="text-sm font-semibold text-text">workspace settings</div>
           <div className="text-xs text-text-subtle font-mono truncate">
             {workspace.name} · {workspace.repo_path}
           </div>
         </div>
 
-        <div className="px-4 py-3 space-y-3">
-          <div className="text-xs text-text-muted uppercase tracking-wide">
-            claude setting sources
-          </div>
-          <label className="flex items-start gap-2 text-sm text-text-dim cursor-pointer">
-            <input
-              type="checkbox"
-              checked
-              disabled
-              className="mt-0.5 accent-accent-strong"
-            />
-            <span>
-              <span className="font-mono">user</span> &nbsp;
-              <span className="text-text-subtle text-xs">
-                — your <code>~/.claude/</code> (always on)
-              </span>
-            </span>
-          </label>
-          <label className="flex items-start gap-2 text-sm text-text-dim cursor-pointer">
-            <input
-              type="checkbox"
-              checked={project}
-              onChange={(e) => setProject(e.target.checked)}
-              className="mt-0.5 accent-accent-strong"
-            />
-            <span>
-              <span className="font-mono">project</span> &nbsp;
-              <span className="text-text-subtle text-xs">
-                — the repo's <code>.claude/</code> (skills, commands, hooks)
-              </span>
-            </span>
-          </label>
-          <label className="flex items-start gap-2 text-sm text-text-dim cursor-pointer">
-            <input
-              type="checkbox"
-              checked={local}
-              onChange={(e) => setLocal(e.target.checked)}
-              className="mt-0.5 accent-accent-strong"
-            />
-            <span>
-              <span className="font-mono">local</span> &nbsp;
-              <span className="text-text-subtle text-xs">
-                — the repo's <code>.claude.local/</code> (machine-specific)
-              </span>
-            </span>
-          </label>
+        <div className="px-4 py-3">
+          <SchemaField
+            node={root}
+            value={draft}
+            onChange={(v) => setDraft(v as Record<string, unknown>)}
+            overrides={OVERRIDES}
+            path=""
+          />
         </div>
-
-        <div className="px-4 py-3 border-t border-border space-y-3">
-          <div className="text-xs text-text-muted uppercase tracking-wide">
-            theme
-          </div>
-
-          <div className="space-y-1.5">
-            <div className="text-xs text-text-subtle">mode</div>
-            <div className="flex gap-2">
-              {BUILT_IN_MODES.map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  data-theme={m}
-                  onClick={() => setMode(m)}
-                  className={`flex-1 flex items-center gap-2 px-3 py-2 rounded border bg-bg ${
-                    mode === m
-                      ? "border-accent"
-                      : "border-border hover:border-border-strong"
-                  }`}
-                >
-                  <span className="h-4 w-4 rounded-sm bg-surface border border-border-strong" />
-                  <span className="text-xs text-text-dim capitalize">{m}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <div className="text-xs text-text-subtle">accent</div>
-            <div className="flex gap-2">
-              {BUILT_IN_ACCENTS.map((a) => (
-                <button
-                  key={a}
-                  type="button"
-                  data-accent={a}
-                  onClick={() => setAccent(a)}
-                  title={a}
-                  aria-label={a}
-                  className={`h-7 w-7 rounded-full bg-accent border-2 ${
-                    accent === a ? "border-text" : "border-transparent"
-                  }`}
-                />
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <div className="text-xs text-text-subtle">agent picture size</div>
-            <div className="flex gap-2">
-              {PFP_SIZES.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setPfpSize(s)}
-                  className={`flex-1 px-3 py-2 rounded border bg-bg text-xs capitalize ${
-                    pfpSize === s
-                      ? "border-accent text-text-dim"
-                      : "border-border hover:border-border-strong text-text-subtle"
-                  }`}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <CustomThemeEditor
-          custom={custom}
-          selectedMode={mode}
-          onChange={setCustom}
-          onSelect={setMode}
-        />
 
         {error !== null && (
-          <div className="px-4 py-2 text-xs text-danger-text font-mono break-all">
-            {error}
-          </div>
+          <div className="px-4 py-2 text-xs text-danger-text font-mono break-all">{error}</div>
         )}
 
-        <div className="px-4 py-3 border-t border-border flex justify-end gap-2">
+        <div className="px-4 py-3 border-t border-border flex justify-end gap-2 sticky bottom-0 bg-bg">
           <button
             type="button"
             onClick={cancel}
@@ -214,14 +100,14 @@ export function WorkspaceConfigModal({ workspace, onClose, onSaved }: Props) {
           >
             cancel
           </button>
-          <button
-            type="button"
+          <ActionButton
+            variant="accent"
             onClick={() => void save()}
             disabled={busy}
-            className="px-3 py-1 rounded bg-accent-strong hover:bg-accent disabled:bg-elevated disabled:text-text-subtle text-xs"
+            className="px-3 py-1 text-xs"
           >
             {busy ? "saving…" : "save"}
-          </button>
+          </ActionButton>
         </div>
       </div>
     </div>

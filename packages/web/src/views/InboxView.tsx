@@ -25,7 +25,7 @@ function NotificationInspector({
       <div className="flex items-center justify-between">
         <span className="font-semibold text-sm">Notification detail</span>
         <button
-          className="px-2 py-1 rounded bg-accent text-white text-xs hover:opacity-80"
+          className="px-2 py-1 rounded bg-accent text-accent-fg text-xs hover:opacity-80"
           data-action="ack"
           onClick={onAck}
         >

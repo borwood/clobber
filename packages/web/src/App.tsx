@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { GearIcon } from "@phosphor-icons/react/dist/csr/Gear";
 import { api, type Workspace } from "./api.ts";
 import { WorkspaceTabs } from "./components/WorkspaceTabs.tsx";
 import { WorkspaceConfigModal } from "./components/WorkspaceConfigModal.tsx";
@@ -64,11 +65,20 @@ export function App() {
   // dark (#369). Depending on the primitives (not the polled object) keeps this
   // from re-firing every poll tick.
   const resolvedWorkspace = workspaces.find((w) => w.id === activeWorkspaceId);
+
+  useEffect(() => {
+    document.title =
+      resolvedWorkspace === undefined ? "clobber" : `clobber | ${resolvedWorkspace.name}`;
+  }, [resolvedWorkspace?.name]);
+
   const themeMode = resolvedWorkspace?.theme.mode;
-  const themeAccent = resolvedWorkspace?.theme.accent;
   const themePfpSize = resolvedWorkspace?.theme.pfpSize;
-  // Serialized so the effect only re-fires when a custom theme's definitions
-  // actually change, not on every poll tick that re-creates the workspace object.
+  // Serialized so the effect only re-fires when a custom theme's definitions (or
+  // a custom accent's color) actually change, not on every poll tick that
+  // re-creates the workspace object. Accent serializes too since it may now be a
+  // custom-color object, not just a built-in string.
+  const themeAccent =
+    resolvedWorkspace === undefined ? undefined : JSON.stringify(resolvedWorkspace.theme.accent);
   const themeCustom =
     resolvedWorkspace === undefined ? undefined : JSON.stringify(resolvedWorkspace.theme.custom);
   useEffect(() => {
@@ -83,7 +93,7 @@ export function App() {
     }
     applyWorkspaceTheme({
       mode: themeMode,
-      accent: themeAccent,
+      accent: JSON.parse(themeAccent),
       pfpSize: themePfpSize,
       custom: JSON.parse(themeCustom),
     });
@@ -180,7 +190,7 @@ export function App() {
             title="Workspace settings"
             aria-label="Workspace settings"
           >
-            <span className="text-base leading-none">⚙</span>
+            <GearIcon size={16} weight="bold" />
           </button>
         )}
         <span className="text-text-subtle text-sm">

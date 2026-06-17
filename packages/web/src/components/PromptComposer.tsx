@@ -5,6 +5,7 @@ import type { TranscriptLine } from "../api.ts";
 import { FilesystemBrowser } from "./FilesystemBrowser.tsx";
 import { Markdown } from "./Markdown.tsx";
 import { ComposerOptionsMenu } from "./ComposerOptionsMenu.tsx";
+import { ActionButton } from "./ActionButton.tsx";
 import { api } from "../api.ts";
 import { getDraft, setDraft } from "../draft-store.ts";
 
@@ -21,6 +22,7 @@ interface Props {
   readonly onSend: (prompt: string) => Promise<void>;
   readonly onResume: (prompt?: string) => Promise<void>;
   readonly onInterrupt: () => Promise<void>;
+  readonly onEndSession: () => Promise<void>;
 }
 
 type FileBrowserState = { readonly path: string; readonly label: string; readonly triggerRect: DOMRect } | null;
@@ -35,6 +37,7 @@ export function PromptComposer({
   onSend,
   onResume,
   onInterrupt,
+  onEndSession,
 }: Props) {
   const [prompt, setPromptState] = useState(() => getDraft(sessionId));
   const [sending, setSending] = useState(false);
@@ -171,25 +174,25 @@ export function PromptComposer({
   function renderActionButton() {
     if (ended) {
       return (
-        <button
-          type="button"
+        <ActionButton
+          variant="accent"
           onClick={() => void resume()}
           disabled={sending}
-          className="px-3 py-1.5 text-xs rounded bg-accent-strong text-white hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed"
+          className="px-3 py-1.5 text-xs"
         >
           {sending ? "Resuming…" : hasText ? "Resume + Send" : "Resume"}
-        </button>
+        </ActionButton>
       );
     }
     return (
-      <button
-        type="button"
+      <ActionButton
+        variant="accent"
         onClick={() => void send()}
         disabled={!canSend}
-        className="px-3 py-1.5 text-xs rounded bg-accent-strong text-white hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed"
+        className="px-3 py-1.5 text-xs"
       >
         {sending ? "Sending…" : "Send"}
-      </button>
+      </ActionButton>
     );
   }
 
@@ -228,6 +231,8 @@ export function PromptComposer({
           onToggleMarkdownPreview={() => setMarkdownPreview((v) => !v)}
           showDetails={showDetails}
           onToggleShowDetails={onToggleShowDetails}
+          canEndSession={!ended}
+          onEndSession={() => void onEndSession()}
         />
         {contextTokens !== undefined && (
           <span className="text-xs text-text-faint font-mono">
@@ -240,15 +245,15 @@ export function PromptComposer({
           </span>
         )}
         {canInterrupt && (
-          <button
-            type="button"
+          <ActionButton
+            variant="danger"
             onClick={() => void interrupt()}
             disabled={interrupting}
             title="Interrupt the running turn (Ctrl+C)"
-            className="ml-auto px-3 py-1.5 text-xs rounded bg-danger-strong text-white hover:bg-danger-strong disabled:opacity-40 disabled:cursor-not-allowed"
+            className="ml-auto px-3 py-1.5 text-xs"
           >
             {interrupting ? "Stopping…" : "Stop"}
-          </button>
+          </ActionButton>
         )}
         <button
           ref={deskButtonRef}

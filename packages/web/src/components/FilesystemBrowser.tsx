@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react";
+import { ArrowUpIcon } from "@phosphor-icons/react/dist/csr/ArrowUp";
+import { FolderIcon } from "@phosphor-icons/react/dist/csr/Folder";
+import { FileIcon } from "@phosphor-icons/react/dist/csr/File";
 import { api } from "../api.ts";
 import type { BrowseDirResponse, FileReadResponse } from "@clobber/shared";
 import { Portal } from "./Portal.tsx";
 import { FileViewer } from "./FileViewer.tsx";
+import { ActionButton } from "./ActionButton.tsx";
 import { computePanelPosition } from "./panel-position.ts";
 
 interface DirModeProps {
@@ -134,10 +138,10 @@ export function FilesystemBrowser(props: Props) {
             type="button"
             onClick={() => data?.parent !== null && data?.parent !== undefined && void loadDir(data.parent)}
             disabled={data === null || data.parent === null || loading || atFileRoot}
-            className="px-2 py-1 rounded text-xs text-text-soft hover:text-text disabled:text-text-faint border border-border hover:border-border-strong disabled:border-surface"
+            className="px-2 py-1 rounded text-text-soft hover:text-text disabled:text-text-faint border border-border hover:border-border-strong disabled:border-surface flex items-center"
             title="Up one level"
           >
-            ↑
+            <ArrowUpIcon size={13} weight="bold" />
           </button>
           <div
             className="flex-1 px-2 py-1 text-xs font-mono text-text-soft bg-surface border border-border rounded truncate"
@@ -169,9 +173,9 @@ export function FilesystemBrowser(props: Props) {
                     key={entry.name}
                     type="button"
                     onClick={() => void loadDir(child)}
-                    className="w-full text-left px-2 py-1 text-xs font-mono text-text-dim hover:bg-elevated"
+                    className="w-full text-left px-2 py-1 text-xs font-mono text-text-dim hover:bg-elevated flex items-center gap-1.5"
                   >
-                    📁 {entry.name}
+                    <FolderIcon size={13} weight="fill" className="shrink-0 text-text-subtle" /> {entry.name}
                   </button>
                 );
               }
@@ -181,9 +185,9 @@ export function FilesystemBrowser(props: Props) {
                     key={entry.name}
                     type="button"
                     onClick={() => void openFile(child)}
-                    className="w-full text-left px-2 py-1 text-xs font-mono text-text-dim hover:bg-elevated"
+                    className="w-full text-left px-2 py-1 text-xs font-mono text-text-dim hover:bg-elevated flex items-center gap-1.5"
                   >
-                    📄 {entry.name}
+                    <FileIcon size={13} className="shrink-0 text-text-subtle" /> {entry.name}
                   </button>
                 );
               }
@@ -200,14 +204,14 @@ export function FilesystemBrowser(props: Props) {
             cancel
           </button>
           {props.mode === "dir" && (
-            <button
-              type="button"
+            <ActionButton
+              variant="accent"
               onClick={() => data !== null && props.onSelect(data.path)}
               disabled={data === null}
-              className="px-2 py-1 rounded bg-accent-strong hover:bg-accent disabled:bg-elevated disabled:text-text-subtle text-xs"
+              className="px-2 py-1 text-xs"
             >
               select this folder
-            </button>
+            </ActionButton>
           )}
         </div>
       </div>

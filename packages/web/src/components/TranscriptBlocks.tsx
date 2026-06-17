@@ -7,6 +7,7 @@ import {
   type ContentBlock,
   type ToolStatus,
 } from "../transcript-types.ts";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { Markdown } from "./Markdown.tsx";
 import { BoundedRaw } from "./BoundedRaw.tsx";
 
@@ -224,8 +225,8 @@ function ToolStatusMark({ status }: { status: ToolStatus }) {
   }
   if (status === "ok") {
     return (
-      <span data-status={status} aria-label={status} className={`${base} text-tool text-[10px] leading-none`}>
-        ✓
+      <span data-status={status} aria-label={status} className={`${base} text-tool`}>
+        <CheckIcon size={11} weight="bold" />
       </span>
     );
   }

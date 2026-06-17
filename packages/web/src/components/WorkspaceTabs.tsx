@@ -1,4 +1,5 @@
 import { useState, type MouseEvent } from "react";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { slugify, type Workspace } from "@clobber/shared";
 import { buildPath } from "../router.ts";
 import { Tabs } from "../layout/Tabs.tsx";
@@ -66,9 +67,9 @@ export function WorkspaceTabs({
           setMenuOpen((open) => !open);
           setCreating(false);
         }}
-        className="px-2 py-1 rounded text-sm text-text-muted hover:text-text-dim border border-border hover:border-border-strong"
+        className="px-2 py-1 rounded text-text-muted hover:text-text-dim border border-border hover:border-border-strong flex items-center"
       >
-        +
+        <PlusIcon size={16} weight="bold" />
       </button>
 
       {menuOpen && (

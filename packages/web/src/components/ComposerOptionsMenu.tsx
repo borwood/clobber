@@ -1,10 +1,13 @@
 import { useState } from "react";
+import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 
 interface Props {
   readonly markdownPreview: boolean;
   readonly onToggleMarkdownPreview: () => void;
   readonly showDetails: boolean;
   readonly onToggleShowDetails: () => void;
+  readonly canEndSession: boolean;
+  readonly onEndSession: () => void;
 }
 
 // The 3-dot composer-options popover. Self-contained: owns its open/closed
@@ -14,6 +17,8 @@ export function ComposerOptionsMenu({
   onToggleMarkdownPreview,
   showDetails,
   onToggleShowDetails,
+  canEndSession,
+  onEndSession,
 }: Props) {
   const [open, setOpen] = useState(false);
   return (
@@ -22,9 +27,9 @@ export function ComposerOptionsMenu({
         type="button"
         onClick={() => setOpen((o) => !o)}
         title="Composer options"
-        className="px-2 py-1.5 text-xs rounded border border-border text-text-soft hover:text-text hover:border-border-strong"
+        className="px-2 py-1.5 rounded border border-border text-text-soft hover:text-text hover:border-border-strong flex items-center"
       >
-        ⋯
+        <DotsThreeIcon size={16} weight="bold" />
       </button>
       {open && (
         <>
@@ -32,6 +37,18 @@ export function ComposerOptionsMenu({
           <div className="absolute bottom-full left-0 mb-1 z-20 w-52 rounded border border-border bg-surface p-1 shadow-lg">
             <ToggleRow label="Markdown preview" on={markdownPreview} onToggle={onToggleMarkdownPreview} />
             <ToggleRow label="Show details" on={showDetails} onToggle={onToggleShowDetails} />
+            {canEndSession && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  onEndSession();
+                }}
+                className="mt-1 flex w-full items-center rounded border-t border-border px-2 pt-2 pb-1.5 text-xs text-danger-text hover:bg-elevated"
+              >
+                End session
+              </button>
+            )}
           </div>
         </>
       )}

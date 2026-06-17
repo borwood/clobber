@@ -17,13 +17,19 @@ export const FileSizePolicyOffSchema = z.object({
 
 export const FileSizePolicyOnSchema = z.object({
   kind: z.literal("on"),
-  max_lines: z.number().int().positive(),
+  max_lines: z
+    .number()
+    .int()
+    .positive()
+    .meta({ title: "Max lines", description: "Line ceiling before the advisory reminder fires." }),
 });
 
-export const FileSizePolicySchema = z.discriminatedUnion("kind", [
-  FileSizePolicyOffSchema,
-  FileSizePolicyOnSchema,
-]);
+export const FileSizePolicySchema = z
+  .discriminatedUnion("kind", [FileSizePolicyOffSchema, FileSizePolicyOnSchema])
+  .meta({
+    title: "File-size policy",
+    description: "Advisory reminder when an Edit/Write pushes a code file past the line ceiling. The write always succeeds.",
+  });
 export type FileSizePolicy = z.infer<typeof FileSizePolicySchema>;
 
 export const DEFAULT_FILE_SIZE_POLICY: FileSizePolicy = {

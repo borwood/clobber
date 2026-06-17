@@ -3,10 +3,38 @@ import {
   DEFAULT_WORKSPACE_THEME,
   BUILT_IN_MODES,
   PFP_SIZE_PX,
+  type Accent,
   type BuiltInMode,
   type PfpSize,
   type WorkspaceTheme,
 } from "@clobber/shared";
+
+// The built-in accent ramp's (lightness, chroma) ladder, lifted from the
+// emerald block in index.css. A custom accent reuses this ladder but takes its
+// HUE from the picked color: `oklch(from <picked> L C h)` keeps the proven
+// per-step lightness/chroma while re-hueing the whole ramp. accent-fg (the
+// text-on-accent token) stays mode-level — a refinement could derive it too.
+const ACCENT_RAMP: readonly (readonly [string, number, number])[] = [
+  ["accent", 0.596, 0.145],
+  ["accent-strong", 0.508, 0.118],
+  ["accent-hover", 0.696, 0.17],
+  ["accent-text", 0.765, 0.177],
+  ["accent-muted", 0.378, 0.077],
+  ["accent-deep", 0.262, 0.051],
+];
+
+export function customAccentProps(color: string): Record<string, string> {
+  return Object.fromEntries(
+    ACCENT_RAMP.map(([token, l, c]) => [token, `oklch(from ${color} ${l} ${c} h)`]),
+  );
+}
+
+// A built-in accent paints via the [data-accent] attribute (its ramp lives in
+// index.css); a custom accent paints "custom" + injects the derived ramp inline.
+function accentToDom(accent: Accent): { readonly attr: string; readonly tokens: Record<string, string> } {
+  if (typeof accent === "string") return { attr: accent, tokens: {} };
+  return { attr: "custom", tokens: customAccentProps(accent.color) };
+}
 
 // The active workspace's theme drives `<html data-theme data-accent>`, which the
 // per-mode / per-accent token blocks in index.css key off. A custom theme (#370)
@@ -29,7 +57,7 @@ function isBuiltInMode(mode: string): mode is BuiltInMode {
 
 interface ResolvedTheme {
   readonly mode: BuiltInMode;
-  readonly accent: string;
+  readonly accentAttr: string;
   readonly pfpSize: PfpSize;
   readonly tokens: Readonly<Record<string, string>>;
 }
@@ -37,24 +65,28 @@ interface ResolvedTheme {
 // Built-in mode → itself, no token overrides. Custom id → its base mode (inherit
 // the base's surfaces + contrast), its pinned accent or the workspace accent, and
 // its sparse token map. A dangling custom id THROWS — no silent fallback
-// (Engineering Rule 3 / the simplest-fallback trap).
+// (Engineering Rule 3 / the simplest-fallback trap). A custom accent contributes
+// its derived ramp to tokens; an explicit custom-theme token override still wins
+// (spread last).
 function resolveTheme(theme: WorkspaceTheme): ResolvedTheme {
   if (isBuiltInMode(theme.mode)) {
-    return { mode: theme.mode, accent: theme.accent, pfpSize: theme.pfpSize, tokens: {} };
+    const a = accentToDom(theme.accent);
+    return { mode: theme.mode, accentAttr: a.attr, pfpSize: theme.pfpSize, tokens: a.tokens };
   }
   const custom = theme.custom.find((c) => c.id === theme.mode);
   if (custom === undefined) {
     throw new Error(`custom theme not found: ${theme.mode}`);
   }
   const accent = custom.accent === undefined ? theme.accent : custom.accent;
-  return { mode: custom.base, accent, pfpSize: theme.pfpSize, tokens: custom.tokens };
+  const a = accentToDom(accent);
+  return { mode: custom.base, accentAttr: a.attr, pfpSize: theme.pfpSize, tokens: { ...a.tokens, ...custom.tokens } };
 }
 
 function paint(theme: WorkspaceTheme): void {
   const root = document.documentElement;
   const resolved = resolveTheme(theme);
   root.dataset.theme = resolved.mode;
-  root.dataset.accent = resolved.accent;
+  root.dataset.accent = resolved.accentAttr;
   root.style.setProperty("--pfp-size", `${PFP_SIZE_PX[resolved.pfpSize]}px`);
 
   for (const prop of appliedCustomProps) root.style.removeProperty(prop);
@@ -90,13 +122,18 @@ export function applyLandingTheme(): void {
 }
 
 // Pre-React boot: repaint from the cached active-workspace theme before the first
-// paint. Absent cache → dark default. A tampered cache throws (Engineering Rule 3
-// — no silent fallback); the DB value reconciles it on the next render regardless.
+// paint. The cache is a DISPOSABLE flash-guard, not authoritative state — so a
+// value written under a prior theme shape (the schema evolves, e.g. accent
+// widening to allow custom colors) must NOT brick boot. Absent OR schema-
+// incompatible → default; the DB-driven render reconciles and rewrites the cache
+// within the first frame. safeParse (not parse) because the DB, never this cache,
+// is the source of truth — this is forward-compat, not silent error-swallowing.
 export function bootstrapTheme(): void {
   const raw = localStorage.getItem(STORAGE_KEY);
-  const theme =
-    raw === null
-      ? DEFAULT_WORKSPACE_THEME
-      : WorkspaceThemeSchema.parse(JSON.parse(raw));
-  paint(theme);
+  if (raw === null) {
+    paint(DEFAULT_WORKSPACE_THEME);
+    return;
+  }
+  const parsed = WorkspaceThemeSchema.safeParse(JSON.parse(raw));
+  paint(parsed.success ? parsed.data : DEFAULT_WORKSPACE_THEME);
 }

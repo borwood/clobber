@@ -9,13 +9,22 @@ import { RoleSkillSchema } from "./role.ts";
 //
 // `allowed_skills` is forward-compat: glob or prefix matching is a
 // plausible follow-up. v1 is exact match by name.
-export const ManagerSkillPolicySchema = z.object({
-  allow_self_grant: z.boolean(),
-  allowed_skills: z.array(z.string().min(1)).refine(
-    (s) => new Set(s).size === s.length,
-    { message: "allowed_skills must not contain duplicates" },
-  ),
-});
+export const ManagerSkillPolicySchema = z
+  .object({
+    allow_self_grant: z
+      .boolean()
+      .meta({ title: "Allow self-grant", description: "May the manager grant skills to its own role?" }),
+    allowed_skills: z
+      .array(z.string().min(1))
+      .refine((s) => new Set(s).size === s.length, {
+        message: "allowed_skills must not contain duplicates",
+      })
+      .meta({ title: "Allowed skills", description: "Skills the manager may pull from the workspace catalog." }),
+  })
+  .meta({
+    title: "Manager skill policy",
+    description: "Governs whether the manager may grant itself skills, and which ones.",
+  });
 export type ManagerSkillPolicy = z.infer<typeof ManagerSkillPolicySchema>;
 
 export const DEFAULT_MANAGER_SKILL_POLICY: ManagerSkillPolicy = {

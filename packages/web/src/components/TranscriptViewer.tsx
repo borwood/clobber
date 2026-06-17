@@ -1,5 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState, type UIEvent } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { ArrowDownIcon } from "@phosphor-icons/react/dist/csr/ArrowDown";
 import type { SessionSummary, TranscriptLine } from "../api.ts";
 import { classifyLine, buildToolResultIndex, type Classified } from "../transcript-types.ts";
 import { deriveWorkingState } from "../working-state.ts";
@@ -120,9 +121,9 @@ export function TranscriptViewer({ lines, showSystem, busy, session }: Props) {
           <button
             type="button"
             onClick={jumpToLatest}
-            className="absolute bottom-3 right-4 px-3 py-1.5 text-xs rounded-full bg-elevated text-text border border-border-strong shadow-lg hover:bg-raised"
+            className="absolute bottom-3 right-4 px-3 py-1.5 text-xs rounded-full bg-elevated text-text border border-border-strong shadow-lg hover:bg-raised flex items-center gap-1.5"
           >
-            ↓ jump to latest
+            <ArrowDownIcon size={12} weight="bold" /> jump to latest
           </button>
         )}
       </div>

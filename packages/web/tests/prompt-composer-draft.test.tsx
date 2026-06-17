@@ -46,6 +46,7 @@ function makeComposer(sessionId: string, onSend: (p: string) => Promise<void>) {
     onSend,
     onResume: noop,
     onInterrupt: noop,
+    onEndSession: noop,
   });
 }
 

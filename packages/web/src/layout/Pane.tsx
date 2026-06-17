@@ -1,4 +1,6 @@
 import React, { useRef, useState } from "react";
+import { ColumnsPlusRightIcon } from "@phosphor-icons/react/dist/csr/ColumnsPlusRight";
+import { RowsPlusBottomIcon } from "@phosphor-icons/react/dist/csr/RowsPlusBottom";
 import type { PaneNode } from "./types.ts";
 import { Tabs } from "./Tabs.tsx";
 import { ViewHost, tabLabel } from "./ViewHost.tsx";
@@ -120,7 +122,7 @@ export function Pane(props: { readonly node: PaneNode }) {
                   })
                 }
               >
-                <span aria-hidden="true" className="inline-block w-3 h-3 border border-current border-l-2" />
+                <ColumnsPlusRightIcon size={15} />
               </SplitButton>
               <SplitButton
                 label="Split down"
@@ -133,7 +135,7 @@ export function Pane(props: { readonly node: PaneNode }) {
                   })
                 }
               >
-                <span aria-hidden="true" className="inline-block w-3 h-3 border border-current border-t-2" />
+                <RowsPlusBottomIcon size={15} />
               </SplitButton>
             </>
           }

@@ -17,21 +17,26 @@ export const FinalReportCallbackNoopSchema = z.object({
 
 export const FinalReportCallbackExecSchema = z.object({
   kind: z.literal("exec"),
-  command: z.string().min(1),
-  args: z.array(z.string()).optional(),
+  command: z.string().min(1).meta({ title: "Command", description: "Executable run with the report JSON on stdin." }),
+  args: z.array(z.string()).meta({ title: "Arguments" }).optional(),
 });
 
 export const FinalReportCallbackHttpSchema = z.object({
   kind: z.literal("http"),
-  url: z.string().url(),
-  headers: z.record(z.string(), z.string()).optional(),
+  url: z.string().url().meta({ title: "URL", description: "Endpoint the report JSON is POSTed to." }),
+  headers: z.record(z.string(), z.string()).meta({ title: "Headers" }).optional(),
 });
 
-export const FinalReportCallbackSchema = z.discriminatedUnion("kind", [
-  FinalReportCallbackNoopSchema,
-  FinalReportCallbackExecSchema,
-  FinalReportCallbackHttpSchema,
-]);
+export const FinalReportCallbackSchema = z
+  .discriminatedUnion("kind", [
+    FinalReportCallbackNoopSchema,
+    FinalReportCallbackExecSchema,
+    FinalReportCallbackHttpSchema,
+  ])
+  .meta({
+    title: "Final-report callback",
+    description: "What runs when an agent files its final report — nothing, a shell command, or an HTTP POST.",
+  });
 export type FinalReportCallback = z.infer<typeof FinalReportCallbackSchema>;
 
 export const DEFAULT_FINAL_REPORT_CALLBACK: FinalReportCallback = {
