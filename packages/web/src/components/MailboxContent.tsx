@@ -77,6 +77,9 @@ export function MailboxContent(props: MailboxContentProps) {
             onInterrupt={async () => {
               await api.interruptSession(selectedSession);
             }}
+            onEndSession={async () => {
+              await api.endSession(selectedSession);
+            }}
           />
         </>
       )}

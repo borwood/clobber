@@ -2,6 +2,7 @@ import { useState, type MouseEvent } from "react";
 import type { DeskCard, OfficeCard, SessionView } from "../api.ts";
 import { relativeTime } from "./relative-time.ts";
 import { ActivityDot } from "./ActivityDot.tsx";
+import { ActionButton } from "./ActionButton.tsx";
 import {
   STATUS_VISUAL,
   STATUS_ASLEEP,
@@ -120,14 +121,14 @@ function OfficeWakeControl(props: OfficeWakeControlProps) {
           </option>
         ))}
       </select>
-      <button
-        type="button"
+      <ActionButton
+        variant="info"
         disabled={isWaking}
         onClick={() => onWake(office.agent_id, selected)}
-        className="rounded bg-info-strong hover:bg-info disabled:opacity-50 disabled:cursor-not-allowed px-3 py-1 text-xs font-medium text-white transition-colors"
+        className="px-3 py-1 text-xs font-medium transition-colors"
       >
         {isWaking ? "waking…" : "Wake"}
-      </button>
+      </ActionButton>
     </div>
   );
 }

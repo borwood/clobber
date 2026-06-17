@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
 import type { FileReadResponse } from "@clobber/shared";
 import { Markdown } from "./Markdown.tsx";
 
@@ -48,9 +49,9 @@ export function FileViewer({ file, onBack, onClose }: Props) {
         <button
           type="button"
           onClick={onBack}
-          className="px-2 py-1 rounded text-xs text-text-soft hover:text-text border border-border hover:border-border-strong"
+          className="px-2 py-1 rounded text-xs text-text-soft hover:text-text border border-border hover:border-border-strong flex items-center gap-1.5"
         >
-          ← back
+          <ArrowLeftIcon size={12} weight="bold" /> back
         </button>
         <div
           className="flex-1 px-2 py-1 text-xs font-mono text-text-soft bg-surface border border-border rounded truncate"

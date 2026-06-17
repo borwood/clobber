@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { encodePanelAnswer, type PanelAnswerPart } from "@clobber/shared";
 import type { OpenQuestion } from "../api.ts";
 import { QuestionPanel } from "./QuestionPanel.tsx";
 import { Tabs } from "../layout/Tabs.tsx";
+import { ActionButton } from "./ActionButton.tsx";
 
 interface Props {
   readonly question: OpenQuestion;
@@ -100,8 +102,8 @@ export function AskWidget({ question, onAnswer }: Props) {
             label: (
               <span className="inline-flex items-center gap-1.5">
                 {q.header === undefined ? `Q${i + 1}` : q.header}
-                <span className={answered(i) ? "text-working" : "text-provenance-text/40"}>
-                  {answered(i) ? "✓" : "•"}
+                <span className={answered(i) ? "text-provenance-text inline-flex" : "text-provenance-text/40"}>
+                  {answered(i) ? <CheckIcon size={12} weight="bold" /> : "•"}
                 </span>
               </span>
             ),
@@ -121,14 +123,14 @@ export function AskWidget({ question, onAnswer }: Props) {
           />
         ),
       )}
-      <button
-        type="button"
+      <ActionButton
+        variant="provenance"
         disabled={submitting || !allAnswered}
         onClick={() => void submit()}
-        className="px-2.5 py-1 text-xs rounded bg-provenance-strong text-provenance-fg hover:bg-provenance disabled:opacity-40 disabled:cursor-not-allowed"
+        className="px-2.5 py-1 text-xs"
       >
         {submitting ? "Sending…" : label}
-      </button>
+      </ActionButton>
       {error !== null && (
         <p className="text-xs text-danger-text truncate" title={error}>
           {error}

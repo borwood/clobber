@@ -56,6 +56,7 @@ function makeComposer(
     onSend,
     onResume,
     onInterrupt: noop,
+    onEndSession: noop,
   });
 }
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { SquaresFourIcon } from "@phosphor-icons/react/dist/csr/SquaresFour";
 import { useLayout } from "./provider.tsx";
 import { defaultLayout } from "./default-layout.ts";
 import {
@@ -100,9 +101,9 @@ export function LayoutMenu() {
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="px-2 py-1 rounded text-text-muted hover:text-text-dim border border-border hover:border-border-strong text-sm leading-none focus-visible:outline focus-visible:outline-1 focus-visible:outline-text-subtle"
+        className="px-2 py-1 rounded text-text-muted hover:text-text-dim border border-border hover:border-border-strong flex items-center focus-visible:outline focus-visible:outline-1 focus-visible:outline-text-subtle"
       >
-        ▦
+        <SquaresFourIcon size={16} weight="bold" />
       </button>
       {open && (
         <div

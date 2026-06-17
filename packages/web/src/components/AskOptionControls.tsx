@@ -1,3 +1,7 @@
+import { CheckSquareIcon } from "@phosphor-icons/react/dist/csr/CheckSquare";
+import { SquareIcon } from "@phosphor-icons/react/dist/csr/Square";
+import { RadioButtonIcon } from "@phosphor-icons/react/dist/csr/RadioButton";
+import { CircleIcon } from "@phosphor-icons/react/dist/csr/Circle";
 import type { AskOption } from "../api.ts";
 
 /**
@@ -35,8 +39,16 @@ export function OptionRow({
         " disabled:opacity-40 disabled:cursor-not-allowed"
       }
     >
-      <div className="flex items-baseline gap-2">
-        <span className="shrink-0">{multi ? (selected ? "☑" : "☐") : selected ? "◉" : "○"}</span>
+      <div className="flex items-center gap-2">
+        <span className="shrink-0">
+          {multi
+            ? selected
+              ? <CheckSquareIcon size={14} weight="bold" />
+              : <SquareIcon size={14} />
+            : selected
+              ? <RadioButtonIcon size={14} weight="bold" />
+              : <CircleIcon size={14} />}
+        </span>
         <span className="font-medium">{option.label}</span>
       </div>
       {option.description !== undefined && (

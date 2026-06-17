@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
+import { ActionButton } from "./ActionButton.tsx";
 import type { OpenQuestion, SessionSummary } from "../api.ts";
 import { pickTone, statusDot } from "./state-tones.ts";
 import { ActivityDot } from "./ActivityDot.tsx";
@@ -145,7 +148,7 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume, o
                 }}
                 className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded text-text-subtle hover:text-info-text hover:bg-elevated transition-colors disabled:opacity-50"
               >
-                ↻
+                <ArrowClockwiseIcon size={14} weight="bold" />
               </button>
             )}
 
@@ -161,7 +164,7 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume, o
                 }}
                 className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded text-text-subtle hover:text-danger-text hover:bg-elevated transition-colors disabled:opacity-50"
               >
-                ✕
+                <XIcon size={14} weight="bold" />
               </button>
             )}
 
@@ -178,8 +181,8 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume, o
                 >
                   Cancel
                 </button>
-                <button
-                  type="button"
+                <ActionButton
+                  variant="danger"
                   onClick={async () => {
                     setEndingId(s.session_id);
                     setConfirmingId(null);
@@ -189,10 +192,10 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume, o
                       setEndingId(null);
                     }
                   }}
-                  className="px-2 py-1 text-xs rounded bg-danger-strong text-white hover:bg-danger-strong"
+                  className="px-2 py-1 text-xs"
                 >
                   End
-                </button>
+                </ActionButton>
               </div>
             )}
           </li>

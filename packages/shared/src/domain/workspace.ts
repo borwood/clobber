@@ -19,6 +19,11 @@ export const SettingSourcesSchema = z
   .array(SettingSourceSchema)
   .refine((s) => new Set(s).size === s.length, {
     message: "setting_sources must not contain duplicates",
+  })
+  .meta({
+    title: "Claude setting sources",
+    description:
+      "Which Claude config layers spawned sessions load. user (~/.claude) is always on; project is the repo's .claude, local its .claude.local.",
   });
 
 export const DEFAULT_SETTING_SOURCES: readonly SettingSource[] = [
@@ -32,12 +37,19 @@ export const DEFAULT_ROLE_EDIT_FORBIDDEN_KEYS: readonly string[] = [
   "permission_mode",
 ];
 
-export const RoleEditPolicySchema = z.object({
-  forbidden_keys: z.array(z.string().min(1)).refine(
-    (s) => new Set(s).size === s.length,
-    { message: "forbidden_keys must not contain duplicates" },
-  ),
-});
+export const RoleEditPolicySchema = z
+  .object({
+    forbidden_keys: z
+      .array(z.string().min(1))
+      .refine((s) => new Set(s).size === s.length, {
+        message: "forbidden_keys must not contain duplicates",
+      })
+      .meta({ title: "Forbidden keys" }),
+  })
+  .meta({
+    title: "Role edit policy",
+    description: "Role manifest keys agents may never change when editing a role (e.g. hooks, permission_mode).",
+  });
 export type RoleEditPolicy = z.infer<typeof RoleEditPolicySchema>;
 
 // Per-role-instance trigger disable list. The id of a trigger comes from
@@ -62,10 +74,13 @@ export const TriggerOverrideSchema = z.object({
 });
 export type TriggerOverride = z.infer<typeof TriggerOverrideSchema>;
 
-export const TriggerOverridesSchema = z.record(
-  z.string().uuid(),
-  TriggerOverrideSchema,
-);
+export const TriggerOverridesSchema = z
+  .record(z.string().uuid(), TriggerOverrideSchema)
+  .meta({
+    title: "Trigger overrides",
+    description:
+      "Per-role-instance trigger disables and wake-program overrides, keyed by agent id. Edited as raw JSON for now.",
+  });
 export type TriggerOverrides = z.infer<typeof TriggerOverridesSchema>;
 
 export const DEFAULT_TRIGGER_OVERRIDES: TriggerOverrides = {};

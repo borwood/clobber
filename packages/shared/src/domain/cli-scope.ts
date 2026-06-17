@@ -15,10 +15,15 @@ export interface CliScope {
 
 // Zod shape for storage and route validation. Token semantics (unknown verbs,
 // deny prefix) are validated at runtime by isActionAllowed/expandDenyToken (Rule 3).
-export const CliScopeSchema = z.object({
-  allow: z.array(z.string()),
-  deny: z.array(z.string()),
-});
+export const CliScopeSchema = z
+  .object({
+    allow: z.array(z.string()).meta({ title: "Allow", description: "Tokens granting capabilities: *, tag:<read|write|admin>, verb.*, or exact verbs." }),
+    deny: z.array(z.string()).meta({ title: "Deny", description: "Deny tokens, each prefixed with '!' (e.g. !spawn)." }),
+  })
+  .meta({
+    title: "CLI permissions",
+    description: "Workspace-level allow/deny scope for agent CLI capabilities.",
+  });
 
 // Permissive default — grants every capability, denies nothing.
 // Used as the column DEFAULT so pre-existing workspace rows are unaffected.
