@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+// Synthetic "This PC" path: a platform-neutral sentinel the dir picker browses
+// to enumerate mounted drive roots (Windows C:\, B:\, …). On POSIX there is a
+// single root (/) so this level is never surfaced; on Windows it sits one step
+// above any drive root so ↑ can hop between volumes.
+export const DRIVES_ROOT = "::drives::";
+
 export const DirEntrySchema = z.object({
   name: z.string(),
   isDir: z.boolean(),

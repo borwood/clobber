@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Fastify from "fastify";
 import { registerFsRoutes } from "../src/routes/fs.ts";
-import type { BrowseDirResponse, FileReadResponse } from "@clobber/shared";
+import { DRIVES_ROOT, type BrowseDirResponse, type FileReadResponse } from "@clobber/shared";
 
 let app: ReturnType<typeof Fastify>;
 let scratch: string;
@@ -121,6 +121,49 @@ describe("GET /fs/browse", () => {
     });
     expect(res.statusCode).toBe(400);
     expect((res.json() as { error: string }).error).toMatch(/directory/);
+  });
+
+  it("lists mounted drive roots at the synthetic drives root on Windows", async () => {
+    const winApp = Fastify({ logger: false });
+    registerFsRoutes(winApp, { platform: "win32", listDrives: () => ["C:\\", "B:\\"] });
+    await winApp.ready();
+
+    const res = await winApp.inject({
+      method: "GET",
+      url: `/fs/browse?path=${encodeURIComponent(DRIVES_ROOT)}`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as BrowseDirResponse;
+    expect(body.path).toBe(DRIVES_ROOT);
+    expect(body.parent).toBeNull();
+    expect(body.entries.map((e) => e.name)).toEqual(["B:\\", "C:\\"]);
+    expect(body.entries.every((e) => e.isDir)).toBe(true);
+
+    await winApp.close();
+  });
+
+  it("makes a Windows drive root's parent the drives sentinel so ↑ reaches other volumes", async () => {
+    const winApp = Fastify({ logger: false });
+    // A directory that is its own win32 dirname stands in for a drive root —
+    // the os-level fact the route keys on is dirname(x) === x.
+    const driveRootScratch = mkdtempSync(join(tmpdir(), "clobber-fs-driveroot-"));
+    registerFsRoutes(winApp, {
+      platform: "win32",
+      listDrives: () => ["C:\\"],
+      isRoot: (p) => p === driveRootScratch,
+    });
+    await winApp.ready();
+
+    const res = await winApp.inject({
+      method: "GET",
+      url: `/fs/browse?path=${encodeURIComponent(driveRootScratch)}`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as BrowseDirResponse;
+    expect(body.parent).toBe(DRIVES_ROOT);
+
+    await winApp.close();
+    rmSync(driveRootScratch, { recursive: true, force: true });
   });
 
   it("includeFiles=true returns files alongside dirs with correct isDir flag", async () => {
