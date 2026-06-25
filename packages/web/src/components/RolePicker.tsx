@@ -6,9 +6,12 @@ interface Props {
   readonly assignments: readonly WorkspaceRoleAssignment[];
   readonly selectedRoleId: string | null;
   readonly onSelect: (roleId: string) => void;
+  // When provided, each role row gets an inline "edit" affordance that opens the
+  // git-backed role authoring editor (#680). Absent for read-only pickers.
+  readonly onEdit?: (roleId: string) => void;
 }
 
-export function RolePicker({ assignments, selectedRoleId, onSelect }: Props) {
+export function RolePicker({ assignments, selectedRoleId, onSelect, onEdit }: Props) {
   const [query, setQuery] = useState("");
   const visible = filterRoleAssignments(assignments, query);
   const totalSpawnable = assignments.filter((a) => a.max_concurrent > 0).length;
@@ -39,7 +42,17 @@ export function RolePicker({ assignments, selectedRoleId, onSelect }: Props) {
           {visible.map(({ role, max_concurrent }) => {
             const isSelected = role.id === selectedRoleId;
             return (
-              <li key={role.id}>
+              <li key={role.id} className="relative group">
+                {onEdit !== undefined && (
+                  <button
+                    type="button"
+                    onClick={() => onEdit(role.id)}
+                    title={`edit ${role.name}`}
+                    className="absolute top-1.5 right-2 z-10 px-1.5 py-0.5 rounded text-[11px] text-text-faint hover:text-text-dim hover:bg-elevated opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                  >
+                    edit
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => onSelect(role.id)}
@@ -63,7 +76,7 @@ export function RolePicker({ assignments, selectedRoleId, onSelect }: Props) {
                         </span>
                       )}
                     </div>
-                    <span className="text-xs text-text-subtle font-mono">
+                    <span className="text-xs text-text-subtle font-mono mr-8">
                       ceiling {max_concurrent}
                     </span>
                   </div>

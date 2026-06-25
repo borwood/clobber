@@ -5,6 +5,8 @@ import type {
   WorkspaceRoleAssignment,
   LatestAgentStatus,
   RoleVersionRef,
+  RoleDetailResponse,
+  RoleEditRequest,
   BrowseDirResponse,
   FileReadResponse,
   SessionLocationsResponse,
@@ -23,6 +25,8 @@ export type {
   LatestAgentStatus,
   AgentState,
   RoleVersionRef,
+  RoleDetailResponse,
+  RoleEditRequest,
   SettingSource,
   AskOption,
   AskQuestion,
@@ -167,6 +171,15 @@ export const api = {
   listWorkspaces: () => getJson<Workspace[]>("/workspaces"),
   liveWorkspaceIds: () => getJson<string[]>("/sessions/live-workspaces"),
   createWorkspace: (req: CreateWorkspaceRequest) => postJson<Workspace>("/workspaces", req),
+  getWorkspaceRoleDetail: (workspaceId: string, roleId: string) =>
+    getJson<RoleDetailResponse>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/roles/${encodeURIComponent(roleId)}`,
+    ),
+  editWorkspaceRole: (workspaceId: string, roleId: string, body: RoleEditRequest) =>
+    patchJson<unknown>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/roles/${encodeURIComponent(roleId)}`,
+      body,
+    ),
   listWorkspaceRoles: (workspaceId: string) =>
     getJson<WorkspaceRoleAssignment[]>(
       `/workspaces/${encodeURIComponent(workspaceId)}/roles`,

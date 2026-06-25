@@ -287,3 +287,78 @@ export const RoleDetailResponseSchema = z.object({
   version_history: z.array(RoleVersionHistoryEntrySchema),
 });
 export type RoleDetailResponse = z.infer<typeof RoleDetailResponseSchema>;
+
+// #680 — single typed source for a role-content edit (GR6). Every patch path
+// binds to this one schema: the agent-scoped PATCH /agent/roles/:id, the
+// operator PATCH /workspaces/:wid/roles/:rid, and the web role editor (which
+// renders its form by introspecting this schema's shape + `.meta()` labels).
+// `description` is metadata-only (lives in the roles row, no pin advance); the
+// rest are git-tree fields that advance the commit pin when present.
+export const RoleEditRequestSchema = z
+  .object({
+    description: z
+      .string()
+      .min(1)
+      .optional()
+      .meta({
+        title: "Description",
+        description: "One-line summary shown in the role list. Metadata only — no version bump.",
+      }),
+    system_prompt: z
+      .string()
+      .min(1)
+      .optional()
+      .meta({
+        title: "System prompt",
+        description: "The role's static instructions, composed into every session it spawns.",
+      }),
+    allowed_tools: z
+      .array(z.string().min(1))
+      .optional()
+      .meta({
+        title: "Allowed tools",
+        description: "Tool names sessions in this role may call.",
+      }),
+    prompt_module_refs: z
+      .array(PromptModuleRefSchema)
+      .optional()
+      .meta({
+        title: "Prompt modules",
+        description: "Ordered prompt-module references and their enabled state.",
+      }),
+    wake_programs: z
+      .array(WakeProgramSchema)
+      .optional()
+      .meta({
+        title: "Wake programs",
+        description: "Named opening moves the role can launch with.",
+      }),
+    triggers: z
+      .array(RoleTriggerSchema)
+      .optional()
+      .meta({
+        title: "Triggers",
+        description: "Wake conditions (persistent roles only).",
+      }),
+    skills: z
+      .array(RoleSkillSchema)
+      .optional()
+      .meta({
+        title: "Skills",
+        description: "Skill definitions bundled into the role.",
+      }),
+  })
+  .strict();
+export type RoleEditRequest = z.infer<typeof RoleEditRequestSchema>;
+
+// The subset of edit fields that live in the git tree and advance the commit
+// pin when present. `description` is the sole metadata-only field, so it's the
+// complement of this set.
+export const ROLE_EDIT_PIN_FIELDS = [
+  "system_prompt",
+  "allowed_tools",
+  "prompt_module_refs",
+  "wake_programs",
+  "triggers",
+  "skills",
+] as const satisfies ReadonlyArray<keyof RoleEditRequest>;

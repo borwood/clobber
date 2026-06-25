@@ -14,8 +14,10 @@ import type { WorkspaceRoleRepos } from "../workspace-role-repos.ts";
 import type { WorkspaceRoleStore } from "../workspace-role-store.ts";
 import type { TriggerScheduler } from "../trigger-scheduler.ts";
 import { patchRoleThroughPin, triggersRequirePersistent } from "../role-commit.ts";
+import { applyRoleEdit } from "../role-edit-apply.ts";
 import { resolveRoleByIdOrName } from "../resolve-role.ts";
 import { roleWakeProgramNames } from "../embody-role.ts";
+import { buildDetail } from "./_agent-roles-views.ts";
 
 interface WorkspaceRoleParams {
   wid: string;
@@ -107,6 +109,58 @@ export function registerWorkspaceRoleRoutes(
         workspaceId: wid,
         apply: (current) => ({ ...current, triggers: parsed.data.triggers }),
         message: `apply triggers to ${role.name}`,
+      });
+      reply.code(result.status);
+      return result.body;
+    },
+  );
+
+  // #680 — operator-level role detail + content edit. The web role editor has no
+  // session in the target workspace, so (like the ceiling PUT and triggers PUT
+  // above) these run without agent auth. The full body handling is shared with
+  // the agent-scoped PATCH /agent/roles/:id via `applyRoleEdit`.
+  app.get<{ Params: WorkspaceRoleParams }>(
+    "/workspaces/:wid/roles/:rid",
+    async (request, reply) => {
+      const { wid, rid } = request.params;
+      if (workspaces.get(wid) === null) {
+        reply.code(404);
+        return { error: "workspace not found" };
+      }
+      const role = resolveRoleByIdOrName(roles, rid, wid);
+      if (role === null || role.workspace_id !== wid) {
+        reply.code(404);
+        return { error: `role not found: ${rid}` };
+      }
+      const detail = buildDetail(role, deps);
+      if (detail === null) {
+        reply.code(500);
+        return { error: "role has no current version" };
+      }
+      return detail;
+    },
+  );
+
+  app.patch<{ Params: WorkspaceRoleParams }>(
+    "/workspaces/:wid/roles/:rid",
+    async (request, reply) => {
+      const { wid, rid } = request.params;
+      const workspace = workspaces.get(wid);
+      if (workspace === null) {
+        reply.code(404);
+        return { error: "workspace not found" };
+      }
+      const role = resolveRoleByIdOrName(roles, rid, wid);
+      if (role === null || role.workspace_id !== wid) {
+        reply.code(404);
+        return { error: `role not found: ${rid}` };
+      }
+      const result = applyRoleEdit(deps, {
+        rawBody: request.body,
+        role,
+        workspaceId: wid,
+        forbiddenKeys: workspace.role_edit_policy.forbidden_keys,
+        message: `edit ${role.name} via UI`,
       });
       reply.code(result.status);
       return result.body;
