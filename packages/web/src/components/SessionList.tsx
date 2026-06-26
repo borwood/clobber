@@ -5,6 +5,7 @@ import { ActionButton } from "./ActionButton.tsx";
 import type { OpenQuestion, SessionSummary } from "../api.ts";
 import { pickTone, statusDot } from "./state-tones.ts";
 import { ActivityDot } from "./ActivityDot.tsx";
+import { CwdLine } from "./CwdLine.tsx";
 import { useSessionCardMenu } from "./useSessionCardMenu.tsx";
 
 function openQuestionLabel(q: OpenQuestion): string {
@@ -108,6 +109,7 @@ export function SessionList({ sessions, selectedId, onSelect, onEnd, onResume, o
                   {s.latest_status.summary}
                 </div>
               )}
+              {s.cwd !== undefined && <CwdLine cwd={s.cwd} />}
               <div className="mt-1 flex items-center gap-2 text-xs text-text-subtle">
                 {wasLive && (
                   <span

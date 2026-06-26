@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { SessionSummary } from "../api.ts";
 import { statusDot } from "./state-tones.ts";
 import { AgentAvatar } from "./AgentAvatar.tsx";
+import { CwdLine } from "./CwdLine.tsx";
 
 interface Props {
   readonly session: SessionSummary;
@@ -49,6 +50,7 @@ export function SessionHeader({ session }: Props) {
               {status.summary}
             </div>
           )}
+          {session.cwd !== undefined && <CwdLine cwd={session.cwd} />}
         </div>
       </div>
     </div>

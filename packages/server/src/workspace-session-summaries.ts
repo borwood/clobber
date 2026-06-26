@@ -35,6 +35,10 @@ export interface SessionSummary {
   readonly model?: string;
   readonly effort?: string;
   readonly context_tokens?: number;
+  // The agent's latest working directory, read from the most recent hook event
+  // that carried a `cwd` (every hook envelope does). Gives the floor a sense of
+  // "where" the agent is — its worktree under spawn_worktree, else the repo.
+  readonly cwd?: string;
 }
 
 export interface WorkspaceSessionSummaries {
@@ -61,6 +65,7 @@ interface Row {
   model: string | null;
   effort: string | null;
   context_tokens: number | null;
+  cwd: string | null;
 }
 
 function pickStatus(row: Row): LatestAgentStatus | undefined {
@@ -123,7 +128,15 @@ export function createWorkspaceSessionSummaries(db: Database): WorkspaceSessionS
       q.status         AS question_status,
       s.model          AS model,
       s.effort         AS effort,
-      s.context_tokens AS context_tokens
+      s.context_tokens AS context_tokens,
+      (
+        SELECT json_extract(e3.payload_json, '$.cwd')
+          FROM events e3
+         WHERE e3.session_id = s.id
+           AND json_extract(e3.payload_json, '$.cwd') IS NOT NULL
+         ORDER BY e3.id DESC
+         LIMIT 1
+      ) AS cwd
     FROM sessions s
     JOIN roles r                ON r.id          = s.role_id
     LEFT JOIN agents a          ON a.id          = s.agent_id
@@ -162,6 +175,7 @@ export function createWorkspaceSessionSummaries(db: Database): WorkspaceSessionS
           ...(row.model === null ? {} : { model: row.model }),
           ...(row.effort === null ? {} : { effort: row.effort }),
           ...(row.context_tokens === null ? {} : { context_tokens: row.context_tokens }),
+          ...(row.cwd === null ? {} : { cwd: row.cwd }),
         };
       });
     },

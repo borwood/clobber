@@ -46,6 +46,7 @@ export function SpawnView() {
           workspaceId={w.activeWorkspaceId}
           roleId={editing.role.id}
           roleName={editing.role.name}
+          initialCeiling={editing.max_concurrent}
           onClose={() => setEditingRoleId(null)}
           onSaved={() => {
             /* the workspace poll refreshes assignments within ~1s */

@@ -62,6 +62,8 @@ export interface SessionSummary {
   readonly model?: string;
   readonly effort?: string;
   readonly context_tokens?: number;
+  // The agent's latest working directory (from the most recent hook event's cwd).
+  readonly cwd?: string;
 }
 
 export interface OfficePeek {
@@ -163,6 +165,16 @@ async function patchJson<T>(path: string, body: unknown): Promise<T> {
   return (await res.json()) as T;
 }
 
+async function putJson<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`PUT ${path} failed: ${await failureMessage(res)}`);
+  return (await res.json()) as T;
+}
+
 export const api = {
   listSessions: (workspaceId: string) =>
     getJson<SessionSummary[]>(
@@ -179,6 +191,11 @@ export const api = {
     patchJson<unknown>(
       `/workspaces/${encodeURIComponent(workspaceId)}/roles/${encodeURIComponent(roleId)}`,
       body,
+    ),
+  setWorkspaceRoleCeiling: (workspaceId: string, roleId: string, maxConcurrent: number) =>
+    putJson<unknown>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/roles/${encodeURIComponent(roleId)}`,
+      { max_concurrent: maxConcurrent },
     ),
   listWorkspaceRoles: (workspaceId: string) =>
     getJson<WorkspaceRoleAssignment[]>(

@@ -10,6 +10,9 @@ interface Props {
   readonly workspaceId: string;
   readonly roleId: string;
   readonly roleName: string;
+  // Current spawn ceiling (max_concurrent) for this role in this workspace —
+  // edited here too, since it's the other knob you reach for when tuning a role.
+  readonly initialCeiling: number;
   readonly onClose: () => void;
   // The picker reloads its role list (commit badge / description) after a save.
   readonly onSaved: () => void;
@@ -35,13 +38,21 @@ function seedDraft(detail: RoleDetailResponse, keys: readonly string[]): Record<
   return seed;
 }
 
-export function RoleEditorModal({ workspaceId, roleId, roleName, onClose, onSaved }: Props) {
+export function RoleEditorModal({
+  workspaceId,
+  roleId,
+  roleName,
+  initialCeiling,
+  onClose,
+  onSaved,
+}: Props) {
   const root = useMemo(() => describeSchema(RoleEditRequestSchema), []);
   const fields: readonly NamedField[] = root.kind === "object" ? root.fields : [];
   const keys = useMemo(() => fields.map((f) => f.key), [fields]);
 
   const [initial, setInitial] = useState<Record<string, unknown> | null>(null);
   const [draft, setDraft] = useState<Record<string, unknown>>({});
+  const [ceiling, setCeiling] = useState(initialCeiling);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -70,7 +81,9 @@ export function RoleEditorModal({ workspaceId, roleId, roleName, onClose, onSave
     for (const k of keys) {
       if (JSON.stringify(draft[k]) !== JSON.stringify(initial[k])) patch[k] = draft[k];
     }
-    if (Object.keys(patch).length === 0) {
+    const ceilingChanged = ceiling !== initialCeiling;
+    const contentChanged = Object.keys(patch).length > 0;
+    if (!ceilingChanged && !contentChanged) {
       onClose();
       return;
     }
@@ -82,7 +95,9 @@ export function RoleEditorModal({ workspaceId, roleId, roleName, onClose, onSave
     setBusy(true);
     setError(null);
     try {
-      await api.editWorkspaceRole(workspaceId, roleId, parsed.data);
+      // Ceiling first (cheap, no git) so a content-edit failure doesn't strand it.
+      if (ceilingChanged) await api.setWorkspaceRoleCeiling(workspaceId, roleId, ceiling);
+      if (contentChanged) await api.editWorkspaceRole(workspaceId, roleId, parsed.data);
       onSaved();
       onClose();
     } catch (e) {
@@ -111,6 +126,7 @@ export function RoleEditorModal({ workspaceId, roleId, roleName, onClose, onSave
           )}
           {initial !== null && (
             <div className="flex flex-col gap-4">
+              <CeilingControl value={ceiling} onChange={setCeiling} />
               <FieldList
                 fields={primary}
                 draft={draft}
@@ -162,6 +178,49 @@ export function RoleEditorModal({ workspaceId, roleId, roleName, onClose, onSave
             {busy ? "saving…" : "save"}
           </ActionButton>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Spawn ceiling: how many sessions of this role may run at once in the
+// workspace. 0 = not spawnable. A stepper keeps it legible at any panel size.
+function CeilingControl({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+}) {
+  return (
+    <div className="space-y-1">
+      <div className="text-xs text-text-dim">Spawn ceiling</div>
+      <div className="text-xs text-text-subtle">
+        Max concurrent sessions of this role in the workspace. 0 = not spawnable.
+      </div>
+      <div className="pt-0.5 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onChange(Math.max(0, value - 1))}
+          disabled={value <= 0}
+          className="size-7 rounded border border-border text-text-subtle hover:border-border-strong hover:text-text-dim disabled:opacity-40"
+        >
+          −
+        </button>
+        <input
+          type="number"
+          min={0}
+          value={value}
+          onChange={(e) => onChange(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+          className="w-16 rounded border border-border bg-surface px-2 py-1 text-xs text-text text-center font-mono focus:outline-none focus:border-border-strong"
+        />
+        <button
+          type="button"
+          onClick={() => onChange(value + 1)}
+          className="size-7 rounded border border-border text-text-subtle hover:border-border-strong hover:text-text-dim"
+        >
+          +
+        </button>
       </div>
     </div>
   );
