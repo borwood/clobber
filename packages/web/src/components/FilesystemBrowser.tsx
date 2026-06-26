@@ -3,7 +3,7 @@ import { ArrowUpIcon } from "@phosphor-icons/react/dist/csr/ArrowUp";
 import { FolderIcon } from "@phosphor-icons/react/dist/csr/Folder";
 import { FileIcon } from "@phosphor-icons/react/dist/csr/File";
 import { api } from "../api.ts";
-import type { BrowseDirResponse, FileReadResponse } from "@clobber/shared";
+import { DRIVES_ROOT, type BrowseDirResponse, type FileReadResponse } from "@clobber/shared";
 import { Portal } from "./Portal.tsx";
 import { FileViewer } from "./FileViewer.tsx";
 import { ActionButton } from "./ActionButton.tsx";
@@ -147,7 +147,7 @@ export function FilesystemBrowser(props: Props) {
             className="flex-1 px-2 py-1 text-xs font-mono text-text-soft bg-surface border border-border rounded truncate"
             title={data?.path ?? ""}
           >
-            {data?.path ?? (loading ? "loading…" : "")}
+            {data?.path === DRIVES_ROOT ? "This PC" : (data?.path ?? (loading ? "loading…" : ""))}
           </div>
         </div>
 
@@ -166,7 +166,14 @@ export function FilesystemBrowser(props: Props) {
           )}
           {data !== null &&
             data.entries.map((entry) => {
-              const child = data.path === "/" ? `/${entry.name}` : `${data.path}/${entry.name}`;
+              // At the synthetic drives root each entry name IS the drive root
+              // path ("C:\\"); otherwise join onto the current dir.
+              const child =
+                data.path === DRIVES_ROOT
+                  ? entry.name
+                  : data.path === "/"
+                    ? `/${entry.name}`
+                    : `${data.path}/${entry.name}`;
               if (entry.isDir) {
                 return (
                   <button
@@ -207,7 +214,7 @@ export function FilesystemBrowser(props: Props) {
             <ActionButton
               variant="accent"
               onClick={() => data !== null && props.onSelect(data.path)}
-              disabled={data === null}
+              disabled={data === null || data.path === DRIVES_ROOT}
               className="px-2 py-1 text-xs"
             >
               select this folder
