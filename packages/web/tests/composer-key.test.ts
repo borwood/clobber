@@ -17,80 +17,68 @@ function ev(
   };
 }
 
-describe("classifyComposerKey", () => {
-  it("Enter alone -> send", () => {
-    expect(classifyComposerKey(ev("Enter"), { hasTextSelection: false })).toBe(
-      "send",
-    );
+const noSel = { hasTextSelection: false } as const;
+
+describe("classifyComposerKey — send/newline", () => {
+  it("Ctrl+Enter -> send", () => {
+    expect(classifyComposerKey(ev("Enter", { ctrlKey: true }), noSel)).toBe("send");
   });
 
-  it("Shift+Enter -> newline (do not send)", () => {
-    expect(
-      classifyComposerKey(ev("Enter", { shiftKey: true }), {
-        hasTextSelection: false,
-      }),
-    ).toBe("newline");
+  it("Cmd+Enter -> send", () => {
+    expect(classifyComposerKey(ev("Enter", { metaKey: true }), noSel)).toBe("send");
   });
 
-  it("Ctrl+Enter -> ignore (no longer sends)", () => {
-    expect(
-      classifyComposerKey(ev("Enter", { ctrlKey: true }), {
-        hasTextSelection: false,
-      }),
-    ).toBe("ignore");
+  it("Enter alone -> newline (no longer sends)", () => {
+    expect(classifyComposerKey(ev("Enter"), noSel)).toBe("newline");
   });
 
-  it("Cmd+Enter -> ignore (no longer sends)", () => {
-    expect(
-      classifyComposerKey(ev("Enter", { metaKey: true }), {
-        hasTextSelection: false,
-      }),
-    ).toBe("ignore");
+  it("Shift+Enter -> newline", () => {
+    expect(classifyComposerKey(ev("Enter", { shiftKey: true }), noSel)).toBe("newline");
   });
+});
 
-  it("Alt+Enter -> ignore", () => {
-    expect(
-      classifyComposerKey(ev("Enter", { altKey: true }), {
-        hasTextSelection: false,
-      }),
-    ).toBe("ignore");
-  });
-
+describe("classifyComposerKey — interrupt", () => {
   it("Ctrl+C with no selection -> interrupt", () => {
-    expect(
-      classifyComposerKey(ev("c", { ctrlKey: true }), {
-        hasTextSelection: false,
-      }),
-    ).toBe("interrupt");
+    expect(classifyComposerKey(ev("c", { ctrlKey: true }), noSel)).toBe("interrupt");
   });
 
   it("Ctrl+C while text is selected -> ignore (let browser copy)", () => {
     expect(
-      classifyComposerKey(ev("c", { ctrlKey: true }), {
-        hasTextSelection: true,
-      }),
-    ).toBe("ignore");
-  });
-
-  it("Ctrl+Shift+C -> ignore (not the bare interrupt shortcut)", () => {
-    expect(
-      classifyComposerKey(ev("c", { ctrlKey: true, shiftKey: true }), {
-        hasTextSelection: false,
-      }),
+      classifyComposerKey(ev("c", { ctrlKey: true }), { hasTextSelection: true }),
     ).toBe("ignore");
   });
 
   it("Cmd+C -> ignore (browser copy on mac)", () => {
-    expect(
-      classifyComposerKey(ev("c", { metaKey: true }), {
-        hasTextSelection: false,
-      }),
-    ).toBe("ignore");
+    expect(classifyComposerKey(ev("c", { metaKey: true }), noSel)).toBe("ignore");
+  });
+});
+
+describe("classifyComposerKey — inline format shortcuts", () => {
+  it("Ctrl+B / Cmd+B -> bold", () => {
+    expect(classifyComposerKey(ev("b", { ctrlKey: true }), noSel)).toBe("bold");
+    expect(classifyComposerKey(ev("b", { metaKey: true }), noSel)).toBe("bold");
+  });
+
+  it("Ctrl+I -> italic", () => {
+    expect(classifyComposerKey(ev("i", { ctrlKey: true }), noSel)).toBe("italic");
+  });
+
+  it("Ctrl+E -> code", () => {
+    expect(classifyComposerKey(ev("e", { ctrlKey: true }), noSel)).toBe("code");
+  });
+
+  it("Ctrl+Shift+X -> strikethrough (key arrives uppercased)", () => {
+    expect(classifyComposerKey(ev("X", { ctrlKey: true, shiftKey: true }), noSel)).toBe(
+      "strikethrough",
+    );
+  });
+
+  it("Ctrl+Alt+B -> ignore (alt disqualifies the shortcut)", () => {
+    expect(classifyComposerKey(ev("b", { ctrlKey: true, altKey: true }), noSel)).toBe("ignore");
   });
 
   it("plain typing key -> ignore", () => {
-    expect(classifyComposerKey(ev("a"), { hasTextSelection: false })).toBe(
-      "ignore",
-    );
+    expect(classifyComposerKey(ev("b"), noSel)).toBe("ignore");
+    expect(classifyComposerKey(ev("a"), noSel)).toBe("ignore");
   });
 });

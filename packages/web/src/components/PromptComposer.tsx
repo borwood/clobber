@@ -1,16 +1,16 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { classifyComposerKey } from "./composer-key.ts";
+import { useRef, useState } from "react";
 import { computeContextLength } from "../context-length.ts";
 import type { TranscriptLine } from "../api.ts";
 import { FilesystemBrowser } from "./FilesystemBrowser.tsx";
-import { Markdown } from "./Markdown.tsx";
 import { ComposerOptionsMenu } from "./ComposerOptionsMenu.tsx";
+import { ComposerToolbar } from "./ComposerToolbar.tsx";
+import { MarkdownEditor, type ComposerAction, type MarkdownEditorHandle } from "./MarkdownEditor.tsx";
 import { ActionButton } from "./ActionButton.tsx";
 import { api } from "../api.ts";
 import { getDraft, setDraft } from "../draft-store.ts";
 
-// Ceiling the textarea grows to before it starts scrolling (~8 lines).
-const MAX_TEXTAREA_HEIGHT = 192;
+// Ceiling the editor grows to before it starts scrolling (~8 lines).
+const MAX_EDITOR_HEIGHT = 192;
 
 interface Props {
   readonly sessionId: string;
@@ -45,10 +45,10 @@ export function PromptComposer({
   const [error, setError] = useState<string | null>(null);
   const [fileBrowser, setFileBrowser] = useState<FileBrowserState>(null);
   const [focused, setFocused] = useState(false);
-  const [markdownPreview, setMarkdownPreview] = useState(true);
+  const [richMarkdown, setRichMarkdown] = useState(true);
   const deskButtonRef = useRef<HTMLButtonElement>(null);
   const officeButtonRef = useRef<HTMLButtonElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<MarkdownEditorHandle>(null);
 
   // Mirror every edit into the per-session draft store so an unsent draft
   // survives this composer unmounting on a tab/session switch.
@@ -61,17 +61,6 @@ export function PromptComposer({
   const canSend = !ended && !sending && hasText;
   const canInterrupt = !ended && busy && !interrupting;
   const contextTokens = transcript !== undefined ? computeContextLength(transcript) : undefined;
-
-  // Grow the textarea to fit its content up to a ceiling, then scroll. The CSS
-  // min-height (set on the element) supplies the floor: one line when idle+empty,
-  // the taller resting size once focused or filled. Re-runs on text + focus
-  // changes and after a programmatic clear (send), since those aren't input events.
-  useEffect(() => {
-    const el = textareaRef.current;
-    if (el === null) return;
-    el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_HEIGHT)}px`;
-  }, [prompt, focused]);
 
   async function send() {
     if (!canSend) return;
@@ -113,6 +102,18 @@ export function PromptComposer({
     }
   }
 
+  function onEditorAction(action: ComposerAction) {
+    if (action === "interrupt") {
+      void interrupt();
+      return;
+    }
+    if (ended) {
+      void resume();
+    } else {
+      void send();
+    }
+  }
+
   async function openFileBrowser(target: "desk" | "office") {
     const ref = target === "desk" ? deskButtonRef : officeButtonRef;
     const triggerRect = ref.current?.getBoundingClientRect();
@@ -128,46 +129,6 @@ export function PromptComposer({
       setFileBrowser({ path, label: target === "desk" ? "Desk" : "Office", triggerRect });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  function insertHardBreak() {
-    const el = textareaRef.current;
-    if (el === null) return;
-    const { selectionStart: start, selectionEnd: end } = el;
-    const insert = "\\\n";
-    setPrompt(prompt.slice(0, start) + insert + prompt.slice(end));
-    requestAnimationFrame(() => {
-      el.selectionStart = el.selectionEnd = start + insert.length;
-    });
-  }
-
-  function onKey(e: KeyboardEvent<HTMLTextAreaElement>) {
-    const action = classifyComposerKey(e, {
-      hasTextSelection: hasTextSelection(),
-    });
-    if (action === "send") {
-      e.preventDefault();
-      if (ended) {
-        void resume();
-      } else {
-        void send();
-      }
-      return;
-    }
-    if (action === "newline") {
-      // Interim hard-break: a single "\n" is a soft break that markdown
-      // collapses to a space, so what's typed wouldn't match what renders.
-      // A trailing backslash is CommonMark's hard line break. Proper fix rides
-      // the live-markdown-editor issue (CodeMirror 6).
-      e.preventDefault();
-      insertHardBreak();
-      return;
-    }
-    if (action === "interrupt") {
-      if (!canInterrupt) return;
-      e.preventDefault();
-      void interrupt();
     }
   }
 
@@ -199,100 +160,96 @@ export function PromptComposer({
   return (
     <div className="border-t border-border bg-bg p-3">
       <div className="mx-auto max-w-3xl space-y-2">
-      {markdownPreview && hasText && (
-        <div className="rounded border border-border bg-surface/40 px-3 py-2 max-h-40 overflow-y-auto">
-          <Markdown text={prompt} />
-        </div>
-      )}
-      <textarea
-        ref={textareaRef}
-        value={prompt}
-        onChange={(e) => setPrompt(e.target.value)}
-        onKeyDown={onKey}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        disabled={sending}
-        placeholder={
-          ended
-            ? "Optional prompt to send on resume…"
-            : busy
-              ? "Agent is working… (Ctrl+C to interrupt)"
-              : "Follow-up prompt… (Enter to send, Shift+Enter for newline)"
-        }
-        style={{
-          minHeight: focused || hasText ? "4.75rem" : "2.25rem",
-          maxHeight: `${MAX_TEXTAREA_HEIGHT}px`,
-        }}
-        className={`w-full resize-none overflow-y-auto rounded border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-faint focus:outline-none focus:border-border-strong disabled:opacity-50 ring-1 transition-[box-shadow] duration-300 ${!busy && !ended ? "ring-accent" : "ring-accent/0"}`}
-      />
-      <div className="flex items-center gap-2 relative">
-        <ComposerOptionsMenu
-          markdownPreview={markdownPreview}
-          onToggleMarkdownPreview={() => setMarkdownPreview((v) => !v)}
-          showDetails={showDetails}
-          onToggleShowDetails={onToggleShowDetails}
-          canEndSession={!ended}
-          onEndSession={() => void onEndSession()}
-        />
-        {contextTokens !== undefined && (
-          <span className="text-xs text-text-faint font-mono">
-            ~{Math.round(contextTokens / 1000)}k ctx
-          </span>
-        )}
-        {error !== null && (
-          <span className="text-xs text-danger-text truncate" title={error}>
-            {error}
-          </span>
-        )}
-        {canInterrupt && (
-          <ActionButton
-            variant="danger"
-            onClick={() => void interrupt()}
-            disabled={interrupting}
-            title="Interrupt the running turn (Ctrl+C)"
-            className="ml-auto px-3 py-1.5 text-xs"
-          >
-            {interrupting ? "Stopping…" : "Stop"}
-          </ActionButton>
-        )}
-        <button
-          ref={deskButtonRef}
-          type="button"
-          onClick={() => void openFileBrowser("desk")}
-          title="Browse agent desk"
-          className={
-            "px-2 py-1.5 text-xs rounded border border-border text-text-soft hover:text-text hover:border-border-strong " +
-            (canInterrupt ? "" : "ml-auto")
-          }
+        <div
+          className={`rounded border border-border bg-surface focus-within:border-border-strong ring-1 transition-[box-shadow] duration-300 ${!busy && !ended ? "ring-accent" : "ring-accent/0"}`}
         >
-          Desk
-        </button>
-        <button
-          ref={officeButtonRef}
-          type="button"
-          onClick={() => void openFileBrowser("office")}
-          title="Browse agent office"
-          className="px-2 py-1.5 text-xs rounded border border-border text-text-soft hover:text-text hover:border-border-strong"
-        >
-          Office
-        </button>
-        {renderActionButton()}
-        {fileBrowser !== null && (
-          <FilesystemBrowser
-            mode="file"
-            initialPath={fileBrowser.path}
-            triggerRect={fileBrowser.triggerRect}
-            onCancel={() => setFileBrowser(null)}
+          <div className="flex items-center border-b border-border px-1.5 py-1">
+            <ComposerToolbar
+              onFormat={(format) => editorRef.current?.applyFormat(format)}
+              disabled={sending}
+            />
+          </div>
+          <MarkdownEditor
+            ref={editorRef}
+            value={prompt}
+            onChange={setPrompt}
+            onAction={onEditorAction}
+            disabled={sending}
+            richMarkdown={richMarkdown}
+            minHeight={focused || hasText ? "4.25rem" : "1.75rem"}
+            maxHeight={MAX_EDITOR_HEIGHT}
+            onFocusChange={setFocused}
+            placeholder={
+              ended
+                ? "Optional prompt to send on resume…"
+                : busy
+                  ? "Agent is working… (Ctrl+C to interrupt)"
+                  : "Follow-up prompt… (Ctrl+Enter to send, Enter for newline)"
+            }
           />
-        )}
-      </div>
+        </div>
+        <div className="flex items-center gap-2 relative">
+          <ComposerOptionsMenu
+            richMarkdown={richMarkdown}
+            onToggleRichMarkdown={() => setRichMarkdown((v) => !v)}
+            showDetails={showDetails}
+            onToggleShowDetails={onToggleShowDetails}
+            canEndSession={!ended}
+            onEndSession={() => void onEndSession()}
+          />
+          {contextTokens !== undefined && (
+            <span className="text-xs text-text-faint font-mono">
+              ~{Math.round(contextTokens / 1000)}k ctx
+            </span>
+          )}
+          {error !== null && (
+            <span className="text-xs text-danger-text truncate" title={error}>
+              {error}
+            </span>
+          )}
+          {canInterrupt && (
+            <ActionButton
+              variant="danger"
+              onClick={() => void interrupt()}
+              disabled={interrupting}
+              title="Interrupt the running turn (Ctrl+C)"
+              className="ml-auto px-3 py-1.5 text-xs"
+            >
+              {interrupting ? "Stopping…" : "Stop"}
+            </ActionButton>
+          )}
+          <button
+            ref={deskButtonRef}
+            type="button"
+            onClick={() => void openFileBrowser("desk")}
+            title="Browse agent desk"
+            className={
+              "px-2 py-1.5 text-xs rounded border border-border text-text-soft hover:text-text hover:border-border-strong " +
+              (canInterrupt ? "" : "ml-auto")
+            }
+          >
+            Desk
+          </button>
+          <button
+            ref={officeButtonRef}
+            type="button"
+            onClick={() => void openFileBrowser("office")}
+            title="Browse agent office"
+            className="px-2 py-1.5 text-xs rounded border border-border text-text-soft hover:text-text hover:border-border-strong"
+          >
+            Office
+          </button>
+          {renderActionButton()}
+          {fileBrowser !== null && (
+            <FilesystemBrowser
+              mode="file"
+              initialPath={fileBrowser.path}
+              triggerRect={fileBrowser.triggerRect}
+              onCancel={() => setFileBrowser(null)}
+            />
+          )}
+        </div>
       </div>
     </div>
   );
-}
-
-function hasTextSelection(): boolean {
-  const sel = window.getSelection();
-  if (sel === null) return false;
-  return sel.toString().length > 0;
 }
