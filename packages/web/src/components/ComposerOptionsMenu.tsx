@@ -2,8 +2,8 @@ import { useState } from "react";
 import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 
 interface Props {
-  readonly markdownPreview: boolean;
-  readonly onToggleMarkdownPreview: () => void;
+  readonly richMarkdown: boolean;
+  readonly onToggleRichMarkdown: () => void;
   readonly showDetails: boolean;
   readonly onToggleShowDetails: () => void;
   readonly canEndSession: boolean;
@@ -13,8 +13,8 @@ interface Props {
 // The 3-dot composer-options popover. Self-contained: owns its open/closed
 // state and click-away; each option is a toggle row driven by parent state.
 export function ComposerOptionsMenu({
-  markdownPreview,
-  onToggleMarkdownPreview,
+  richMarkdown,
+  onToggleRichMarkdown,
   showDetails,
   onToggleShowDetails,
   canEndSession,
@@ -35,7 +35,7 @@ export function ComposerOptionsMenu({
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div className="absolute bottom-full left-0 mb-1 z-20 w-52 rounded border border-border bg-surface p-1 shadow-lg">
-            <ToggleRow label="Markdown preview" on={markdownPreview} onToggle={onToggleMarkdownPreview} />
+            <ToggleRow label="Markdown styling" on={richMarkdown} onToggle={onToggleRichMarkdown} />
             <ToggleRow label="Show details" on={showDetails} onToggle={onToggleShowDetails} />
             {canEndSession && (
               <button

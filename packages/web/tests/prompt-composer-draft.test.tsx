@@ -7,6 +7,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { PromptComposer } from "../src/components/PromptComposer.tsx";
 import { getDraft } from "../src/draft-store.ts";
+import { editorText, typeInto } from "./cm-editor-harness.ts";
 
 import { api } from "../src/api.ts";
 (api as { getSessionLocations: unknown }).getSessionLocations = async () => ({
@@ -50,23 +51,6 @@ function makeComposer(sessionId: string, onSend: (p: string) => Promise<void>) {
   });
 }
 
-function reactProps(el: Element): Record<string, unknown> {
-  const elAsMap = el as unknown as Record<string, unknown>;
-  const fiberKey = Object.keys(elAsMap).find((k) => k.startsWith("__reactFiber"));
-  const fiber = fiberKey !== undefined ? elAsMap[fiberKey] : undefined;
-  if (fiber === undefined) throw new Error("no React fiber on element");
-  return (fiber as { memoizedProps: Record<string, unknown> }).memoizedProps;
-}
-
-async function typeIntoTextarea(textarea: Element, value: string) {
-  const onChange = reactProps(textarea).onChange as (e: { target: { value: string } }) => void;
-  await act(async () => {
-    onChange({ target: { value } });
-  });
-}
-
-const textareaValue = () => (container.querySelector("textarea") as HTMLTextAreaElement).value;
-
 // A tab switch fully unmounts the composer (only the active pane renders, and
 // it's keyed per session). Model that: drop the composer, then mount it fresh
 // so its useState initializer re-reads the draft store.
@@ -78,25 +62,25 @@ async function tabAwayAndBack(node: ReturnType<typeof makeComposer>) {
 describe("PromptComposer draft retention", () => {
   it("restores an unsent draft when the composer remounts for the same session", async () => {
     await act(async () => { root.render(makeComposer("draft-session-a", noop)); });
-    await typeIntoTextarea(container.querySelector("textarea")!, "half-written thought");
+    await typeInto(container, "half-written thought");
 
     await tabAwayAndBack(makeComposer("draft-session-a", noop));
 
-    expect(textareaValue()).toBe("half-written thought");
+    expect(editorText(container)).toBe("half-written thought");
   });
 
   it("keeps drafts isolated per session", async () => {
     await act(async () => { root.render(makeComposer("draft-session-b", noop)); });
-    await typeIntoTextarea(container.querySelector("textarea")!, "for session b");
+    await typeInto(container, "for session b");
 
     await tabAwayAndBack(makeComposer("draft-session-c", noop));
 
-    expect(textareaValue()).toBe("");
+    expect(editorText(container)).toBe("");
   });
 
   it("clears the draft after a successful send", async () => {
     await act(async () => { root.render(makeComposer("draft-session-d", noop)); });
-    await typeIntoTextarea(container.querySelector("textarea")!, "send me");
+    await typeInto(container, "send me");
     expect(getDraft("draft-session-d")).toBe("send me");
 
     const send = container.querySelector("button[class*='accent']") as HTMLButtonElement;
@@ -108,6 +92,6 @@ describe("PromptComposer draft retention", () => {
 
     await tabAwayAndBack(makeComposer("draft-session-d", noop));
 
-    expect(textareaValue()).toBe("");
+    expect(editorText(container)).toBe("");
   });
 });
