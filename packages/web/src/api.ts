@@ -16,6 +16,9 @@ import type {
   TranscriptLine,
   TranscriptFetchResponse,
   Notification,
+  EffortLevel,
+  Model,
+  SessionReconfigureRequest,
 } from "@clobber/shared";
 
 export type {
@@ -33,6 +36,9 @@ export type {
   TranscriptLine,
   TranscriptFetchResponse,
   Notification,
+  EffortLevel,
+  Model,
+  SessionReconfigureRequest,
 } from "@clobber/shared";
 
 export interface OpenQuestion {
@@ -105,10 +111,6 @@ export interface Whiteboard {
   readonly offices: readonly OfficeCard[];
   readonly desks: readonly DeskCard[];
 }
-
-export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max";
-
-export type Model = "opus" | "sonnet" | "haiku" | "fable";
 
 export interface SpawnRequest {
   readonly workspace_id: string;
@@ -227,6 +229,11 @@ export const api = {
     postJson<{ ok: true }>(
       `/sessions/${encodeURIComponent(sessionId)}/interrupt`,
       {},
+    ),
+  reconfigureSession: (sessionId: string, change: SessionReconfigureRequest) =>
+    postJson<{ ok: true; applied: "live" | "deferred" }>(
+      `/sessions/${encodeURIComponent(sessionId)}/config`,
+      change,
     ),
   sendPrompt: (sessionId: string, prompt: string) =>
     postJson<{ ok: true }>(

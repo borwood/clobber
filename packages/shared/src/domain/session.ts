@@ -36,6 +36,12 @@ export const SessionSchema = z.object({
   // which can differ under per-dispatch overrides (#468).
   model: ModelSchema.optional(),
   effort: EffortLevelSchema.optional(),
+  // Explicit per-session dials — a spawn-time override or a live reconfigure.
+  // Recorded facts that survive resume: every wake resolves override ?? role
+  // default, so an absent override keeps re-deriving from the role (#468)
+  // while a set one pins the session regardless of role edits.
+  model_override: ModelSchema.optional(),
+  effort_override: EffortLevelSchema.optional(),
 });
 export type Session = z.infer<typeof SessionSchema>;
 
@@ -55,5 +61,16 @@ export const CreateSessionRequestSchema = z.object({
   composed_system_prompt: z.string().min(1).optional(),
   model: ModelSchema.optional(),
   effort: EffortLevelSchema.optional(),
+  model_override: ModelSchema.optional(),
+  effort_override: EffortLevelSchema.optional(),
 });
 export type CreateSessionRequest = z.infer<typeof CreateSessionRequestSchema>;
+
+// A live/deferred change to a session's model and/or effort dials
+// (`POST /sessions/:id/config`). At least one field must be present —
+// enforced at the route so the wire error stays a plain 400.
+export const SessionReconfigureRequestSchema = z.object({
+  model: ModelSchema.optional(),
+  effort: EffortLevelSchema.optional(),
+});
+export type SessionReconfigureRequest = z.infer<typeof SessionReconfigureRequestSchema>;

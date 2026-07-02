@@ -16,6 +16,8 @@ import {
 } from "./materialize-bundle.ts";
 import {
   serializeInterruptRequest,
+  serializeSetEffortRequest,
+  serializeSetModelRequest,
   serializeUserMessage,
 } from "./stream-json.ts";
 import { deriveTranscriptPath } from "./transcript-path.ts";
@@ -38,6 +40,9 @@ export interface RuntimeProviderCapabilities extends InSessionHabitsCapability {
   readonly livePromptInjection: boolean;
   readonly interrupt: boolean;
   readonly resume: boolean;
+  // Can retune a live process's model/effort via control requests. Runtimes
+  // without it still honor recorded dials at the next respawn/turn.
+  readonly reconfigure: boolean;
   // True when the runtime cannot start without a prompt (e.g. Codex exec).
   readonly requiresPrompt?: boolean;
 }
@@ -105,6 +110,8 @@ export interface RuntimeProvider {
   initialProviderThreadId(sessionId: string): string | undefined;
   serializeUserPrompt(prompt: string, tag?: ClobberPromptTag): string;
   serializeInterrupt(requestId: string): string;
+  serializeSetModel(requestId: string, model: Model): string;
+  serializeSetEffort(requestId: string, effort: EffortLevel): string;
   transcriptPath(cwd: string, sessionId: string): string;
 }
 
@@ -115,6 +122,7 @@ export const claudeRuntimeProvider: RuntimeProvider = {
     livePromptInjection: true,
     interrupt: true,
     resume: true,
+    reconfigure: true,
     inSessionHabits: true,
   },
   prepareBundle(opts) {
@@ -157,6 +165,8 @@ export const claudeRuntimeProvider: RuntimeProvider = {
   },
   serializeUserPrompt: serializeUserMessage,
   serializeInterrupt: serializeInterruptRequest,
+  serializeSetModel: serializeSetModelRequest,
+  serializeSetEffort: serializeSetEffortRequest,
   transcriptPath: deriveTranscriptPath,
 };
 
@@ -167,6 +177,7 @@ export const codexRuntimeProvider: RuntimeProvider = {
     livePromptInjection: false,
     interrupt: false,
     resume: true,
+    reconfigure: false,
     inSessionHabits: false,
     requiresPrompt: true,
   },
@@ -193,6 +204,12 @@ export const codexRuntimeProvider: RuntimeProvider = {
   },
   serializeInterrupt() {
     throw new Error("Codex runtime does not support interrupts");
+  },
+  serializeSetModel() {
+    throw new Error("Codex runtime does not support live reconfigure");
+  },
+  serializeSetEffort() {
+    throw new Error("Codex runtime does not support live reconfigure");
   },
   transcriptPath(cwd, sessionId) {
     return `${cwd}/.clobber/codex-transcripts/${sessionId}.jsonl`;

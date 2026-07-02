@@ -209,6 +209,10 @@ export async function attachSessionToAgent(
     // defaults that can differ under per-dispatch overrides (#468).
     ...(ctx.spawnOptions.model === undefined ? {} : { model: ctx.spawnOptions.model }),
     ...(ctx.spawnOptions.effort === undefined ? {} : { effort: ctx.spawnOptions.effort }),
+    // Record explicit dials as facts so resume re-applies them instead of
+    // silently reverting to role defaults.
+    ...(modelOverride === undefined ? {} : { model_override: modelOverride }),
+    ...(effortOverride === undefined ? {} : { effort_override: effortOverride }),
   });
   bindLiveSession(deps, sessionId, ctx, spawned, ctx.spawnOptions.prompt !== undefined);
 

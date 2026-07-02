@@ -57,6 +57,7 @@ function turnProvider(opts: {
       livePromptInjection: false,
       interrupt: false,
       resume: true,
+      reconfigure: false,
       inSessionHabits: false,
     },
     initialProviderThreadId(sessionId) {

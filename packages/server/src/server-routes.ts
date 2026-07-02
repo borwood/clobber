@@ -3,6 +3,7 @@ import { registerHookRoutes } from "./routes/hooks.ts";
 import { registerEventRoutes } from "./routes/events.ts";
 import { registerSessionRoutes } from "./routes/sessions.ts";
 import { registerSessionTranscriptRoute } from "./routes/session-transcript.ts";
+import { registerSessionReconfigureRoute } from "./routes/session-reconfigure.ts";
 import { registerSpawnRoutes } from "./routes/spawn.ts";
 import { registerWorkspaceRoutes } from "./routes/workspaces.ts";
 import { registerFsRoutes } from "./routes/fs.ts";
@@ -84,6 +85,11 @@ export function registerAllRoutes(
     runtimeProvider,
     resumeTurn,
     resumeEnded,
+  });
+  registerSessionReconfigureRoute(app, {
+    sessions: opts.sessions,
+    registry,
+    runtimeProvider,
   });
   registerToolTokenTestRoutes(app, {
     sessionTokens: opts.sessionTokens,

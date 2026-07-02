@@ -33,6 +33,10 @@ export interface SessionStore {
   updateComposedSystemPrompt(id: string, prompt: string): boolean;
   // Re-capture the resolved model/effort on resume (#468).
   updateModelEffort(id: string, model: string | undefined, effort: string | undefined): boolean;
+  // Record explicit per-session dials (live reconfigure). Partial: an absent
+  // field keeps the existing override, so a model-only change never clears a
+  // previously set effort override.
+  recordDialOverrides(id: string, change: { readonly model?: string | undefined; readonly effort?: string | undefined }): boolean;
   updateProviderThreadId(id: string, providerThreadId: string): boolean;
   updateTranscriptPath(id: string, path: string): boolean;
   updateContextTokens(id: string, tokens: number): boolean;
@@ -44,8 +48,8 @@ export interface SessionStore {
 export function createSessionStore(db: Database): SessionStore {
   const insertStmt = db.prepare(
     `INSERT INTO sessions
-       (id, agent_id, workspace_id, role_id, role_commit_branch, role_commit_sha, runtime_provider, provider_thread_id, wake_program, op_level_addon, label, pid, started_at, ended_at, transcript_path, composed_system_prompt, model, effort)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
+       (id, agent_id, workspace_id, role_id, role_commit_branch, role_commit_sha, runtime_provider, provider_thread_id, wake_program, op_level_addon, label, pid, started_at, ended_at, transcript_path, composed_system_prompt, model, effort, model_override, effort_override)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`,
   );
   const getStmt = db.prepare("SELECT * FROM sessions WHERE id = ?");
   const latestForAgentStmt = db.prepare(
@@ -77,6 +81,9 @@ export function createSessionStore(db: Database): SessionStore {
   );
   const updateModelEffortStmt = db.prepare(
     "UPDATE sessions SET model = ?, effort = ? WHERE id = ?",
+  );
+  const recordDialOverridesStmt = db.prepare(
+    "UPDATE sessions SET model_override = COALESCE(?, model_override), effort_override = COALESCE(?, effort_override) WHERE id = ?",
   );
   const updateProviderThreadIdStmt = db.prepare(
     "UPDATE sessions SET provider_thread_id = ? WHERE id = ? AND ended_at IS NULL",
@@ -117,6 +124,8 @@ export function createSessionStore(db: Database): SessionStore {
         req.composed_system_prompt === undefined ? null : req.composed_system_prompt;
       const model = req.model === undefined ? null : req.model;
       const effort = req.effort === undefined ? null : req.effort;
+      const model_override = req.model_override === undefined ? null : req.model_override;
+      const effort_override = req.effort_override === undefined ? null : req.effort_override;
       insertStmt.run(
         req.id,
         req.agent_id,
@@ -135,6 +144,8 @@ export function createSessionStore(db: Database): SessionStore {
         composed_system_prompt,
         model,
         effort,
+        model_override,
+        effort_override,
       );
       const out: Record<string, unknown> = {
         id: req.id,
@@ -158,6 +169,8 @@ export function createSessionStore(db: Database): SessionStore {
       }
       if (req.model !== undefined) out["model"] = req.model;
       if (req.effort !== undefined) out["effort"] = req.effort;
+      if (req.model_override !== undefined) out["model_override"] = req.model_override;
+      if (req.effort_override !== undefined) out["effort_override"] = req.effort_override;
       return SessionSchema.parse(out);
     },
 
@@ -220,6 +233,15 @@ export function createSessionStore(db: Database): SessionStore {
       const result = updateModelEffortStmt.run(
         model === undefined ? null : model,
         effort === undefined ? null : effort,
+        id,
+      );
+      return result.changes > 0;
+    },
+
+    recordDialOverrides(id, change) {
+      const result = recordDialOverridesStmt.run(
+        change.model === undefined ? null : change.model,
+        change.effort === undefined ? null : change.effort,
         id,
       );
       return result.changes > 0;
