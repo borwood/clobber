@@ -29,6 +29,8 @@ import type { AgentSpawner } from "../src/types.ts";
 
 export interface SpawnRecord {
   readonly req: RuntimeSpawnRequest;
+  // Everything the server wrote to this child's stdin, in write order.
+  readonly stdinChunks: string[];
   exit(code: number | null): Promise<void>;
 }
 
@@ -56,6 +58,7 @@ export function turnProvider(): RuntimeProvider {
       livePromptInjection: false,
       interrupt: false,
       resume: true,
+      reconfigure: false,
       inSessionHabits: false,
     },
     initialProviderThreadId(sessionId) {
@@ -89,7 +92,10 @@ export function buildHarness(runtimeProvider: RuntimeProvider, opts?: { readonly
   const spawner: AgentSpawner = (req) => {
     counter += 1;
     const stdin = new PassThrough();
-    stdin.resume();
+    const stdinChunks: string[] = [];
+    stdin.on("data", (chunk) => {
+      stdinChunks.push(String(chunk));
+    });
     let resolveExit!: (code: number | null) => void;
     const exited = new Promise<number | null>((resolve) => {
       resolveExit = resolve;
@@ -97,6 +103,7 @@ export function buildHarness(runtimeProvider: RuntimeProvider, opts?: { readonly
     if (req.sessionId === undefined) throw new Error("expected sessionId");
     records.push({
       req,
+      stdinChunks,
       async exit(code) {
         resolveExit(code);
         await new Promise<void>((resolve) => setTimeout(resolve, 0));

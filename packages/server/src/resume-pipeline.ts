@@ -139,6 +139,10 @@ async function performResume(
     ...(session.wake_program === undefined ? {} : { wakeProgram: session.wake_program }),
     // Re-compose the op-level orientation layer (#502); absent on non-cycle sessions.
     ...(session.op_level_addon === undefined ? {} : { opLevelAddon: session.op_level_addon }),
+    // Re-apply the session's recorded dials (spawn-time override or live
+    // reconfigure). Unset dials keep re-deriving from the role (#468).
+    ...(session.model_override === undefined ? {} : { modelOverride: session.model_override }),
+    ...(session.effort_override === undefined ? {} : { effortOverride: session.effort_override }),
   });
   if (!prepared.ok) return prepared;
   const ctx = prepared.context;
@@ -180,7 +184,8 @@ async function performResume(
   // rendered prompt this resume actually ran with (#253).
   deps.sessions.updateComposedSystemPrompt(session.id, ctx.spawnOptions.systemPrompt);
   // Re-capture model/effort so the header reflects the actual values for this
-  // wake — they may change if a role's defaults were updated between wakes (#468).
+  // wake — a recorded dial pins them; otherwise role-default edits between
+  // wakes propagate (#468).
   deps.sessions.updateModelEffort(session.id, ctx.spawnOptions.model, ctx.spawnOptions.effort);
   // #366: the resume kick is suppressed (gated on mode === "resume"), so a turn
   // is in flight only when this resume carried an explicit prompt. A bare resume

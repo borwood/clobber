@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api, type EffortLevel, type Model, type SpawnResponse } from "../api.ts";
+import { EFFORT_LEVELS, MODEL_OPTIONS } from "../model-effort-options.ts";
 
 interface Props {
   readonly workspaceId: string;
@@ -11,16 +12,9 @@ interface Props {
 type EffortChoice = EffortLevel | "default";
 type ModelChoice = Model | "default";
 
-const EFFORT_CHOICES: readonly EffortChoice[] = [
-  "default",
-  "low",
-  "medium",
-  "high",
-  "xhigh",
-  "max",
-];
+const EFFORT_CHOICES: readonly EffortChoice[] = ["default", ...EFFORT_LEVELS];
 
-const MODEL_CHOICES: readonly ModelChoice[] = ["default", "opus", "sonnet", "haiku", "fable"];
+const MODEL_CHOICES: readonly ModelChoice[] = ["default", ...MODEL_OPTIONS];
 
 const DEFAULT_WAKE = "default";
 const CUSTOM_WAKE = "custom";

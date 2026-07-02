@@ -35,3 +35,27 @@ export function serializeInterruptRequest(requestId: string): string {
     request: { subtype: "interrupt" },
   }) + "\n";
 }
+
+/**
+ * Retunes the running session's model; takes effect on the next turn. claude
+ * accepts aliases ("sonnet") and full ids ("claude-sonnet-5") alike.
+ */
+export function serializeSetModelRequest(requestId: string, model: string): string {
+  return JSON.stringify({
+    type: "control_request",
+    request_id: requestId,
+    request: { subtype: "set_model", model },
+  }) + "\n";
+}
+
+/**
+ * Effort has no dedicated control subtype; it rides the generic
+ * `apply_flag_settings` channel (the stream-json analogue of `--effort`).
+ */
+export function serializeSetEffortRequest(requestId: string, effort: string): string {
+  return JSON.stringify({
+    type: "control_request",
+    request_id: requestId,
+    request: { subtype: "apply_flag_settings", settings: { effort } },
+  }) + "\n";
+}

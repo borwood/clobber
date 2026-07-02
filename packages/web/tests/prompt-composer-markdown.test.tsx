@@ -49,6 +49,7 @@ function makeComposer(over: { onSend?: (p: string) => Promise<void> } = {}) {
     onResume: noop,
     onInterrupt: noop,
     onEndSession: noop,
+    onReconfigure: noop,
   });
 }
 

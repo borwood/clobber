@@ -111,6 +111,8 @@ export const SCHEMA = `
     composed_system_prompt TEXT,
     model                  TEXT,
     effort                 TEXT,
+    model_override         TEXT,
+    effort_override        TEXT,
     FOREIGN KEY (agent_id)     REFERENCES agents(id)     ON DELETE SET NULL,
     FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
     FOREIGN KEY (role_id)      REFERENCES roles(id)      ON DELETE CASCADE

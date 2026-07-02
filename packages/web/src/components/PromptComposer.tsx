@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { computeContextLength } from "../context-length.ts";
-import type { TranscriptLine } from "../api.ts";
+import type { SessionReconfigureRequest, TranscriptLine } from "../api.ts";
 import { FilesystemBrowser } from "./FilesystemBrowser.tsx";
 import { ComposerOptionsMenu } from "./ComposerOptionsMenu.tsx";
 import { ComposerToolbar } from "./ComposerToolbar.tsx";
@@ -23,6 +23,10 @@ interface Props {
   readonly onResume: (prompt?: string) => Promise<void>;
   readonly onInterrupt: () => Promise<void>;
   readonly onEndSession: () => Promise<void>;
+  // The session's current model/effort dials, surfaced in the options menu.
+  readonly model?: string | undefined;
+  readonly effort?: string | undefined;
+  readonly onReconfigure: (change: SessionReconfigureRequest) => Promise<void>;
 }
 
 type FileBrowserState = { readonly path: string; readonly label: string; readonly triggerRect: DOMRect } | null;
@@ -38,6 +42,9 @@ export function PromptComposer({
   onResume,
   onInterrupt,
   onEndSession,
+  model,
+  effort,
+  onReconfigure,
 }: Props) {
   const [prompt, setPromptState] = useState(() => getDraft(sessionId));
   const [sending, setSending] = useState(false);
@@ -196,6 +203,14 @@ export function PromptComposer({
             onToggleShowDetails={onToggleShowDetails}
             canEndSession={!ended}
             onEndSession={() => void onEndSession()}
+            model={model}
+            effort={effort}
+            onReconfigure={(change) => {
+              setError(null);
+              onReconfigure(change).catch((e) => {
+                setError(e instanceof Error ? e.message : String(e));
+              });
+            }}
           />
           {contextTokens !== undefined && (
             <span className="text-xs text-text-faint font-mono">

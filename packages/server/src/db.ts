@@ -14,6 +14,7 @@ import { migrateRoleContractVersion } from "./role-contract-version-migration.ts
 import { migrateRoleCommitPin } from "./role-commit-pin-migration.ts";
 import { migrateWorkspaceTheme } from "./theme-migration.ts";
 import { migrateSessionModelEffort } from "./session-model-effort-migration.ts";
+import { migrateSessionDialOverrides } from "./session-dial-override-migration.ts";
 import { migrateAuditRowProvenance } from "./audit-row-provenance-migration.ts";
 import { migrateRoleCommitProvenance } from "./role-commit-provenance-migration.ts";
 import { migrateRoleVersionPinDrop } from "./role-version-pin-drop-migration.ts";
@@ -56,6 +57,7 @@ export function createDatabase(path: string): Database {
   migrateRoleCommitProvenance(db);
   migrateRoleVersionPinDrop(db);
   migrateSessionOpLevel(db);
+  migrateSessionDialOverrides(db);
   migrateSessionTokenScope(db);
   migrateNotificationLogicalKey(db);
   migrateNotificationDeliveryMode(db);

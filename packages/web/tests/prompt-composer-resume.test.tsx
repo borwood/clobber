@@ -58,6 +58,7 @@ function makeComposer(
     onResume,
     onInterrupt: noop,
     onEndSession: noop,
+    onReconfigure: noop,
   });
 }
 

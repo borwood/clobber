@@ -14,6 +14,7 @@ describe("claudeRuntimeProvider", () => {
       livePromptInjection: true,
       interrupt: true,
       resume: true,
+      reconfigure: true,
       inSessionHabits: true,
     });
   });
@@ -73,6 +74,7 @@ describe("codexRuntimeProvider", () => {
       livePromptInjection: false,
       interrupt: false,
       resume: true,
+      reconfigure: false,
       inSessionHabits: false,
       requiresPrompt: true,
     });

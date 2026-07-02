@@ -20,6 +20,8 @@ export interface Row {
   composed_system_prompt: string | null;
   model: string | null;
   effort: string | null;
+  model_override: string | null;
+  effort_override: string | null;
 }
 
 export function rowToSession(row: Row): Session {
@@ -49,5 +51,7 @@ export function rowToSession(row: Row): Session {
   }
   if (row.model !== null) input["model"] = row.model;
   if (row.effort !== null) input["effort"] = row.effort;
+  if (row.model_override !== null) input["model_override"] = row.model_override;
+  if (row.effort_override !== null) input["effort_override"] = row.effort_override;
   return SessionSchema.parse(input);
 }

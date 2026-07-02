@@ -80,6 +80,11 @@ export function MailboxContent(props: MailboxContentProps) {
             onEndSession={async () => {
               await api.endSession(selectedSession);
             }}
+            model={selected.model}
+            effort={selected.effort}
+            onReconfigure={async (change) => {
+              await api.reconfigureSession(selectedSession, change);
+            }}
           />
         </>
       )}
