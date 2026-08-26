@@ -2,7 +2,75 @@
 
 A control room for multi-Claude orchestration. Spawn, watch, and intervene in many `claude` sessions on a whiteboard-style room. Persistent agents (managers, reviewers) keep working in the background even when no LLM brain is currently embodying them.
 
-> Status: scaffolding. Not usable yet.
+> Status: scaffolding, but the loop below works end to end.
+
+## Quickstart
+
+Every command here was run verbatim against a fresh clone during the #683 cold-start pass.
+Requires only [Bun](https://bun.sh) and `git`.
+
+```sh
+git clone https://github.com/brennan-volter/clobber.git
+cd clobber
+bun install
+bun run type-check   # sanity check — should print nothing and exit 0
+```
+
+Start the server (default port 3370 — pick another with `CLOBBER_PORT` if that's taken):
+
+```sh
+cd packages/server
+bun run dev
+```
+
+In a second terminal, from the repo root, create a workspace pointed at any local git repo
+(here, a throwaway one) using the operator-level `clobber workspace create` command — it talks to
+the server over `CLOBBER_API_BASE` only, no agent session required:
+
+```sh
+mkdir -p /tmp/clobber-demo-repo && cd /tmp/clobber-demo-repo
+git init -q && git commit -q --allow-empty -m init
+
+mkdir -p /tmp/clobber-demo-config
+cat > /tmp/clobber-demo-config/workspace.config.json <<'EOF'
+{ "name": "demo", "repo_path": "/tmp/clobber-demo-repo" }
+EOF
+
+cd -   # back to the clobber checkout
+CLOBBER_API_BASE=http://127.0.0.1:3370 \
+  bun packages/cli/src/index.ts workspace create --config /tmp/clobber-demo-config --json
+```
+
+That prints the created workspace's `id`. Find the seeded `worker` role's id for that workspace:
+
+```sh
+curl -s http://127.0.0.1:3370/roles | python3 -c \
+  'import json,sys; [print(r["id"]) for r in json.load(sys.stdin) if r["name"]=="worker"]'
+```
+
+Spawn a worker with a trivial task (no manager needed for a smoke test — `/spawn` is also
+operator-level):
+
+```sh
+curl -s -X POST http://127.0.0.1:3370/spawn -H "Content-Type: application/json" -d '{
+  "workspace_id": "<workspace id from above>",
+  "role_id": "<worker role id from above>",
+  "label": "smoke-test",
+  "wake_program": "custom",
+  "prompt": "Append hello to a new file hello.txt in the repo root, then run: clobber status done \"done\". Do not commit."
+}'
+```
+
+Watch it land — the whiteboard route shows live status without needing the browser:
+
+```sh
+curl -s http://127.0.0.1:3370/workspaces/<workspace id>/whiteboard | python3 -m json.tool
+```
+
+Once `session.latest_status.state` reads `"done"`, the loop closed: clone → server → workspace →
+worker → status, no hidden setup steps. The same server also serves the web UI's API — run
+`bun run dev` in `packages/web` (port 3470 by default) to watch it happen on the whiteboard instead
+of via curl.
 
 ## Vocabulary
 

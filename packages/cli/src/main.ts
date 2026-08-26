@@ -115,8 +115,15 @@ export async function run(opts: RunOptions): Promise<number> {
   // Server commands resolve the agent env eagerly so a missing token fails fast
   // (and, for direct-arg verbs, before any command logic runs). Local dev
   // commands never reach the server, so they skip it; the getter throws loudly
-  // if such a command mistakenly reads `ctx.env`.
-  const env = command.local === true ? null : readEnv(opts.env);
+  // if such a command mistakenly reads `ctx.env`. `operator` is per-subcommand
+  // (#683) — a sibling sub-verb on the same Command may still need a real
+  // session token (e.g. `workspace patch` resolves `GET /agent/me` first).
+  const invokedSubcommand = command.subcommands?.find((s) => s.name === rest[0]);
+  const isOperatorInvocation = invokedSubcommand?.operator === true;
+  const env =
+    command.local === true
+      ? null
+      : readEnv(opts.env, { requireSessionToken: !isOperatorInvocation });
   try {
     return await command.run({
       get env() {

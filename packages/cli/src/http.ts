@@ -21,7 +21,7 @@ export async function request<T>(env: CliEnv, opts: RequestOptions): Promise<T> 
   const init: RequestInit = {
     method: opts.method,
     headers: {
-      authorization: `Bearer ${env.sessionToken}`,
+      ...(env.sessionToken === undefined ? {} : { authorization: `Bearer ${env.sessionToken}` }),
       ...(opts.body === undefined ? {} : { "content-type": "application/json" }),
     },
     ...(opts.body === undefined ? {} : { body: JSON.stringify(opts.body) }),

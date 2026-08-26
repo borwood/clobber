@@ -4,10 +4,14 @@ import { WORKSPACE_CONFIG_FILE, MANAGER_TRIGGERS_FILE, runCreate } from "./works
 import { runPatch } from "./workspace-patch.ts";
 import { runPermsShow, runPermsSet } from "./workspace-perms.ts";
 
-// workspace create/patch/perms call /workspaces/* routes (no withAgentAuth), so
-// no capability ref — they operate outside the agent-authz layer.
+// workspace create/patch/perms call /workspaces/* routes (no withAgentAuth on
+// the workspace mutation itself), so no capability ref — they operate outside
+// the agent-authz layer. Only `create` is a true bare-shell operator command
+// (#683): `patch`/`perms` resolve their target workspace via `GET /agent/me`
+// first, which IS agent-authed (routes/agent.ts) — they still need a real
+// session token, just not a capability grant for the workspace write itself.
 const SUBCOMMANDS: readonly Subcommand[] = [
-  { name: "create" },
+  { name: "create", operator: true },
   { name: "patch" },
   { name: "perms" },
 ];

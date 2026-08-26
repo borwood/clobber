@@ -3,6 +3,15 @@ import type { CliEnv } from "./env.ts";
 export interface Subcommand {
   readonly name: string;
   readonly capability?: string;
+  /**
+   * This specific sub-verb hits only routes with no agent-auth check (e.g.
+   * `POST /workspaces`, the `workspace create` operator seam, #683) — so it
+   * works from a bare human shell that has CLOBBER_API_BASE but no session
+   * token. Sibling sub-verbs on the same Command may still require one (e.g.
+   * `workspace patch`/`workspace perms` resolve `GET /agent/me` first, which
+   * IS agent-authed) — this flag is per-subcommand, never inherited.
+   */
+  readonly operator?: boolean;
 }
 
 export interface CommandContext {
