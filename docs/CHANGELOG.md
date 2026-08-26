@@ -4,8 +4,8 @@
 
 _Generated from git history of source metadata files._
 
-- 2026-08-26 fix(cli): narrow the operator seam to workspace create only (#688 review)
-- 2026-08-26 fix(cli): let workspace create/patch/perms run from a bare human shell (#683)
+- 2026-08-26 feat(shared,server,runtime): bootstrap-interview first-open workspace setup (#685)
+- 2026-08-26 fix(revival): cold-start truth pass (#683) (#688)
 - 2026-06-14 feat(cli,server): worktrees set-default --worktree-root + read-merge-write (#662)
 - 2026-06-12 feat(server,cli,shared): role commit legibility — required message, agent provenance, branch changelog (#637) (#646)
 - 2026-06-12 feat(server,cli): route clobber reply to agent tip, survive cycling (#638) (#645)
