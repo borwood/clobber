@@ -1,6 +1,9 @@
 export interface CliEnv {
   readonly apiBase: string;
-  readonly sessionToken: string;
+  // Absent for an operator sub-verb invoked from a bare human shell (#683) —
+  // callers that hit agent-authed routes always have one by construction
+  // (readEnv throws first), so `undefined` only ever reaches an operator route.
+  readonly sessionToken: string | undefined;
   // Present when the CLI is running inside a clobber-spawned agent session.
   readonly agentId: string | undefined;
   // How long the ask command keeps retrying an unreachable server before it
@@ -55,7 +58,7 @@ export function readEnv(
   const agentId = env["CLOBBER_AGENT_ID"];
   return {
     apiBase: apiBase.replace(/\/$/, ""),
-    sessionToken: sessionToken ?? "",
+    sessionToken: sessionToken !== undefined && sessionToken.length > 0 ? sessionToken : undefined,
     agentId: agentId !== undefined && agentId.length > 0 ? agentId : undefined,
     askRetryBudgetMs: readPositiveIntEnv(env, "CLOBBER_ASK_RETRY_BUDGET_MS", 60_000),
     askRetryIntervalMs: readPositiveIntEnv(env, "CLOBBER_ASK_RETRY_INTERVAL_MS", 1_000),

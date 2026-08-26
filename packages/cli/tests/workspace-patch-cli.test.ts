@@ -343,4 +343,21 @@ describe("clobber CLI — workspace patch (#454)", () => {
     expect(code).toBe(2);
     expect(s.err()).toMatch(/--allow-skill|--disallow-skill|--allow-self-grant|--json/i);
   });
+
+  it("with no CLOBBER_SESSION_TOKEN, fails fast with the local error (not a 401) (#688)", async () => {
+    // Unlike `workspace create`, `patch` resolves its target workspace via
+    // `GET /agent/me` first, which IS agent-authed — it must still demand a
+    // real session token from a bare human shell rather than hitting the
+    // server and surfacing a raw network 401.
+    const s = captureStreams();
+
+    await expect(
+      run({
+        argv: ["workspace", "patch", "--allow-self-grant", "true"],
+        env: { CLOBBER_API_BASE: harness.baseUrl },
+        stdout: s.stdout,
+        stderr: s.stderr,
+      }),
+    ).rejects.toThrow(/CLOBBER_SESSION_TOKEN is not set/);
+  });
 });
