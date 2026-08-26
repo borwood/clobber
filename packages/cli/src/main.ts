@@ -116,7 +116,10 @@ export async function run(opts: RunOptions): Promise<number> {
   // (and, for direct-arg verbs, before any command logic runs). Local dev
   // commands never reach the server, so they skip it; the getter throws loudly
   // if such a command mistakenly reads `ctx.env`.
-  const env = command.local === true ? null : readEnv(opts.env);
+  const env =
+    command.local === true
+      ? null
+      : readEnv(opts.env, { requireSessionToken: command.operator !== true });
   try {
     return await command.run({
       get env() {

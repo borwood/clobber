@@ -60,6 +60,10 @@ export const workspaceCommand: Command = {
   summary: "Load or patch a workspace (create + apply triggers, or live config patch).",
   usage: WORKSPACE_USAGE,
   subcommands: SUBCOMMANDS,
+  // #683 — create/patch/perms hit /workspaces/* routes with no agent-auth
+  // check, so a bare human shell (CLOBBER_API_BASE only, no session token)
+  // can run this before any agent has ever been spawned.
+  operator: true,
   async run(ctx) {
     const [sub, ...rest] = ctx.args;
     if (sub === undefined) {

@@ -33,6 +33,12 @@ export interface Command {
    * (the default) resolve that env eagerly so a missing token fails fast.
    */
   readonly local?: boolean;
+  /**
+   * Hits the server but only routes with no agent-auth check (e.g. the
+   * `/workspaces` operator seam, #683) — so it works from a bare human shell
+   * that has CLOBBER_API_BASE but no session token.
+   */
+  readonly operator?: boolean;
   run(ctx: CommandContext): Promise<number>;
 }
 

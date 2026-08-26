@@ -32,7 +32,14 @@ function readPositiveIntEnv(
   return parsed;
 }
 
-export function readEnv(env: NodeJS.ProcessEnv): CliEnv {
+// `requireSessionToken: false` is for operator commands (e.g. `workspace
+// create`) that hit routes with no agent-auth check (#683) — a bare human
+// shell has CLOBBER_API_BASE (pointed at a running server) but never a
+// session token, which only exists inside a clobber-spawned agent.
+export function readEnv(
+  env: NodeJS.ProcessEnv,
+  opts: { requireSessionToken: boolean } = { requireSessionToken: true },
+): CliEnv {
   const apiBase = env["CLOBBER_API_BASE"];
   const sessionToken = env["CLOBBER_SESSION_TOKEN"];
   if (apiBase === undefined || apiBase.length === 0) {
@@ -40,7 +47,7 @@ export function readEnv(env: NodeJS.ProcessEnv): CliEnv {
       "CLOBBER_API_BASE is not set — this CLI must be invoked from inside a clobber-spawned agent.",
     );
   }
-  if (sessionToken === undefined || sessionToken.length === 0) {
+  if (opts.requireSessionToken && (sessionToken === undefined || sessionToken.length === 0)) {
     throw new CliEnvError(
       "CLOBBER_SESSION_TOKEN is not set — this CLI must be invoked from inside a clobber-spawned agent.",
     );
@@ -48,7 +55,7 @@ export function readEnv(env: NodeJS.ProcessEnv): CliEnv {
   const agentId = env["CLOBBER_AGENT_ID"];
   return {
     apiBase: apiBase.replace(/\/$/, ""),
-    sessionToken,
+    sessionToken: sessionToken ?? "",
     agentId: agentId !== undefined && agentId.length > 0 ? agentId : undefined,
     askRetryBudgetMs: readPositiveIntEnv(env, "CLOBBER_ASK_RETRY_BUDGET_MS", 60_000),
     askRetryIntervalMs: readPositiveIntEnv(env, "CLOBBER_ASK_RETRY_INTERVAL_MS", 1_000),

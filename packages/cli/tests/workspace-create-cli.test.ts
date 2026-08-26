@@ -173,4 +173,29 @@ describe("clobber CLI — workspace create --config (#181)", () => {
     );
     expect(after.triggers).toHaveLength(4);
   });
+
+  it("works from a bare human shell with no CLOBBER_SESSION_TOKEN set (#683)", async () => {
+    const bareConfigDir = mkdtempSync(join(tmpdir(), "clobber-ws-create-bare-config-"));
+    const exampleConfig = JSON.parse(
+      readFileSync(join(EXAMPLE_DIR, "workspace.config.json"), "utf8"),
+    ) as Record<string, unknown>;
+    exampleConfig["name"] = "clobber-on-clobber-bare-shell";
+    exampleConfig["repo_path"] = harness.repoPath;
+    writeFileSync(
+      join(bareConfigDir, "workspace.config.json"),
+      JSON.stringify(exampleConfig, null, 2),
+    );
+
+    const s = captureStreams();
+    const code = await run({
+      argv: ["workspace", "create", "--config", bareConfigDir, "--json"],
+      env: { CLOBBER_API_BASE: harness.baseUrl },
+      stdout: s.stdout,
+      stderr: s.stderr,
+    });
+    expect(s.err()).toBe("");
+    expect(code).toBe(0);
+
+    rmSync(bareConfigDir, { recursive: true, force: true });
+  });
 });
