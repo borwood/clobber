@@ -4,7 +4,7 @@
 
 _Generated from git history of source metadata files._
 
-- 2026-08-26 feat(shared,server,runtime): bootstrap-interview first-open workspace setup (#685)
+- 2026-08-26 feat(shared,server,runtime): bootstrap-interview first-open workspace setup (#689)
 - 2026-08-26 fix(revival): cold-start truth pass (#683) (#688)
 - 2026-06-14 feat(cli,server): worktrees set-default --worktree-root + read-merge-write (#662)
 - 2026-06-12 feat(server,cli,shared): role commit legibility — required message, agent provenance, branch changelog (#637) (#646)
