@@ -1,8 +1,25 @@
 # Clobber
 
-A control room for multi-Claude orchestration. Spawn, watch, and intervene in many `claude` sessions on a whiteboard-style room. Persistent agents (managers, reviewers) keep working in the background even when no LLM brain is currently embodying them.
+Clobber is an office for Claude Code agents. Open a workspace on a repo and a
+persistent **manager** takes the one permanent desk in it — you hand it
+issues and decisions, and it spawns ephemeral **workers** at the desks around
+it to carry the implementation work: write the failing test, make it pass,
+open the PR, watch CI. The **whiteboard** shows the office live, so you can
+walk in on several sessions at once without reading several transcripts.
 
-> Status: scaffolding, but the loop below works end to end.
+Every agent embodies a **role** — a template that bakes in a system prompt,
+a skill bundle, allowed tools, and (for autonomous roles) an SDLC profile.
+Roles talk back to Clobber through a small `clobber` CLI, authenticated
+per-session, so status updates and blocking questions land on the whiteboard
+instead of getting lost in a terminal nobody's watching. When an agent hits a
+decision it can't make alone, it asks — a widget pops on its desk or office
+and mirrors into a sidebar, so a question doesn't get buried under a busy
+floor.
+
+> Status: early, not feature-complete. The workspace → spawn → status loop
+> below runs end to end against a real server. See "How it feels" below for
+> what's built (a live whiteboard, a first-open interview, diff-rendering
+> transcripts) versus what's still just documented intent.
 
 ## Quickstart
 
@@ -79,12 +96,14 @@ of via curl.
 - **Session** — a `claude` process embodying an agent right now. Identified by claude's actual session ID; resumable.
 - **Workspace** — work-source (a repo) + manager agent + agent ceiling.
 - **Room** — whiteboard view of a workspace.
-- **Office** — permanent box on the whiteboard belonging to a *persistent* agent (e.g. Manager, Reviewer). Stays on the board even when nothing is embodying the agent. Each office is backed by a per-agent directory inside `.clobber/` in the workspace cwd, where the agent stores notes-to-self and other files that should outlive any single session.
+- **Office** — permanent box on the whiteboard belonging to a *persistent* agent (the shipped `manager` role is one). Stays on the board even when nothing is embodying the agent. Each office is backed by a per-agent directory inside `.clobber/` in the workspace cwd, where the agent stores notes-to-self and other files that should outlive any single session.
 - **Desk** — temporary spot on the room's shared floor for an *ephemeral* agent (e.g. a default Worker). Appears when the agent is spawned; disappears when the session ends. Ephemeral agents have no persistent directory of their own.
 
 ## How it feels
 
 You walk into a workspace. The Manager's office and any other persistent agents' offices are always there. Workers come and go on the shared floor as their tasks are spawned and finish.
+
+**First open.** The first time a workspace's manager wakes — a `workspace-open` trigger guarded on the absence of `.clobber/bootstrap.json` — it runs a short interview instead of anything else: your repo/stack, which SDLC phases to ratify, which shipped roles to enable, and any hazards or conventions worth telling every future agent once instead of leaving them to rediscover it. The answers become a `project-context` prompt-module wired onto the worker role, and the sentinel file marks the interview done so it never re-fires.
 
 **Triggers wake persistent agents.** A persistent agent — typically the Manager — can carry standing orders that fire on events (a new issue assigned to you, a webhook, a PR opened) or on a cron. The Manager wakes itself up to triage incoming work, scan PRs, or audit roles, without a human prompt. Ephemeral workers don't carry triggers; they're spawned per task.
 
