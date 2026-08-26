@@ -10,6 +10,8 @@ import {
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { Markdown } from "./Markdown.tsx";
 import { BoundedRaw } from "./BoundedRaw.tsx";
+import { FileDiffBlock } from "./DiffBlock.tsx";
+import { detectFileDiff } from "../file-diff.ts";
 
 export function UserBubble({ line }: { line: UserLine }) {
   const content = line.message.content;
@@ -178,6 +180,7 @@ function ToolCallCard({
     ? (obj["description"] as string)
     : null;
   const preview = previewToolInput(input);
+  const fileDiff = detectFileDiff(name, input);
   // mt-3 sets the description+tool pair apart from the preceding block; the
   // left bar (border-l) marks the unit as subordinate to the agent's prose and
   // supplies the indent; the tight inner space-y-1 keeps the description bound
@@ -192,10 +195,11 @@ function ToolCallCard({
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex items-baseline gap-2">
             <span className="text-text-dim font-mono shrink-0">{name}</span>
-            {preview !== null && (
+            {fileDiff === null && preview !== null && (
               <span className="text-tool truncate font-mono">{preview}</span>
             )}
           </div>
+          {fileDiff !== null && <FileDiffBlock diff={fileDiff} />}
           {showDetails && (
             <BoundedRaw
               text={JSON.stringify(input, null, 2)}

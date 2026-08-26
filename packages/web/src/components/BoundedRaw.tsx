@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-const CAP_CHARS = 10_000;
+export const CAP_CHARS = 10_000;
 
 // Renders a pre-formatted text payload truncated to CAP_CHARS, with a
 // "show full" button that reveals the rest on demand. Used for raw JSON
