@@ -41,11 +41,36 @@ export function detectFileDiff(name: string, input: unknown): FileDiff | null {
 
 export type DiffLine = { readonly type: "context" | "add" | "remove"; readonly text: string };
 
-// Line-level LCS diff. Quadratic in line count, which is fine for an Edit
-// call's old/new snippet (a localized region of one file, not a whole file).
+// Splits a string into lines for diffing/rendering. `\r\n` is normalized to
+// `\n` first so CRLF text (Windows-authored files) doesn't leave a trailing
+// `\r` on every line — without this, identical lines never match by `===`
+// and the whole diff renders as remove+add instead of context. An empty
+// string is zero lines (not one empty line): a deletion's new_string="" must
+// not render a spurious trailing blank "add" line.
+export function normalizeLines(text: string): readonly string[] {
+  if (text.length === 0) return [];
+  return text.replace(/\r\n/g, "\n").split("\n");
+}
+
+// A diff whose line-count product would blow up the O(n*m) LCS matrix (or
+// whose total line count would dump too many DOM nodes at once) is too large
+// to compute/render inline — the caller should fall back to a bounded
+// all-removed/all-added view instead (cf. WriteDiff in DiffBlock.tsx).
+export const MAX_DIFF_CELLS = 250_000;
+export const MAX_DIFF_LINES = 4_000;
+
+export function isDiffTooLarge(
+  oldLines: readonly string[],
+  newLines: readonly string[],
+): boolean {
+  return oldLines.length * newLines.length > MAX_DIFF_CELLS || oldLines.length + newLines.length > MAX_DIFF_LINES;
+}
+
+// Line-level LCS diff. Quadratic in line count — callers must guard with
+// isDiffTooLarge first; this function does not check the cap itself.
 export function computeLineDiff(oldStr: string, newStr: string): readonly DiffLine[] {
-  const oldLines = oldStr.split("\n");
-  const newLines = newStr.split("\n");
+  const oldLines = normalizeLines(oldStr);
+  const newLines = normalizeLines(newStr);
   const n = oldLines.length;
   const m = newLines.length;
 

@@ -168,4 +168,106 @@ describe("TranscriptViewer: file diff blocks for Edit/Write (#684)", () => {
     expect(container.querySelector('[data-diff-line]')).toBeNull();
     expect(container.textContent).toContain("something-else");
   });
+
+  it("normalizes CRLF so lines identical except for line-ending convention match as context", () => {
+    // old_string carries CRLF (as read from a Windows-authored file); new_string
+    // carries LF-only (as an assistant typically writes it). line1/line3 are the
+    // same text on both sides and must be recognized as unchanged.
+    act(() => {
+      root.render(
+        <TranscriptViewer
+          lines={[
+            toolUseLine("Edit", {
+              file_path: "/repo/src/crlf.ts",
+              old_string: "line1\r\nline2\r\nline3",
+              new_string: "line1\nCHANGED\nline3",
+            }),
+          ]}
+          showSystem={false}
+          busy={false}
+        />,
+      );
+    });
+    const context = Array.from(container.querySelectorAll('[data-diff-line="context"]'));
+    expect(context.some((el) => el.textContent?.includes("line1"))).toBe(true);
+    expect(context.some((el) => el.textContent?.includes("line3"))).toBe(true);
+    const removed = Array.from(container.querySelectorAll('[data-diff-line="remove"]'));
+    const added = Array.from(container.querySelectorAll('[data-diff-line="add"]'));
+    expect(removed.length).toBe(1);
+    expect(added.length).toBe(1);
+    expect(removed[0]?.textContent).toContain("line2");
+    expect(added[0]?.textContent).toContain("CHANGED");
+  });
+
+  it("renders a deletion (new_string empty) with only remove lines, no spurious trailing add", () => {
+    act(() => {
+      root.render(
+        <TranscriptViewer
+          lines={[
+            toolUseLine("Edit", {
+              file_path: "/repo/src/deleted.ts",
+              old_string: "line1\nline2",
+              new_string: "",
+            }),
+          ]}
+          showSystem={false}
+          busy={false}
+        />,
+      );
+    });
+    const removed = container.querySelectorAll('[data-diff-line="remove"]');
+    const added = container.querySelectorAll('[data-diff-line="add"]');
+    expect(removed.length).toBe(2);
+    expect(added.length).toBe(0);
+  });
+
+  it("falls back to a bounded remove-all/add-all view when the LCS cell count is too large to compute inline", () => {
+    // 600 * 600 = 360,000 cells, over the 250,000 cap; total lines (1200) stay
+    // under the separate line-count cap, isolating the cell-count guard.
+    const oldString = Array.from({ length: 600 }, (_, i) => `old line ${i}`).join("\n");
+    const newString = Array.from({ length: 600 }, (_, i) => `new line ${i}`).join("\n");
+    act(() => {
+      root.render(
+        <TranscriptViewer
+          lines={[
+            toolUseLine("Edit", {
+              file_path: "/repo/src/huge.ts",
+              old_string: oldString,
+              new_string: newString,
+            }),
+          ]}
+          showSystem={false}
+          busy={false}
+        />,
+      );
+    });
+    // No LCS was computed, so nothing is recognized as shared context.
+    expect(container.querySelector('[data-diff-line="context"]')).toBeNull();
+    expect(container.querySelector('[data-diff-line="remove"]')).not.toBeNull();
+    expect(container.querySelector('[data-diff-line="add"]')).not.toBeNull();
+  });
+
+  it("falls back to a bounded view when the total line count is too large, even if cells are small", () => {
+    // n=1, m=4001 → 4001 cells (well under the cell cap) but 4002 total lines,
+    // over the 4,000 line cap, isolating the total-line-count guard.
+    const newString = Array.from({ length: 4001 }, (_, i) => `n${i}`).join("\n");
+    act(() => {
+      root.render(
+        <TranscriptViewer
+          lines={[
+            toolUseLine("Edit", {
+              file_path: "/repo/src/huge-onesided.ts",
+              old_string: "x",
+              new_string: newString,
+            }),
+          ]}
+          showSystem={false}
+          busy={false}
+        />,
+      );
+    });
+    expect(container.querySelector('[data-diff-line="context"]')).toBeNull();
+    expect(container.querySelector('[data-diff-line="remove"]')).not.toBeNull();
+    expect(container.querySelector('[data-diff-line="add"]')).not.toBeNull();
+  });
 });
