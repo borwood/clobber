@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { RoleTriggerSchema, triggerId } from "../src/domain/role.ts";
+import { RoleTriggerSchema, triggerId } from "../src/domain/role-trigger.ts";
 
 describe("RoleTriggerSchema", () => {
   it("accepts a cron trigger with a valid expression", () => {

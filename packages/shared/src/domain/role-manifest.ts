@@ -4,6 +4,7 @@ import { isActionAllowed } from "./cli-scope.ts";
 import { EffortLevelSchema, ModelSchema, SdlcProfileSchema } from "./role.ts";
 import { PromptModuleRefSchema } from "./prompt-module.ts";
 import { WakeProgramSchema } from "./wake-program.ts";
+import { RoleTriggerSchema } from "./role-trigger.ts";
 
 const RelativeBundlePath = z
   .string()
@@ -40,6 +41,11 @@ export const RoleManifestSchema = z
     // user-message kick; snapshotted into the role version's wake_programs_json
     // at seed time. `idle` is the universal built-in and is never listed here.
     wakePrograms: z.array(WakeProgramSchema).readonly().optional(),
+    // The role's default wake conditions (persistent roles only), sibling to
+    // promptModuleRefs/wakePrograms: snapshotted into the role version's
+    // triggers_json at seed time. Absent → no default triggers (today's
+    // shipped-role behavior).
+    triggers: z.array(RoleTriggerSchema).readonly().optional(),
     // The opening move a fresh spawn selects when it names none (#213). A
     // program name from `wakePrograms` (or `idle`). Omitted → idle. The worker
     // sets `task`; the manager omits it so spawns default to idle.

@@ -265,9 +265,12 @@ describe("PATCH /agent/roles/:idOrName — triggers", () => {
     const h = buildHarness();
     const boot = await bootInWorkspace(h, repo.path);
 
+    // The worker ships no default triggers (only the manager declares one,
+    // #685 bootstrap-interview) — this proves the generic seed→detail
+    // round-trip, not anything manager-specific.
     const showRes = await h.server.inject({
       method: "GET",
-      url: `/agent/roles/${boot.managerRoleId}`,
+      url: `/agent/roles/${boot.workerRoleId}`,
       headers: { authorization: `Bearer ${boot.managerToken}` },
     });
     const detail = showRes.json() as {

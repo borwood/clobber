@@ -207,6 +207,16 @@ function setManagerWebhook(h: Harness, path: string): void {
   writeRoleVersion(h.db, role, cur, { triggers: [{ kind: "webhook", path }] });
 }
 
+// The shipped manager now declares a guarded workspace-open trigger by
+// default (#685 bootstrap-interview). Tests whose premise is "the manager has
+// no trigger registered" clear it explicitly rather than relying on the
+// pre-#685 empty default.
+function clearManagerTriggers(h: Harness): void {
+  const role = h.roles.get(h.managerRoleId) as Role;
+  const cur = getCurrentVersion(h, h.managerRoleId);
+  writeRoleVersion(h.db, role, cur, { triggers: [] });
+}
+
 function setManagerWorkspaceOpen(h: Harness, debounceMs?: number): void {
   const role = h.roles.get(h.managerRoleId) as Role;
   const cur = getCurrentVersion(h, h.managerRoleId);
@@ -834,6 +844,7 @@ describe("TriggerScheduler — workspace-open firing", () => {
 
   it("returns dispatched=0 and writes nothing when no agent has a workspace-open trigger in that workspace", async () => {
     const h = makeHarness(new Date("2026-05-05T09:00:00.000Z"));
+    clearManagerTriggers(h);
     h.scheduler.start();
 
     const result = await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined);
@@ -1008,6 +1019,7 @@ describe("TriggerScheduler — workspace-open firing", () => {
 
   it("does not fire workspace-open triggers configured on ephemeral roles", async () => {
     const h = makeHarness(new Date("2026-05-05T09:00:00.000Z"));
+    clearManagerTriggers(h);
     const workerRole = h.roles.get(h.workerRoleId) as Role;
     const cur = h.roleVersions.latestForRole(workerRole.id)!;
     h.roleVersions.create({
@@ -1064,6 +1076,7 @@ describe("TriggerScheduler — workspace-open firing", () => {
 
   it("reloadAgent picks up a newly-added workspace-open trigger without restart", async () => {
     const h = makeHarness(new Date("2026-05-05T09:00:00.000Z"));
+    clearManagerTriggers(h);
     h.scheduler.start();
     expect((await h.scheduler.fireWorkspaceOpen(h.workspaceId, undefined)).dispatched).toBe(0);
 

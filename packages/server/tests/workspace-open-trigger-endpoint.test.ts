@@ -167,6 +167,17 @@ describe("POST /workspaces/:id/open — fire workspace-open trigger", () => {
     const h = buildHarness();
     const boot = await bootInWorkspace(h, repo.path);
 
+    // The shipped manager now declares a default workspace-open trigger
+    // (#685 bootstrap-interview) — clear it to set up this test's actual
+    // premise: nobody in the workspace has one.
+    const clearRes = await h.server.inject({
+      method: "PATCH",
+      url: `/agent/roles/${boot.managerRoleId}`,
+      headers: { authorization: `Bearer ${boot.managerToken}` },
+      payload: { triggers: [] },
+    });
+    expect(clearRes.statusCode).toBe(200);
+
     const fireRes = await h.server.inject({
       method: "POST",
       url: `/workspaces/${boot.workspaceId}/open`,
