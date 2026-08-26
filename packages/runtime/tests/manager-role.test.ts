@@ -120,6 +120,52 @@ describe("managerRole", () => {
     expect(text).toMatch(/code/i);
   });
 
+  it("declares a guarded workspace-open trigger for the bootstrap-interview wake-program (#685)", () => {
+    const triggers = managerRole.manifest.triggers ?? [];
+    expect(triggers).toEqual([
+      {
+        kind: "workspace-open",
+        wake_program: "bootstrap-interview",
+        guard: { kind: "file-absent", path: ".clobber/bootstrap.json" },
+      },
+    ]);
+  });
+
+  it("ships a bootstrap-interview wake-program with a non-trivial system addon and kick", () => {
+    const programs = managerRole.manifest.wakePrograms ?? [];
+    const program = programs.find((p) => p.name === "bootstrap-interview");
+    expect(program).toBeDefined();
+    expect(program!.system.trim().length).toBeGreaterThan(20);
+    expect(program!.user).toMatch(/bootstrap-interview/);
+  });
+
+  it("ships a bootstrap-interview skill that writes the overlay via existing CLI surfaces, sentinel last (#685)", () => {
+    const pluginRoot = join(managerRole.bundleRoot, managerRole.manifest.pluginTemplatePath);
+    const skillPath = join(pluginRoot, "skills", "bootstrap-interview", "SKILL.md");
+    expect(existsSync(skillPath)).toBe(true);
+    const body = readFileSync(skillPath, "utf8");
+    expect(body).toMatch(/^name:\s*bootstrap-interview$/m);
+    expect(body).toMatch(/AskUserQuestion/);
+    expect(body).toMatch(/clobber prompt-modules create project-context/);
+    expect(body).toMatch(/clobber roles prompt-modules worker add project-context/);
+    expect(body).toMatch(/\.clobber\/bootstrap\.json/);
+  });
+
+  it("keeps the bootstrap-interview skill and wake-program free of workspace-specific content (#685 AC6 / seam-LAW)", () => {
+    const pluginRoot = join(managerRole.bundleRoot, managerRole.manifest.pluginTemplatePath);
+    const skillBody = readFileSync(
+      join(pluginRoot, "skills", "bootstrap-interview", "SKILL.md"),
+      "utf8",
+    );
+    const programSystem =
+      (managerRole.manifest.wakePrograms ?? []).find((p) => p.name === "bootstrap-interview")
+        ?.system ?? "";
+    for (const text of [skillBody, programSystem]) {
+      expect(text).not.toMatch(/tasks#20/);
+      expect(text).not.toMatch(/brennan-volter/i);
+    }
+  });
+
   it("inherits the hooks mechanism from base (#355), wrapped in { hooks } with the __CLOBBER_HOOK_URL__ placeholder", () => {
     const pluginRoot = join(managerRole.bundleRoot, managerRole.manifest.pluginTemplatePath);
     // The fork no longer ships its own hooks file; it inherits base's.

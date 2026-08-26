@@ -33,7 +33,7 @@ export interface ScheduledWebhook extends AgentBinding {
 }
 
 export interface ScheduledWorkspaceOpen extends AgentBinding {
-  readonly trigger: { kind: "workspace-open"; debounce_ms?: number | undefined };
+  readonly trigger: Extract<RoleTrigger, { kind: "workspace-open" }>;
   readonly debounceMs: number;
   lastFiredAt: number | null;
 }

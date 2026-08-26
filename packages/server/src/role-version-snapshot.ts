@@ -32,7 +32,7 @@ export function snapshotShippedBundle(inputs: SnapshotInputs): RoleVersionSnapsh
     allowed_tools_json: JSON.stringify(allowedTools),
     allowed_cli_commands_json: JSON.stringify([...loaded.manifest.allowedCliCommands]),
     hooks_json: loaded.hooksJson,
-    triggers_json: "[]",
+    triggers_json: JSON.stringify(loaded.manifest.triggers ?? []),
     seed_refs_json: JSON.stringify(loaded.manifest.promptModuleRefs ?? []),
     wake_programs_json: JSON.stringify(loaded.manifest.wakePrograms ?? []),
     default_wake_program: loaded.manifest.defaultWakeProgram ?? null,

@@ -1,8 +1,11 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import {
   RoleTriggerSchema,
   triggerId,
   type Agent,
   type RoleTrigger,
+  type Workspace,
 } from "@clobber/shared";
 import { resolveCurrentRoleVersion } from "./resolve-role-content.ts";
 import {
@@ -224,6 +227,8 @@ export function createTriggerScheduler(
   ): Promise<DispatchResult> {
     const set = workspaceOpensByWorkspace.get(workspaceId);
     if (set === undefined) return { dispatched: 0 };
+    const workspace = deps.workspaces.get(workspaceId);
+    if (workspace === null) return { dispatched: 0 };
     const now = deps.clock.now().getTime();
     let dispatched = 0;
     for (const entry of set) {
@@ -233,12 +238,26 @@ export function createTriggerScheduler(
       ) {
         continue;
       }
+      if (isGuardBlocked(entry.trigger, workspace)) continue;
       if (await dispatchTrigger(dispatchDeps, entry, entry.trigger, payload)) {
         entry.lastFiredAt = now;
         dispatched += 1;
       }
     }
     return { dispatched };
+  }
+
+  // A guarded workspace-open trigger fires only when its guard's file does NOT
+  // exist under the workspace repo root — the "first open" gate #685 uses for
+  // the bootstrap-interview sentinel. A block is a silent skip, mirroring the
+  // debounce skip right above: no audit row, same as a fire the recipient
+  // wasn't ready for.
+  function isGuardBlocked(
+    trigger: Extract<RoleTrigger, { kind: "workspace-open" }>,
+    workspace: Workspace,
+  ): boolean {
+    if (trigger.guard === undefined) return false;
+    return existsSync(join(workspace.repo_path, trigger.guard.path));
   }
 
   return {
