@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { baseRole, enumerateShippedRoles, type BaseLayer, type RoleBundleData } from "@clobber/runtime";
 import { deserializeRoleTree, serializeRoleTree, type RoleTreeContract } from "./role-tree.ts";
 import { roleSnapshotToContract } from "./role-tree-snapshot.ts";
-import { commitTree, git, readTreeAtCommit, revParse } from "./role-git.ts";
+import { commitTree, git, readTreeAtCommit, revParse, writeTreeObject } from "./role-git.ts";
 import { snapshotShippedBundle } from "./role-version-snapshot.ts";
 
 // #349 — the upstream role git repo: the canonical store of role versions and
@@ -115,20 +115,64 @@ export function commitContractOnBranch(
   return { branch, sha: revParse(dir, branch) };
 }
 
-// Idempotent boot entrypoint: materialize the upstream repo into `dir` the first
-// time, and on subsequent boots re-open the existing repo and read its current
-// branch tips. The shipped-role set is the engine's, so the fork branches are
-// re-derived from it — opening never mutates the repo (advancing it on an engine
-// upgrade is the workspace's `git merge`, not boot's job).
+// Advance `branch` (which must already exist) to a new commit carrying
+// `contract`'s tree — but only when that tree actually differs from the
+// branch's current tip. Advancing (a new commit on the existing branch, not a
+// recreated one) preserves lineage: the old tip stays an ancestor, so a
+// workspace's later `git merge upstream/<branch>` stays clean. The no-op path
+// (tree unchanged) is what keeps re-derivation idempotent across boots — #532
+// bars empty/no-op commits.
+export function advanceContractOnBranch(
+  dir: string,
+  branch: string,
+  contract: RoleTreeContract,
+  message: string,
+): ForkRef {
+  git(dir, "checkout", "-q", branch);
+  const priorTreeSha = revParse(dir, `${branch}^{tree}`);
+  const newTreeSha = writeTreeObject(dir, serializeRoleTree(contract));
+  if (newTreeSha !== priorTreeSha) {
+    git(
+      dir,
+      "-c",
+      "user.email=clobber@local",
+      "-c",
+      "user.name=clobber",
+      "-c",
+      "commit.gpgsign=false",
+      "commit",
+      "-q",
+      "-m",
+      message,
+    );
+  }
+  return { branch, sha: revParse(dir, branch) };
+}
+
+// Idempotent boot entrypoint: materialize the upstream repo into `dir` the
+// first time. On subsequent boots, re-derive each shipped role's `-default`
+// branch from the CURRENT shipped bundle and advance it if content drifted
+// since the last boot (#532 — a long-lived install must not stay pinned to
+// whatever the repo looked like the day it was first materialized). This is
+// the read-only baseline only: fork branches (a role edited through the
+// working-copy flow, or workspace-invented) are never touched here, and pins
+// don't auto-follow a branch tip — a workspace adopts new content explicitly.
 export function ensureUpstreamRoleRepo(dir: string): UpstreamRoleRepo {
   if (!existsSync(join(dir, ".git"))) {
     return materializeUpstreamRoleRepo(dir);
   }
   const forks = new Map<string, ForkRef>();
   for (const loaded of enumerateShippedRoles()) {
-    const branch = `${loaded.manifest.name}-default`;
-    forks.set(loaded.manifest.name, { branch, sha: revParse(dir, branch) });
+    const name = loaded.manifest.name;
+    const branch = `${name}-default`;
+    const snapshot = snapshotShippedBundle({ loaded, allowedTools: loaded.allowedTools });
+    const contract = { ...roleSnapshotToContract(snapshot), habits: loaded.habits };
+    forks.set(
+      name,
+      advanceContractOnBranch(dir, branch, contract, `${name}: re-derive from shipped bundle`),
+    );
   }
+  git(dir, "checkout", "-q", BASE_BRANCH);
   return { dir, baseBranch: BASE_BRANCH, baseSha: revParse(dir, BASE_BRANCH), forks };
 }
 

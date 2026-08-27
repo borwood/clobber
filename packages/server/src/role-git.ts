@@ -96,6 +96,16 @@ export function clearWorkingTree(dir: string): void {
   }
 }
 
+// Stage `tree` as the working tree and return git's tree object hash, WITHOUT
+// committing. Lets a caller compare a candidate tree to a branch tip's tree
+// (`rev-parse <branch>^{tree}`) before deciding whether a commit is needed.
+export function writeTreeObject(dir: string, tree: RoleTree): string {
+  clearWorkingTree(dir);
+  writeTreeToDir(dir, tree);
+  git(dir, "add", "-A");
+  return git(dir, "write-tree").trim();
+}
+
 // Run git diff --no-index between two directories. Exit 0 = identical, exit 1 =
 // has differences — both are success for a diff query; only other exit codes are
 // errors. Returns the raw unified diff string (empty string when no differences).
