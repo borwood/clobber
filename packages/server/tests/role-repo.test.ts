@@ -4,13 +4,12 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { loadRoleBundle } from "@clobber/runtime";
 import type { RoleBundleData } from "@clobber/runtime";
-import { roleSnapshotToContract } from "../src/role-tree-snapshot.ts";
-import { snapshotShippedBundle } from "../src/role-version-snapshot.ts";
 import {
   materializeUpstreamRoleRepo,
   ensureUpstreamRoleRepo,
   loadRoleBundleAtCommit,
   bundleFromContract,
+  contractForShippedRole,
   BASE_BRANCH,
 } from "../src/role-repo.ts";
 
@@ -34,14 +33,10 @@ function git(dir: string, ...args: string[]): string {
 
 // The bundle the live embodiment path would produce for a shipped role, before
 // any git is involved — the oracle we hold the git round-trip against.
-// Phase 0: roleSnapshotToContract returns habits: [] (no snapshot column), so
-// we overlay loaded.habits to match what materializeUpstreamRoleRepo commits.
 function inMemoryBundle(name: string): RoleBundleData {
   const loaded = loadRoleBundle(name);
   if (loaded === null) throw new Error(`no shipped role ${name}`);
-  const snapshot = snapshotShippedBundle({ loaded, allowedTools: loaded.allowedTools });
-  const contract = { ...roleSnapshotToContract(snapshot), habits: loaded.habits };
-  return bundleFromContract(contract, {
+  return bundleFromContract(contractForShippedRole(loaded), {
     pluginName: name,
     description: loaded.manifest.description,
   });
@@ -136,5 +131,103 @@ describe("upstream role git repo (#349)", () => {
     const merged = loadRoleBundleAtCommit(dir, sha, { pluginName: "worker" });
     expect(merged.systemPrompt).toBe(inMemoryBundle("worker").systemPrompt);
     expect(merged.skills.map((s) => s.name)).toContain("safety");
+  });
+});
+
+// #532 — boot must idempotently re-derive each `-default` branch from the
+// CURRENT shipped bundle, so a long-lived install's baseline never stays
+// frozen at whatever it looked like the day it was first materialized. These
+// tests build their own old-state fixture (rolling `manager-default` back to a
+// stripped contract) rather than relying on any live install's tips.
+describe("baseline re-derivation on boot (#532)", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "clobber-role-repo-"));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  // Roll `manager-default` back to a contract stripped of content the CURRENT
+  // shipped bundle carries (bootstrap-interview skill + workspace-open
+  // trigger), simulating an install whose baseline predates a later engine
+  // release — programmatically, not by reading real install state.
+  function rollBackManagerDefault(): string {
+    git(dir, "checkout", "-q", "manager-default");
+    rmSync(join(dir, "skills", "bootstrap-interview"), { recursive: true, force: true });
+    rmSync(join(dir, "triggers", "workspace-open.json"), { force: true });
+    git(dir, "add", "-A");
+    git(
+      dir,
+      "-c",
+      "user.email=t@t",
+      "-c",
+      "user.name=t",
+      "commit",
+      "-q",
+      "-m",
+      "manager: simulated stale baseline (pre-#689)",
+    );
+    return git(dir, "rev-parse", "manager-default").trim();
+  }
+
+  it("advances a stale -default tip to the current shipped bundle, preserving lineage", () => {
+    materializeUpstreamRoleRepo(dir);
+    const rolledBackTip = rollBackManagerDefault();
+
+    const repo = ensureUpstreamRoleRepo(dir);
+    const advancedTip = repo.forks.get("manager")!.sha;
+
+    expect(advancedTip).not.toBe(rolledBackTip);
+    const isAncestor = Bun.spawnSync(
+      ["git", "-C", dir, "merge-base", "--is-ancestor", rolledBackTip, advancedTip],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    expect(isAncestor.exitCode, "rolled-back tip is an ancestor of the advanced tip").toBe(0);
+
+    // A workspace created after this boot seeds from the advanced tip and
+    // carries the content the stale baseline was missing.
+    const loaded = loadRoleBundle("manager")!;
+    const bundle = loadRoleBundleAtCommit(dir, advancedTip, {
+      pluginName: "manager",
+      description: loaded.manifest.description,
+    });
+    expect(bundle.skills.map((s) => s.name)).toContain("bootstrap-interview");
+    expect(bundle).toEqual(inMemoryBundle("manager"));
+  });
+
+  it("makes no new commit when tips are already current (idempotent across a double boot)", () => {
+    materializeUpstreamRoleRepo(dir);
+    const first = ensureUpstreamRoleRepo(dir);
+    const second = ensureUpstreamRoleRepo(dir);
+
+    for (const name of ["manager", "worker"]) {
+      expect(second.forks.get(name)!.sha).toBe(first.forks.get(name)!.sha);
+    }
+  });
+
+  it("keeps a pre-existing pin's old sha resolvable after the branch advances", () => {
+    materializeUpstreamRoleRepo(dir);
+    const oldSha = rollBackManagerDefault();
+
+    ensureUpstreamRoleRepo(dir);
+
+    const oldContract = loadRoleBundleAtCommit(dir, oldSha, { pluginName: "manager" });
+    expect(oldContract.skills.map((s) => s.name)).not.toContain("bootstrap-interview");
+  });
+
+  it("never touches a fork branch (only -default/base baseline branches)", () => {
+    materializeUpstreamRoleRepo(dir);
+    // Simulate a workspace fork: a role branch off worker-default, edited.
+    git(dir, "checkout", "-q", "-b", "worker", "worker-default");
+    writeFileSync(join(dir, "framing.md"), "a locally-edited framing\n");
+    git(dir, "add", "-A");
+    git(dir, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "worker: local edit");
+    const forkTip = git(dir, "rev-parse", "worker").trim();
+
+    ensureUpstreamRoleRepo(dir);
+
+    expect(git(dir, "rev-parse", "worker").trim()).toBe(forkTip);
   });
 });

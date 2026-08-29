@@ -1,9 +1,15 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { baseRole, enumerateShippedRoles, type BaseLayer, type RoleBundleData } from "@clobber/runtime";
+import {
+  baseRole,
+  enumerateShippedRoles,
+  type BaseLayer,
+  type LoadedRole,
+  type RoleBundleData,
+} from "@clobber/runtime";
 import { deserializeRoleTree, serializeRoleTree, type RoleTreeContract } from "./role-tree.ts";
 import { roleSnapshotToContract } from "./role-tree-snapshot.ts";
-import { commitTree, git, readTreeAtCommit, revParse } from "./role-git.ts";
+import { commitTree, git, readTreeAtCommit, revParse, writeTreeObject } from "./role-git.ts";
 import { snapshotShippedBundle } from "./role-version-snapshot.ts";
 
 // #349 — the upstream role git repo: the canonical store of role versions and
@@ -41,6 +47,16 @@ export interface BundleIdentity {
   readonly description?: string;
 }
 
+// A shipped role's tree contract, straight off the #348 codec: snapshot the
+// bundle, project the snapshot into a contract, then overlay habits (Phase 0 —
+// roleSnapshotToContract returns habits: [] because the version-store has no
+// habit column). The materialize path (first boot), the re-derive path (every
+// later boot), and the test oracle all need exactly this, so it lives once.
+export function contractForShippedRole(loaded: LoadedRole): RoleTreeContract {
+  const snapshot = snapshotShippedBundle({ loaded, allowedTools: loaded.allowedTools });
+  return { ...roleSnapshotToContract(snapshot), habits: loaded.habits };
+}
+
 // Materialize a fresh upstream repo at `dir`, creating it if it does not exist.
 // Commits the base layer on `base`, then forks one branch per shipped role and
 // commits its effective (base ⊕ fork) tree. HEAD is left on `base`.
@@ -57,11 +73,7 @@ export function materializeUpstreamRoleRepo(dir: string): UpstreamRoleRepo {
   const forks = new Map<string, ForkRef>();
   for (const loaded of enumerateShippedRoles()) {
     const name = loaded.manifest.name;
-    const snapshot = snapshotShippedBundle({ loaded, allowedTools: loaded.allowedTools });
-    // Phase 0: roleSnapshotToContract returns habits: [] because the version-store
-    // has no habit column. Overlay the shipped bundle's habits so the git tree
-    // includes them from the start; workspace forks inherit them on first merge.
-    const contract = { ...roleSnapshotToContract(snapshot), habits: loaded.habits };
+    const contract = contractForShippedRole(loaded);
     forks.set(
       name,
       commitContractOnBranch(
@@ -115,20 +127,67 @@ export function commitContractOnBranch(
   return { branch, sha: revParse(dir, branch) };
 }
 
-// Idempotent boot entrypoint: materialize the upstream repo into `dir` the first
-// time, and on subsequent boots re-open the existing repo and read its current
-// branch tips. The shipped-role set is the engine's, so the fork branches are
-// re-derived from it — opening never mutates the repo (advancing it on an engine
-// upgrade is the workspace's `git merge`, not boot's job).
+// Advance `branch` (which must already exist) to a new commit carrying
+// `contract`'s tree — but only when that tree actually differs from the
+// branch's current tip. Advancing (a new commit on the existing branch, not a
+// recreated one) preserves lineage: the old tip stays an ancestor, so a
+// workspace's later `git merge upstream/<branch>` stays clean. The no-op path
+// (tree unchanged) is what keeps re-derivation idempotent across boots — #532
+// bars empty/no-op commits.
+export function advanceContractOnBranch(
+  dir: string,
+  branch: string,
+  contract: RoleTreeContract,
+  message: string,
+): ForkRef {
+  git(dir, "checkout", "-q", branch);
+  const priorTreeSha = revParse(dir, `${branch}^{tree}`);
+  const newTreeSha = writeTreeObject(dir, serializeRoleTree(contract));
+  if (newTreeSha !== priorTreeSha) {
+    git(
+      dir,
+      "-c",
+      "user.email=clobber@local",
+      "-c",
+      "user.name=clobber",
+      "-c",
+      "commit.gpgsign=false",
+      "commit",
+      "-q",
+      "-m",
+      message,
+    );
+  }
+  return { branch, sha: revParse(dir, branch) };
+}
+
+// Idempotent boot entrypoint: materialize the upstream repo into `dir` the
+// first time. On subsequent boots, re-derive each shipped role's `-default`
+// branch from the CURRENT shipped bundle and advance it if content drifted
+// since the last boot (#532 — a long-lived install must not stay pinned to
+// whatever the repo looked like the day it was first materialized). This is
+// the read-only baseline only: fork branches (a role edited through the
+// working-copy flow, or workspace-invented) are never touched here, and pins
+// don't auto-follow a branch tip — a workspace adopts new content explicitly.
 export function ensureUpstreamRoleRepo(dir: string): UpstreamRoleRepo {
   if (!existsSync(join(dir, ".git"))) {
     return materializeUpstreamRoleRepo(dir);
   }
+  // Every boot now runs the full snapshot→contract codec for every shipped
+  // role, not just at first materialization — a malformed manifest throws
+  // here and fails boot loudly, which is intended (no defensive fallback to a
+  // stale branch: a bad shipped role is a bug to surface, not paper over).
   const forks = new Map<string, ForkRef>();
   for (const loaded of enumerateShippedRoles()) {
-    const branch = `${loaded.manifest.name}-default`;
-    forks.set(loaded.manifest.name, { branch, sha: revParse(dir, branch) });
+    const name = loaded.manifest.name;
+    const branch = `${name}-default`;
+    const contract = contractForShippedRole(loaded);
+    forks.set(
+      name,
+      advanceContractOnBranch(dir, branch, contract, `${name}: re-derive from shipped bundle`),
+    );
   }
+  git(dir, "checkout", "-q", BASE_BRANCH);
   return { dir, baseBranch: BASE_BRANCH, baseSha: revParse(dir, BASE_BRANCH), forks };
 }
 
