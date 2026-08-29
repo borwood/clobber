@@ -39,13 +39,14 @@ export function establishSingletonAgentsForWorkspace(
     const ceiling = ceilingRow === null ? 0 : ceilingRow.max_concurrent;
     if (ceiling < 1) continue;
     const existing = countExisting.get(workspaceId, role.id) as { n: number };
-    if (existing.n >= ceiling) continue;
-    const agent = agents.create({
-      workspace_id: workspaceId,
-      role_id: role.id,
-      label: role.name,
-    });
-    createdAgentIds.push(agent.id);
+    for (let n = existing.n; n < ceiling; n += 1) {
+      const agent = agents.create({
+        workspace_id: workspaceId,
+        role_id: role.id,
+        label: role.name,
+      });
+      createdAgentIds.push(agent.id);
+    }
   }
   return { createdAgentIds };
 }

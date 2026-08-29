@@ -191,4 +191,82 @@ describe("workspace create establishes the manager agent (#694)", () => {
 
     await teardown(h);
   });
+
+  it("POST /spawn for the manager role reuses the already-established session-less agent instead of double-instantiating", async () => {
+    const h = buildHarness();
+    const wsRes = await h.server.inject({
+      method: "POST",
+      url: "/workspaces",
+      payload: { name: `ws-${repo.path}`, repo_path: repo.path },
+    });
+    const ws = wsRes.json() as { id: string };
+    const managerRole = h.db
+      .prepare("SELECT id FROM roles WHERE workspace_id = ? AND name = 'manager'")
+      .get(ws.id) as { id: string };
+    const establishedAgent = h.db
+      .prepare("SELECT id FROM agents WHERE workspace_id = ? AND role_id = ?")
+      .get(ws.id, managerRole.id) as { id: string };
+
+    const spawnRes = await h.server.inject({
+      method: "POST",
+      url: "/spawn",
+      payload: {
+        workspace_id: ws.id,
+        role_id: managerRole.id,
+        prompt: "boot",
+        label: "boot",
+      },
+    });
+    expect(spawnRes.statusCode).toBe(200);
+    const spawned = spawnRes.json() as { agent_id: string };
+    expect(spawned.agent_id).toBe(establishedAgent.id);
+
+    const count = (
+      h.db
+        .prepare("SELECT COUNT(*) AS n FROM agents WHERE workspace_id = ? AND role_id = ?")
+        .get(ws.id, managerRole.id) as { n: number }
+    ).n;
+    expect(count).toBe(1);
+
+    await teardown(h);
+  });
+
+  it("POST /spawn for the manager role refuses once every agent for the role already holds a live session", async () => {
+    const h = buildHarness();
+    const wsRes = await h.server.inject({
+      method: "POST",
+      url: "/workspaces",
+      payload: { name: `ws-${repo.path}`, repo_path: repo.path },
+    });
+    const ws = wsRes.json() as { id: string };
+    const managerRole = h.db
+      .prepare("SELECT id FROM roles WHERE workspace_id = ? AND name = 'manager'")
+      .get(ws.id) as { id: string };
+
+    // First spawn reuses (and wakes) the established agent, filling it with a
+    // live session — at ceiling 1 there is now no session-less agent left.
+    const firstSpawn = await h.server.inject({
+      method: "POST",
+      url: "/spawn",
+      payload: { workspace_id: ws.id, role_id: managerRole.id, prompt: "boot", label: "boot" },
+    });
+    expect(firstSpawn.statusCode).toBe(200);
+
+    const secondSpawn = await h.server.inject({
+      method: "POST",
+      url: "/spawn",
+      payload: { workspace_id: ws.id, role_id: managerRole.id, prompt: "again", label: "again" },
+    });
+    expect(secondSpawn.statusCode).toBe(403);
+    expect((secondSpawn.json() as { error: string }).error).toBe("role at capacity");
+
+    const count = (
+      h.db
+        .prepare("SELECT COUNT(*) AS n FROM agents WHERE workspace_id = ? AND role_id = ?")
+        .get(ws.id, managerRole.id) as { n: number }
+    ).n;
+    expect(count).toBe(1);
+
+    await teardown(h);
+  });
 });
