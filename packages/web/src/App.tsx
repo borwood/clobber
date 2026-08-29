@@ -204,6 +204,7 @@ export function App() {
       </header>
 
       <LayoutProvider
+        key={workspaceSlug}
         workspaceSlug={workspaceSlug}
         workspaceId={activeWorkspaceId}
         deepLinkSessionId={selectedSession}
