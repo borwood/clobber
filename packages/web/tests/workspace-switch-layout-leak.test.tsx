@@ -38,6 +38,17 @@ const SEEDED_LAYOUT_A: LayoutNode = {
   ],
 };
 
+// B's own saved layout — distinct from both A's layout and the default, so a
+// post-switch render can distinguish "B's own layout was restored" from
+// "A's layout (or the default) leaked in". The inbox pane is the marker: it
+// appears in neither A's seeded layout nor defaultLayout().
+const SEEDED_LAYOUT_B: LayoutNode = {
+  kind: "pane",
+  id: "b-only",
+  views: [{ kind: "inbox" }],
+  activeIndex: 0,
+};
+
 function jsonResponse(data: unknown): Response {
   return new Response(JSON.stringify(data), {
     status: 200,
@@ -125,8 +136,9 @@ function clickWorkspaceTab(name: string): void {
 }
 
 describe("workspace switch does not leak layout/transcript panels (#695)", () => {
-  it("restores B's own layout, drops A's mailbox panes, and leaves A's storage intact", async () => {
+  it("restores B's own layout, drops A's mailbox panes, and leaves both workspaces' storage intact", async () => {
     localStorage.setItem(layoutStorageKey(WORKSPACE_A_SLUG), JSON.stringify(SEEDED_LAYOUT_A));
+    localStorage.setItem(layoutStorageKey(WORKSPACE_B_SLUG), JSON.stringify(SEEDED_LAYOUT_B));
 
     await renderAt(`/w/${WORKSPACE_A_SLUG}`);
     expect(paneTabTexts().some((t) => t.includes("worker-issue-42"))).toBe(true);
@@ -139,8 +151,17 @@ describe("workspace switch does not leak layout/transcript panels (#695)", () =>
     const tabsAfterSwitch = paneTabTexts();
     expect(tabsAfterSwitch.some((t) => t.includes(SESSION_A.slice(0, 8)))).toBe(false);
     expect(tabsAfterSwitch.some((t) => t.includes("worker-issue-42"))).toBe(false);
+    // B's own saved layout (the inbox pane) is what's actually restored, not
+    // A's leaked panes and not a freshly-derived default layout.
+    expect(tabsAfterSwitch.some((t) => t.includes("Inbox"))).toBe(true);
 
     const storedA = localStorage.getItem(layoutStorageKey(WORKSPACE_A_SLUG));
     expect(storedA).toBe(JSON.stringify(SEEDED_LAYOUT_A));
+
+    // This is the destination side of the leak: the bug's causal chain
+    // persisted A's carried-over panes under B's own storage key, clobbering
+    // B's saved layout on every switch.
+    const storedB = localStorage.getItem(layoutStorageKey(WORKSPACE_B_SLUG));
+    expect(storedB).toBe(JSON.stringify(SEEDED_LAYOUT_B));
   });
 });
