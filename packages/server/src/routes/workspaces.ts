@@ -9,6 +9,7 @@ import type { WorkspaceStore } from "../workspace-store.ts";
 import type { TriggerScheduler } from "../trigger-scheduler.ts";
 import type { ForkRef } from "../role-repo.ts";
 import { seedWorkspaceRoles } from "../seed-workspace-roles.ts";
+import { establishSingletonAgentsForWorkspace } from "../establish-singleton-agents.ts";
 import { validateWorkspacePath } from "../validate-workspace-path.ts";
 
 interface IdParam {
@@ -20,7 +21,7 @@ export function registerWorkspaceRoutes(
   deps: {
     db: Database;
     workspaces: WorkspaceStore;
-    scheduler: Pick<TriggerScheduler, "reloadRole" | "fireWorkspaceOpen">;
+    scheduler: Pick<TriggerScheduler, "reloadRole" | "reloadAgent" | "fireWorkspaceOpen">;
     // #385 — present iff a role repo is configured; flips fresh seeds to git-backed.
     roleForks?: ReadonlyMap<string, ForkRef>;
   },
@@ -49,6 +50,10 @@ export function registerWorkspaceRoutes(
     }
     const created = workspaces.create(parsed.data);
     seedWorkspaceRoles(db, created.id, roleForks);
+    const { createdAgentIds } = establishSingletonAgentsForWorkspace(db, created.id);
+    for (const agentId of createdAgentIds) {
+      scheduler.reloadAgent(agentId);
+    }
     reply.code(201);
     return created;
   });

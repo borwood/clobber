@@ -27,6 +27,7 @@ import { migrateAgentSpawner } from "./agent-spawner-migration.ts";
 import { migrateAgentWorktreeIdentity } from "./agent-worktree-identity-migration.ts";
 import { migrateAgentMessageTokenAgentIds } from "./agent-message-token-agent-id-migration.ts";
 import { migrateSessionContextTokens } from "./session-context-tokens-migration.ts";
+import { backfillMissingSingletonAgents } from "./establish-singleton-agents.ts";
 
 export function createDatabase(path: string): Database {
   const db = new Database(path);
@@ -66,6 +67,9 @@ export function createDatabase(path: string): Database {
   migrateAgentWorktreeIdentity(db);
   migrateAgentMessageTokenAgentIds(db);
   migrateSessionContextTokens(db);
+  // Must run last: depends on the agents table's final column shape (all
+  // prior migrateAgent* ALTERs applied) and on roles/ceilings being seeded.
+  backfillMissingSingletonAgents(db);
   return db;
 }
 

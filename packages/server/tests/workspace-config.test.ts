@@ -29,10 +29,11 @@ beforeEach(async () => {
   db = createDatabase(":memory:");
   app = Fastify({ logger: false });
   reloadedRoles = [];
-  const scheduler: Pick<TriggerScheduler, "reloadRole" | "fireWorkspaceOpen"> = {
+  const scheduler: Pick<TriggerScheduler, "reloadRole" | "reloadAgent" | "fireWorkspaceOpen"> = {
     reloadRole: (roleId) => {
       reloadedRoles.push(roleId);
     },
+    reloadAgent: () => {},
     fireWorkspaceOpen: async () => ({ dispatched: 0 }),
   };
   registerWorkspaceRoutes(app, {
