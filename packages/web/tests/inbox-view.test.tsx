@@ -56,6 +56,7 @@ function makeWorkspace(userNotifications: readonly Notification[]): WorkspaceCon
     setRoleId: () => {},
     offices: [],
     desks: [],
+    reports: [],
     now: 1_700_000_000_000,
     wakingAgents: new Set(),
     showSystem: false,
