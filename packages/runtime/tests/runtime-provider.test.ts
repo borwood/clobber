@@ -58,11 +58,52 @@ describe("claudeRuntimeProvider", () => {
       sessionId: "00000000-0000-4000-8000-000000000001",
       permissionMode: "bypassPermissions",
       allowedTools: ["Bash", "Read"],
-      env: { CLOBBER_SESSION_ID: "s1" },
+      env: { CLOBBER_SESSION_ID: "s1", CLAUDE_CODE_ENABLE_TODO_TOOLS: "1" },
       pluginDirs: ["/repo/.clobber/roles/worker"],
       appendSystemPrompt: "You are a worker.",
       displayName: "fix-bug",
     });
+  });
+
+  // #699 — TaskCreate/TaskUpdate (the phase-plan contract's task tool) are
+  // only ToolSearch-reachable in a claude spawn when
+  // CLAUDE_CODE_ENABLE_TODO_TOOLS=1 is set on the child process env.
+  // --allowedTools is a permission allowlist, not a registration switch — it
+  // does not surface the tool on its own (confirmed empirically against the
+  // installed claude binary: real spawn env is the actual seam).
+  it("registers the task tool by setting CLAUDE_CODE_ENABLE_TODO_TOOLS on the spawn env", () => {
+    const req = claudeRuntimeProvider.buildSpawnRequest({
+      hookUrl: "http://127.0.0.1:3300/hook",
+      prompt: "do work",
+      cwd: "/repo",
+      sessionId: "00000000-0000-4000-8000-000000000001",
+      env: { CLOBBER_SESSION_ID: "s1" },
+      materialized: {
+        pluginDir: "/repo/.clobber/roles/worker",
+        binDir: "/repo/.clobber/bin",
+      },
+      systemPrompt: "You are a worker.",
+    });
+
+    expect(req.env["CLAUDE_CODE_ENABLE_TODO_TOOLS"]).toBe("1");
+    expect(req.env["CLOBBER_SESSION_ID"]).toBe("s1");
+  });
+
+  it("lets a caller-supplied CLAUDE_CODE_ENABLE_TODO_TOOLS override the default", () => {
+    const req = claudeRuntimeProvider.buildSpawnRequest({
+      hookUrl: "http://127.0.0.1:3300/hook",
+      prompt: "do work",
+      cwd: "/repo",
+      sessionId: "00000000-0000-4000-8000-000000000001",
+      env: { CLAUDE_CODE_ENABLE_TODO_TOOLS: "0" },
+      materialized: {
+        pluginDir: "/repo/.clobber/roles/worker",
+        binDir: "/repo/.clobber/bin",
+      },
+      systemPrompt: "You are a worker.",
+    });
+
+    expect(req.env["CLAUDE_CODE_ENABLE_TODO_TOOLS"]).toBe("0");
   });
 });
 

@@ -115,6 +115,18 @@ export interface RuntimeProvider {
   transcriptPath(cwd: string, sessionId: string): string;
 }
 
+// #699 — the worker role's boot-tasks phase plan drives TaskCreate/TaskUpdate
+// (the harness's task-tracking tool family), which the server hooks into
+// phase-transition events (task-event-handler.ts). That tool family is only
+// ToolSearch-reachable in a claude spawn when CLAUDE_CODE_ENABLE_TODO_TOOLS=1
+// is set on the child process env — confirmed empirically against the
+// installed claude binary. --allowedTools is a permission allowlist; it does
+// not, on its own, register the tool. A caller-supplied value in opts.env
+// still wins (e.g. a test or an operator opting a session out).
+function withTaskToolRegistration(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return { CLAUDE_CODE_ENABLE_TODO_TOOLS: "1", ...env };
+}
+
 export const claudeRuntimeProvider: RuntimeProvider = {
   id: "claude",
   capabilities: {
@@ -141,7 +153,7 @@ export const claudeRuntimeProvider: RuntimeProvider = {
       ...(opts.allowedTools === undefined ? {} : { allowedTools: opts.allowedTools }),
       ...(opts.effort === undefined ? {} : { effort: opts.effort }),
       ...(opts.model === undefined ? {} : { model: opts.model }),
-      env: opts.env,
+      env: withTaskToolRegistration(opts.env),
       pluginDirs: [opts.materialized.pluginDir],
       appendSystemPrompt: opts.systemPrompt,
       ...(opts.displayName === undefined ? {} : { displayName: opts.displayName }),
