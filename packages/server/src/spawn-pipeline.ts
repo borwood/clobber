@@ -6,6 +6,7 @@ import { prepareSpawnContext, type SpawnContext, type PrepareSpawnContextResult 
 import { bindRuntimeEvents } from "./runtime-event-binder.ts";
 import { WorktreeError } from "./spawn-worktree.ts";
 import { embodyRole, rolePin } from "./embody-role.ts";
+import { checkAgentRowCapacity, findReusableSessionlessAgent } from "./persistent-agent-reuse.ts";
 export type { SpawnPipelineDeps } from "./spawn-pipeline-deps.ts";
 import type { SpawnPipelineDeps } from "./spawn-pipeline-deps.ts";
 
@@ -81,9 +82,6 @@ export async function executeSpawn(
   const { workspace, role, prompt, label, briefing, effortOverride, modelOverride, scopeOverride, systemAddon } = input;
   const promptTag: ClobberPromptTag = input.promptTag ?? { kind: "spawn-prompt" };
 
-  const capacity = checkCapacity(deps, workspace, role);
-  if (capacity !== null) return capacity;
-
   // Surface 1 (#213): the spawn wake-program is a selector with a default. When
   // the caller selects nothing (undefined) OR explicitly sends "default", the
   // role's declared `default_wake_program` is its opening move (the worker's
@@ -93,6 +91,40 @@ export async function executeSpawn(
   const wakeProgram = (input.wakeProgram === undefined || input.wakeProgram === "default")
     ? defaultWakeProgramFor(deps, role)
     : input.wakeProgram;
+
+  // A persistent role's identity is the agent row, not the session (#698
+  // review): a session-less existing agent (established at workspace-create,
+  // or left behind by an ended session) reuses its own identity rather than
+  // minting a second one — a second agent row for an already-singleton role
+  // would double-register the role's triggers. checkCapacity's active-session
+  // count can't see a session-less agent, so persistent roles route through
+  // the agent-row-based capacity check instead.
+  if (role.persistent) {
+    const reusable = findReusableSessionlessAgent(deps, workspace, role);
+    if (reusable !== null) {
+      // Reusing the identity should not silently drop the caller's requested
+      // label — a fresh spawn would have carried it onto the new agent row.
+      if (reusable.label !== label) deps.agents.updateLabel(reusable.id, label);
+      return attachSessionToAgent(deps, {
+        workspace,
+        role,
+        agent: { ...reusable, label },
+        prompt,
+        promptTag,
+        ...(wakeProgram === undefined ? {} : { wakeProgram }),
+        ...(systemAddon === undefined ? {} : { systemAddon }),
+        ...(briefing === undefined ? {} : { briefing }),
+        ...(effortOverride === undefined ? {} : { effortOverride }),
+        ...(modelOverride === undefined ? {} : { modelOverride }),
+        ...(scopeOverride === undefined ? {} : { scopeOverride }),
+      });
+    }
+    const agentCapacity = checkAgentRowCapacity(deps, workspace, role);
+    if (agentCapacity !== null) return agentCapacity;
+  } else {
+    const capacity = checkCapacity(deps, workspace, role);
+    if (capacity !== null) return capacity;
+  }
 
   const agent = deps.agents.create({
     workspace_id: workspace.id,

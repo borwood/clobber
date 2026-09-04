@@ -132,15 +132,15 @@ async function bootManager(h: Harness, repoPath: string): Promise<Booted> {
     .prepare("SELECT id FROM roles WHERE name = ? AND workspace_id = ?")
     .get("manager", ws.id) as { id: string };
 
+  // Workspace create (#694) already establishes the singleton manager agent —
+  // wake it directly rather than spawning a second manager agent via /spawn.
+  const managerAgentRow = h.db
+    .prepare("SELECT id FROM agents WHERE workspace_id = ? AND role_id = ?")
+    .get(ws.id, managerRow.id) as { id: string };
   const spawnRes = await h.server.inject({
     method: "POST",
-    url: "/spawn",
-    payload: {
-      workspace_id: ws.id,
-      role_id: managerRow.id,
-      prompt: "boot",
-      label: "boot",
-    },
+    url: `/persistent-agents/${managerAgentRow.id}/wake`,
+    payload: {},
   });
   if (spawnRes.statusCode !== 200) throw new Error(`boot: ${spawnRes.body}`);
   const boot = spawnRes.json() as { agent_id: string; session_id: string };
@@ -211,6 +211,21 @@ describe("TriggerScheduler — HTTP integration wiring", () => {
         "UPDATE workspace_role_ceilings SET max_concurrent = 5 WHERE workspace_id = ? AND role_id = ?",
       )
       .run(ws.id, managerRow.id);
+
+    // Workspace create (#694) already established the singleton manager agent
+    // (session-less). Give it a live session now — otherwise the cron trigger
+    // PATCHed onto the role below would later find it session-less too and
+    // spawn-on-deliver into it via the git-backed role-embodiment path, racing
+    // this test's teardown.
+    const autoAgentRow = h.db
+      .prepare("SELECT id FROM agents WHERE workspace_id = ? AND role_id = ?")
+      .get(ws.id, managerRow.id) as { id: string };
+    const autoWakeRes = await h.server.inject({
+      method: "POST",
+      url: `/persistent-agents/${autoAgentRow.id}/wake`,
+      payload: {},
+    });
+    expect(autoWakeRes.statusCode).toBe(200);
 
     // Spawn a first manager just to mint a token to call PATCH
     const bootRes = await h.server.inject({

@@ -122,10 +122,17 @@ async function bootInWorkspace(h: Harness, repoPath: string): Promise<Booted> {
     .get("manager", ws.id) as { id: string } | null;
   if (managerRow === null) throw new Error("seed missing manager");
 
+  // Workspace create (#694) already establishes the singleton manager agent —
+  // wake it directly rather than spawning a second manager agent via /spawn.
+  const managerAgentRow = h.db
+    .prepare("SELECT id FROM agents WHERE workspace_id = ? AND role_id = ?")
+    .get(ws.id, managerRow.id) as { id: string } | null;
+  if (managerAgentRow === null) throw new Error("seed missing manager agent");
+
   const bootRes = await h.server.inject({
     method: "POST",
-    url: "/spawn",
-    payload: { workspace_id: ws.id, role_id: managerRow.id, prompt: "boot", label: "boot" },
+    url: `/persistent-agents/${managerAgentRow.id}/wake`,
+    payload: {},
   });
   if (bootRes.statusCode !== 200) throw new Error(`boot: ${bootRes.body}`);
   const boot = bootRes.json() as { session_id: string; agent_id: string };

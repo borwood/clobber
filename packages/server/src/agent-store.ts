@@ -8,6 +8,7 @@ export interface AgentStore {
   delete(id: string): boolean;
   listForWorkspace(workspaceId: string): Agent[];
   setWorktreeIdentity(id: string, branch: string, path: string): void;
+  updateLabel(id: string, label: string): void;
 }
 
 interface Row {
@@ -47,6 +48,7 @@ export function createAgentStore(db: Database): AgentStore {
   const setWorktreeStmt = db.prepare(
     "UPDATE agents SET worktree_branch = ?, worktree_path = ? WHERE id = ?",
   );
+  const updateLabelStmt = db.prepare("UPDATE agents SET label = ? WHERE id = ?");
 
   return {
     create(req) {
@@ -83,6 +85,10 @@ export function createAgentStore(db: Database): AgentStore {
 
     setWorktreeIdentity(id, branch, path) {
       setWorktreeStmt.run(branch, path, id);
+    },
+
+    updateLabel(id, label) {
+      updateLabelStmt.run(label, id);
     },
   };
 }
