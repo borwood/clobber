@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import {
   api,
   type DeskCard,
+  type FinalReportEntry,
   type Notification,
   type OfficeCard,
   type SessionSummary,
@@ -21,6 +22,7 @@ const EMPTY_SESSIONS: readonly SessionSummary[] = [];
 const EMPTY_OFFICES: readonly OfficeCard[] = [];
 const EMPTY_DESKS: readonly DeskCard[] = [];
 const EMPTY_WHITEBOARD: Whiteboard = { offices: EMPTY_OFFICES, desks: EMPTY_DESKS };
+const EMPTY_REPORTS: readonly FinalReportEntry[] = [];
 
 export interface WorkspacePolls {
   readonly workspaces: readonly Workspace[];
@@ -32,6 +34,7 @@ export interface WorkspacePolls {
   readonly sessions: readonly SessionSummary[];
   readonly offices: readonly OfficeCard[];
   readonly desks: readonly DeskCard[];
+  readonly reports: readonly FinalReportEntry[];
   readonly now: number;
   readonly userNotifications: readonly Notification[];
   readonly errors: ReadonlyArray<Error | undefined>;
@@ -81,6 +84,15 @@ export function useWorkspacePolls(workspaceSlug: string | null): WorkspacePolls 
     POLL_MS,
   );
 
+  const reportsPoll = usePolledResource<readonly FinalReportEntry[]>(
+    () =>
+      activeWorkspaceId === null
+        ? Promise.resolve(EMPTY_REPORTS)
+        : api.getReports(activeWorkspaceId).then((r) => r.reports),
+    [activeWorkspaceId],
+    POLL_MS,
+  );
+
   const nowPoll = usePolledResource(() => Promise.resolve(Date.now()), [], POLL_MS);
 
   const EMPTY_NOTIFICATIONS = useMemo(() => ({ notifications: [] as const }), []);
@@ -102,6 +114,7 @@ export function useWorkspacePolls(workspaceSlug: string | null): WorkspacePolls 
     sessions: sessionsPoll.data ?? EMPTY_SESSIONS,
     offices: whiteboardPoll.data?.offices ?? EMPTY_OFFICES,
     desks: whiteboardPoll.data?.desks ?? EMPTY_DESKS,
+    reports: reportsPoll.data ?? EMPTY_REPORTS,
     now: nowPoll.data ?? Date.now(),
     userNotifications: (notifPoll.data?.notifications ?? []) as readonly Notification[],
     errors: [
@@ -110,6 +123,7 @@ export function useWorkspacePolls(workspaceSlug: string | null): WorkspacePolls 
       rolesPoll.error,
       sessionsPoll.error,
       whiteboardPoll.error,
+      reportsPoll.error,
       notifPoll.error,
     ],
   };

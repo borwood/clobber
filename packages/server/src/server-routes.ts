@@ -13,6 +13,7 @@ import { registerAgentRoutes } from "./routes/agent.ts";
 import { registerAgentMessagesRoutes } from "./routes/agent-messages.ts";
 import { registerPersistentAgentsRoutes } from "./routes/persistent-agents.ts";
 import { registerWhiteboardRoutes } from "./routes/whiteboard.ts";
+import { registerWorkspaceReportsRoutes } from "./routes/workspace-reports.ts";
 import { registerWebhookTriggersRoutes } from "./routes/webhook-triggers.ts";
 import { registerLayoutEventRoutes } from "./routes/layout-events.ts";
 import { registerToolTokenTestRoutes } from "./routes/tool-token-test.ts";
@@ -156,6 +157,12 @@ export function registerAllRoutes(
     registry,
     agentStatuses: opts.agentStatuses,
     ...roleEmbodiment,
+  });
+  registerWorkspaceReportsRoutes(app, {
+    workspaces: opts.workspaces,
+    sessions: opts.sessions,
+    roles: opts.roles,
+    agentStatusLog: opts.agentStatusLog,
   });
   registerRoleRoutes(app, { roles: opts.roles });
   registerWorkspaceRoleRoutes(app, {

@@ -9,7 +9,9 @@ import {
   saveSavedLayout,
   type ClosedPaneEntry,
 } from "./persistence.ts";
-import type { PaneNode } from "./types.ts";
+import { layoutHasViewKind } from "./find.ts";
+import { SINGLETON_VIEW_KINDS, viewLabel } from "./ViewHost.tsx";
+import type { PaneNode, ViewId } from "./types.ts";
 
 export function LayoutMenu() {
   const { workspaceSlug, layout, dispatch } = useLayout();
@@ -80,6 +82,22 @@ export function LayoutMenu() {
     close();
   }
 
+  function onReopenKind(kind: Exclude<ViewId["kind"], "mailbox">) {
+    const pane: PaneNode = {
+      kind: "pane",
+      id: `pane-reopened-${kind}-${Date.now()}`,
+      views: [{ kind } as ViewId],
+      activeIndex: 0,
+    };
+    dispatch({ kind: "reopen_pane", pane });
+    close();
+  }
+
+  // Every closed panel type (a singleton view kind currently absent from the
+  // layout tree, transcripts/mailbox excepted — see SINGLETON_VIEW_KINDS)
+  // must be reopenable from here (#691).
+  const missingKinds = SINGLETON_VIEW_KINDS.filter((kind) => !layoutHasViewKind(layout, kind));
+
   function onReset() {
     const isDefault = JSON.stringify(layout) === JSON.stringify(defaultLayout());
     if (
@@ -149,6 +167,16 @@ export function LayoutMenu() {
             {closedEntries.map((e, i) => (
               <MenuItem key={i} onClick={() => onReopen(e)}>
                 {e.label}
+              </MenuItem>
+            ))}
+          </Submenu>
+          <Submenu
+            label="Reopen panel"
+            empty={missingKinds.length === 0 ? "(none)" : null}
+          >
+            {missingKinds.map((kind) => (
+              <MenuItem key={kind} onClick={() => onReopenKind(kind)}>
+                {viewLabel({ kind } as ViewId)}
               </MenuItem>
             ))}
           </Submenu>

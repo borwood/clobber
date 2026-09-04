@@ -1,6 +1,7 @@
 import { createContext, useContext, type ReactNode } from "react";
 import type {
   DeskCard,
+  FinalReportEntry,
   Notification,
   OfficeCard,
   SessionSummary,
@@ -17,6 +18,7 @@ export interface WorkspaceContextValue {
   readonly setRoleId: (id: string) => void;
   readonly offices: readonly OfficeCard[];
   readonly desks: readonly DeskCard[];
+  readonly reports: readonly FinalReportEntry[];
   readonly now: number;
   readonly wakingAgents: ReadonlySet<string>;
   readonly showSystem: boolean;

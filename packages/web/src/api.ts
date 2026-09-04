@@ -19,6 +19,7 @@ import type {
   EffortLevel,
   Model,
   SessionReconfigureRequest,
+  FinalReport,
 } from "@clobber/shared";
 
 export type {
@@ -39,6 +40,7 @@ export type {
   EffortLevel,
   Model,
   SessionReconfigureRequest,
+  FinalReport,
 } from "@clobber/shared";
 
 export interface OpenQuestion {
@@ -110,6 +112,19 @@ export interface DeskCard {
 export interface Whiteboard {
   readonly offices: readonly OfficeCard[];
   readonly desks: readonly DeskCard[];
+}
+
+export interface FinalReportEntry {
+  readonly session_id: string;
+  readonly role: string;
+  readonly label?: string;
+  readonly summary: string;
+  readonly created_at: number;
+  readonly report: FinalReport;
+}
+
+export interface WorkspaceReports {
+  readonly reports: readonly FinalReportEntry[];
 }
 
 export interface SpawnRequest {
@@ -206,6 +221,8 @@ export const api = {
   spawn: (req: SpawnRequest) => postJson<SpawnResponse>("/spawn", req),
   getWhiteboard: (workspaceId: string) =>
     getJson<Whiteboard>(`/workspaces/${encodeURIComponent(workspaceId)}/whiteboard`),
+  getReports: (workspaceId: string) =>
+    getJson<WorkspaceReports>(`/workspaces/${encodeURIComponent(workspaceId)}/reports`),
   wakePersistentAgent: (agentId: string, wakeProgram?: string) =>
     postJson<SpawnResponse>(
       `/persistent-agents/${encodeURIComponent(agentId)}/wake`,
