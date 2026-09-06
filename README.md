@@ -166,3 +166,7 @@ is one answer to that question, frozen here in working form.
 
 The exploration continues elsewhere, in newer shapes. This repo stays as the
 record of what that question looked like answered with an office.
+
+## License
+
+[MIT](LICENSE).
