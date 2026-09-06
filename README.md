@@ -63,7 +63,37 @@ decision it can't make alone, it asks — a widget pops on its desk or office
 and mirrors into a sidebar, so a question doesn't get buried under a busy
 floor.
 
-## Quickstart
+## Getting started
+
+Requires [Bun](https://bun.sh), `git`, and a working [Claude Code](https://claude.com/claude-code)
+install (agents run as headless `claude` sessions on your subscription).
+
+```sh
+git clone https://github.com/brennan-volter/clobber.git
+cd clobber
+bun install
+bun run dev
+```
+
+That starts the server (port 3370) and the web UI — open **http://localhost:3470**.
+
+**Add a workspace.** Press the **`+` button** in the workspace tab row at the
+top, then **"new workspace…"** at the bottom of the dropdown. Give it a name
+and the absolute path to the repo it should manage (the `browse…` button opens
+a folder picker). The selected directory **must already be a git repository**
+— the server rejects a path without a `.git` in it.
+
+**Session onboarding.** The workspace is created with its manager agent
+already in place. The first time you open the workspace, a **manager session
+starts automatically** and runs the **bootstrapping interview**: it asks about
+your repo and stack, which roles to enable, which SDLC phases workers should
+follow, and any workflow hazards or conventions worth telling every future
+agent once. Your answers are woven into the workspace's roles as context, and
+a sentinel file (`.clobber/bootstrap.json` in your repo) marks onboarding
+done so the interview never re-fires. From then on, opening the workspace is
+an ordinary wake — hand the manager work, or spawn workers directly.
+
+## Quickstart (headless, curl-only)
 
 Every command here was run verbatim against a fresh clone during the #683 cold-start pass.
 Requires only [Bun](https://bun.sh) and `git`.
