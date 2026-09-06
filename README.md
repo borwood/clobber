@@ -7,19 +7,61 @@ it to carry the implementation work: write the failing test, make it pass,
 open the PR, watch CI. The **whiteboard** shows the office live, so you can
 walk in on several sessions at once without reading several transcripts.
 
-Every agent embodies a **role** — a template that bakes in a system prompt,
-a skill bundle, allowed tools, and (for autonomous roles) an SDLC profile.
+> **Status: open-sourced, no longer maintained.** Clobber was a personal
+> harness, built for and used on real work — the repos it managed include
+> this one; much of Clobber was built by agents Clobber was orchestrating.
+> It's published as-is: the loops documented below run end to end against a
+> real server, and the quickstart was verified against a fresh clone. There
+> is no roadmap and no support. Fork freely.
+
+## What Clobber affords
+
+Everything here rides **headless Claude Code sessions** — Clobber spawns the
+`claude` CLI you already have, so agents run on your existing subscription.
+No separate API billing, no second auth model.
+
+- **Versioned roles.** Every agent embodies a **role** — a template baking in
+  a system prompt, skill bundle, allowed tools, triggers, and (for autonomous
+  roles) an SDLC profile. Role state lives in a git repo of its own: edits are
+  commits, workspaces pin a sha, and a running agent's contract can't be
+  yanked out from under it by an engine update.
+- **DRY context machinery.** Prompt-modules, seeds, and a shared base layer
+  let roles share context components instead of copy-pasting prompt prose.
+  Compose once, project into every role that needs it; workspace-specific
+  overlays shadow engine defaults without forking them.
+- **Hooks beyond the native set.** Every native Claude Code hook event
+  (session start/end, each tool use, prompts, stop, pre-compact) streams into
+  a per-workspace audit log keyed by agent and session — the raw material for
+  clocking session length and spend per agent. On top of that, completion
+  triggers broadcast when a worker is done or its session dies, and blocking
+  questions surface the moment a worker is stuck. A **habits** layer compiles
+  user-defined event→action rules down onto the native hooks.
+- **Task-list injection.** A dispatch can seed a phase plan onto the agent's
+  task list at spawn; task-tool calls are hooked server-side and reduced into
+  phase-transition events, so the floor shows "writing test → opening PR →
+  watching CI" without the agent narrating it.
+- **Agent–agent orchestration.** Managers spawn, message, resume, and reap
+  workers; triggers (workspace-open, webhooks, cron, completion wakes) wake
+  persistent agents without a human prompt; one-shot reply tokens let a
+  worker answer its manager mid-flight.
+- **A self-healing workspace.** Workers file structured final reports (what
+  went well, what went badly) and fire-and-forget findings when they hit
+  friction. Full transcripts of every session are auditable after the fact.
+  Roles can be put in charge of the feedback loop itself — reading reports,
+  auditing worker sessions, and patching the context problems other agents
+  report, so the workspace tightens its own runbooks over time.
+- **A UI built for parallel sessions.** A grid-style layout you arrange into
+  panes — transcripts, the live whiteboard, spawn controls, reports — for
+  organizing views of many concurrent sessions. Per-workspace theming and
+  fast workspace tabs make juggling several projects in parallel legible at
+  a glance.
+
 Roles talk back to Clobber through a small `clobber` CLI, authenticated
 per-session, so status updates and blocking questions land on the whiteboard
 instead of getting lost in a terminal nobody's watching. When an agent hits a
 decision it can't make alone, it asks — a widget pops on its desk or office
 and mirrors into a sidebar, so a question doesn't get buried under a busy
 floor.
-
-> Status: early, not feature-complete. The workspace → spawn → status loop
-> below runs end to end against a real server. See "How it feels" below for
-> what's built (a live whiteboard, a first-open interview, diff-rendering
-> transcripts) versus what's still just documented intent.
 
 ## Quickstart
 
@@ -150,3 +192,15 @@ Two guards close it:
   written. `--db <path>` targets another database; `--keep` retains the migrated copy for inspection.
 
 See `CLAUDE.md` for engineering rules and `docs/architecture/agent-model.md` for the design north-star (vocabulary in depth, IPC directions, session lifecycle, manager-as-workspace-shell, roles-as-data v2 scope).
+
+## Why this exists, and why it stops here
+
+Clobber is a checkpoint: condensed wisdom from a stretch of AI-first
+development, where the question behind every feature was the same — *how do
+you deliver the right context at every available juncture so agents are
+effective, and the surface area for misjudgement shrinks?* Versioned roles,
+shared prompt-modules, hook fan-in, task seeding, self-auditing reports — each
+is one answer to that question, frozen here in working form.
+
+The exploration continues elsewhere, in newer shapes. This repo stays as the
+record of what that question looked like answered with an office.
