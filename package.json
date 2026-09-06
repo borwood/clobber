@@ -7,10 +7,12 @@
   ],
   "scripts": {
     "type-check": "tsc --noEmit",
-    "docs:gen": "bun run packages/cli/scripts/docs-gen.ts"
+    "docs:gen": "bun run packages/cli/scripts/docs-gen.ts",
+    "dev": "concurrently --kill-others-on-fail -c blue,green \"bun run packages/server/src/index.ts\" \"bun run --cwd packages/web dev\""
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "concurrently": "^10.0.3",
     "typescript": "^5.6.3"
   }
 }
