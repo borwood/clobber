@@ -17,7 +17,8 @@ walk in on several sessions at once without reading several transcripts.
 > real server, and the quickstart was verified against a fresh clone. There
 > is no roadmap and no support. Fork freely. Some of the features that makes
 > Clobber unique are now first-class in the Claude Code harness, including
-> inter-agent messaging and agent teams. Its unique upgrades are listed below.
+> inter-agent messaging, scratch pad, and agent teams.
+> Its unique upgrades are listed below.
 
 ## What Clobber affords
 
@@ -30,6 +31,13 @@ No separate API billing, no second auth model.
   roles) an SDLC profile. Role state lives in a git repo of its own: edits are
   commits, workspaces pin a sha, and a running agent's contract can't be
   yanked out from under it by an engine update.
+- **Persistent agents with self-handoff.** You can define special 'persistent'
+  roles for which there is at most one live session, inheriting the same scratch
+  directory for notes and scripts. These agents can use the `clobber` CLI to
+  cycle - restart their own session from fresh context, with a self-authored handoff
+  note - to manage long-running tasks like agent dispatch, harvest, and reports triage.
+  With clobber hooks, these agents can have reminders to cycle when their context usage
+  grows past an effective length.
 - **DRY context machinery.** Prompt-modules, seeds, and a shared base layer
   let roles share context components instead of copy-pasting prompt prose.
   Compose once, project into every role that needs it; workspace-specific
@@ -59,8 +67,9 @@ No separate API billing, no second auth model.
   panes — transcripts, the live whiteboard, spawn controls, reports — for
   organizing views of many concurrent sessions. Per-workspace theming and
   fast workspace tabs make juggling several projects in parallel legible at
-  a glance. With the `clobber` CLI, agents you put in control have the same
+  a glance. With the `clobber` CLI, agents you authorize have the same
   view of the workspace you do, and the power to notice and fix its frictions.
+
 
 Roles talk back to Clobber through a small `clobber` CLI, authenticated
 per-session, so status updates and blocking questions land on the whiteboard
