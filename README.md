@@ -1,7 +1,10 @@
 # Clobber
 
 Clobber is an office for Claude Code agents. Open a workspace on a repo and a
-persistent **manager** takes the one permanent desk in it — you hand it
+persistent **manager** takes the first permanent desk in it. Discuss your preferred
+workflows, where to source context from (GitHub/Jira CLI, local docs?), and manager
+will define agent roles with the context, guards, and triggers you need by forking
+the built-in manager and worker roles. Hand the manager (or a custom dispatch role)
 issues and decisions, and it spawns ephemeral **workers** at the desks around
 it to carry the implementation work: write the failing test, make it pass,
 open the PR, watch CI. The **whiteboard** shows the office live, so you can
@@ -12,7 +15,9 @@ walk in on several sessions at once without reading several transcripts.
 > this one; much of Clobber was built by agents Clobber was orchestrating.
 > It's published as-is: the loops documented below run end to end against a
 > real server, and the quickstart was verified against a fresh clone. There
-> is no roadmap and no support. Fork freely.
+> is no roadmap and no support. Fork freely. Some of the features that makes
+> Clobber unique are now first-class in the Claude Code harness, including
+> inter-agent messaging and agent teams. Its unique upgrades are listed below.
 
 ## What Clobber affords
 
@@ -54,7 +59,8 @@ No separate API billing, no second auth model.
   panes — transcripts, the live whiteboard, spawn controls, reports — for
   organizing views of many concurrent sessions. Per-workspace theming and
   fast workspace tabs make juggling several projects in parallel legible at
-  a glance.
+  a glance. With the `clobber` CLI, agents you put in control have the same
+  view of the workspace you do, and the power to notice and fix its frictions.
 
 Roles talk back to Clobber through a small `clobber` CLI, authenticated
 per-session, so status updates and blocking questions land on the whiteboard
@@ -69,7 +75,7 @@ Requires [Bun](https://bun.sh), `git`, and a working [Claude Code](https://claud
 install (agents run as headless `claude` sessions on your subscription).
 
 ```sh
-git clone https://github.com/brennan-volter/clobber.git
+git clone https://github.com/borwood/clobber.git
 cd clobber
 bun install
 bun run dev
